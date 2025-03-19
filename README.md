@@ -3,7 +3,7 @@
 # Math content is in the `math/Resources` folder. 
 
 # Before start of the lectures
-Brash up you Math knowledge, we recommend the following resources:
+Brush up you Math knowledge, we recommend the following resources:
 - Linear Algebra https://www.3blue1brown.com/topics/linear-algebra
 - Calculus https://www.3blue1brown.com/topics/calculus
 - Probability https://www.3blue1brown.com/topics/probability (you can skip first 4 videos at first)
