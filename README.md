@@ -1,25 +1,16 @@
 # python_math_ml_course
 
-📢 Սկսում ենք Python-ի և մեքենյական ուսուցման **անվճար օնլայն դասընթաց**։
+# Math content is in the `math/Resources` folder. 
 
-## 📋Դասընթացի կառուցվածքը
+# Before start of the lectures
+Brash up you Math knowledge, we recommend the following resources:
+- Linear Algebra https://www.3blue1brown.com/topics/linear-algebra
+- Calculus https://www.3blue1brown.com/topics/calculus
+- Probability https://www.3blue1brown.com/topics/probability (you can skip first 4 videos at first)
+- Statistics https://www.youtube.com/playlist?list=PL8dPuuaLjXtNM_Y-bUAhblSAdWRnmBUcr
 
-- Python լեզվի հիմունքներ (2.5 - 3 ամիս)
-- Python գրադարաններ (1 - 1.5 ամիս)
-- Մեքենայական ուսուցման համար անհրաժեշտ մաթեմատիկան գիտելիքներ (1.5 - 2 ամիս)
-- Մեքենայական ուսուցում (3 ամիս)
+The videos mostly help to get geometric intuition of the concepts. Especially the ones
+by 3blue1brown. Having the intuition will help you a lot when we start covering the concepts.
 
-## ℹ️ Կարևոր տեղեկություններ
-
-- Եթե հետաքրքրված չեք մեքենյական ուսուցմամբ կարող եք հաճախել միայն Python-ի դասերին
-- Բոլոր դասերի տեսագրությունները և նյութերը բաց հասանելի տեղադրվելու են YouTube-ում և մեր ստեղծած կայքում
-- Հանձնարարվելու են բազմաթիվ տնային առաջադրանքներ (**կրիտիկական է լինելու զգալի ժամանակ հատկացնել դասընթացին**)
-- Շաբաթական 2-3 դաս, 1.5-2 ժամ տևողությամբ
-- Աշխատանքային օրերին դասերը կսկսվեն մոտ 20:00, իսկ շաբաթ/կիրակի՝ 13:00-ին
-- Դասընթացի ավարտին սերտիֆիկատ **չի տրվելու**
-- ‼️Դիմելու վերջնաժամկետը` **մարտի 23 23:59**
-
-## 🔗Հղումներ
-
-- Դիմելու հղումը՝  https://forms.gle/jpc66NNS7asHSnjz5
-- Դասընթացի նախնական պլանը՝ https://bit.ly/metric_academy
+Here is a collection of resources on wide range of topics that may help as well:
+https://bit.ly/metric_learn
