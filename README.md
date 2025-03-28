@@ -1,5 +1,7 @@
 # python_math_ml_course
 
+[Course website](https://panir.notion.site/)
+
 # Math content is in the `math/Resources` folder. 
 
 # Before start of the lectures
