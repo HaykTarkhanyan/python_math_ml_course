@@ -16,14 +16,16 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-# with st.echo():
-#     # congrats
-#     st.balloons()
-#     st.snow()
+
+with streamlit.echo():
+    pass
+    # st.balloons()
+    # st.snow()
+
     
 
 
-with st.echo():
+with streamlit.echo():
     # ---------- Displaying Text  ----------
     # Title and Header
     st.title("My Streamlit App")
@@ -39,7 +41,7 @@ with st.echo():
     st.subheader("Markdown")
     st.markdown("This is a markdown block. You can write *italic*, **bold**, or even use [links](https://www.streamlit.io/).")
 
-st.divider()
+# st.divider()
 # Latex
 st.subheader("Latex")
 with st.echo():
@@ -54,7 +56,7 @@ st.subheader("Table")
 with st.echo():
     # ---------- Displaying DataFrames  ----------
     # Displaying a Table
-    st.dataframe([{ 'Name': "Գինի", 'Age': 3 }, { 'Name': "Պանիր", 'Age': 1 }])
+    st.dataframe([{ 'Name': "Գինի", 'Age': 3}, {'Name': "Պանիր", 'Age': 1 }])
 
 with st.echo():
     # DataFrame
@@ -68,7 +70,7 @@ with st.echo():
         "Type": "Չանախ",
     })
 
-# Plotly
+# # Plotly
 st.subheader("Plotly Bar Chart")
 
 with st.echo():
@@ -104,7 +106,7 @@ with st.echo():
     st.write("Slider value:", slider_value)
 
 with st.echo():
-    num_input_value = st.number_input("Num input", min_value=0.0, max_value=100., step=5.0) # պետքա float լինի
+    num_input_value = st.number_input("Num input", min_value=0.0, max_value=100.0, step=5.0) # պետքա float լինի
     st.write("Number input value:", num_input_value)
 
 with st.echo():
@@ -118,7 +120,7 @@ with st.echo():
         st.write("File uploaded!")
 
 st.divider()
-# Displaying Progress
+# # Displaying Progress
 st.subheader("Progress")
 
 # with st.echo():
@@ -126,7 +128,7 @@ st.subheader("Progress")
 
 #     for i in range(100):
 #         sleep(0.1)
-#         progress_bar.progress(i + 1)
+#         progress_bar.progress(i)
 
 with st.echo():
     # Sidebar

@@ -3,7 +3,7 @@
 # from helper import * # 3
 # import helper as h # 4
 # from helper import square as s # 5
-from helper import square
+from files_helper import square
 
 tiv = int(input("Մուտքագրեք թիվը: "))
 
