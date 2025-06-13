@@ -1,5 +1,6 @@
 [] Zovq / Bookinist / Zangak scraper
 [] Tick Tack Toe from Temu  
+[] Tick Tack Toe normal
 [] Kargin search  
 [] Telegram bot  
 [] Outline generator (#, ##, ...)  
@@ -12,5 +13,6 @@
 [] Smile detection  
 [] Virus spread simulation  
 [] Wordcloud for different authors  
-[x] Appoximate pi 
+[x] Approximate pi 
 [] Hangman game
+[] Youtube playlist analyzer (Classes)
