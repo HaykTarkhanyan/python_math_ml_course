@@ -16,3 +16,12 @@
 [x] Approximate pi 
 [] Hangman game
 [] Youtube playlist analyzer (Classes)
+
+
+- Youtube transcripts, translate
+- Youtube playlist / video metadata analyzer 
+- Wordcloud generator
+- Blot combination probability (create deck of cards for let's say 1000 times and calculate how many times you get a certain combination (terz, 50, 4 of a kind, etc.))
+- Tool to automatically send emails  
+- Telegram bot  
+- OpenAI based something
