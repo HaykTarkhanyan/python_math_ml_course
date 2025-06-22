@@ -25,3 +25,4 @@
 - Tool to automatically send emails  
 - Telegram bot  
 - OpenAI based something
+- Kargin search
