@@ -16,7 +16,9 @@
 [x] Approximate pi 
 [] Hangman game
 [] Youtube playlist analyzer (Classes)
-
+[] Benzakalonka
+[] Snake
+[] opencv based smthing
 
 - Youtube transcripts, translate
 - Youtube playlist / video metadata analyzer 
