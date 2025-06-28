@@ -19,6 +19,7 @@
 [] Benzakalonka
 [] Snake
 [] opencv based smthing
+[] browsing history analyzer https://davidbieber.com/snippets/2019-12-30-analyzing-my-browser-history/
 
 - Youtube transcripts, translate
 - Youtube playlist / video metadata analyzer 
