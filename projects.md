@@ -29,3 +29,5 @@
 - Telegram bot  
 - OpenAI based something
 - Kargin search
+
+[] requiremenets.txt gnnerator
