@@ -31,3 +31,4 @@
 - Kargin search
 
 [] requiremenets.txt gnnerator
+[] auto big file to .gitignore
