@@ -5,4 +5,4 @@
 # Useful commands
 `make render`: quarto render-s and pushes to GitHub
 `make push`: just git add, commit and push
-`make render/push MSG="message"`: renders and pushes with a custom message (defaults to "rendering")
+`make render/push msg="message"`: renders and pushes with a custom message (defaults to "rendering")
