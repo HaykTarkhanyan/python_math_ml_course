@@ -18,8 +18,8 @@ push:
 	@echo ">> won't run `quarto render`..."
 	@echo ">> Staging changes..."
 	@git add .
-	@echo ">> Committing with message: '$(MSG)'"
-	@git commit -m "$(MSG)"
+	@echo ">> Committing with message: '$(msg)'"
+	@git commit -m "$(msg)"
 	@echo ">> Pushing to remote..."
 	@git push
 	@echo ">> Done"
