@@ -3,6 +3,11 @@
 - Be careful not to have super long outputs (which may go unnoticed when their displayed on one line). Also you can add `--verbose` to quarto render.
 
 # Useful commands
-`make render`: quarto render-s and pushes to GitHub
-`make push`: just git add, commit and push
-`make render/push msg="message"`: renders and pushes with a custom message (defaults to "rendering")
+`make` or `make push`: Runs Quarto render, stages all changes, commits with the default message rendering YYYY-MM-DD HH:MM, and pushes.
+
+`make push render=false`: Skips the Quarto render step, then stages, commits (same default message), and pushes.
+
+`make push msg="cheese"`: Renders (unless `render=false`), stages, commits with your custom message, and pushes.
+
+You can combine flags, e.g.
+`make push render=false msg="cheese"` — skips rendering and commits with the specified message.
