@@ -1,6 +1,6 @@
 # Quarto
 - Files must be lowercase, I have no idea why. GitHub may not approach names in a case-sensitive way.
-- Be careful not to have super long outputs (which may go unnoticed when their displayed on one line). Also you can add `--verbose` to quarto render.
+- Be careful not to have super long outputs (which may go unnoticed when displayed on one line). Also you can add `--verbose` to quarto render.
 
 # Useful commands
 `make` or `make push`: Runs Quarto render, stages all changes, commits with the default message rendering YYYY-MM-DD HH:MM, and pushes.

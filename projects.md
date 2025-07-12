@@ -21,14 +21,14 @@
 [] opencv based smthing
 [] browsing history analyzer https://davidbieber.com/snippets/2019-12-30-analyzing-my-browser-history/
 
-- Youtube transcripts, translate
-- Youtube playlist / video metadata analyzer 
-- Wordcloud generator
-- Blot combination probability (create deck of cards for let's say 1000 times and calculate how many times you get a certain combination (terz, 50, 4 of a kind, etc.))
-- Tool to automatically send emails  
-- Telegram bot  
-- OpenAI based something
-- Kargin search
+[] Youtube transcripts, translate
+[] Youtube playlist / video metadata analyzer 
+[x] Wordcloud generator
+[] Blot combination probability (create deck of cards for let's say 1000 times and calculate how many times you get a certain combination (terz, 50, 4 of a kind, etc.))
+[] Tool to automatically send emails  
+[] Telegram bot  
+[x] OpenAI based something
+[] Kargin search
 
-[] requiremenets.txt gnnerator
+[] requirements.txt generator
 [] auto big file to .gitignore
