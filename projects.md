@@ -31,4 +31,4 @@
 [] Kargin search
 
 [] requirements.txt generator
-[] auto big file to .gitignore
+[] auto big file to .gitignore 
