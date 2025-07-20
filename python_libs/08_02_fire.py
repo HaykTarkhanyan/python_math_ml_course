@@ -25,12 +25,14 @@ def count_files(directory, logs=False):
         
     return num_files
 
+
 def another_function(cheese: str = "Ամասիա"):
     # insert cheese emoji between each character
     cheese_emoji = " 🧀 "
     print(cheese_emoji.join(cheese))
     
+    
 if __name__ == "__main__":
-    # fire.Fire(count_files)
-    fire.Fire()
+    fire.Fire(count_files)
+    # fire.Fire()
 

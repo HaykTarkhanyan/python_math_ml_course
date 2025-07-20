@@ -9,7 +9,6 @@ Run:
     python 08_02_click.py count_files assets --logs True
     python 08_02_click.py another_function --cheese="Gouda"
 """
-
 import os
 import click
 
@@ -36,12 +35,12 @@ def count_files(directory: str, logs: bool):
     if logs:
         print(f"Number of files: {num_files}")
 
-    print(num_files)  # keep behaviour identical to the Fire version
+    print(num_files) 
     return num_files
 
 
 @cli.command()
-@click.option("--cheese", default="Ամասիա", help="Cheese string")
+@click.option("--cheese", "-c", default="Ամասիա", help="Cheese string")
 def another_function(cheese: str):
     """Insert cheese emoji between each character."""
     cheese_emoji = " 🧀 "
