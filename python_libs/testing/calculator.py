@@ -1,6 +1,3 @@
-import pytest
-
-
 def add(a: int, b: int) -> int:
     return a + b
 
@@ -9,11 +6,14 @@ def div(a: int, b: int) -> float:
         raise ValueError("b must be non-zero")
     return a / b
 
+# test_calculator # test
+
 # ------------- Coverage -------------
-# pytest --cov=calculator # Stmt = # executable lines
+# # pytest --cov=calculator # Stmt = # executable lines
 def subtract(a: int, b: int) -> int:
     return a - b
 
+# -------------- Debugging ------------
 def is_prime(n: int) -> bool:
     if n <= 1:
         return False

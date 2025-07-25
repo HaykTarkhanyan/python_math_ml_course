@@ -9,9 +9,10 @@ import os
 import pandas as pd
 import numpy as np
 
-def test_add(a: bool, b: ):
+def test_add(a: bool, b: bool):
+    pass
 
-def test_divide(a: , b ):
+def test_divide(a, b):
     """_summary_
 
     Args:

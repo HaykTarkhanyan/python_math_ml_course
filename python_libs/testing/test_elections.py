@@ -22,21 +22,21 @@ def test_first_name(sample_df):
     assert isinstance(first_name, str), "First name should be a string"
     assert first_name != "", "First name should not be empty"
     
-# teardown
+# # teardown
 @pytest.fixture
 def sample_df_with_teardown(): # pytest -k "teardown"
     df = load_data()
     yield df
     # Teardown logic
-    df.to_csv("teardown_elections.csv", index=False)
+    df.to_csv("teardown_elections_1.csv", index=False)
 
 def test_first_name_teardown(sample_df_with_teardown):
     first_name = get_first_name(sample_df_with_teardown)
     assert isinstance(first_name, str), "First name should be a string"
     assert first_name != "", "First name should not be empty"
     
-# ------------- Mocking -------------
-# uv pip install pytest-mock
+# # ------------- Mocking -------------
+# # uv pip install pytest-mock
 
 def test_num_unique_regions_mock(mocker):
     mock_df = pd.DataFrame({
@@ -45,7 +45,6 @@ def test_num_unique_regions_mock(mocker):
     # mocker.patch('elections.load_data', return_value=mock_df)
     mocker.patch('test_elections.load_data', return_value=mock_df)
     
-
     df = load_data()  # This will use the mocked return value
     print(df)
     num_regions = get_num_unique_regions(df)
