@@ -1,34 +1,12 @@
 import unittest
 import movies 
 
-
-import matplotlib.pyplot as plt
-import sys
 import json
 import os
-import pandas as pd
-import numpy as np
 
 def test_add(a: bool, b: bool):
     pass
 
-def test_divide(a, b):
-    """_summary_
-
-    Args:
-        a (_type_): _description_
-        b (_type_): _description_
-
-    Raises:
-        ValueError: _description_
-
-    Returns:
-        _type_: _description_
-    """
-    if x:
-        raise ValueError("x cannot be 0")
-
-    return c 
 
 class TestMovies(unittest.TestCase):
     @classmethod
