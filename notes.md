@@ -1,6 +1,7 @@
 # Quarto
 - Files must be lowercase, I have no idea why. GitHub may not approach names in a case-sensitive way.
 - Be careful not to have super long outputs (which may go unnoticed when displayed on one line). Also you can add `--verbose` to quarto render.
+- Quarto sols: `quarto render 05_probability.qmd --profile=solution --output 05_probability_sol.html`
 
 ## Armenian
 Just add this to the YAML header of the file:
