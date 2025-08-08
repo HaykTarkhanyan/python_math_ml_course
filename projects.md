@@ -29,6 +29,7 @@
 [] Telegram bot  
 [x] OpenAI based something
 [] Kargin search
+[] compounding interest calculator
 
 [] requirements.txt generator
 [] auto big file to .gitignore 
