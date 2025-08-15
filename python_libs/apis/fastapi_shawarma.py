@@ -11,12 +11,11 @@ app = FastAPI(
     title="Yerevanyan Shawarma API",
     description="🥙 Երևանյան Շաուրմա - API for ordering delicious shawarma",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs", # default
+    redoc_url="/redoc" # default
 )
 
 # --- ՏՎՅԱԼՆԵՐԻ ՄՈԴԵԼՆԵՐ ---
-
 class ShawarmaItem(BaseModel):
     name: str
     price: int
