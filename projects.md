@@ -12,9 +12,9 @@
 [] Boids algorithm  
 [] Smile detection  
 [] Virus spread simulation  
-[] Wordcloud for different authors  
+[x] Wordcloud for different authors  
 [x] Approximate pi 
-[] Hangman game
+[x] Hangman game
 [] Youtube playlist analyzer (Classes)
 [] Benzakalonka
 [] Snake
