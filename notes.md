@@ -15,14 +15,46 @@ format:
 
 
 # Useful commands
-`make` or `make push`: Runs Quarto render, stages all changes, commits with the default message rendering YYYY-MM-DD HH:MM, and pushes.
 
-`make push render=false`: Skips the Quarto render step, then stages, commits (same default message), and pushes.
+## Make Commands
 
-`make push msg="cheese"`: Renders (unless `render=false`), stages, commits with your custom message, and pushes.
+The Makefile has been updated to support a new workflow with separate commits for manual changes and rendered output.
 
-You can combine flags, e.g.
-`make push render=false msg="cheese"` — skips rendering and commits with the specified message.
+### Basic Usage
+- `make` or `make push`: 
+  1. Pulls latest changes
+  2. Commits current changes with default message "rendering YYYY-MM-DD HH:MM"
+  3. Renders only changed notebooks (using Python script)
+  4. Commits rendered files with message "render YYYY-MM-DD HH:MM"
+  5. Pushes all commits
+
+### Flags
+
+#### Rendering Control
+- `make push render=false`: Skips the rendering step entirely
+- `make push all=true`: Renders ALL files instead of just changed ones (uses `quarto render`)
+- `make push all=false`: Renders only changed files (uses `render_only_changed.py`) - **default**
+
+#### Custom Messages
+- `make push msg="your message"`: Uses custom commit message for your manual changes
+
+### Examples
+```bash
+# Default: commit changes, render only changed files, push
+make push
+
+# Commit with custom message, render only changed files
+make push msg="Added new exercise to notebook 15"
+
+# Full render of all files
+make push all=true msg="Complete rebuild after major changes"
+
+# Skip rendering entirely
+make push render=false msg="Updated documentation only"
+
+# Combinations
+make push all=true render=true msg="Major update - full rebuild needed"
+```
 
 # Tex in VS Code
 - Install the LaTeX Workshop extension.
