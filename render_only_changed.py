@@ -31,6 +31,12 @@ def main():
     print(f"Found {len(ipynb_files)} changed files.")
     
     if len(ipynb_files) > 0:
+        # check that file exists
+        for file in ipynb_files:
+            if not os.path.exists(file):
+                print(f"File not found: {file}")
+                ipynb_files.remove(file)
+
         print("Rendering uncommitted *ipynb files:")
         for file in ipynb_files:
             print(f"\t{file}")
