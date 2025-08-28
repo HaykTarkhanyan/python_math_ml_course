@@ -3,8 +3,8 @@
 
 // Function to add cheese emojis based on difficulty attribute
 function addCheeseEmojis() {
-  // Find all h2 elements (problem headers)
-  const headers = document.querySelectorAll('h2');
+  // Find all h3 elements (problem headers)
+  const headers = document.querySelectorAll('h3');
   const maxCheese = 3; // Maximum number of cheese emojis
   
   headers.forEach(header => {
