@@ -2,86 +2,44 @@
 
 ## Required YAML Header
 
-Every homework file must start with a YAML header that includes:
+Every homework file must start with a simplified YAML header:
 
 ```yaml
 ---
 title: "Homework X: Topic Name"
-toc: true
-toc-location: right
-toc-title: "Contents"
-format:
-  html:
-    embed-resources: true
-    css: homework-styles.css
-
-execute:
-  echo: false
-  warning: false
-  cache: true
 ---
 ```
+
+**Note**: Most configuration options (TOC, formatting, CSS, execution settings) are now handled by the main `_quarto.yml` file, so individual homework files only need the title.
 
 ### YAML Header Options Explained:
 
 - **`title`**: The homework title following the pattern "Homework X: Topic Name"
-- **`toc: true`**: Enables table of contents
-- **`toc-location: right`**: Places TOC on the right side
-- **`toc-title: "Contents"`**: Sets the TOC title
-- **`format.html.embed-resources: true`**: Creates self-contained HTML files
-- **`format.html.css: homework-styles.css`**: Links to the standard homework stylesheet
-- **`execute.echo: false`**: Hides code chunks in output (for Python/R code)
-- **`execute.warning: false`**: Suppresses warnings in output
-- **`execute.cache: true`**: Enables caching for faster rendering
+
+**Previously required options now handled globally:**
+- Table of contents settings
+- HTML formatting options  
+- CSS styling
+- Code execution settings
 
 ## Required JavaScript Section
 
-After the YAML header, include the dark mode toggle functionality:
+After the YAML header, include the JavaScript functionality:
 
 ```html
-<!-- Dark Mode Toggle Button -->
-<button class="dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">
-  <span id="theme-icon">🌙</span>
-</button>
-
-<script>
-// Dark mode functionality
-function toggleDarkMode() {
-  const html = document.documentElement;
-  const themeIcon = document.getElementById('theme-icon');
-  
-  if (html.getAttribute('data-theme') === 'dark') {
-    html.removeAttribute('data-theme');
-    themeIcon.textContent = '🌙';
-    localStorage.setItem('theme', 'light');
-  } else {
-    html.setAttribute('data-theme', 'dark');
-    themeIcon.textContent = '☀️';
-    localStorage.setItem('theme', 'dark');
-  }
-}
-
-// Load saved theme on page load
-document.addEventListener('DOMContentLoaded', function() {
-  const savedTheme = localStorage.getItem('theme');
-  const themeIcon = document.getElementById('theme-icon');
-  
-  if (savedTheme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    themeIcon.textContent = '☀️';
-  } else {
-    themeIcon.textContent = '🌙';
-  }
-});
-</script>
+<!-- Include homework JavaScript functionality -->
+<script src="homework-scripts.js"></script>
 ```
+
+**Note**: The `homework-scripts.js` file contains the necessary JavaScript functionality for:
+- Cheese emoji difficulty indicators for problem headers
 
 ## Problem Structure
 
 Each problem should follow this structure:
 
 ```markdown
-## X Problem Title
+## Problem X: Problem Title
 
 [Problem statement here, using LaTeX math notation when needed]
 
@@ -93,6 +51,23 @@ Each problem should follow this structure:
 
 :::
 ```
+
+### Cheese Emoji Feature
+
+You can add cheese emojis (🧀) as a difficulty indicator prefix to problem headers by using the `data-difficulty` attribute:
+
+```markdown
+## Problem 1: Easy Problem {data-difficulty="1"}
+## Problem 2: Medium Problem {data-difficulty="2"}  
+## Problem 3: Hard Problem {data-difficulty="3"}
+```
+
+- **Usage**: Add `data-difficulty="X"` to any problem header where X is the difficulty level (1-3)
+- **Result**: The specified number of 🧀 emojis will be automatically added as a prefix
+- **Example**: `data-difficulty="3"` will add "🧀🧀🧀 " before the problem title
+- **Maximum**: Limited to 3 cheese emojis maximum
+- **Compatibility**: Works with other classes like `.bonus-problem`
+- **Auto-detection**: The JavaScript automatically processes all h2 headers on page load
 
 
 ### Special Sections
@@ -121,7 +96,6 @@ The homework uses custom CSS classes:
 
 - **`.solution-header`**: Styles solution headers
 - **`.content-visible`**: Controls conditional content display
-- **`.dark-mode-toggle`**: Styles the dark mode button
 - **`.bonus-problem`**: Styles bonus problem headers
 - **`.video-solution`**: Styles video solution links
 
@@ -129,6 +103,43 @@ The homework uses custom CSS classes:
 ### Naming Convention
 - Files: `XX_topic_description.qmd` (where XX is zero-padded number)
 - Example: `00_intro_sets_comb_funcs.qmd`
+
+### Main Configuration
+The homework files are included in the main `_quarto.yml` under the Math section:
+
+```yaml
+- part: Math
+  chapters:
+  - file: math/Homeworks/00_intro_sets_comb_funcs.qmd
+  - file: math/Homeworks/01_another_homework.qmd
+```
+
+This centralized configuration handles:
+- Global formatting settings
+- CSS and theme management  
+- TOC and navigation settings
+- Code execution preferences
+
+## JavaScript File Structure
+
+The homework functionality is contained in `homework-scripts.js` which should be placed in the same directory as the homework files. This file includes:
+
+### Functions Available:
+- **`addCheeseEmojis()`**: Automatically adds cheese emojis to headers with `data-difficulty` attributes
+
+### Automatic Initialization:
+The script automatically runs when the page loads and:
+1. Processes all problem headers for difficulty indicators
+2. Adds appropriate cheese emojis
+
+### File Location:
+```
+math/
+  Homeworks/
+    homework-scripts.js     # JavaScript functionality
+    homework-styles.css     # CSS styles
+    XX_topic_name.qmd      # Homework files
+```
 
 ## Best Practices
 
@@ -143,7 +154,7 @@ The homework uses custom CSS classes:
 ## Example Problem Template
 
 ```markdown
-## Problem 1: Sample Problem Title
+## Problem 1: Sample Problem Title {data-difficulty="2"}
 
 Given vectors $\mathbf{a} = \begin{bmatrix} 1 \\ 2 \\ 3 \end{bmatrix}$ and $\mathbf{b} = \begin{bmatrix} 4 \\ 5 \\ 6 \end{bmatrix}$, find:
 
@@ -161,6 +172,14 @@ $$\mathbf{a} + \mathbf{b} = \begin{bmatrix} 1 \\ 2 \\ 3 \end{bmatrix} + \begin{b
 $$\mathbf{a} \cdot \mathbf{b} = 1(4) + 2(5) + 3(6) = 4 + 10 + 18 = 32$$
 
 :::
+
+## Problem 2: Bonus Problem {.bonus-problem data-difficulty="1"}
+
+This is a bonus problem with difficulty level 1.
+
+## Problem 3: Regular Problem
+
+This problem has no difficulty indicator.
 ```
 
 ## Rendering
