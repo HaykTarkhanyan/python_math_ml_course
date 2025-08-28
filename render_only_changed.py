@@ -26,23 +26,23 @@ def main():
     all_files = run_git_command(git_command)
     
     # Filter for .ipynb files (equivalent to str_detect(files, 'ipynb$'))
-    ipynb_files = [f for f in all_files if f.endswith('.ipynb')]
-    
-    print(f"Found {len(ipynb_files)} changed files.")
-    
-    if len(ipynb_files) > 0:
+    files = [f for f in all_files if f.endswith('.ipynb') or f.endswith('.qmd')]
+
+    print(f"Found {len(files)} changed files.")
+
+    if len(files) > 0:
         # check that file exists
-        for file in ipynb_files:
+        for file in files:
             if not os.path.exists(file):
                 print(f"File not found: {file}")
-                ipynb_files.remove(file)
+                files.remove(file)
 
-        print("Rendering uncommitted *ipynb files:")
-        for file in ipynb_files:
+        print("Rendering uncommitted files:")
+        for file in files:
             print(f"\t{file}")
         print()
         
-        for file in ipynb_files:
+        for file in files:
             print(file)
             cmd = f"quarto render {file}"
             print(cmd)
