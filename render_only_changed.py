@@ -28,6 +28,10 @@ def main():
     # Filter for .ipynb files (equivalent to str_detect(files, 'ipynb$'))
     files = [f for f in all_files if f.endswith('.ipynb') or f.endswith('.qmd')]
 
+    folders_to_include = ["python", "python_libs", "math", "misc"]
+
+    files = [f for f in all_files if any(f.startswith(folder) for folder in folders_to_include)]
+    
     print(f"Found {len(files)} changed files.")
 
     if len(files) > 0:
