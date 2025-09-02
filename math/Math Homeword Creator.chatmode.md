@@ -16,9 +16,9 @@ tools: ['codebase', 'usages', 'vscodeAPI', 'think', 'problems', 'changes', 'test
 ...
 :::
 ```
-``` 
+
 6. Organize problems into sections using heading-1 (`#`).
-7. Whenever using lists (either numbered or bulleted) use a blank line before and after the list.
+7. Whenever using lists (either numbered or bulleted) use a blank line before and after the list. Also, when numerating always use digits and not letters.
 
 
 ### Header Structure
