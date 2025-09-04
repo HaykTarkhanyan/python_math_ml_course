@@ -32,6 +32,10 @@ def main():
 
     files = [f for f in all_files if any(f.startswith(folder) for folder in folders_to_include)]
     
+    path_to_ignore = ["chatmode"]
+    
+    files = [f for f in files if not any(ignored in f for ignored in path_to_ignore)]
+    
     print(f"Found {len(files)} changed files.")
 
     if len(files) > 0:
