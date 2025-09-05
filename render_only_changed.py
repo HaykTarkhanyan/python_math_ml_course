@@ -32,7 +32,7 @@ def main():
 
     files = [f for f in all_files if any(f.startswith(folder) for folder in folders_to_include)]
     
-    path_to_ignore = ["chatmode", "html"]
+    path_to_ignore = ["chatmode", "html", "png", "jpg", "jpeg", "gif", "svg",]
     
     files = [f for f in files if not any(ignored in f for ignored in path_to_ignore)]
     
