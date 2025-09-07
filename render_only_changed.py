@@ -30,7 +30,7 @@ def main():
 
     folders_to_include = ["python", "python_libs", "math", "misc"]
 
-    files = [f for f in all_files if any(f.startswith(folder) for folder in folders_to_include)]
+    files = [f for f in files if any(f.startswith(folder) for folder in folders_to_include)]
     
     path_to_ignore = ["chatmode", "html", "png", "jpg", "jpeg", "gif", "svg",]
     
