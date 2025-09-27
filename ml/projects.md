@@ -34,3 +34,10 @@
 1. You can put filters on Kaggle search and sort by "Most Votes" https://www.kaggle.com/datasets?sort=votes&tags=14101-Tabular%2C13304-Clustering
 2. For each task figure out what's the best way to evaluate the model, and present the results.
 3. Always do EDA first.
+4. Use Git / Github
+
+# ToDo
+1. Reply with + in Slack.
+2. EOD - send team (1-3), choose project (not necessarly from above)
+3. Random shuffle
+4. GitHub repository
