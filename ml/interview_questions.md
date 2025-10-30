@@ -1,0 +1,3 @@
+- https://www.toptal.com/machine-learning/interview-questions
+- https://github.com/andrewekhalel/MLQuestions
+- https://github.com/Metricam/Internship_tasks
