@@ -1,6 +1,13 @@
 04 Plan
 1. Convex and concave functions
 2. Derivative 1st and 2nd tests
+Practicals?
+3 lessons this week, then break
+
+
+HW
+7.2.3 Logistic (sketching)
+5.2.4
 
 03 Plan
 
@@ -8,7 +15,16 @@
 2. Taylor's theorem
 
 
-trig functions review վերիտասիում
+ToDo
+[] Trig functions
+[] Domain, Image (Range)
+
+[] The Intermediate Value Theorem
+[] Infinite Sequences
+[] L'Hôpital's Rule
+
+[] Partial derivatives
+
 
 # Topics
 Polynomial Approximations
