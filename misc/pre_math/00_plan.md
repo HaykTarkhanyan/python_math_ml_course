@@ -1,8 +1,21 @@
+Multivariate
+
+Mean value theorem, same slope point theorem
+Normal distribution
+
+06
+Multivar calc
+
+05
+0. Nested sequence lemma
+1. Intermediate Value Theorem
+2. L'Hôpital's Rule
+
 04 Plan
 1. Convex and concave functions
 2. Derivative 1st and 2nd tests
-Practicals?
-3 lessons this week, then break
+
+
 
 
 HW
