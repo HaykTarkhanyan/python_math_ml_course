@@ -1,15 +1,23 @@
-Multivariate
-
 Mean value theorem, same slope point theorem
 Normal distribution
+Elasticity
+
+
+08 
+Integrals
+
+07
+Chain rule for multivar
+Lagrange
+
 
 06
 Multivar calc
 
 05
-0. Nested sequence lemma
-1. Intermediate Value Theorem
-2. L'Hôpital's Rule
+1. Nested sequence lemma
+2. Intermediate Value Theorem
+3. L'Hôpital's Rule
 
 04 Plan
 1. Convex and concave functions
