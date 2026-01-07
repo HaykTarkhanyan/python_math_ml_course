@@ -36,6 +36,11 @@ def main():
     
     files = [f for f in files if not any(ignored in f for ignored in path_to_ignore)]
     
+    # Always include the site index so the homepage stays fresh
+    index_file = "index.qmd"
+    if os.path.exists(index_file) and index_file not in files:
+        files.append(index_file)
+
     print(f"Found {len(files)} changed files.")
 
     if len(files) > 0:
