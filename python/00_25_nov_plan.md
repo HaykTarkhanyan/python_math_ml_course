@@ -18,8 +18,8 @@ Decorators - at home
 
 27 [08] 22, 5shabti, Exception handling + Streamlit 
 28 [09] 24, Practical; OpenAI API
-
 29 [10] 28, Lecture OOP
+
 30 29, 5shabti, Practical OOP / Lecture continued
 31 31, Practical / HW
 32 04, Practical / HW
