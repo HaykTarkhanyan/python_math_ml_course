@@ -22,11 +22,11 @@ Done
 29 [10] 28, Lecture OOP
 30 29, 5shabti, Practical OOP / Lecture continued
 31 31, Practical / HW
+32 [11] 04, Practical on Classes + Polymorphism
+33 05, 5shabti, Maybe testing / logging / ... 
 
 ToDo 
-32 04, Practical / HW
-33 [11] 05, 5shabti, Maybe testing / logging / ... 
-34 07
+34 07, Practical
 35 11
 36 [12] 12, Project presentation + Wrap up
 
