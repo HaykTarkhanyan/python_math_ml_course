@@ -10,14 +10,95 @@
 
 **Motivating question:** *A poll says 52% support candidate A (n = 1000). A clinical trial says drug B reduces symptoms by 15% (n = 200). How much should you trust these numbers?*
 
-- Population vs sample; parameters (estimands) vs statistics (estimators)
-- The i.i.d. assumption — and real-world violations (time dependence, selection bias, non-response, distribution shift)
-- The plug-in principle: replace the unknown distribution with the empirical one
-- Loss functions → risk → empirical risk minimization (ERM)
-  - Mean minimizes squared-error loss, median minimizes absolute-error loss, mode minimizes 0-1 loss
-  - Why the choice of loss reflects your values, not just math
-- Examples across domains: polling, quality control in manufacturing, clinical dosing, train/test splits in ML
-- **Practical:** Given a dataset, compute empirical risk under different losses in Python; observe how the "best" summary changes with the loss
+### 0.1 Opening: probability vs statistics
+
+- Probability: given the rules of the game (a fair die), predict what you'll see → forward problem
+- Statistics: given what you saw (data), figure out the rules → inverse problem
+- This is harder — the inverse problem is usually ill-posed (many rules could produce the same data)
+- Discussion: "You flip a coin 10 times and get 7 heads. Is the coin fair?" — collect student intuitions, don't resolve yet. This question will take the entire course to answer properly.
+
+### 0.2 Population, sample, parameter, statistic
+
+- **Population:** the complete collection we care about (all voters, all lightbulbs from this factory, all patients with condition X)
+  - Can be finite (voters in a country) or conceptually infinite (all future measurements from an instrument)
+- **Parameter:** a fixed (unknown) number that describes the population
+  - Notation: θ, μ, σ², p — these are what we want to learn
+  - Examples: true approval rating of candidate A; true mean lifetime of a lightbulb; true probability a drug works
+- **Sample:** the subset we actually observe — $X_1, X_2, \ldots, X_n$
+  - This is what we have. Everything else is inference.
+- **Statistic (= estimator):** any function of the sample — $T(X_1, \ldots, X_n)$
+  - Examples: sample mean $\bar{X}$, sample variance $S^2$, sample proportion $\hat{p}$, sample median
+  - Key idea: a statistic is a *random variable* (it depends on the random sample). A parameter is a fixed number. Confusing these two is the source of most beginner mistakes.
+- **Estimand vs estimator vs estimate:** the target (θ), the recipe ($\bar{X}$), and the number you got (42.7)
+
+- Discussion prompt: "Armenia's population is ~3 million. A polling agency surveys 1,000 people and reports '62% support policy X.' What's the population? The parameter? The sample? The statistic?"
+
+### 0.3 The i.i.d. assumption
+
+- Most of classical statistics assumes the sample is **independent and identically distributed**
+  - Independent: knowing $X_1$ tells you nothing about $X_2$
+  - Identically distributed: every $X_i$ comes from the same distribution $F$
+- When does i.i.d. hold (approximately)?
+  - Random sampling from a large population
+  - Repeated independent measurements of the same quantity
+  - Controlled experiments with proper randomization
+- When does it break?
+  - **Time dependence:** stock prices, weather, patient health over time
+  - **Spatial correlation:** neighboring sensors, neighboring houses
+  - **Selection bias:** surveying only people who answered the phone; studying only patients who came to the hospital
+  - **Non-response bias:** people who refuse to answer may differ systematically
+  - **Distribution shift:** the data you trained on comes from a different era/population than the data you'll apply to
+- Not a disaster — just means you need different tools (time series, spatial stats, causal inference). But if you pretend non-i.i.d. data is i.i.d., your conclusions can be wildly wrong.
+
+### 0.4 The plug-in principle
+
+- The big idea: we don't know the true distribution $F$, so replace it with the empirical distribution $\hat{F}_n$
+  - $\hat{F}_n$ puts mass $1/n$ on each observed data point
+  - Want the population mean $\mu = \mathbb{E}_F[X]$? Plug in: $\hat{\mu} = \mathbb{E}_{\hat{F}}[X] = \bar{X}$
+  - Want the population variance? Plug in: $\hat{\sigma}^2 = \frac{1}{n}\sum(X_i - \bar{X})^2$
+  - Want the population CDF $F(t) = P(X \le t)$? Plug in: $\hat{F}_n(t) = \frac{\#\{X_i \le t\}}{n}$
+- This is surprisingly powerful and is the foundation of much of nonparametric statistics
+- But it raises questions: how *good* is the plug-in? How far can $\hat{F}_n$ be from $F$? (Glivenko–Cantelli theorem says $\hat{F}_n \to F$ uniformly — connects to LLN from Module 20)
+
+### 0.5 Loss, risk, and optimal summaries
+
+- Suppose you must summarize the population with a single number $a$. How do you choose?
+- Depends on what "error" means to you — this is formalized by a **loss function** $L(\theta, a)$:
+  - **Squared-error loss:** $L(\theta, a) = (\theta - a)^2$
+    - Optimal summary: the **mean** — penalizes large errors quadratically
+  - **Absolute-error loss:** $L(\theta, a) = |\theta - a|$
+    - Optimal summary: the **median** — robust to outliers
+  - **0-1 loss:** $L(\theta, a) = \mathbf{1}[\theta \ne a]$
+    - Optimal summary: the **mode** — the most common value
+- **Risk** $= \mathbb{E}[L(\theta, \hat{\theta})]$ — the average loss over repeated samples
+- **Empirical risk** = average loss on the data you have — this is what we can actually compute
+- **Empirical Risk Minimization (ERM):** pick the estimator that minimizes empirical risk
+  - This is the principle behind least squares, maximum likelihood, and most ML training procedures
+- The choice of loss is not just math — it reflects values:
+  - Medical dosing: overestimate vs underestimate a dose have very different consequences (asymmetric loss)
+  - Predicting house prices: MAE vs MSE gives different answers when there are mansions in the data
+  - Spam filter: false positive (blocking a real email) vs false negative (letting spam through)
+
+- Exercise (in-class): "You're predicting tomorrow's temperature for an outdoor event. The caterer needs a number to plan. Would you report the mean or median of the forecast distribution? What if you're planning evacuation thresholds for a flood?"
+
+### 0.6 The big picture: what statistics will give us
+
+- We now know *what* we're trying to do: learn about θ from data
+- The rest of the course answers four questions:
+  1. **Estimation:** What's our best guess for θ? (Lectures 2–3)
+  2. **Uncertainty:** How confident are we? (Lectures 4–5)
+  3. **Decisions:** Is the effect real or noise? (Lectures 6–7)
+  4. **Models:** How do multiple variables relate? (Lecture 8)
+- Preview: we'll use all of these together in real applications (Lecture 9)
+
+### 0.7 Practical / take-home exercise
+
+- Given a dataset (e.g., city temperatures, exam scores, or household incomes):
+  - Compute the sample mean, median, and mode
+  - Compute empirical risk under squared-error, absolute-error, and 0-1 loss for each summary
+  - Observe: the mean minimizes squared-error risk, the median minimizes absolute-error risk
+  - Add one extreme outlier and repeat — watch the mean shift dramatically while the median barely moves
+  - Discuss: "Which summary would you report, and why? Does the answer depend on context?"
 
 > **Bridge:** We now have point summaries — but a single number hides a lot. How do we see the full picture?
 
@@ -27,15 +108,108 @@
 
 **Motivating question:** *You get a spreadsheet with 10,000 rows. What do you look at first — and what can fool you?*
 
-- Sample moments (mean, variance, skewness, kurtosis) — what each reveals
-- Robust alternatives: median, IQR, MAD — why outliers matter
-  - Heavy-tailed data in practice: income distributions, insurance claims, network traffic
-- Quantiles, percentiles, boxplots
-  - Applications: grading curves, risk thresholds (VaR in finance), anomaly detection
-- Empirical CDF and its properties
-  - Visual tool: comparing distributions (Kolmogorov–Smirnov intuition)
-- Anscombe's quartet / Datasaurus Dozen — summary statistics can lie, always plot your data
-- **Practical:** EDA on a real dataset: histograms, boxplots, ECDF, spotting data quality issues before any analysis
+### 1.1 Why descriptive statistics matter
+
+- Any serious analysis starts by *looking at the data* — before any model, any test, any estimation
+- Goals of descriptive statistics:
+  - Summarize the center, spread, and shape of a distribution
+  - Detect anomalies: outliers, missing data patterns, impossible values
+  - Compare groups or time periods visually
+  - Generate hypotheses (what looks interesting?) before testing them (is it real?)
+- Descriptive ≠ inferential: we're describing *this sample*, not (yet) drawing conclusions about the population
+
+### 1.2 Measures of center
+
+- **Sample mean:** $\bar{X} = \frac{1}{n}\sum_{i=1}^n X_i$
+  - Pro: uses all the data, is the MLE for μ under normality, minimizes squared error
+  - Con: sensitive to outliers — a single extreme value can move it a lot
+  - Example: mean income in a room with 9 teachers and 1 billionaire
+- **Sample median:** the middle value (or average of two middle values)
+  - Pro: robust — up to 50% of the data can be corrupted before it breaks (high breakdown point)
+  - Con: ignores magnitude of values beyond the middle; less efficient than mean for normal data
+- **Sample mode:** most frequent value (mainly useful for categorical data)
+- **Trimmed mean:** discard the top and bottom k%, compute the mean of the rest — a compromise between mean and median
+- Discussion: "Armenia's mean household income vs median household income — which is higher? Why? Which tells you more about a 'typical' family?"
+
+### 1.3 Measures of spread
+
+- **Sample variance:** $S^2 = \frac{1}{n-1}\sum_{i=1}^n (X_i - \bar{X})^2$
+  - Why $n-1$? (Bessel's correction — we'll prove this is unbiased in Lecture 3. For now: we used up one "degree of freedom" estimating the mean.)
+  - **Sample standard deviation:** $S = \sqrt{S^2}$ — same units as the data
+- **Range:** max − min — simple but extremely sensitive to outliers
+- **Interquartile range (IQR):** $Q_3 - Q_1$ — the range of the middle 50%
+  - Robust: outliers don't affect it (unless more than 25% of data is extreme)
+- **Median Absolute Deviation (MAD):** median of $|X_i - \text{median}|$
+  - Even more robust than IQR; a natural companion to the median
+- **Coefficient of variation (CV):** $S / \bar{X}$ — dimensionless measure of relative spread
+  - Useful for comparing variability across different scales (e.g., heights in cm vs weights in kg)
+
+### 1.4 Quantiles, percentiles, and boxplots
+
+- **Quantile** $q_p$: the value below which a fraction $p$ of the data falls
+  - $q_{0.5}$ = median, $q_{0.25} = Q_1$, $q_{0.75} = Q_3$
+  - Percentile = quantile × 100 (90th percentile = $q_{0.9}$)
+- Interpolation: with finite data, quantiles aren't unique — different conventions exist (Python's `np.quantile` has 9 methods). Usually doesn't matter much for large n.
+- **Boxplot anatomy:**
+  - Box: $Q_1$ to $Q_3$ (the middle 50%)
+  - Line inside: median
+  - Whiskers: typically extend to the most extreme point within $1.5 \times IQR$ from the box
+  - Points beyond whiskers: potential outliers (flagged, not necessarily wrong)
+- **When boxplots shine:** comparing distributions across groups side by side (salaries by department, scores by school, measurements by lab)
+- **When boxplots mislead:** bimodal distributions look unimodal in a boxplot — always pair with a histogram or violin plot
+
+- Applications beyond statistics:
+  - Finance: Value at Risk (VaR) = a quantile of the loss distribution ("What's the worst 5% scenario?")
+  - Medicine: growth charts for children (3rd, 50th, 97th percentile)
+  - Education: standardized test scores reported as percentiles
+
+### 1.5 Shape: skewness and kurtosis
+
+- **Skewness:** measures asymmetry
+  - $\text{Skew} = \frac{1}{n}\sum\left(\frac{X_i - \bar{X}}{S}\right)^3$
+  - Positive skew: long right tail (income, house prices, file sizes)
+  - Negative skew: long left tail (exam scores with a hard ceiling, age at retirement)
+  - Zero skew: symmetric (not necessarily normal — uniform is symmetric too)
+- **Kurtosis:** measures tail heaviness (not "peakedness" — a common misconception)
+  - Normal distribution has kurtosis = 3 (or excess kurtosis = 0)
+  - High kurtosis → more extreme outliers than you'd expect from a normal
+  - Why it matters: financial returns have high kurtosis — assuming normality underestimates risk (this contributed to the 2008 financial crisis)
+- These are useful descriptors but fragile with small samples — interpret cautiously
+
+### 1.6 The empirical CDF
+
+- **Definition:** $\hat{F}_n(t) = \frac{1}{n}\#\{X_i \le t\}$ — the fraction of observations at or below $t$
+  - A step function that jumps by $1/n$ at each data point
+- **Properties:**
+  - Non-decreasing, right-continuous, goes from 0 to 1
+  - $\hat{F}_n(t) \to F(t)$ for every $t$ as $n \to \infty$ (Glivenko–Cantelli — the "fundamental theorem of statistics")
+  - At any point $t$: $\hat{F}_n(t) \sim \text{Binomial}(n, F(t))/n$ — we can put error bars on it
+- **Visual power:** plot two ECDFs to compare distributions — more informative than histograms for comparison because it's parameter-free (no bin width choice)
+- **Kolmogorov–Smirnov statistic (intuition only):** $D_n = \sup_t |\hat{F}_n(t) - F_0(t)|$
+  - "What's the biggest gap between the empirical and theoretical CDF?"
+  - Small $D_n$ → data is consistent with $F_0$; large $D_n$ → something differs
+  - We'll formalize this as a test in Lecture 7; for now it's a visual tool
+
+### 1.7 Summary statistics can lie — always plot your data
+
+- **Anscombe's quartet (1973):** four datasets with nearly identical summary statistics (mean, variance, correlation, regression line) but wildly different scatter plots
+  - One is linear, one is curved, one has an outlier, one is clustered with one extreme point
+  - Moral: never trust a number without a picture
+- **Datasaurus Dozen (2017):** same idea, pushed to the extreme — 13 datasets (including a dinosaur) all with the same means, SDs, and correlation
+- **Simpson's paradox:** an aggregate trend can reverse when you split by a subgroup
+  - Classic example: UC Berkeley admissions appeared to discriminate against women overall, but favored women within each department — women were applying to more competitive departments
+  - This is not just a curiosity — it changes real decisions in medicine, policy, and science
+  - Connection to Lecture 8: controlling for confounders in regression is how we handle this
+
+### 1.8 Practical / take-home exercise
+
+- **EDA on a real dataset** (suggested: a dataset with known quirks — Titanic, Palmer Penguins, or a messy real-world CSV):
+  - Compute mean, median, SD, IQR, skewness for each numeric variable
+  - Make histograms — identify skewed variables, potential outliers, multimodal distributions
+  - Make boxplots by group (e.g., survival by class, body mass by species)
+  - Plot ECDFs for two subgroups on the same axes — where do they differ most?
+  - Find at least one case where a summary statistic is misleading and a plot reveals the truth
+  - Bonus: construct your own Anscombe-style pair — two tiny datasets with the same mean and variance but different shapes
 
 > **Bridge:** Descriptive stats summarize data. But we want to *learn parameters* — how do we go from data to estimates?
 
