@@ -27,8 +27,8 @@ Done
 34 07, Practical
 
 ToDo 
-35 11
-36 [12] 12, Project presentation + Wrap up
+35 [12] amsi 11 | Encapsulation, Abstraction + Generators  
+36 12, Project presentation + Wrap up
 
 37 [13] Bonus
 
