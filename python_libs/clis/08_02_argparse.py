@@ -37,6 +37,9 @@ if __name__ == "__main__":
     directory = args.directory
     logs = args.logs
     
+    # directory = "test_dir"
+    # logs = False
+    
     num_files = count_files(directory, logs)
     print(f"Number of files in '{directory}': {num_files}")
     

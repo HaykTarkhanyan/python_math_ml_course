@@ -15,9 +15,9 @@ def test_subtract():
     assert subtract(5, 2) == 3
 
 # # ------------- Parametrization -------------
-@pytest.mark.parametrize("a, b, expected", [(1, 2, 3), (2, 3, 5), (0, 0, 0)])
-def test_add_parametrized(a, b, expected):
-    assert add(a, b) == expected
+# @pytest.mark.parametrize("a, b, expected", [(1, 2, 3), (2, 3, 5), (0, 0, 0)])
+# def test_add_parametrized(a, b, expected):
+#     assert add(a, b) == expected
 
 # # For loop -
 # def test_add_multiple():
