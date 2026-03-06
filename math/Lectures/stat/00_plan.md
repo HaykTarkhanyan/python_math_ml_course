@@ -42,7 +42,7 @@ Recap of L4 → MoM (idea, Normal example, Uniform failure) → MLE idea & recip
 
 ## Next Up
 
-### Lecture 6: MAP & Bayesian Estimation (`xx_stat.tex` → `06_stat.tex`, 21 frames)
+### Lecture 6: MAP & Bayesian Estimation (`06_stat.tex`, 21 frames)
 
 Recap of L5 → Bayes' theorem for parameters → Prior × likelihood ∝ posterior → Conjugate priors (Beta-Binomial, Normal-Normal) → **Conjugate priors as pseudo-observations** → MAP estimation → When does the prior matter? → Regularization = MAP (Gaussian → Ridge, Laplace → Lasso) → **MLE vs MAP overfitting demo** → MLE vs MAP vs full Bayesian → When to use what.
 
