@@ -40,75 +40,71 @@ Recap of L4 → MoM (idea, Normal example, Uniform failure) → MLE idea & recip
 
 ---
 
-## Next Up
+### Lecture 6: MAP & Bayesian Estimation (`06_stat.tex`, 25 frames)
 
-### Lecture 6: MAP & Bayesian Estimation (`06_stat.tex`, 21 frames)
+Recap of L5 → Bayes' theorem for parameters → Prior × likelihood ∝ posterior → Conjugate priors (Beta-Binomial, Normal-Normal, Gamma-Poisson, Gamma-Exp) → **Conjugate priors as pseudo-observations** → **Sequential Bayesian updating** → **Choosing priors** (informative, weakly informative, Jeffreys) → MAP estimation → When does the prior matter? → Regularization = MAP (Gaussian → Ridge, Laplace → Lasso, **Elastic Net**) → **MLE vs MAP overfitting demo** → MLE vs MAP vs full Bayesian → **Empirical Bayes** → When to use what.
 
-Recap of L5 → Bayes' theorem for parameters → Prior × likelihood ∝ posterior → Conjugate priors (Beta-Binomial, Normal-Normal) → **Conjugate priors as pseudo-observations** → MAP estimation → When does the prior matter? → Regularization = MAP (Gaussian → Ridge, Laplace → Lasso) → **MLE vs MAP overfitting demo** → MLE vs MAP vs full Bayesian → When to use what.
-
-Builds on: L5 (MLE), Module 16 (Bayes' theorem), Module 01 (norms), Module 05 (regularization).
+Builds on: L5 (MLE), L4 (Fisher info for Jeffreys), Module 16 (Bayes' theorem), Module 01 (norms), Module 05 (regularization).
 
 **Homework:** (1) Normal conjugacy MAP derivation, (2) Beta-Binomial MAP under 3 priors, (3) Ridge closed-form = MAP
 
 ---
 
+### Lecture 7: Confidence Intervals (`07_stat.tex`, 28 frames)
+
+Recap of L5 & L6 → Sampling distributions (hat-theta is random) → The sqrt(n) law → Standard error (known vs estimated) → **Wald CI** → What 95% confidence really means → Width determinants → CI for proportions (Wald, **Wilson interval**) → Sample size planning → **t-interval** (unknown sigma) → **General MLE CI recipe** → **Bayesian credible intervals vs frequentist CIs** → **Delta method for CIs**.
+
+Builds on: L5 (MLE, asymptotic normality), L4 (Fisher info, CR bound), Module 20 (CLT).
+
+**Homework:** (1) Lightbulb CIs at 3 levels, (2) Poll CI + sample size, (3) Exponential CI via Fisher + delta method, (4) Wald vs Wilson simulation
+
+---
+
+### Lecture 8: The Bootstrap (`08_stat.tex`, 30 frames)
+
+Recap of L7 → The bootstrap idea (resample with replacement) → Bootstrap algorithm → **Bootstrap SE** → **Bootstrap bias estimation** → Why bootstrap works (plug-in principle) → **Bootstrap CIs** (Normal, **Percentile**, **BCa**) → Comparing CI methods → **Parametric vs nonparametric bootstrap** → Bootstrap for correlation → **When bootstrap fails** (extremes, small n, dependence, non-smooth) → **Permutation tests** (shuffle labels, null distribution, p-value) → Bootstrap vs permutation → How many replicates? → Python code.
+
+Builds on: L7 (CIs, SE), L5 (MLE for Uniform — bootstrap failure), L3 (bias-variance tradeoff).
+
+**Homework:** (1) Bootstrap SE/CI for median, (2) Bootstrap SE converges to S/sqrt(n), (3) A/B test: permutation + bootstrap, (4) Bootstrap failure for Uniform max
+
+---
+
 ## Future Lectures
 
-### Lecture 7: The EM Algorithm
-
-*"What if you can't observe everything you need for MLE?"*
-
-Incomplete data & latent variables → If we knew the labels, MLE would be easy → E-step (expected sufficient statistics) → M-step (maximize expected complete-data log-likelihood) → Two-coin example → **Gaussian Mixture Models** (full derivation) → EM as coordinate ascent on ELBO → Convergence (monotonic, local optima) → K-means as hard EM → When to use EM vs numerical MLE (L5).
-
-### Lecture 8: MCMC & Bayesian Computation
-
-*"The posterior exists but we can't write it down. How do we sample from it?"*
-
-Why MAP isn't enough (need full posterior for uncertainty) → Monte Carlo integration → Rejection sampling → **Metropolis-Hastings** algorithm → **Gibbs sampling** → Diagnostics (trace plots, autocorrelation, R-hat, effective sample size) → Practical tools (PyMC, Stan) → Variational inference as alternative (brief).
-
-### Lecture 9: Sampling Distributions & Confidence Intervals
-
-*"A poll reports 52% +/- 3%. Where does the +/- come from?"*
-
-Sampling distributions → Standard error → Asymptotic normality of MLE → **Delta method** (variance of transformed estimators) → Pivotal quantities → Wald confidence intervals → Exact vs asymptotic CIs → **Bayesian credible intervals vs frequentist CIs** (interpretation, coverage, when they agree/disagree).
-
-### Lecture 10: Bootstrap & Permutation Tests
-
-*"One dataset, a complicated statistic, no SE formula. Now what?"*
-
-Bootstrap idea & CIs (percentile, BCa), when bootstrap fails, permutation tests, cross-validation vs bootstrap.
-
-### Lecture 11: Hypothesis Testing
+### Lecture 9: Hypothesis Testing
 
 *"A new drug lowers blood pressure by 3 mmHg. Real effect or noise?"*
 
 H0/H1, test statistics, Type I/II errors → p-values (interpretation & misinterpretation) → **Power analysis & sample size planning** (effect size, power curves, designing studies) → Multiple testing (Bonferroni, BH-FDR).
 
-### Lecture 12: Likelihood Ratio Tests & Classical Tests
+### Lecture 10: Likelihood Ratio Tests & Classical Tests
 
 *"Which test do I actually use?"*
 
 **LRT as unifying framework** (Neyman-Pearson lemma, -2 log Λ ~ χ²) → z-test & t-test (one-sample, paired, Welch's) **as special cases of LRT** → Chi-squared tests (goodness-of-fit, independence) → Nonparametric alternatives (Mann-Whitney, Wilcoxon).
 
-### Lecture 13: Regression Inference
+### Lecture 11: Regression Inference
 
 OLS inference → Gauss-Markov theorem → SE / t-tests / p-values for coefficients → Diagnostics (residuals, QQ, leverage, Cook's distance) → R² and adjusted R² → **Logistic regression as MLE** (connects back to L5 cross-entropy slide) → Inference for logistic regression coefficients.
 
-### Lecture 14: Generalized Linear Models
+### Lecture 12: Generalized Linear Models
 
 *"OLS and logistic regression look different — but they're the same machine."*
 
-Three components: random (exp family), systematic (linear predictor), link function → Canonical links (identity, logit, log) → OLS as GLM (Normal + identity) → Logistic as GLM (Bernoulli + logit) → **Poisson regression** (counts + log link) → MLE for GLMs via IRLS → Deviance & model comparison → Connects: exp family (L3), MLE (L5), regression (L13).
+Three components: random (exp family), systematic (linear predictor), link function → Canonical links (identity, logit, log) → OLS as GLM (Normal + identity) → Logistic as GLM (Bernoulli + logit) → **Poisson regression** (counts + log link) → MLE for GLMs via IRLS → Deviance & model comparison → Connects: exp family (L3), MLE (L5), regression (L11).
 
-### Lecture 15: ANOVA, Model Comparison & Applications
+### Lecture 13: ANOVA, Model Comparison & Applications
 
 ANOVA via F-test → Prediction vs confidence intervals → **Information criteria (AIC, BIC)** for model selection → A/B testing → Reproducibility crisis.
 
-### Lecture 16: Causal Inference
+### Lecture 14: Causal Inference
 
 *"Correlation is not causation — so how do we get causation?"*
 
 Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin causal model → Average Treatment Effect (ATE) → **Randomized Controlled Trials** (the gold standard) → Confounders & Simpson's paradox revisited (from L2) → **DAGs** (directed acyclic graphs, d-separation) → Conditioning vs intervening (do-calculus basics) → Observational studies: matching, propensity scores → Instrumental variables (brief) → Connection to A/B testing.
+
+*Note: EM algorithm and MCMC/Bayesian computation topics may be added as supplementary lectures if time permits.*
 
 ---
 
@@ -122,16 +118,14 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | 4 | `04_stat.tex` | Fisher info, Cramer-Rao, admissibility, Stein's paradox |
 | 5 | `05_stat.tex` | MoM, MLE, cross-entropy, MLE failures, numerical MLE |
 | 6 | `06_stat.tex` | MAP, conjugate priors, regularization = MAP, overfitting |
-| 7 | `07_stat.tex` | EM algorithm, GMMs, K-means as hard EM |
-| 8 | `08_stat.tex` | MCMC, Metropolis-Hastings, Gibbs, Bayesian computation |
-| 9 | `09_stat.tex` | Sampling distributions, delta method, CIs (freq & Bayes) |
-| 10 | `10_stat.tex` | Bootstrap, permutation tests |
-| 11 | `11_stat.tex` | Hypothesis testing, power analysis, multiple testing |
-| 12 | `12_stat.tex` | LRT framework, t-tests, chi-squared, nonparametric |
-| 13 | `13_stat.tex` | Regression inference (OLS + logistic) |
-| 14 | `14_stat.tex` | GLMs: exp family + link functions, Poisson regression |
-| 15 | `15_stat.tex` | ANOVA, AIC/BIC, model comparison |
-| 16 | `16_stat.tex` | Causal inference, DAGs, potential outcomes, propensity |
+| 7 | `07_stat.tex` | Sampling distributions, CIs (Wald, Wilson, t, delta method) |
+| 8 | `08_stat.tex` | Bootstrap, bootstrap CIs (Normal/Percentile/BCa), permutation tests |
+| 9 | `09_stat.tex` | Hypothesis testing, power analysis, multiple testing |
+| 10 | `10_stat.tex` | LRT framework, t-tests, chi-squared, nonparametric |
+| 11 | `11_stat.tex` | Regression inference (OLS + logistic) |
+| 12 | `12_stat.tex` | GLMs: exp family + link functions, Poisson regression |
+| 13 | `13_stat.tex` | ANOVA, AIC/BIC, model comparison |
+| 14 | `14_stat.tex` | Causal inference, DAGs, potential outcomes, propensity |
 
 ---
 
@@ -152,5 +146,5 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | OLS, normal equation | Module 03 (linear regression) |
 | Bayes' theorem, priors | Module 16 (conditional probability) |
 | Delta method | Module 07 (Taylor expansion, derivatives) |
-| GLMs, link functions | L3 (exp family), L5 (MLE), L13 (regression) |
-| Causal inference, DAGs | L2 (Simpson's paradox), L11 (hypothesis testing) |
+| GLMs, link functions | L3 (exp family), L5 (MLE), L11 (regression) |
+| Causal inference, DAGs | L2 (Simpson's paradox), L9 (hypothesis testing) |
