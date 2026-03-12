@@ -50,23 +50,27 @@ Builds on: L5 (MLE), L4 (Fisher info for Jeffreys), Module 16 (Bayes' theorem), 
 
 ---
 
-### Lecture 7: Confidence Intervals (`07_stat.tex`, 28 frames)
+### Lecture 7: Sampling Distributions (`07_stat.tex`, 28 frames)
 
-Recap of L5 & L6 → Sampling distributions (hat-theta is random) → The sqrt(n) law → Standard error (known vs estimated) → **Wald CI** → What 95% confidence really means → Width determinants → CI for proportions (Wald, **Wilson interval**) → Sample size planning → **t-interval** (unknown sigma) → **General MLE CI recipe** → **Bayesian credible intervals vs frequentist CIs** → **Delta method for CIs**.
+Recap of L5 & L6 → **θ̂ is random** (thought experiment, diagram) → But we only have one sample (theory / simulation / bootstrap) → **Monte Carlo simulation** (recipe, Normal example, effect of n) → Every estimator has a sampling distribution (mean vs median vs variance) → MLE for Exp(λ) → **CLT** (statement, Uniform demo, Exponential demo, how large must n be?) → CLT for MLEs (Bernoulli, Poisson, Exp) → **SD ≠ SE** (the most confused pair) → SE of X̄ = σ/√n (derivation) → **√n law** (diminishing returns) → SE for any MLE via Fisher info → Plug-in SE → Known vs estimated SE (z vs t) → **Fisher info ↔ sampling distribution** (sharp vs flat) → The full picture (analytical vs computational paths) → Python Monte Carlo code.
 
-Builds on: L5 (MLE, asymptotic normality), L4 (Fisher info, CR bound), Module 20 (CLT).
+Builds on: L4 (Fisher info, CR bound), L5 (MLE, asymptotic normality), Module 20 (CLT).
 
-**Homework:** (1) Lightbulb CIs at 3 levels, (2) Poll CI + sample size, (3) Exponential CI via Fisher + delta method, (4) Wald vs Wilson simulation
+**Homework:** (1) SE of p̂ two ways, (2) Poisson sampling distribution simulation, (3) IQ sample size planning, (4) Uniform MLE SE — why asymptotic formula fails
 
 ---
 
-### Lecture 8: The Bootstrap (`08_stat.tex`, 30 frames)
+### Lecture 8: Confidence Intervals & The Bootstrap (`08_stat.tex`, 30 frames)
 
-Recap of L7 → The bootstrap idea (resample with replacement) → Bootstrap algorithm → **Bootstrap SE** → **Bootstrap bias estimation** → Why bootstrap works (plug-in principle) → **Bootstrap CIs** (Normal, **Percentile**, **BCa**) → Comparing CI methods → **Parametric vs nonparametric bootstrap** → Bootstrap for correlation → **When bootstrap fails** (extremes, small n, dependence, non-smooth) → **Permutation tests** (shuffle labels, null distribution, p-value) → Bootstrap vs permutation → How many replicates? → Python code.
+**Part I — Confidence Intervals (analytical path):** What is a CI (definition + many-CIs visualization) → Wald CI construction → Example (lightbulb) → What 95% confidence really means (correct vs wrong interpretation) → Width determinants (confidence level, σ, n) → CI for proportions (Wald + Wilson, when Wald fails) → Sample size planning → **t-interval** + general MLE CI recipe → CI vs credible interval (frequentist vs Bayesian) → **Delta method** for transformations.
 
-Builds on: L7 (CIs, SE), L5 (MLE for Uniform — bootstrap failure), L3 (bias-variance tradeoff).
+**Part II — The Bootstrap (computational path):** When formulas don't exist → Core insight (ideal vs bootstrap world) → Bootstrap algorithm (5 steps) → Visualizing bootstrap samples → Bootstrap SE + distribution → **Bootstrap CIs** (Normal, Percentile, **BCa**) → Why it works (plug-in principle) → Parametric vs nonparametric → When bootstrap fails (extremes, small n, dependence, non-smooth).
 
-**Homework:** (1) Bootstrap SE/CI for median, (2) Bootstrap SE converges to S/sqrt(n), (3) A/B test: permutation + bootstrap, (4) Bootstrap failure for Uniform max
+**Part III — Two Paths, One Goal:** Analytical vs bootstrap comparison (pros/cons) → When to use which → Python code.
+
+Builds on: L7 (sampling distributions, SE, CLT), L5 (MLE), L4 (Fisher info), L6 (credible intervals), L3 (bias-variance).
+
+*Note: Permutation tests moved to L9/L10 (after hypothesis testing introduces p-values).*
 
 ---
 
@@ -118,8 +122,8 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | 4 | `04_stat.tex` | Fisher info, Cramer-Rao, admissibility, Stein's paradox |
 | 5 | `05_stat.tex` | MoM, MLE, cross-entropy, MLE failures, numerical MLE |
 | 6 | `06_stat.tex` | MAP, conjugate priors, regularization = MAP, overfitting |
-| 7 | `07_stat.tex` | Sampling distributions, CIs (Wald, Wilson, t, delta method) |
-| 8 | `08_stat.tex` | Bootstrap, bootstrap CIs (Normal/Percentile/BCa), permutation tests |
+| 7 | `07_stat.tex` | Sampling distributions, Monte Carlo, CLT in action, SD vs SE |
+| 8 | `08_stat.tex` | CIs (Wald, Wilson, t, delta) + bootstrap (SE, percentile, BCa) |
 | 9 | `09_stat.tex` | Hypothesis testing, power analysis, multiple testing |
 | 10 | `10_stat.tex` | LRT framework, t-tests, chi-squared, nonparametric |
 | 11 | `11_stat.tex` | Regression inference (OLS + logistic) |
