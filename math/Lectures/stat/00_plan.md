@@ -140,11 +140,29 @@ Builds on: L9 (hypothesis testing, p-values, power, multiple testing), L10 (t-te
 
 ---
 
+### Lecture 12: Regression Inference (`12_stat.tex`, 32 frames)
+
+*"From fitting lines to testing coefficients."*
+
+**Part I — The Linear Model:** Quick OLS recall (scatter + fitted line) → Statistical model ($Y = X\beta + \varepsilon$, $\varepsilon \sim N(0,\sigma^2)$) → Parameters vs estimates (sampling distribution of $\hat\beta$) → LINE assumptions (Linearity, Independence, Normality, Equal variance).
+
+**Part II — Inference for Coefficients:** Sampling distribution of $\hat\beta_j$ → SE formula (simple and matrix form, what makes SE small/large) → $t$-test for individual coefficients ($T = \hat\beta_j / \text{SE}$) → House prices example (table with estimates, SE, $t$, $p$) → CIs for coefficients (CI contains 0 ↔ not significant, visualization).
+
+**Part III — Overall Model Fit:** Overall $F$-test (ANOVA for regression) → $R^2$ and adjusted $R^2$ (benchmarks, trap of adding useless predictors).
+
+**Part IV — Gauss-Markov:** OLS is BLUE (Best Linear Unbiased Estimator) → When Gauss-Markov doesn't help (heteroscedasticity → robust SE, non-linearity, biased estimators can win → ridge/lasso from L6).
+
+**Part V — Diagnostics:** Four diagnostic plots (residuals vs fitted good/bad, QQ plot good/bad) → Leverage ($h_{ii}$) and Cook's distance ($D_i$) with influential point visualization.
+
+**Part VI — Logistic Regression:** Logistic as MLE (sigmoid, cross-entropy) → $Z$-test for coefficients (asymptotic normality from Fisher info) → Odds ratios ($e^{\hat\beta_j}$, interpretation, CIs) → OLS vs Logistic comparison table.
+
+Builds on: L5 (MLE, cross-entropy), L6 (regularization = MAP), L7 (sampling distributions, SE), L10 (t-tests), L11 (ANOVA, F-test), L3 (bias-variance, Cramér-Rao), L4 (Fisher info).
+
+**Homework:** (1) Simulated regression ($\beta_2 = 0$, check significance + CIs + $R^2$), (2) Diabetes dataset diagnostics (influential points, Cook's distance), (3) Logistic regression on breast cancer (odds ratios + CIs), (4) Theory: why $R^2$ always increases but $R^2_\text{adj}$ can decrease.
+
+---
+
 ## Future Lectures
-
-### Lecture 12: Regression Inference
-
-OLS inference → Gauss-Markov theorem → SE / t-tests / p-values for coefficients → Diagnostics (residuals, QQ, leverage, Cook's distance) → R² and adjusted R² → **Logistic regression as MLE** (connects back to L5 cross-entropy slide) → Inference for logistic regression coefficients.
 
 ### Lecture 13: Generalized Linear Models
 
@@ -177,7 +195,7 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | 9 | `09_stat.tex` | Hypothesis testing, p-values, power, permutation tests, multiple testing |
 | 10 | `10_stat.tex` | Classical tests & LRT: t-tests, chi-squared, nonparametric, decision flowchart |
 | 11 | `11_stat.tex` | ANOVA, A/B testing, post-hoc, sequential testing |
-| 12 | `12_stat.tex` | Regression inference (OLS + logistic) |
+| 12 | `12_stat.tex` | Regression inference: SE, t-tests, R², Gauss-Markov, diagnostics, logistic |
 | 13 | `13_stat.tex` | GLMs: exp family + link functions, Poisson regression |
 | 14 | `14_stat.tex` | Causal inference, DAGs, potential outcomes, propensity |
 
