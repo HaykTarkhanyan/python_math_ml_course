@@ -96,13 +96,27 @@ Builds on: L7 (sampling distributions, SE), L8 (CIs, bootstrap), L6 (Bayesian fo
 
 ---
 
-## Future Lectures
-
-### Lecture 10: Likelihood Ratio Tests & Classical Tests
+### Lecture 10: Classical Tests & the LRT Framework (`10_stat.tex`, 30 frames)
 
 *"Which test do I actually use?"*
 
-**LRT as unifying framework** (Neyman-Pearson lemma, -2 log Λ ~ χ²) → z-test & t-test (one-sample, paired, Welch's) **as special cases of LRT** → Chi-squared tests (goodness-of-fit, independence) → Nonparametric alternatives (Mann-Whitney, Wilcoxon).
+**Part I — The Unifying Principle:** Nested models (restricted vs full) → Likelihood ratio statistic (Λ) → Wilks' theorem ($-2\log\Lambda \to \chi^2_k$) → The χ² distribution (density curves, key facts, decision rule).
+
+**Part II — Tests for Means:** One-sample t-test (coffee shop example) → Paired t-test (blood pressure before/after, why pairing matters) → Two-sample t-test (pooled + **Welch's** — default to Welch's) → Teaching methods example → Test for proportions (z-test, coin flip example, two-proportion formula).
+
+**Part III — Chi-Squared Tests:** Goodness-of-fit (die fairness example with bar chart) → Test of independence (smoking/cancer 2×2 contingency table, expected counts formula).
+
+**Part IV — When Assumptions Fail:** Mann–Whitney U test (rank-based, visualization of ranking procedure) → Wilcoxon signed-rank test (paired nonparametric, bar chart of differences).
+
+**Decision Flowchart:** TikZ decision tree (data type → number of groups → paired? → specific test).
+
+Builds on: L9 (hypothesis testing, p-values, power), L7 (sampling distributions, CLT), L5 (MLE), L4 (Fisher info).
+
+**Homework:** (1) One-sample t + CI (manufacturer weight claim), (2) Paired vs unpaired t on runners' times, (3) χ² GoF on transport preferences, (4) χ² independence on study method vs exam result.
+
+---
+
+## Future Lectures
 
 ### Lecture 11: Regression Inference
 
@@ -141,7 +155,7 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | 7 | `07_stat.tex` | Sampling distributions, Monte Carlo, CLT in action, SD vs SE |
 | 8 | `08_stat.tex` | CIs (Wald, Wilson, t, delta) + bootstrap (SE, percentile, BCa) |
 | 9 | `09_stat.tex` | Hypothesis testing, p-values, power, permutation tests, multiple testing |
-| 10 | `10_stat.tex` | LRT framework, t-tests, chi-squared, nonparametric |
+| 10 | `10_stat.tex` | Classical tests & LRT: t-tests, chi-squared, nonparametric, decision flowchart |
 | 11 | `11_stat.tex` | Regression inference (OLS + logistic) |
 | 12 | `12_stat.tex` | GLMs: exp family + link functions, Poisson regression |
 | 13 | `13_stat.tex` | ANOVA, AIC/BIC, model comparison |
