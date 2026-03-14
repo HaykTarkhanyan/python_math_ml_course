@@ -162,13 +162,31 @@ Builds on: L5 (MLE, cross-entropy), L6 (regularization = MAP), L7 (sampling dist
 
 ---
 
-## Future Lectures
-
-### Lecture 13: Generalized Linear Models
+### Lecture 13: Generalized Linear Models (`13_stat.tex`, 29 frames)
 
 *"OLS and logistic regression look different — but they're the same machine."*
 
-Three components: random (exp family), systematic (linear predictor), link function → Canonical links (identity, logit, log) → OLS as GLM (Normal + identity) → Logistic as GLM (Bernoulli + logit) → **Poisson regression** (counts + log link) → MLE for GLMs via IRLS → Deviance & model comparison → Connects: exp family (L3), MLE (L5), regression (L12).
+**Part I — Motivation:** Three response types (continuous/binary/counts) → Why OLS fails for binary and count data (two plots showing OLS predictions outside valid range).
+
+**Part II — Three Components:** Random component (exponential family) + Systematic component (linear predictor η = Xβ) + Link function g(μ) = η → Exponential family table (Normal, Bernoulli, Poisson, Exponential with natural parameter, log-partition, mean) → Link functions (Identity, Logit, Log) with range diagrams → Canonical links.
+
+**Part III — OLS as GLM:** Normal + Identity → MLE = OLS, exact t and F, closed-form solution. Special properties.
+
+**Part IV — Logistic as GLM:** Bernoulli + Logit → logit link maps (0,1) → ℝ → MLE via IRLS, Z-tests, odds ratios, variance depends on mean.
+
+**Part V — Poisson Regression:** Poisson + Log → log link ensures λ > 0, multiplicative effects (rate ratios) → Bike rentals example → Fitted curve plot → Overdispersion (Negative Binomial, Quasi-Poisson).
+
+**Part VI — Estimation & Inference:** IRLS algorithm (4 steps) → Inference comparison table (OLS vs Logistic vs Poisson: estimation, test stat, SE, CI, interpretation, overall test) → Deviance as GLM analogue of RSS → Model comparison via LRT on deviance → AIC = D + 2p.
+
+**Part VII — The Big Picture:** GLM family tree (TikZ diagram) → Choosing the right GLM (decision guide based on response type).
+
+Builds on: L3 (exponential family), L5 (MLE), L10 (LRT, chi-squared), L12 (regression inference, logistic regression).
+
+**Homework:** (1) ER visits Poisson GLM + overdispersion check, (2) Normal canonical link + deviance = RSS proof, (3) Insurance claims Gamma GLM, (4) Unifying exercise: OLS vs logistic vs Poisson on one dataset.
+
+---
+
+## Future Lectures
 
 ### Lecture 14: Causal Inference
 
