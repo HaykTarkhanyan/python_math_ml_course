@@ -116,21 +116,41 @@ Builds on: L9 (hypothesis testing, p-values, power), L7 (sampling distributions,
 
 ---
 
+### Lecture 11: ANOVA & A/B Testing (`11_stat.tex`, 34 frames)
+
+*"Three groups, three t-tests — what could go wrong?"*
+
+**Part I — The Problem:** Multiple t-tests inflate false positives (1-(1-α)^m explosion plot) → Need a single test for k groups.
+
+**Part II — One-Way ANOVA:** Between vs within variability (scatter visualization) → SS decomposition (SST = SSB + SSW, three explanation boxes) → F-statistic (MS ratio, F distribution plots) → ANOVA table (template + numerical example) → Assumptions (independence, normality, equal variances, Welch's ANOVA, Kruskal-Wallis).
+
+**Part III — Post-Hoc Tests:** Tukey's HSD vs Bonferroni (when to use which) → Visualizing post-hoc results (means with CIs and significance brackets).
+
+**Part IV — Beyond Basics:** Effect size η² (eta-squared, small/medium/large benchmarks) → Two-way ANOVA (interaction plot, non-parallel lines = interaction).
+
+**Part V — A/B Testing:** What is A/B testing (randomization diagram) → A/B test = hypothesis test (5-step recipe, MDE) → Sample size planning (proportions formula, 8K users example) → Button color example (z-test, relative lift).
+
+**Part VI — A/B Testing Pitfalls:** Peeking (p-value trajectory plot, 26% false positive rate) → Too many metrics → Novelty/primacy, Simpson's paradox, interference, survivorship bias → Sequential testing (O'Brien–Fleming boundaries plot).
+
+**Big Picture:** ANOVA vs A/B testing comparison table → When to use what (decision guide).
+
+Builds on: L9 (hypothesis testing, p-values, power, multiple testing), L10 (t-tests, chi-squared, decision flowchart).
+
+**Homework:** (1) Three fertilizers one-way ANOVA + η² + Bonferroni, (2) E-commerce A/B test (z-test + sample size planning), (3) Peeking simulation in Python, (4) A/B/C test via χ² homogeneity + pairwise z-tests.
+
+---
+
 ## Future Lectures
 
-### Lecture 11: Regression Inference
+### Lecture 12: Regression Inference
 
 OLS inference → Gauss-Markov theorem → SE / t-tests / p-values for coefficients → Diagnostics (residuals, QQ, leverage, Cook's distance) → R² and adjusted R² → **Logistic regression as MLE** (connects back to L5 cross-entropy slide) → Inference for logistic regression coefficients.
 
-### Lecture 12: Generalized Linear Models
+### Lecture 13: Generalized Linear Models
 
 *"OLS and logistic regression look different — but they're the same machine."*
 
-Three components: random (exp family), systematic (linear predictor), link function → Canonical links (identity, logit, log) → OLS as GLM (Normal + identity) → Logistic as GLM (Bernoulli + logit) → **Poisson regression** (counts + log link) → MLE for GLMs via IRLS → Deviance & model comparison → Connects: exp family (L3), MLE (L5), regression (L11).
-
-### Lecture 13: ANOVA, Model Comparison & Applications
-
-ANOVA via F-test → Prediction vs confidence intervals → **Information criteria (AIC, BIC)** for model selection → A/B testing → Reproducibility crisis.
+Three components: random (exp family), systematic (linear predictor), link function → Canonical links (identity, logit, log) → OLS as GLM (Normal + identity) → Logistic as GLM (Bernoulli + logit) → **Poisson regression** (counts + log link) → MLE for GLMs via IRLS → Deviance & model comparison → Connects: exp family (L3), MLE (L5), regression (L12).
 
 ### Lecture 14: Causal Inference
 
@@ -156,9 +176,9 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | 8 | `08_stat.tex` | CIs (Wald, Wilson, t, delta) + bootstrap (SE, percentile, BCa) |
 | 9 | `09_stat.tex` | Hypothesis testing, p-values, power, permutation tests, multiple testing |
 | 10 | `10_stat.tex` | Classical tests & LRT: t-tests, chi-squared, nonparametric, decision flowchart |
-| 11 | `11_stat.tex` | Regression inference (OLS + logistic) |
-| 12 | `12_stat.tex` | GLMs: exp family + link functions, Poisson regression |
-| 13 | `13_stat.tex` | ANOVA, AIC/BIC, model comparison |
+| 11 | `11_stat.tex` | ANOVA, A/B testing, post-hoc, sequential testing |
+| 12 | `12_stat.tex` | Regression inference (OLS + logistic) |
+| 13 | `13_stat.tex` | GLMs: exp family + link functions, Poisson regression |
 | 14 | `14_stat.tex` | Causal inference, DAGs, potential outcomes, propensity |
 
 ---

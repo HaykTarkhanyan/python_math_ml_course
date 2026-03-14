@@ -1,0 +1,1153 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{default}
+\usecolortheme{dove}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \hfill{\large\insertframenumber\,/\,\inserttotalframenumber}\hspace{0.8em}\vspace{0.5em}%
+}
+
+\definecolor{popblue}{RGB}{52, 101, 164}
+\definecolor{sampred}{RGB}{204, 0, 0}
+\definecolor{paramgreen}{RGB}{0, 140, 70}
+\definecolor{warnred}{RGB}{180, 40, 40}
+\definecolor{orange1}{RGB}{220, 120, 0}
+\definecolor{violet1}{RGB}{120, 50, 160}
+\definecolor{lightbg}{RGB}{245, 245, 250}
+
+\setbeamercolor{frametitle}{fg=popblue}
+\setbeamercolor{title}{fg=popblue}
+
+\usepackage{pgfplots}
+\usepackage{tikz}
+\usetikzlibrary{shapes, arrows.meta, positioning, calc, decorations.pathreplacing, patterns}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{statistics}
+\usepackage{amsmath, amssymb}
+\usepackage{pifont}
+\usepackage{colortbl}
+\usepackage{fontenc}
+
+\title{Lecture 11: ANOVA \& A/B Testing}
+\subtitle{Comparing Many Groups $\cdot$ Experimenting at Scale}
+\date{}
+
+\begin{document}
+
+% ============================================================
+\begin{frame}
+\titlepage
+\end{frame}
+
+% ============================================================
+\begin{frame}
+\frametitle{Previously, on Lecture 10\ldots}
+
+\begin{center}
+\begin{tikzpicture}[
+  sbox/.style={draw=popblue!60, fill=popblue!5, rounded corners=4pt, text width=12cm, minimum height=0.5cm, align=left, inner sep=5pt, font=\small}
+]
+  \node[sbox] at (0, 2.0) {\textbf{LRT:} Compare restricted vs full model. $-2\log\Lambda \sim \chi^2_k$ (Wilks' theorem).};
+  \node[sbox] at (0, 1.2) {\textbf{$t$-tests:} One-sample, paired, Welch's two-sample. The workhorses of inference.};
+  \node[sbox] at (0, 0.4) {\textbf{$\chi^2$ tests:} Goodness-of-fit (one variable) and independence (two categorical variables).};
+  \node[sbox] at (0, -0.4) {\textbf{Nonparametric:} Mann--Whitney and Wilcoxon when normality fails.};
+  \node[sbox] at (0, -1.2) {\textbf{Flowchart:} Data type $\to$ number of groups $\to$ paired? $\to$ specific test.};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.3cm}
+\begin{center}
+{\large\textbf{Today:}} What if we have \textbf{three or more} groups? And how does industry actually run experiments?
+\end{center}
+\end{frame}
+
+% ============================================================
+% PART I: THE PROBLEM WITH MULTIPLE t-TESTS
+% ============================================================
+\section{Why Not Multiple $t$-Tests?}
+
+\begin{frame}
+\begin{center}
+  \vspace{1.5cm}
+  {\Huge\bfseries\textcolor{popblue}{Part I: The Problem}}
+
+  \vspace{0.8cm}
+  {\large Three groups, three $t$-tests --- what could go wrong?}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Comparing More Than Two Groups}
+
+\small
+\textbf{Scenario:} A teacher tries three teaching methods (A, B, C) on different classes. Are exam scores different?
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    width=10cm, height=4cm,
+    boxplot/draw direction=y,
+    xtick={1, 2, 3},
+    xticklabels={Method A, Method B, Method C},
+    ylabel={Exam score},
+    ymin=50, ymax=100,
+    grid=major, grid style={gray!15},
+    every axis plot/.style={fill=popblue!25}
+  ]
+    % Method A
+    \addplot+[boxplot prepared={lower whisker=60, lower quartile=68, median=74, upper quartile=80, upper whisker=90}, fill=popblue!30] coordinates {};
+    % Method B
+    \addplot+[boxplot prepared={lower whisker=55, lower quartile=63, median=70, upper quartile=76, upper whisker=85}, fill=sampred!30] coordinates {};
+    % Method C
+    \addplot+[boxplot prepared={lower whisker=65, lower quartile=75, median=82, upper quartile=88, upper whisker=95}, fill=paramgreen!30] coordinates {};
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\textbf{Na\"ive approach:} Run three pairwise $t$-tests: A vs B, A vs C, B vs C.
+
+\vspace{0.1cm}
+\textbf{Problem:} Each test has $\alpha = 0.05$ false positive rate. Three tests?
+$$P(\text{at least one false positive}) = 1 - (1 - 0.05)^3 = 0.143$$
+With 10 groups: $\binom{10}{2} = 45$ tests $\Rightarrow$ $1 - 0.95^{45} = 0.90$. Almost certain to find ``something.''
+\end{frame}
+
+\begin{frame}
+\frametitle{The Multiple Comparisons Explosion}
+
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    width=10cm, height=4.5cm,
+    xlabel={Number of groups $k$},
+    ylabel={$P(\text{at least one false positive})$},
+    xmin=2, xmax=10,
+    ymin=0, ymax=1,
+    grid=major, grid style={gray!15},
+    xtick={2,3,4,5,6,7,8,9,10},
+    ytick={0, 0.2, 0.4, 0.6, 0.8, 1.0},
+    every axis plot/.style={thick, mark=*, mark size=2pt}
+  ]
+    % 1 - (0.95)^(k choose 2)
+    \addplot[popblue] coordinates {
+      (2, 0.05) (3, 0.143) (4, 0.265) (5, 0.401) (6, 0.537)
+      (7, 0.659) (8, 0.760) (9, 0.838) (10, 0.901)
+    };
+    \draw[thick, dashed, warnred] (axis cs:2, 0.05) -- (axis cs:10, 0.05);
+    \node[font=\scriptsize, warnred, right] at (axis cs:10, 0.08) {$\alpha = 0.05$};
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{warnred}{warnred!5}{\parbox{10cm}{\centering\small
+  \textbf{We need a single test} that asks: ``Are \textit{any} of these group means different?''\\
+  while controlling the overall Type~I error rate at $\alpha$.\\[3pt]
+  That test is \textbf{ANOVA} (Analysis of Variance).
+}}
+\end{center}
+\end{frame}
+
+% ============================================================
+% PART II: ONE-WAY ANOVA
+% ============================================================
+\section{One-Way ANOVA}
+
+\begin{frame}
+\begin{center}
+  \vspace{1.5cm}
+  {\Huge\bfseries\textcolor{popblue}{Part II: One-Way ANOVA}}
+
+  \vspace{0.8cm}
+  {\large One factor, $k$ groups --- split the total variability}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{The Core Idea: Between vs Within}
+
+\begin{center}
+\begin{tikzpicture}
+  % Grand mean line
+  \draw[thick, dashed, black!50] (0, 2.5) -- (13, 2.5);
+  \node[font=\scriptsize, left] at (0, 2.5) {$\bar{X}_{\cdot\cdot}$};
+
+  % Group A
+  \fill[popblue!15] (0.5, 0) rectangle (4, 4.5);
+  \node[font=\small\bfseries, popblue] at (2.25, 4.8) {Group A};
+  \draw[thick, popblue] (0.5, 3.2) -- (4, 3.2);
+  \node[font=\scriptsize, popblue, left] at (0.5, 3.2) {$\bar{X}_1$};
+  \foreach \x/\y in {1.2/2.8, 1.8/3.0, 2.5/3.5, 3.0/3.6, 1.5/2.9, 3.3/3.3} {
+    \fill[popblue] (\x, \y) circle (2pt);
+  }
+
+  % Group B
+  \fill[sampred!10] (4.3, 0) rectangle (7.5, 4.5);
+  \node[font=\small\bfseries, sampred] at (5.9, 4.8) {Group B};
+  \draw[thick, sampred] (4.3, 2.0) -- (7.5, 2.0);
+  \node[font=\scriptsize, sampred, right] at (7.5, 2.0) {$\bar{X}_2$};
+  \foreach \x/\y in {4.8/1.6, 5.5/2.3, 5.1/1.8, 6.3/2.4, 5.8/2.1, 6.8/1.7} {
+    \fill[sampred] (\x, \y) circle (2pt);
+  }
+
+  % Group C
+  \fill[paramgreen!10] (8.3, 0) rectangle (11.5, 4.5);
+  \node[font=\small\bfseries, paramgreen] at (9.9, 4.8) {Group C};
+  \draw[thick, paramgreen] (8.3, 3.8) -- (11.5, 3.8);
+  \node[font=\scriptsize, paramgreen, right] at (11.5, 3.8) {$\bar{X}_3$};
+  \foreach \x/\y in {8.8/3.5, 9.4/4.0, 10.0/3.6, 10.6/4.2, 9.1/3.9, 11.0/3.7} {
+    \fill[paramgreen] (\x, \y) circle (2pt);
+  }
+
+  % Annotations
+  \draw[<->, thick, orange1] (12.2, 2.0) -- (12.2, 3.8);
+  \node[font=\scriptsize, orange1, right, align=left] at (12.2, 2.9) {\textbf{Between}\\groups};
+
+  \draw[<->, thick, violet1] (0.3, 2.8) -- (0.3, 3.6);
+  \node[font=\scriptsize, violet1, left, align=right] at (0.3, 3.2) {\textbf{Within}\\group};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{popblue}{popblue!5}{\parbox{11cm}{\centering\small
+  \textbf{If group means are truly equal,} the ``between-group'' variability should be\\
+  no larger than the ``within-group'' variability (just random noise).
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Sum of Squares Decomposition}
+
+\vspace{-0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=12cm, align=center, inner sep=8pt] {
+    $\underbrace{\sum_{i,j}(X_{ij} - \bar{X}_{\cdot\cdot})^2}_{\text{SS}_{\text{Total}}} = \underbrace{\sum_{i=1}^{k} n_i(\bar{X}_{i\cdot} - \bar{X}_{\cdot\cdot})^2}_{\text{SS}_{\text{Between}}} + \underbrace{\sum_{i,j}(X_{ij} - \bar{X}_{i\cdot})^2}_{\text{SS}_{\text{Within}}}$
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}[
+  cbox/.style={draw, rounded corners=6pt, text width=3.5cm, align=center, inner sep=6pt, font=\small, minimum height=2cm}
+]
+  \node[cbox, fill=black!5] at (-5.2, 0) {
+    {\bfseries $\text{SS}_{\text{Total}}$}\\[3pt]
+    Total spread of all\\
+    observations around $\bar{X}_{\cdot\cdot}$\\[2pt]
+    df $= N - 1$
+  };
+  \node[font=\Huge] at (-2.8, 0) {$=$};
+  \node[cbox, fill=orange1!10, draw=orange1!50] at (-0.5, 0) {
+    {\bfseries\textcolor{orange1}{$\text{SS}_{\text{Between}}$}}\\[3pt]
+    Spread of \textit{group means}\\
+    around $\bar{X}_{\cdot\cdot}$\\[2pt]
+    df $= k - 1$
+  };
+  \node[font=\Huge] at (2, 0) {$+$};
+  \node[cbox, fill=violet1!10, draw=violet1!50] at (4.5, 0) {
+    {\bfseries\textcolor{violet1}{$\text{SS}_{\text{Within}}$}}\\[3pt]
+    Spread around\\
+    \textit{own} group mean\\[2pt]
+    df $= N - k$
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{The $F$-Statistic}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=violet1, fill=violet1!5, rounded corners=10pt, text width=11cm, align=center, inner sep=12pt] {
+    {\Large $F = \dfrac{\text{MS}_{\text{Between}}}{\text{MS}_{\text{Within}}} = \dfrac{\text{SS}_{\text{Between}} / (k - 1)}{\text{SS}_{\text{Within}} / (N - k)} \;\sim\; F_{k-1,\, N-k}$}\\[10pt]
+    \small under $H_0\!: \mu_1 = \mu_2 = \cdots = \mu_k$
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[
+  cbox/.style={draw, rounded corners=5pt, text width=5.5cm, align=left, inner sep=7pt, font=\small}
+]
+  \node[cbox, fill=popblue!8] at (-4.2, 0) {
+    \textbf{\textcolor{popblue}{$F \approx 1$: No evidence}}\\[3pt]
+    Between-group variance $\approx$\\
+    within-group variance.\\
+    Group means are similar.\\
+    $\Rightarrow$ Fail to reject $H_0$.
+  };
+  \node[cbox, fill=warnred!8] at (4.2, 0) {
+    \textbf{\textcolor{warnred}{$F \gg 1$: Evidence}}\\[3pt]
+    Between-group variance $\gg$\\
+    within-group variance.\\
+    Group means differ.\\
+    $\Rightarrow$ Reject $H_0$.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\small $F$ is always $\geq 0$. We only reject in the \textbf{right tail} (one-sided).
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{The $F$-Distribution}
+
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    width=10cm, height=4.5cm,
+    domain=0.05:6, samples=100,
+    xlabel={$x$}, ylabel={Density},
+    xmin=0, xmax=6, ymin=0, ymax=0.85,
+    grid=major, grid style={gray!15},
+    legend style={at={(0.98,0.95)}, anchor=north east, font=\footnotesize},
+    every axis plot/.style={thick, no markers}
+  ]
+    % F(2,10): Beta(1,5) scaled
+    \addplot[sampred] {(1/(1+x*2/10))^6 * (x*2/10)^0 * 2/10 / 0.333};
+    \addlegendentry{$F_{2,10}$}
+    % F(5,20)
+    \addplot[popblue] {x^(1.5) * (1+x*5/20)^(-12.5) * 3.2};
+    \addlegendentry{$F_{5,20}$}
+    % F(10,50)
+    \addplot[paramgreen] {x^(4) * (1+x*10/50)^(-30) * 85};
+    \addlegendentry{$F_{10,50}$}
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=popblue!50, fill=popblue!3, rounded corners=5pt, text width=12cm, align=left, inner sep=7pt, font=\small] {
+    \textbf{Key facts:}\;
+    Ratio of two independent $\chi^2$ variables, each divided by their df.\\
+    Right-skewed; mean $\approx 1$ when $H_0$ is true (for large denominator df).\\
+    \textbf{Special case:} $F_{1,\,n-2} = t_{n-2}^{\,2}$. The $t$-test is a special case of ANOVA with $k = 2$.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{The ANOVA Table}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[inner sep=0pt] {
+    \small
+    \begin{tabular}{l|cccc}
+      \textbf{Source} & \textbf{SS} & \textbf{df} & \textbf{MS} & \textbf{$F$} \\
+      \hline
+      \rowcolor{orange1!10}
+      Between (Treatment) & $\text{SS}_\text{B}$ & $k - 1$ & $\text{SS}_\text{B}/(k{-}1)$ & $\text{MS}_\text{B}/\text{MS}_\text{W}$ \\
+      \rowcolor{violet1!8}
+      Within (Error) & $\text{SS}_\text{W}$ & $N - k$ & $\text{SS}_\text{W}/(N{-}k)$ & \\
+      \hline
+      Total & $\text{SS}_\text{T}$ & $N - 1$ & & \\
+    \end{tabular}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.3cm}
+\textbf{Example:} Three methods, $n_i = 10$ each ($N = 30$).
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[inner sep=0pt] {
+    \small
+    \begin{tabular}{l|cccc}
+      \textbf{Source} & \textbf{SS} & \textbf{df} & \textbf{MS} & \textbf{$F$} \\
+      \hline
+      \rowcolor{orange1!10}
+      Between & 720 & 2 & 360 & $360/40 = \mathbf{9.0}$ \\
+      \rowcolor{violet1!8}
+      Within & 1080 & 27 & 40 & \\
+      \hline
+      Total & 1800 & 29 & & \\
+    \end{tabular}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+$F_{2,\,27,\,0.05} = 3.35$. Since $F = 9.0 > 3.35$: \textbf{reject} $H_0$.\\
+At least one teaching method gives different results. But which one?
+\end{frame}
+
+\begin{frame}
+\frametitle{ANOVA: Assumptions}
+
+\begin{center}
+\begin{tikzpicture}[
+  abox/.style={draw=popblue!50, fill=popblue!3, rounded corners=6pt, text width=11.5cm, align=left, inner sep=8pt, font=\small}
+]
+  \node[abox] at (0, 2.6) {
+    \textbf{1. Independence:} Observations within and between groups are independent.\\
+    \hspace{1cm}\textcolor{black!50}{\small Violated by: repeated measures, clustered data, time series.}
+  };
+  \node[abox] at (0, 1.0) {
+    \textbf{2. Normality:} Each group is (approximately) normally distributed.\\
+    \hspace{1cm}\textcolor{black!50}{\small Robust to violations when $n_i \geq 20$ (CLT). Check with QQ plots.}
+  };
+  \node[abox] at (0, -0.6) {
+    \textbf{3. Equal variances (homoscedasticity):} $\sigma_1^2 = \sigma_2^2 = \cdots = \sigma_k^2$.\\
+    \hspace{1cm}\textcolor{black!50}{\small Rule of thumb: OK if largest $S_i$ / smallest $S_i < 2$.}\\
+    \hspace{1cm}\textcolor{black!50}{\small Test with Levene's test. Alternative: Welch's ANOVA.}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\fcolorbox{orange1}{orange1!5}{\parbox{10cm}{\centering\footnotesize
+  \textbf{If equal-variance assumption fails:} use \textbf{Welch's ANOVA} (\texttt{scipy.stats.f\_oneway} does this).\\
+  If normality fails: use \textbf{Kruskal--Wallis test} (nonparametric ANOVA).
+}}
+\end{center}
+\end{frame}
+
+% ============================================================
+% PART III: POST-HOC TESTS
+% ============================================================
+\section{Post-Hoc: Which Groups Differ?}
+
+\begin{frame}
+\begin{center}
+  \vspace{1.5cm}
+  {\Huge\bfseries\textcolor{popblue}{Part III: Post-Hoc Tests}}
+
+  \vspace{0.8cm}
+  {\large ANOVA says ``something differs.'' Post-hoc says \textit{what.}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Post-Hoc: Which Pairs Are Different?}
+\framesubtitle{Only run post-hoc tests \textit{after} ANOVA rejects $H_0$}
+
+\begin{center}
+\begin{tikzpicture}[
+  cbox/.style={draw, rounded corners=6pt, text width=5.3cm, align=left, inner sep=7pt, font=\small, minimum height=3.5cm}
+]
+  \node[cbox, fill=popblue!8, draw=popblue!40] at (-4.2, 0) {
+    {\large\bfseries\textcolor{popblue}{Tukey's HSD}}\\[5pt]
+    Honestly Significant Difference.\\[3pt]
+    Compares \textit{all} pairs.\\[3pt]
+    Controls \textbf{family-wise} error rate.\\[3pt]
+    Uses studentized range ($q$).\\[3pt]
+    \textbf{Best for:} equal $n_i$, all pairs.
+  };
+  \node[cbox, fill=orange1!8, draw=orange1!40] at (4.2, 0) {
+    {\large\bfseries\textcolor{orange1}{Bonferroni}}\\[5pt]
+    Divide $\alpha$ by number of tests.\\[3pt]
+    Works with any comparisons.\\[3pt]
+    Conservative (wider CIs).\\[3pt]
+    We already know this from L9!\\[3pt]
+    \textbf{Best for:} few planned comparisons.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\small
+\textbf{Teaching methods example:} Tukey's HSD finds that C $>$ A ($p = 0.02$) and C $>$ B ($p = 0.001$),\\
+but A vs B is not significant ($p = 0.38$). Method C is the winner.
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Visualizing Post-Hoc Results}
+
+\begin{center}
+\begin{tikzpicture}
+  % Group means with CIs
+  \draw[thick, ->] (0, 0) -- (0, 5.5) node[above, font=\small] {Mean score};
+  \draw[thick] (-0.1, 1) -- (0.1, 1) node[left, font=\scriptsize] {60};
+  \draw[thick] (-0.1, 2) -- (0.1, 2) node[left, font=\scriptsize] {70};
+  \draw[thick] (-0.1, 3) -- (0.1, 3) node[left, font=\scriptsize] {80};
+  \draw[thick] (-0.1, 4) -- (0.1, 4) node[left, font=\scriptsize] {90};
+
+  % Method A
+  \fill[popblue] (2, 2.4) circle (4pt);
+  \draw[thick, popblue] (2, 1.7) -- (2, 3.1);
+  \draw[thick, popblue] (1.8, 1.7) -- (2.2, 1.7);
+  \draw[thick, popblue] (1.8, 3.1) -- (2.2, 3.1);
+  \node[font=\small\bfseries, popblue, below] at (2, 1.4) {A: 74};
+
+  % Method B
+  \fill[sampred] (5, 2.0) circle (4pt);
+  \draw[thick, sampred] (5, 1.2) -- (5, 2.8);
+  \draw[thick, sampred] (4.8, 1.2) -- (5.2, 1.2);
+  \draw[thick, sampred] (4.8, 2.8) -- (5.2, 2.8);
+  \node[font=\small\bfseries, sampred, below] at (5, 0.9) {B: 70};
+
+  % Method C
+  \fill[paramgreen] (8, 3.2) circle (4pt);
+  \draw[thick, paramgreen] (8, 2.5) -- (8, 3.9);
+  \draw[thick, paramgreen] (7.8, 2.5) -- (8.2, 2.5);
+  \draw[thick, paramgreen] (7.8, 3.9) -- (8.2, 3.9);
+  \node[font=\small\bfseries, paramgreen, below] at (8, 2.2) {C: 82};
+
+  % Significance brackets
+  \draw[thick, orange1] (2, 4.3) -- (2, 4.5) -- (8, 4.5) -- (8, 4.3);
+  \node[font=\scriptsize\bfseries, orange1, above] at (5, 4.5) {$p = 0.02$ *};
+
+  \draw[thick, orange1] (5, 3.5) -- (5, 3.7) -- (8, 3.7) -- (8, 3.5);
+  \node[font=\scriptsize\bfseries, orange1, above] at (6.5, 3.7) {$p = 0.001$ **};
+
+  \draw[thick, black!40] (2, 3.5) -- (2, 3.7) -- (5, 3.7) -- (5, 3.5);
+  \node[font=\scriptsize, black!50, above] at (3.5, 3.7) {n.s.};
+
+  % Legend
+  \node[font=\footnotesize, right, align=left] at (10, 3) {Error bars:\\95\% Tukey\\HSD intervals};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\small If two intervals \textbf{don't overlap}, the difference is significant. Method C is significantly better.
+\end{center}
+\end{frame}
+
+% ============================================================
+% PART IV: EFFECT SIZE & TWO-WAY ANOVA
+% ============================================================
+\section{Beyond the Basics}
+
+\begin{frame}
+\frametitle{Effect Size: $\eta^2$ (Eta-Squared)}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=violet1, fill=violet1!5, rounded corners=10pt, text width=10cm, align=center, inner sep=12pt] {
+    {\Large $\eta^2 = \dfrac{\text{SS}_{\text{Between}}}{\text{SS}_{\text{Total}}}$}\\[10pt]
+    \small Proportion of total variance explained by group membership.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[
+  cbox/.style={draw, rounded corners=5pt, text width=3cm, align=center, inner sep=6pt, font=\small, minimum height=1.4cm}
+]
+  \node[cbox, fill=paramgreen!10] at (-4, 0) {\textbf{Small}\\$\eta^2 = 0.01$};
+  \node[cbox, fill=orange1!10] at (0, 0) {\textbf{Medium}\\$\eta^2 = 0.06$};
+  \node[cbox, fill=warnred!10] at (4, 0) {\textbf{Large}\\$\eta^2 = 0.14$};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\small
+\textbf{Teaching example:} $\eta^2 = 720/1800 = 0.40$. \textbf{Very large} --- 40\% of score variation is explained by teaching method.
+
+\vspace{0.15cm}
+\begin{center}
+\fcolorbox{orange1}{orange1!5}{\parbox{10cm}{\centering\footnotesize
+  Like Cohen's $d$ for $t$-tests, $\eta^2$ answers: how \textbf{big} is the effect?\\
+  A small $p$-value with tiny $\eta^2$ means: real but unimportant.
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Two-Way ANOVA: Two Factors at Once}
+\framesubtitle{Example: Teaching method (A/B/C) $\times$ class size (small/large)}
+
+\vspace{-0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=12cm, align=center, inner sep=8pt] {
+    $\text{SS}_\text{Total} = \text{SS}_\text{Method} + \text{SS}_\text{Size} + \text{SS}_\text{Interaction} + \text{SS}_\text{Within}$\\[6pt]
+    \small Now we get \textbf{three} $F$-tests: one for each factor, one for their interaction.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  % Interaction plot
+  \begin{axis}[
+    width=8cm, height=4cm,
+    xlabel={Teaching method},
+    ylabel={Mean score},
+    symbolic x coords={A, B, C},
+    xtick=data,
+    ymin=60, ymax=90,
+    grid=major, grid style={gray!15},
+    legend style={at={(0.98,0.3)}, anchor=east, font=\footnotesize},
+    every axis plot/.style={thick, mark=*, mark size=3pt}
+  ]
+    \addplot[popblue] coordinates {(A, 72) (B, 68) (C, 85)};
+    \addlegendentry{Small class}
+    \addplot[sampred] coordinates {(A, 76) (B, 72) (C, 78)};
+    \addlegendentry{Large class}
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\small
+\textbf{Interaction:} Method C shines in small classes but not in large ones.\\
+Lines are \textbf{not parallel} $\Rightarrow$ significant interaction. The effect of method \textit{depends on} class size.
+\end{center}
+\end{frame}
+
+% ============================================================
+% PART V: A/B TESTING
+% ============================================================
+\section{A/B Testing}
+
+\begin{frame}
+\begin{center}
+  \vspace{1.5cm}
+  {\Huge\bfseries\textcolor{popblue}{Part IV: A/B Testing}}
+
+  \vspace{0.8cm}
+  {\large Hypothesis testing meets the real world}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{What Is A/B Testing?}
+
+\begin{center}
+\begin{tikzpicture}[
+  ubox/.style={draw, rounded corners=8pt, text width=4.5cm, align=center, inner sep=10pt, font=\small, minimum height=3cm}
+]
+  % Users
+  \node[font=\Large\bfseries, popblue] at (0, 3) {Users arrive};
+  \draw[->, very thick, popblue] (0, 2.4) -- (0, 1.8);
+
+  % Random split
+  \node[diamond, draw=orange1, fill=orange1!10, inner sep=3pt, font=\small\bfseries, align=center] (split) at (0, 1.2) {Random\\split};
+
+  % Control
+  \node[ubox, fill=popblue!8, draw=popblue!50] (ctrl) at (-4, -1.5) {
+    {\large\bfseries\textcolor{popblue}{Control (A)}}\\[5pt]
+    Current design\\[3pt]
+    Blue ``Buy'' button\\[3pt]
+    Old checkout flow
+  };
+
+  % Treatment
+  \node[ubox, fill=paramgreen!8, draw=paramgreen!50] (treat) at (4, -1.5) {
+    {\large\bfseries\textcolor{paramgreen}{Treatment (B)}}\\[5pt]
+    New design\\[3pt]
+    Green ``Buy Now!'' button\\[3pt]
+    Simplified checkout
+  };
+
+  \draw[->, thick] (split) -- node[above left, font=\scriptsize] {50\%} (ctrl);
+  \draw[->, thick] (split) -- node[above right, font=\scriptsize] {50\%} (treat);
+
+  % Measure
+  \node[draw=violet1!50, fill=violet1!5, rounded corners=5pt, font=\small, text width=10cm, align=center, inner sep=5pt] at (0, -4) {
+    \textbf{Measure:} conversion rate, revenue, time on page, \ldots\\
+    \textbf{Compare:} Is B significantly better than A?
+  };
+  \draw[->, thick, violet1] (ctrl) -- (0, -3.3);
+  \draw[->, thick, violet1] (treat) -- (0, -3.3);
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{A/B Testing Is Just Hypothesis Testing}
+
+\begin{center}
+\begin{tikzpicture}[
+  mbox/.style={draw=popblue!40, fill=popblue!3, rounded corners=5pt, text width=12cm, align=left, inner sep=7pt, font=\small}
+]
+  \node[mbox] at (0, 3.0) {
+    \textbf{Step 1 --- Hypothesis:}\;
+    $H_0\!: p_B = p_A$ (no difference). \;$H_1\!: p_B \neq p_A$ (or $p_B > p_A$).
+  };
+  \node[mbox] at (0, 2.0) {
+    \textbf{Step 2 --- Sample size:}\;
+    Choose $n$ \textit{before} the test using power analysis (L9).
+    Fix $\alpha$, $\beta$, MDE.
+  };
+  \node[mbox] at (0, 1.0) {
+    \textbf{Step 3 --- Randomize:}\;
+    Randomly assign users to A or B. Run until planned $n$ is reached.
+  };
+  \node[mbox] at (0, 0.0) {
+    \textbf{Step 4 --- Analyze:}\;
+    Two-proportion $z$-test or Welch's $t$-test depending on metric.
+  };
+  \node[mbox] at (0, -1.0) {
+    \textbf{Step 5 --- Decide:}\;
+    If $p < \alpha$ \textbf{and} effect is practically significant $\Rightarrow$ ship B.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\fcolorbox{popblue}{popblue!5}{\parbox{10cm}{\centering\small
+  \textbf{MDE} = Minimum Detectable Effect.\\
+  The smallest improvement worth detecting. Business decides this, not statistics.
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Sample Size Planning for A/B Tests}
+\framesubtitle{For comparing two proportions ($p_A$ vs $p_B$)}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=popblue, fill=popblue!5, rounded corners=10pt, text width=10cm, align=center, inner sep=10pt] {
+    {\Large $n = \dfrac{(z_{\alpha/2} + z_\beta)^2 \cdot (p_A(1-p_A) + p_B(1-p_B))}{(p_B - p_A)^2}$}\\[8pt]
+    \small $n$ = per group. This is the two-proportion version from L9's power formula.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\small
+\textbf{Example:} Baseline conversion $p_A = 5\%$. Want to detect $p_B = 6\%$ (MDE $= 1$ pp).\\
+$\alpha = 0.05$, power $= 80\%$ ($z_{0.025} = 1.96$, $z_{0.20} = 0.84$).
+
+$$n = \frac{(1.96 + 0.84)^2 \times (0.05 \times 0.95 + 0.06 \times 0.94)}{(0.01)^2} = \frac{7.84 \times 0.1039}{0.0001} \approx \mathbf{8{,}146}$$
+
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{warnred}{warnred!5}{\parbox{10cm}{\centering\small
+  Need $\sim$\textbf{8,000 users per group} (16,000 total) to detect a 1\% lift in conversion.\\
+  Small effects need big samples. This is why A/B tests take weeks.
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{A/B Test Example: Button Color}
+
+\small
+\textbf{Setup:} $n_A = 5{,}000$ (blue button), $n_B = 5{,}000$ (green button).\\
+Results: $k_A = 230$ conversions ($\hat{p}_A = 4.6\%$), $k_B = 275$ ($\hat{p}_B = 5.5\%$).
+
+\vspace{0.15cm}
+\textbf{Pooled proportion:} $\hat{p} = (230 + 275)/(5000 + 5000) = 0.0505$.
+
+$$Z = \frac{0.055 - 0.046}{\sqrt{0.0505 \times 0.9495 \times (1/5000 + 1/5000)}} = \frac{0.009}{0.0044} = 2.05$$
+
+\vspace{0.1cm}
+$p\text{-value} = 2(1 - \Phi(2.05)) = 0.040 < 0.05$: \textbf{reject} $H_0$.
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  % Bar comparison
+  \fill[popblue!50] (0, 0) rectangle (2.3, 2);
+  \fill[paramgreen!50] (3.5, 0) rectangle (5.8+0.45, 2);
+  \node[font=\large\bfseries, white] at (1.15, 1) {4.6\%};
+  \node[font=\large\bfseries, white] at (4.625+0.225, 1) {5.5\%};
+  \node[font=\small\bfseries, popblue] at (1.15, -0.3) {Control (Blue)};
+  \node[font=\small\bfseries, paramgreen] at (4.625+0.225, -0.3) {Treatment (Green)};
+
+  % Lift
+  \node[draw=orange1, fill=orange1!10, rounded corners=4pt, font=\small\bfseries, inner sep=5pt, align=center] at (9, 1) {
+    $+$19.6\% relative lift\\
+    $p = 0.040$
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\small\textbf{Decision:} Statistically significant. +19.6\% relative lift is practically meaningful. Ship the green button.
+\end{frame}
+
+% ============================================================
+% PART VI: A/B TESTING PITFALLS
+% ============================================================
+\section{A/B Testing Pitfalls}
+
+\begin{frame}
+\begin{center}
+  \vspace{1.5cm}
+  {\Huge\bfseries\textcolor{popblue}{Part V: A/B Testing Pitfalls}}
+
+  \vspace{0.8cm}
+  {\large The theory is simple. The practice is full of traps.}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Pitfall 1: Peeking (The Most Common Mistake)}
+
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    width=10cm, height=4.5cm,
+    xlabel={Day},
+    ylabel={$p$-value},
+    xmin=0, xmax=30,
+    ymin=0, ymax=0.3,
+    grid=major, grid style={gray!15},
+    every axis plot/.style={thick, no markers},
+    clip=false
+  ]
+    % p-value trajectory that dips below 0.05 and comes back
+    \addplot[popblue, thick] coordinates {
+      (1, 0.25) (3, 0.18) (5, 0.12) (7, 0.08) (9, 0.04) (10, 0.03)
+      (12, 0.06) (14, 0.09) (16, 0.07) (18, 0.11) (20, 0.13)
+      (22, 0.10) (24, 0.08) (26, 0.07) (28, 0.065) (30, 0.07)
+    };
+    \draw[thick, dashed, warnred] (axis cs:0, 0.05) -- (axis cs:30, 0.05);
+    \node[font=\scriptsize, warnred, right] at (axis cs:30, 0.05) {$\alpha = 0.05$};
+
+    % Peek and stop
+    \draw[thick, ->, sampred] (axis cs:10, 0.12) -- (axis cs:10, 0.05);
+    \node[font=\scriptsize\bfseries, sampred, above] at (axis cs:10, 0.12) {``It's significant! Ship it!''};
+
+    % Reality
+    \node[font=\scriptsize, paramgreen, above] at (axis cs:30, 0.09) {Final $p = 0.07$ (not sig.)};
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{warnred}{warnred!5}{\parbox{11cm}{\centering\small
+  \textbf{If you check daily and stop when $p < 0.05$,} the true false positive rate\\
+  can be \textbf{26\%} or higher, not 5\%. The $p$-value fluctuates --- early dips are noise.\\[3pt]
+  \textbf{Fix:} Decide sample size \textit{before} the test. Don't peek.
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Pitfall 2: Too Many Metrics}
+
+\begin{center}
+\begin{tikzpicture}[
+  mbox/.style={draw=popblue!40, fill=popblue!3, rounded corners=5pt, text width=5cm, align=center, inner sep=6pt, font=\small}
+]
+  \node[mbox] at (-3.8, 1.8) {Conversion rate};
+  \node[mbox] at (3.8, 1.8) {Revenue per user};
+  \node[mbox] at (-3.8, 0.6) {Time on page};
+  \node[mbox] at (3.8, 0.6) {Bounce rate};
+  \node[mbox] at (-3.8, -0.6) {Pages per session};
+  \node[mbox] at (3.8, -0.6) {Cart abandonment};
+  \node[mbox, draw=warnred!60, fill=warnred!8] at (-3.8, -1.8) {Newsletter signup};
+  \node[mbox] at (3.8, -1.8) {Customer satisfaction};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\small
+Test 8 metrics at $\alpha = 0.05$: $P(\text{at least one false positive}) = 1 - 0.95^8 = 0.34$.
+
+\vspace{0.1cm}
+\fcolorbox{orange1}{orange1!5}{\parbox{10cm}{\centering\footnotesize
+  \textbf{Fix:} Pick \textbf{one primary metric} before the test. Others are exploratory.\\
+  If you must test many, apply Bonferroni or BH correction (L9).
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{More Pitfalls}
+
+\begin{center}
+\begin{tikzpicture}[
+  pbox/.style={draw=warnred!50, fill=warnred!5, rounded corners=5pt, text width=11.5cm, align=left, inner sep=7pt, font=\small}
+]
+  \node[pbox] at (0, 2.8) {
+    \textbf{3. Novelty \& primacy effects:}
+    Users click the new thing \textit{because} it's new, not because it's better.
+    Effect fades after 1--2 weeks.
+    \textcolor{paramgreen}{\textbf{Fix:}} run test long enough (2+ weeks).
+  };
+  \node[pbox] at (0, 1.2) {
+    \textbf{4. Simpson's paradox:}
+    Overall B wins, but A wins in \textit{every} segment (mobile, desktop, tablet).
+    Caused by unequal traffic mix.
+    \textcolor{paramgreen}{\textbf{Fix:}} stratified randomization.
+  };
+  \node[pbox] at (0, -0.4) {
+    \textbf{5. Interference / network effects:}
+    If user A's experience affects user B (social networks, marketplaces),
+    standard randomization breaks.
+    \textcolor{paramgreen}{\textbf{Fix:}} cluster randomization (by region, by network cluster).
+  };
+  \node[pbox] at (0, -2.0) {
+    \textbf{6. Survivorship bias:}
+    Only analyzing users who \textit{completed} the funnel.
+    Ignoring those who dropped off.
+    \textcolor{paramgreen}{\textbf{Fix:}} intent-to-treat analysis.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Sequential Testing: A Principled Way to Peek}
+
+\small
+Sometimes you \textit{need} to check results early (e.g., detecting harm).
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    width=10cm, height=4cm,
+    xlabel={Sample size (per group)},
+    ylabel={Test statistic $Z$},
+    xmin=0, xmax=10000,
+    ymin=-3.5, ymax=3.5,
+    grid=major, grid style={gray!15},
+    every axis plot/.style={thick, no markers},
+    clip=false
+  ]
+    % Spending function boundaries (O'Brien-Fleming style)
+    \addplot[warnred, thick, dashed] coordinates {
+      (2000, 2.96) (4000, 2.51) (6000, 2.24) (8000, 2.07) (10000, 1.96)
+    };
+    \addplot[warnred, thick, dashed] coordinates {
+      (2000, -2.96) (4000, -2.51) (6000, -2.24) (8000, -2.07) (10000, -1.96)
+    };
+
+    % Z trajectory
+    \addplot[popblue, thick] coordinates {
+      (2000, 0.8) (4000, 1.5) (6000, 1.9) (8000, 2.3) (10000, 2.1)
+    };
+
+    % Labels
+    \node[font=\scriptsize, warnred, right] at (axis cs:10000, 2.5) {Reject boundary};
+    \node[font=\scriptsize, warnred, right] at (axis cs:10000, -2.5) {Reject boundary};
+
+    % Crossing point
+    \fill[paramgreen] (axis cs:8000, 2.3) circle (3pt);
+    \node[font=\scriptsize\bfseries, paramgreen, above] at (axis cs:8000, 2.3) {Crosses! Stop.};
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.05cm}
+\begin{center}
+\fcolorbox{popblue}{popblue!5}{\parbox{11cm}{\centering\footnotesize
+  \textbf{O'Brien--Fleming boundaries:} tighter at early looks (harder to reject), relaxing over time.\\
+  Overall Type~I error is still $\alpha = 0.05$, but you can stop early if the effect is large.\\[2pt]
+  \textbf{Python:} \texttt{statsmodels.stats.GroupSequential}
+}}
+\end{center}
+\end{frame}
+
+% ============================================================
+% PART VII: ANOVA ↔ A/B TESTING CONNECTION
+% ============================================================
+\section{The Big Picture}
+
+\begin{frame}
+\frametitle{ANOVA and A/B Testing: Same Core, Different Worlds}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[inner sep=0pt] {
+    \small
+    \begin{tabular}{l|p{5cm}|p{5cm}}
+       & \textbf{ANOVA} & \textbf{A/B Testing} \\
+      \hline
+      \textbf{Setting} & Science, medicine, education & Tech, product, marketing \\
+      \textbf{Groups} & 2+ (often 3--5) & Usually 2 (A vs B) \\
+      \textbf{Design} & Controlled experiment & Online randomized experiment \\
+      \textbf{Metric} & Continuous (scores, times) & Often proportions (conversion) \\
+      \textbf{Analysis} & $F$-test + post-hoc & $z$-test or $t$-test \\
+      \textbf{Pitfalls} & Assumptions, multiple comp. & Peeking, novelty, interference \\
+      \textbf{Effect size} & $\eta^2$ & Relative lift (\%) \\
+    \end{tabular}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.3cm}
+\begin{center}
+\fcolorbox{popblue}{popblue!5}{\parbox{10cm}{\centering\small
+  \textbf{Both are hypothesis tests.} ANOVA generalizes to $k$ groups.\\
+  A/B testing adds the engineering of randomization, sample size, and deployment.\\
+  An A/B test with 3+ variants is literally ANOVA (sometimes called A/B/n testing).
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{When To Use What}
+
+\begin{center}
+\begin{tikzpicture}[
+  tbox/.style={draw=popblue!50, fill=popblue!3, rounded corners=5pt, text width=12cm, align=left, inner sep=7pt, font=\small}
+]
+  \node[tbox] at (0, 2.8) {
+    \textbf{2 groups, continuous metric:}\;
+    Welch's $t$-test (or Mann--Whitney if non-Normal). From L10.
+  };
+  \node[tbox] at (0, 1.8) {
+    \textbf{2 groups, proportions:}\;
+    Two-proportion $z$-test. The classic A/B test.
+  };
+  \node[tbox] at (0, 0.8) {
+    \textbf{$k \geq 3$ groups, continuous:}\;
+    One-way ANOVA $\to$ post-hoc (Tukey). Or Kruskal--Wallis if non-Normal.
+  };
+  \node[tbox] at (0, -0.2) {
+    \textbf{$k \geq 3$ groups, proportions:}\;
+    $\chi^2$ test of homogeneity ($= \chi^2$ independence test on proportions).
+  };
+  \node[tbox] at (0, -1.2) {
+    \textbf{Two factors (e.g., method $\times$ class size):}\;
+    Two-way ANOVA. Look at main effects and interaction.
+  };
+  \node[tbox] at (0, -2.2) {
+    \textbf{Need to peek at results early:}\;
+    Sequential testing (O'Brien--Fleming). Pre-plan the number of looks.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+\section{Summary}
+
+\begin{frame}
+\frametitle{Summary: ANOVA \& A/B Testing}
+\begin{center}
+\begin{tikzpicture}[
+  sbox/.style={draw=popblue!60, fill=popblue!5, rounded corners=4pt, text width=12cm, minimum height=0.5cm, align=left, inner sep=5pt, font=\small}
+]
+  \node[sbox] at (0, 3.2) {\textbf{Problem:} Multiple $t$-tests inflate false positives. Need a single test for $k$ groups.};
+  \node[sbox] at (0, 2.4) {\textbf{ANOVA:} $F = \text{MS}_\text{Between}/\text{MS}_\text{Within}$. Large $F$ $\Rightarrow$ group means differ.};
+  \node[sbox] at (0, 1.6) {\textbf{Post-hoc:} Tukey HSD or Bonferroni to find \textit{which} pairs differ.};
+  \node[sbox] at (0, 0.8) {\textbf{Effect size:} $\eta^2 = \text{SS}_\text{B}/\text{SS}_\text{T}$. How much variance is explained by groups.};
+  \node[sbox] at (0, 0.0) {\textbf{A/B testing:} Hypothesis testing in tech. Same math, different engineering.};
+  \node[sbox] at (0, -0.8) {\textbf{Sample size:} Small effects need big samples. Plan $n$ before running the test.};
+  \node[sbox] at (0, -1.6) {\textbf{Pitfalls:} Peeking, too many metrics, novelty effects, interference.};
+  \node[sbox] at (0, -2.4) {\textbf{Sequential:} O'Brien--Fleming lets you peek with controlled error rate.};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+\section{Practical}
+
+\begin{frame}
+\frametitle{Practical: ANOVA \& A/B Testing in Python}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=popblue, fill=popblue!3, rounded corners=10pt, text width=12cm, align=left, inner sep=12pt] {
+    \begin{enumerate}\setlength{\itemsep}{4pt}
+      \item \textbf{One-way ANOVA:}
+        \begin{itemize}\setlength{\itemsep}{1pt}
+          \item Generate 3 groups with \texttt{np.random.normal} (same vs different means)
+          \item Run \texttt{scipy.stats.f\_oneway}. Check $F$ and $p$
+          \item Post-hoc with \texttt{statsmodels.stats.multicomp.pairwise\_tukeyhsd}
+        \end{itemize}
+      \item \textbf{Assumptions check:}
+        \begin{itemize}\setlength{\itemsep}{1pt}
+          \item Levene's test: \texttt{scipy.stats.levene}
+          \item Kruskal--Wallis: \texttt{scipy.stats.kruskal}
+        \end{itemize}
+      \item \textbf{A/B test simulation:}
+        \begin{itemize}\setlength{\itemsep}{1pt}
+          \item Simulate $n$ Bernoulli trials for A and B. Run $z$-test
+          \item Repeat 10,000 times. Check: is the rejection rate $\approx \alpha$?
+        \end{itemize}
+      \item \textbf{Peeking simulation:}
+        \begin{itemize}\setlength{\itemsep}{1pt}
+          \item Simulate with $p_A = p_B$ (no effect). Check daily
+          \item Count how often $p < 0.05$ at \textit{any} day. Compare to 5\%
+        \end{itemize}
+    \end{enumerate}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Homework}
+\begin{enumerate}\setlength{\itemsep}{6pt}
+  \item Three fertilizers tested on plant height ($n = 15$ per group):\\
+    A: $\bar{X}_1 = 22.1$, $S_1 = 3.2$. \;B: $\bar{X}_2 = 25.4$, $S_2 = 3.5$. \;C: $\bar{X}_3 = 24.8$, $S_3 = 2.9$.\\
+    (a) Compute $\text{SS}_\text{B}$, $\text{SS}_\text{W}$, $F$. (b) Test at $\alpha = 0.05$ ($F_{2,42,0.05} = 3.22$).\\
+    (c) Compute $\eta^2$. (d) Which fertilizer is best? (Use Bonferroni with $\alpha/3$.)
+
+  \item An e-commerce site tests two checkout flows ($n = 3{,}000$ per group):\\
+    Control: 156 conversions. \;Treatment: 189 conversions.\\
+    (a) Compute $\hat{p}_A$, $\hat{p}_B$, $Z$, $p$-value. (b) Is the result significant at $\alpha = 0.05$?\\
+    (c) What is the relative lift? (d) How many users would you need to detect a 0.5\% absolute lift?
+
+  \item \textbf{Peeking simulation} (Python):
+    Simulate 1,000 A/B tests where $p_A = p_B = 0.05$ (no true effect), $n = 5{,}000$ per group.
+    For each test, compute the $p$-value after every 500 users.
+    What fraction of tests show $p < 0.05$ at \textit{any} checkpoint? Compare to $\alpha = 0.05$.
+
+  \item A 3-way A/B/C test shows: $n_A = 1000$, $k_A = 48$; $n_B = 1000$, $k_B = 55$; $n_C = 1000$, $k_C = 62$.\\
+    Test using $\chi^2$ test of homogeneity. Then do pairwise $z$-tests with Bonferroni.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Recommended Resources}
+
+\footnotesize
+\begin{center}
+\begin{tikzpicture}[
+  rbox/.style={draw=popblue!40, fill=popblue!3, rounded corners=5pt, text width=12cm, align=left, inner sep=6pt, font=\footnotesize}
+]
+  \node[rbox] at (0, 2.4) {
+    \textbf{\textcolor{popblue}{Interactive: Seeing Theory --- ANOVA (Brown University)}}\\[1pt]
+    \scriptsize\texttt{seeing-theory.brown.edu/regression-analysis} --- visual $F$-test with adjustable groups.
+  };
+  \node[rbox] at (0, 1.2) {
+    \textbf{\textcolor{popblue}{Video: StatQuest --- ANOVA}}\\[1pt]
+    \scriptsize Clear walkthrough of one-way ANOVA, $F$-statistic, and post-hoc tests. Also: ``A/B Testing.''
+  };
+  \node[rbox] at (0, 0.0) {
+    \textbf{\textcolor{popblue}{Reading: Kohavi, Tang \& Xu --- ``Trustworthy Online Controlled Experiments''}}\\[1pt]
+    \scriptsize The definitive book on A/B testing from Microsoft researchers. Practical and rigorous.
+  };
+  \node[rbox] at (0, -1.2) {
+    \textbf{\textcolor{popblue}{Blog: Evan Miller --- ``How Not to Run an A/B Test''}}\\[1pt]
+    \scriptsize Classic blog post on the peeking problem. Required reading for anyone running A/B tests.
+  };
+  \node[rbox] at (0, -2.4) {
+    \textbf{\textcolor{popblue}{Python: \texttt{scipy.stats} + \texttt{statsmodels}}}\\[1pt]
+    \scriptsize \texttt{f\_oneway}, \texttt{kruskal}, \texttt{levene}, \texttt{pairwise\_tukeyhsd}, \texttt{proportions\_ztest}.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\begin{center}
+  {\Huge\bfseries\textcolor{popblue}{Questions?}}
+
+  \vspace{1cm}
+
+  {\large Next: Lecture~12 --- Regression inference}
+\end{center}
+\end{frame}
+
+\end{document}
