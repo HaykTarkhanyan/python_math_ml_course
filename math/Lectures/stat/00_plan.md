@@ -186,15 +186,27 @@ Builds on: L3 (exponential family), L5 (MLE), L10 (LRT, chi-squared), L12 (regre
 
 ---
 
-## Future Lectures
-
-### Lecture 14: Causal Inference
+### Lecture 14: Causal Inference (`14_stat.tex`, 37 frames)
 
 *"Correlation is not causation — so how do we get causation?"*
 
-Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin causal model → Average Treatment Effect (ATE) → **Randomized Controlled Trials** (the gold standard) → Confounders & Simpson's paradox revisited (from L2) → **DAGs** (directed acyclic graphs, d-separation) → Conditioning vs intervening (do-calculus basics) → Observational studies: matching, propensity scores → Instrumental variables (brief) → Connection to A/B testing.
+**Part I — Correlation ≠ Causation:** Spurious correlations (ice cream vs drowning, scatter + confounder DAG) → Three reasons: confounding, reverse causation, collider bias (with mini DAGs).
 
-*Note: EM algorithm and MCMC/Bayesian computation topics may be added as supplementary lectures if time permits.*
+**Part II — The Gold Standard:** RCT design (population → randomize → treatment/control → compare) → A/B test vs RCT comparison table (same logic, different domain).
+
+**Part III — Potential Outcomes:** The fundamental problem (counterfactual table with "?") → ATE = E[Y(1)] − E[Y(0)] → Why randomization identifies ATE (selection bias decomposition, 4-step argument).
+
+**Part IV — Causal Graphs (DAGs):** Nodes = variables, arrows = causal effects → Three fundamental structures (fork/chain/collider) → Collider bias example (talent vs attractiveness among celebrities) → Simpson's paradox revisited (DAG explains when to stratify).
+
+**Part V — Observational Studies:** RCT vs observational comparison → Strategy 1: regression adjustment (pros/cons) → Strategy 2: matching (twin visualization) → Strategy 3: propensity scores (PS matching, weighting, stratification) → Strategy 4: instrumental variables (relevance, exclusion, independence).
+
+**Part VI — Doing vs Seeing:** P(Y|X) vs P(Y|do(X)) (side-by-side DAGs with "cut" arrows) → Backdoor criterion → Adjustment formula.
+
+**Part VII — Practical Checklist:** Ladder of causation (association/intervention/counterfactual) → 7-step checklist → Common pitfalls (controlling for everything, big data ≠ no confounding, post-treatment conditioning, external validity) → Course journey diagram (Describe → Estimate → Test → Model → Cause).
+
+Builds on: L2 (Simpson's paradox), L9 (hypothesis testing, p-values), L11 (A/B testing), L12 (regression, logistic), L13 (GLMs).
+
+**Homework:** (1) Surgery mortality DAG + propensity scores, (2) Ads vs purchases alternative explanations + A/B test design, (3) Collider simulation (conditioning creates correlation), (4) IV assumptions for "distance to hospital."
 
 ---
 
