@@ -78,12 +78,14 @@ All major formulas were verified and found **correct**:
 
 | Topic | Priority | Suggested Location | Notes |
 |---|---|---|---|
-| **EM Algorithm** | Medium | After L6 or as L6 appendix | L4 mentions it in "What We Haven't Covered" but it's never taught. Important for mixture models. |
-| **Cross-validation** | Medium | L12 or L13 | Critical for model selection in practice, only AIC is mentioned for GLMs |
-| **Robust statistics** | Low | L2 extension | Trimmed mean, Huber estimators — briefly mentioned (MAD) but not developed |
-| **Survival analysis** | Low | After L13 | Common in applied stats, not covered |
-| **Mixed-effects models** | Low | After L13 | Important for hierarchical data |
-| **Multivariate statistics** | Low | Separate lecture | PCA, multivariate normal — referenced via Stein's paradox but not taught |
+| **Cross-validation** | High | L12 or L13 | Critical for model selection in practice; only AIC is mentioned for GLMs. k-fold, LOO needed for applied ML readiness. |
+| **Time series / autocorrelated data** | High | After L13 or as appendix | L1 mentions i.i.d. can break with temporal data but never returns to it. ACF, ARIMA basics, or at minimum a warning about what breaks when data is correlated. |
+| **EM Algorithm** | Medium | After L6 or as L6 appendix | L4 originally mentioned it in "What We Haven't Covered" but it's never taught. Important for mixture models. |
+| **Missing data** | Medium | L12 | MAR/MCAR/MNAR framework — essential for applied work, never mentioned. |
+| **GLM diagnostics** | Medium | L13 extension | L12 covers regression diagnostics well, but L13 doesn't show diagnostic plots for Poisson/logistic (deviance residuals, link-scale residuals). |
+| **Mixed-effects / hierarchical models** | Low | After L13 | Important for nested data (patients in hospitals, students in schools). |
+| **Robust statistics** | Low | L2 extension | Trimmed mean, Huber estimators — briefly mentioned (MAD) but not developed. |
+| **Multivariate statistics** | Low | Separate lecture | PCA, multivariate normal — referenced via Stein's paradox but not taught. |
 
 ### 2.2 Topics Covered Well
 
@@ -155,6 +157,25 @@ All lectures L3+ have recap slides referencing prior lectures. These are effecti
 
 5. **"Common mistakes" boxes** throughout — L15 has a great "Top Mistakes" slide; distributing these warnings into individual lectures would be more effective.
 
+6. **"Pause and predict" moments** — add interactive questions to break up dense slides:
+   - L7: "If we triple sample size, how does SE change? Why √n not n?"
+   - L8: "Can a 95% CI fail to contain the true θ? When, and how often?"
+   - L10: "Look at this test output. Which model fits better?"
+   - L14: "For this DAG, should we adjust for variable Z? Why or why not?"
+
+7. **Explicit cross-topic bridges** — some connections are implicit but should be made explicit:
+   - Stein's paradox (L4) ↔ Ridge/Lasso regularization (L6): "Stein showed biased estimators can win; Ridge is the modern realization"
+   - Power (L9) ↔ CI width (L8): "Shorter CIs require larger samples, which also increase power"
+   - A/B testing (L11) ↔ RCTs in causal inference (L14): "A/B tests are randomized experiments answering causal questions by design"
+
+8. **Notation reference table** in L15 — consolidate all notation ($\theta$, $\hat\theta$, $\ell(\theta)$, $s(\theta)$, $I(\theta)$, etc.) for student reference.
+
+### 3.6 Minor Precision Issues
+
+- **L11 line 338:** F-distribution mean description says "mean ≈ 1 when H₀ is true" — the mean is $\frac{df_2}{df_2 - 2}$ regardless of H₀. Should say "mean ≈ 1 for large denominator df."
+- **L12 line 355:** House price regression example doesn't explicitly state price units (coefficient 0.12 interpreted as $120 assumes price in thousands).
+- **Notation:** $S^2$ (L2, L3) vs $\hat\sigma^2_n$ (L3 bias discussion) — could standardize.
+
 ---
 
 ## 4. Homework Assignments
@@ -223,18 +244,23 @@ No changes needed.
 
 ## 5. Summary of Action Items
 
-### Must Fix (Errors)
-1. [ ] **L4 lines 946–951:** Fix "What We Haven't Covered" lecture numbers to match actual curriculum
-2. [ ] **L5 line 1103:** Change "Lecture~7" to "Lecture~8" for CIs reference
-3. [ ] **L6 line 1221:** Change "Sampling distributions and confidence intervals" to "Sampling distributions"
+### Must Fix (Errors) — ALL DONE ✓
+1. [x] **L4 lines 946–951:** Fix "What We Haven't Covered" lecture numbers to match actual curriculum
+2. [x] **L5 line 1103:** Change "Lecture~7" to "Lecture~8" for CIs reference
+3. [x] **L6 line 1221:** Change "Sampling distributions and confidence intervals" to "Sampling distributions"
 
-### Should Fix (Improvements)
-4. [ ] **L3 line 30:** Remove "Cramér–Rao" from subtitle (it's an L4 topic)
-5. [ ] **L1:** Add homework slide (3 problems, see Section 4)
-6. [ ] **L5 line 884:** Change "Lectures~3–4" to "Lecture~4" for CR bound reference
+### Should Fix (Improvements) — ALL DONE ✓
+4. [x] **L3 line 30:** Remove "Cramér–Rao" from subtitle → replaced with "Exponential Family"
+5. [x] **L1:** Add homework slide (3 problems covering population/sample, loss functions, plug-in)
+6. [x] **L5 line 884:** Change "Lectures~3–4" to "Lecture~4" for CR bound reference
 
-### Nice to Have
+### Nice to Have (Future Work)
 7. [ ] Fix `\usepackage{fontenc}` → `\usepackage[T1]{fontenc}` across all files
 8. [ ] Remove unused `\usepackage{pifont}` from L10, L11, L13
 9. [ ] Add Python code examples to L3 and L4
 10. [ ] Add "Why should I care?" opening hooks to L3 and L4
+11. [ ] Add notation reference table to L15
+12. [ ] Add explicit cross-topic bridge slides (Stein↔Ridge, Power↔CI, A/B↔RCT)
+13. [ ] Add GLM diagnostic plots to L13 (deviance residuals, link-scale residuals)
+14. [ ] Clarify F-distribution mean statement in L11 line 338
+15. [ ] Add units to house price regression example in L12 line 355
