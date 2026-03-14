@@ -74,13 +74,29 @@ Builds on: L7 (sampling distributions, SE, CLT), L5 (MLE), L4 (Fisher info), L6 
 
 ---
 
-## Future Lectures
-
-### Lecture 9: Hypothesis Testing
+### Lecture 9: Hypothesis Testing (`09_stat.tex`, 38 frames)
 
 *"A new drug lowers blood pressure by 3 mmHg. Real effect or noise?"*
 
-H0/H1, test statistics, Type I/II errors → p-values (interpretation & misinterpretation) → **Power analysis & sample size planning** (effect size, power curves, designing studies) → Multiple testing (Bonferroni, BH-FDR).
+**Part I — The Logic of Testing:** Running example (drug trial: n=100, 3 mmHg difference) → Innocent until proven guilty (courtroom analogy) → H0/H1 → Test statistic (z-statistic) → Rejection region & significance level.
+
+**Part II — Two Types of Errors:** Type I/II error table → Real-world costs (medicine, justice, spam).
+
+**Part III — p-Values:** Definition & visualization → What p-values are NOT (4 common misinterpretations) → Statistical vs practical significance (effect size matters) → The cliff-edge problem (p=0.049 vs 0.051, ASA statement).
+
+**Part IV — Power Analysis:** Power definition & visualization (two overlapping distributions) → Four knobs (effect size, n, α, σ) → Cohen's d (small/medium/large) → Power curves → Sample size formula.
+
+**Part V — Permutation Tests:** If H0 is true, labels don't matter → Algorithm → Permutation distribution visualization → Pros and cons.
+
+**Part VI — Multiple Testing:** The problem (1-(1-α)^m) → Bonferroni vs Benjamini-Hochberg (BH step-up visualization).
+
+Builds on: L7 (sampling distributions, SE), L8 (CIs, bootstrap), L6 (Bayesian for p-value misconception), Module 16 (Bayes' theorem).
+
+**Homework:** (1) Coffee shop z-test + CI agreement, (2) Sample size planning for d=0.3, (3) Gene testing with Bonferroni/BH, (4) Permutation test for two teaching methods.
+
+---
+
+## Future Lectures
 
 ### Lecture 10: Likelihood Ratio Tests & Classical Tests
 
@@ -124,7 +140,7 @@ Correlation ≠ causation (motivating examples) → Potential outcomes / Rubin c
 | 6 | `06_stat.tex` | MAP, conjugate priors, regularization = MAP, overfitting |
 | 7 | `07_stat.tex` | Sampling distributions, Monte Carlo, CLT in action, SD vs SE |
 | 8 | `08_stat.tex` | CIs (Wald, Wilson, t, delta) + bootstrap (SE, percentile, BCa) |
-| 9 | `09_stat.tex` | Hypothesis testing, power analysis, multiple testing |
+| 9 | `09_stat.tex` | Hypothesis testing, p-values, power, permutation tests, multiple testing |
 | 10 | `10_stat.tex` | LRT framework, t-tests, chi-squared, nonparametric |
 | 11 | `11_stat.tex` | Regression inference (OLS + logistic) |
 | 12 | `12_stat.tex` | GLMs: exp family + link functions, Poisson regression |
