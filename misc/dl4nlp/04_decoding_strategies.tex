@@ -33,7 +33,7 @@
 \usepackage{fontenc}
 
 \title{Decoding Strategies}
-\subtitle{Greedy $\cdot$ Beam Search $\cdot$ Temperature $\cdot$ Top-$k$ $\cdot$ Top-$p$}
+\subtitle{Greedy $\cdot$ Beam Search $\cdot$ Temperature $\cdot$ Top-$k$ $\cdot$ Top-$p$ $\cdot$ Min-$p$ $\cdot$ Constrained}
 \date{}
 
 \begin{document}
@@ -696,6 +696,93 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \end{frame}
 
 % ============================================================
+% MIN-P SAMPLING
+% ============================================================
+\begin{frame}
+\frametitle{Min-$p$ sampling (2024)}
+\vspace{-0.4cm}
+
+\textbf{Idea:} Set a floor relative to the top token: keep token $w$ iff $P(w) \ge p_{\text{base}} \cdot P(w_{\text{top}})$.
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.8, transform shape]
+  % LEFT: Peaked distribution
+  \begin{scope}[xshift=-4.5cm]
+    \node[font=\normalsize\bfseries, popblue] at (1.5, 3.8) {Confident model};
+
+    \fill[paramgreen!40] (0, 0) rectangle (0.6, 3.2);   % top token: 0.64
+    \fill[paramgreen!30] (0.8, 0) rectangle (1.4, 0.6);  % 0.12 > 0.064
+    \fill[gray!25] (1.6, 0) rectangle (2.2, 0.25);       % 0.05 < 0.064
+    \fill[gray!15] (2.4, 0) rectangle (3.0, 0.15);
+    \fill[gray!10] (3.2, 0) rectangle (3.8, 0.08);
+
+    \draw[thick, ->] (-0.2, 0) -- (4.2, 0);
+    \draw[thick, ->] (0, -0.1) -- (0, 3.8);
+
+    \node[font=\tiny] at (0.3, -0.3) {the};
+    \node[font=\tiny] at (1.1, -0.3) {a};
+    \node[font=\tiny] at (1.9, -0.3) {his};
+    \node[font=\tiny] at (2.7, -0.3) {my};
+    \node[font=\tiny] at (3.5, -0.3) {her};
+
+    \node[font=\tiny, popblue] at (0.3, 3.45) {.64};
+
+    % Threshold line
+    \draw[very thick, sampred, dashed] (-0.15, 0.32) -- (4.0, 0.32);
+    \node[font=\scriptsize, sampred, anchor=west] at (4.1, 0.32) {$0.1 \times .64 = .064$};
+
+    % Bracket
+    \draw[thick, paramgreen, decorate, decoration={brace, amplitude=4pt, mirror}]
+      (0, -0.6) -- (1.4, -0.6)
+      node[midway, below=5pt, font=\scriptsize, paramgreen] {\textbf{2 tokens}};
+  \end{scope}
+
+  % RIGHT: Flat distribution
+  \begin{scope}[xshift=4cm]
+    \node[font=\normalsize\bfseries, orange1] at (2, 3.8) {Uncertain model};
+
+    \fill[paramgreen!40] (0, 0) rectangle (0.6, 1.4);     % 0.18
+    \fill[paramgreen!35] (0.8, 0) rectangle (1.4, 1.2);   % 0.15
+    \fill[paramgreen!30] (1.6, 0) rectangle (2.2, 1.0);   % 0.13
+    \fill[paramgreen!25] (2.4, 0) rectangle (3.0, 0.85);  % 0.11
+    \fill[paramgreen!20] (3.2, 0) rectangle (3.8, 0.7);   % 0.09
+    \fill[gray!15] (4.0, 0) rectangle (4.6, 0.1);         % 0.01
+
+    \draw[thick, ->] (-0.2, 0) -- (5, 0);
+    \draw[thick, ->] (0, -0.1) -- (0, 3.8);
+
+    \node[font=\tiny] at (0.3, -0.3) {on};
+    \node[font=\tiny] at (1.1, -0.3) {in};
+    \node[font=\tiny] at (1.9, -0.3) {by};
+    \node[font=\tiny] at (2.7, -0.3) {at};
+    \node[font=\tiny] at (3.5, -0.3) {near};
+    \node[font=\tiny] at (4.3, -0.3) {xyz};
+
+    \node[font=\tiny, popblue] at (0.3, 1.65) {.18};
+
+    % Threshold line
+    \draw[very thick, sampred, dashed] (-0.15, 0.14) -- (4.8, 0.14);
+    \node[font=\scriptsize, sampred, anchor=west] at (4.1, 0.35) {$0.1 \times .18 = .018$};
+
+    % Bracket
+    \draw[thick, paramgreen, decorate, decoration={brace, amplitude=4pt, mirror}]
+      (0, -0.6) -- (3.8, -0.6)
+      node[midway, below=5pt, font=\scriptsize, paramgreen] {\textbf{5 tokens}};
+  \end{scope}
+
+  % Bottom comparison
+  \node[draw=paramgreen, fill=paramgreen!5, rounded corners=6pt, text width=12cm, align=center, inner sep=8pt, font=\small] at (0, -2.5) {
+    Like top-$p$, min-$p$ adapts the candidate set to model confidence.\\
+    Unlike top-$p$, the threshold \textbf{scales with the top token's probability}:\\
+    confident $\to$ tight filter, uncertain $\to$ permissive. Single parameter $p_{\text{base}} \in [0,1]$.\\[2pt]
+    {\footnotesize --- Nguyen et al., ``Turning up the Heat: Min-p Sampling for Creative and Coherent LLM Outputs'' (2024)}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
 % COMBINING: TEMPERATURE + TOP-P
 % ============================================================
 \begin{frame}
@@ -735,6 +822,57 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \end{frame}
 
 % ============================================================
+% STRUCTURED / CONSTRAINED DECODING
+% ============================================================
+\begin{frame}
+\frametitle{Structured \& constrained decoding}
+
+\begin{center}
+\begin{tikzpicture}[
+  cbox/.style={draw, rounded corners=6pt, minimum width=5.5cm, minimum height=3.5cm, text width=5cm, align=left, inner sep=8pt}
+]
+  % The idea
+  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=12cm, align=center, inner sep=10pt, font=\normalsize] at (0, 2.8) {
+    \textbf{Idea:} At each decoding step, \textbf{mask out} tokens that would violate a grammar or schema.\\[2pt]
+    The LLM's output is \textit{guaranteed} to conform to the desired structure.
+  };
+
+  % JSON mode
+  \node[cbox, fill=paramgreen!8] at (-4, -0.6) {
+    \textbf{\large\textcolor{paramgreen}{JSON mode}}\\[6pt]
+    \small
+    Force output to be valid JSON\\[2pt]
+    \textbullet\ At each step, only allow tokens\\
+    \quad that keep the JSON well-formed\\[2pt]
+    \textbullet\ OpenAI, Anthropic, vLLM all\\
+    \quad support this natively\\[2pt]
+    \textbullet\ Critical for tool use / function\\
+    \quad calling in LLM agents
+  };
+
+  % Grammar-guided
+  \node[cbox, fill=orange1!8] at (4, -0.6) {
+    \textbf{\large\textcolor{orange1}{Grammar-guided}}\\[6pt]
+    \small
+    Define a CFG or regex; decode\\
+    only tokens matching it\\[2pt]
+    \textbullet\ \textbf{Outlines} (2024): compile any\\
+    \quad regex/JSON schema to a mask\\[2pt]
+    \textbullet\ \textbf{Guidance} (Microsoft): interleave\\
+    \quad free generation \& constrained\\[2pt]
+    \textbullet\ Used for SQL, code, configs
+  };
+
+  % Bottom note
+  \node[draw=violet1, fill=violet1!5, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.4) {
+    Structured decoding is orthogonal to sampling strategy --- you can combine it with\\
+    temperature, top-$p$, min-$p$, etc.\ It only restricts \textit{which} tokens are candidates.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
 % COMPARISON TABLE
 % ============================================================
 \begin{frame}
@@ -751,7 +889,9 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
   \textcolor{popblue}{Beam search} & Yes & Translation, summary & ``Boring'' open-ended text \\[2pt]
   \textcolor{sampred}{Temperature} & --- & \textit{Modifier, not standalone} & Just a knob \\[2pt]
   \textcolor{orange1}{Top-$k$} & No & Open-ended generation & Fixed $k$ doesn't adapt \\[2pt]
-  \textcolor{paramgreen}{Top-$p$} & No & Open-ended generation & Slightly slower than top-$k$ \\
+  \textcolor{paramgreen}{Top-$p$} & No & Open-ended generation & Slightly slower than top-$k$ \\[2pt]
+  \textcolor{violet1}{Min-$p$} & No & Open-ended generation & Newer, less battle-tested \\[2pt]
+  \textcolor{orange1}{Constrained} & Either & Structured output (JSON) & Restricts expressiveness \\
   \hline
 \end{tabular}
 \end{center}
@@ -760,9 +900,9 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \begin{center}
 \begin{tikzpicture}
   \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=11cm, align=center, inner sep=10pt, font=\small] {
-    \textbf{In practice}, most LLM APIs use \textbf{temperature + top-$p$} together.\\
+    \textbf{In practice}, most LLM APIs use \textbf{temperature + top-$p$} (min-$p$ gaining adoption).\\
     Beam search is reserved for structured tasks (translation, summarization).\\
-    Greedy ($T{=}0$) is used when you want fully deterministic output.
+    Greedy ($T{=}0$) for deterministic output; \textbf{constrained decoding} for structured formats.
   };
 \end{tikzpicture}
 \end{center}
@@ -783,6 +923,7 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
     \quad \textcolor{sampred}{temperature} = 0.7,\\
     \quad \textcolor{paramgreen}{top\_p} = 0.9,\\
     \quad \textcolor{orange1}{top\_k} = 50,\quad\textcolor{gray}{\# optional}\\
+    \quad \textcolor{violet1}{min\_p} = 0.1,\quad\textcolor{gray}{\# optional}\\
     \quad max\_tokens = 256\\
     )
   };
@@ -833,13 +974,15 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
     \textbf{\textcolor{paramgreen}{Analysis \& Improvements}}\\[4pt]
     {\small
     \textbullet~Meister et al.\ (2020), ``If Beam Search is the Answer, What was the Question?''\\[2pt]
-    \textbullet~Su et al.\ (2022), ``A Contrastive Framework for Neural Text Generation'' (contrastive search)
+    \textbullet~Su et al.\ (2022), ``A Contrastive Framework for Neural Text Generation'' (contrastive search)\\[2pt]
+    \textbullet~Nguyen et al.\ (2024), ``Turning up the Heat: Min-p Sampling'' (min-$p$)
     }
   };
-  \node[draw=orange1, fill=orange1!8, rounded corners=8pt, text width=13cm, align=left, inner sep=8pt] at (0, -1.7) {
-    \textbf{\textcolor{orange1}{Practical Guide}}\\[4pt]
+  \node[draw=orange1, fill=orange1!8, rounded corners=8pt, text width=13cm, align=left, inner sep=8pt] at (0, -1.9) {
+    \textbf{\textcolor{orange1}{Practical Guide \& Constrained Decoding}}\\[4pt]
     {\small
     \textbullet~HuggingFace blog, ``How to generate text: using different decoding methods''\\[2pt]
+    \textbullet~Willard \& Louf (2023), ``Efficient Guided Generation for Large Language Models'' (Outlines)\\[2pt]
     \textbullet~Jurafsky \& Martin, \emph{Speech and Language Processing}, Ch.\,10 --- Language Model Decoding
     }
   };
