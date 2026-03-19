@@ -6,7 +6,7 @@ type: project
 
 ## Math Modules (.qmd homework files)
 
-**Complete (with problems):**
+**Complete (with problems + correct resource links):**
 - 00 Sets/combinatorics (14 problems), 01 Vectors (20+), 02 Matrices (15+), 03 LA concepts (20+)
 - 05 Extrema/convexity/Taylor (16+), 07 Multivar calculus (12+), 08 Univar optim (implementation-heavy)
 - 16 Probability basics (38), 17 E/Var/inequalities (12+), 18 Cov/correlation (7+), 19 Distributions (14+)
@@ -14,19 +14,28 @@ type: project
 
 **Partial:** 04 Limits/derivatives (references Armenian textbook PDF), 06 Integrals (skeleton, ~60 lines)
 
-**Skeleton (template stubs):** 09-15 (optimization theory), 24 Confidence intervals, 25 Hypothesis testing
+**Skeleton (have resource links now, but no problems):** 09-15 (optimization theory), 24 Confidence intervals, 25 Hypothesis testing
+
+**Missing stat .qmd files entirely:** No homework modules for stat lectures 11 (ANOVA/A-B testing), 12 (Regression inference), 13 (GLMs), 14 (Causal inference). Lectures 15-16 (recap + How to Lie) probably don't need homework.
+
+**Resource links status:** All 26 modules now have correct YouTube and PDF references (fixed March 2026). Auto-extracted links marked with callout note.
 
 ## Statistics Lectures (math/Lectures/stat/)
 All 16 presentations complete (541 total frames). Audit done, all major issues fixed.
-
-**Why:** Statistics lecture series was the primary collaborative work area.
 
 ## Python Course (python/)
 18 modules complete. Capstone project (YouTube Transcript Translator) integrates all concepts.
 
 ## ML Section (ml/)
-6 chapter directories + Datasets/ + Projects/ — mostly skeleton, not started.
+Not started yet. 6 chapter directories + Datasets/ + Projects/ exist as empty structure. User has not begun ML content development.
 
-**Why:** ML is the planned final block of the course but hasn't been developed yet.
+**How to apply:** Don't suggest ML work unless user initiates it. When they do, build on modules 00-25 and the stat lecture series.
 
-**How to apply:** When the user starts ML work, refer to the existing math/probability/statistics foundations that are already built. The ML chapters should build on modules 00-25 and the stat lecture series.
+## Folders to ignore
+- `misc/pre_math/` — user doesn't care about this folder
+- `math/unstructured/` — old/scratch files
+
+## Remaining TODOs in index.qmd
+- 16 missing Python library module descriptions (lines 175-295)
+- ~8 other ToDo markers (timestamps, file cleanup, project descriptions)
+- Fun sections (🎲) across ~8 math .qmd files have empty cultural/music links
