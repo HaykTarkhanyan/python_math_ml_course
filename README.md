@@ -116,8 +116,8 @@ Not started yet
 │   ├── Chapter 1–6/     # Lecture notes, code, homeworks per chapter
 │   └── Datasets/        # Shared ML datasets
 ├── misc/                # Miscellaneous guides (Google Colab, etc.)
-├── docs/                # Rendered Quarto book (GitHub Pages)
 ├── _quarto.yml          # Quarto book configuration
+├── .github/workflows/   # GitHub Actions: auto-render & deploy on push
 └── index.qmd            # Course landing page
 ```
 
@@ -143,11 +143,10 @@ The easiest way is to visit the **[course website](https://hayktarkhanyan.github
    - Jupyter / JupyterLab (for `.ipynb` notebooks)
    - TeX Live (for compiling Beamer slides)
 
-3. **Render the Quarto book**
+3. **Render the Quarto book** (optional — the site auto-deploys via GitHub Actions on every push to `main`)
    ```bash
    quarto render
    ```
-   The rendered site will be in the `docs/` directory.
 
 ---
 
@@ -159,6 +158,7 @@ The easiest way is to visit the **[course website](https://hayktarkhanyan.github
 | Jupyter Notebooks | Python and Libraries modules |
 | LaTeX / Beamer | Lecture slide decks with TikZ diagrams |
 | GitHub Pages | Hosting the course website |
+| GitHub Actions | Auto-render & deploy on every push to `main` (~5 min) |
 
 ---
 
