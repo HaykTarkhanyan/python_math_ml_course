@@ -29,7 +29,7 @@
 \usepackage{fontenc}
 
 \title{Lecture 9: Hypothesis Testing}
-\subtitle{p-Values $\cdot$ Power Analysis $\cdot$ Permutation Tests $\cdot$ Multiple Testing}
+\subtitle{p-Values $\cdot$ p-Hacking $\cdot$ Power Analysis $\cdot$ Permutation Tests $\cdot$ Multiple Testing}
 \date{}
 
 \begin{document}
@@ -206,7 +206,7 @@ A \textbf{test statistic} $T$ compresses the data into one number measuring ``di
 \end{center}
 
 \vspace{0.1cm}
-Under $H_0$: $T \sim N(0, 1)$ approximately. Large $|T|$ = data far from $H_0$ = evidence against $H_0$.
+Under $H_0$: $T \sim N(0, 1)$ approximately (by CLT, Lecture~7). Large $|T|$ = data far from $H_0$ = evidence against $H_0$.
 
 \vspace{0.1cm}
 \begin{center}
@@ -941,11 +941,169 @@ Lowering $\alpha$ (moving the cutoff right) $\Rightarrow$ fewer false alarms but
 \end{center}
 
 \vspace{0.15cm}
+\centering\small
+\textbf{The biggest culprit?} A practice called \textbf{$p$-hacking}. Let's see how it works\ldots
+\end{frame}
+
+% ============================================================
+% p-HACKING
+% ============================================================
+
+\begin{frame}
+\frametitle{$p$-Hacking: The Garden of Forking Paths}
+
+\small
+\textbf{Definition:} Trying multiple analyses until you find $p < 0.05$, then reporting only that one.
+
+\vspace{0.2cm}
 \begin{center}
-\fcolorbox{violet1}{violet1!5}{\parbox{10cm}{\centering\small
-  \textbf{$p$-hacking:} trying multiple analyses until $p < 0.05$. Examples:\\[2pt]
-  Drop outliers selectively $\cdot$ Add/remove covariates $\cdot$ Test subgroups $\cdot$ Transform the outcome\\[2pt]
-  Each ``researcher degree of freedom'' inflates the false positive rate.
+\begin{tikzpicture}[
+  fork/.style={draw=popblue, thick, -{Stealth}},
+  choice/.style={draw, rounded corners=4pt, fill=popblue!8, font=\scriptsize, inner sep=4pt, align=center},
+  bad/.style={draw=warnred, rounded corners=4pt, fill=warnred!10, font=\scriptsize\bfseries, inner sep=4pt}
+]
+  \node[choice, text width=2cm] (data) at (0, 0) {Collect\\data};
+
+  \node[choice] (out1) at (3, 1.5) {Keep outliers};
+  \node[choice] (out2) at (3, 0) {Remove outliers};
+  \node[choice] (out3) at (3, -1.5) {Winsorize};
+
+  \draw[fork] (data) -- (out1);
+  \draw[fork] (data) -- (out2);
+  \draw[fork] (data) -- (out3);
+
+  \node[choice] (cov1) at (6.5, 2.2) {No covariates};
+  \node[choice] (cov2) at (6.5, 0.8) {Add age, sex};
+  \node[choice] (cov3) at (6.5, -0.5) {Log-transform};
+  \node[choice] (cov4) at (6.5, -1.8) {Subgroup only};
+
+  \draw[fork] (out1) -- (cov1);
+  \draw[fork] (out1) -- (cov2);
+  \draw[fork] (out2) -- (cov3);
+  \draw[fork] (out3) -- (cov4);
+
+  \node[choice] (test1) at (10, 1.8) {$t$-test};
+  \node[choice] (test2) at (10, 0.6) {Wilcoxon};
+  \node[bad] (star) at (10, -0.8) {$p = 0.043$ \textcolor{warnred}{\ding{51}}};
+  \node[choice] (test3) at (10, -2.0) {Permutation};
+
+  \draw[fork] (cov1) -- (test1);
+  \draw[fork] (cov2) -- (test2);
+  \draw[fork] (cov3) -- (star);
+  \draw[fork] (cov4) -- (test3);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{warnred}{warnred!5}{\parbox{10.5cm}{\centering\small
+  With enough ``researcher degrees of freedom,'' you can \textit{almost always} find $p < 0.05$ ---\\
+  even when there is \textbf{no real effect}. This is the \textbf{garden of forking paths} (Gelman \& Loken, 2013).
+}}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{$p$-Hacking: How Bad Can It Get?}
+
+\small
+\textbf{Thought experiment:} The null is \textit{true} ($\mu = 0$). A researcher tries $k$ independent tests.
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=violet1, fill=violet1!5, rounded corners=10pt, text width=11cm, align=center, inner sep=10pt] {
+    {\large $P(\text{at least one } p < 0.05 \text{ in } k \text{ tests}) = 1 - (1 - 0.05)^k = 1 - 0.95^k$}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    width=11cm, height=4.5cm,
+    xlabel={Number of tests $k$},
+    ylabel={$P($false positive$)$},
+    xmin=0, xmax=52,
+    ymin=0, ymax=1.05,
+    axis lines=left,
+    grid=major, grid style={gray!15},
+    xtick={1, 5, 10, 20, 30, 50},
+    ytick={0, 0.05, 0.25, 0.5, 0.75, 1.0},
+    every axis plot/.append style={line width=2.5pt, samples=50}
+  ]
+    \addplot[popblue, domain=1:50] {1 - 0.95^x};
+    \draw[dashed, warnred, thick] (axis cs:0, 0.05) -- (axis cs:52, 0.05);
+    \node[font=\footnotesize, warnred, right] at (axis cs:35, 0.1) {Nominal $\alpha = 0.05$};
+
+    % Annotations
+    \fill[sampred] (axis cs:1, 0.05) circle (3pt);
+    \node[font=\scriptsize, right] at (axis cs:1.5, 0.12) {$k = 1$: 5\%};
+
+    \fill[sampred] (axis cs:10, 0.401) circle (3pt);
+    \node[font=\scriptsize, right] at (axis cs:10.5, 0.47) {$k = 10$: 40\%};
+
+    \fill[sampred] (axis cs:20, 0.642) circle (3pt);
+    \node[font=\scriptsize, right] at (axis cs:20.5, 0.71) {$k = 20$: 64\%};
+
+    \fill[sampred] (axis cs:50, 0.923) circle (3pt);
+    \node[font=\scriptsize, left] at (axis cs:49, 0.85) {$k = 50$: 92\%};
+  \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\vspace{-0.1cm}
+\centering\small
+With 20 tests, there's a \textbf{64\% chance} of a false ``discovery'' --- even with no real effect.
+\end{frame}
+
+\begin{frame}
+\frametitle{Real-World $p$-Hacking: FiveThirtyEight Demo}
+
+\small
+\textbf{Hack Your Way to Scientific Glory} (FiveThirtyEight, 2015): an interactive tool where you manipulate researcher choices to make \textit{anything} ``significant.''
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[
+  rbox/.style={draw=popblue!50, fill=popblue!5, rounded corners=5pt, text width=5cm, align=left, inner sep=7pt, font=\small, minimum height=2cm}
+]
+  \node[rbox] at (-4, 0) {
+    \textbf{The setup:}\\[3pt]
+    \footnotesize
+    Does the US economy do better\\
+    under Democrats or Republicans?\\[3pt]
+    Choose: which party, which\\
+    metric, which years, which\\
+    controls\ldots
+  };
+
+  \pause
+  \node[rbox, fill=warnred!8, draw=warnred!50] at (4, 0) {
+    \textbf{The result:}\\[3pt]
+    \footnotesize
+    You can ``prove'' \textit{either} party\\
+    is better, with $p < 0.05$, by\\
+    choosing different combinations\\
+    of the same data.\\[3pt]
+    \textbf{Same data, opposite conclusions!}
+  };
+
+  \draw[-{Stealth}, very thick, orange1, line width=2pt] (-.5, 0) -- (1.2, 0)
+    node[midway, above, font=\small\bfseries] {cherry-pick};
+\end{tikzpicture}
+\end{center}
+
+\pause
+\vspace{0.15cm}
+\begin{center}
+\fcolorbox{paramgreen}{paramgreen!5}{\parbox{11cm}{\centering\small
+  \textbf{The antidote:}\\[2pt]
+  \textbf{1. Pre-register} your analysis plan before seeing data\\
+  \textbf{2. Report all analyses} you ran, not just the ``significant'' ones\\
+  \textbf{3. Correct for multiple comparisons} (Bonferroni, BH --- covered later)\\
+  \textbf{4. Focus on effect sizes and CIs}, not just $p < 0.05$
 }}
 \end{center}
 \end{frame}
@@ -1120,7 +1278,8 @@ Effect size is \textbf{independent of sample size} --- it measures the \textit{p
 
 \vspace{0.05cm}
 {\footnotesize\textcolor{gray}{\textbf{Other effect sizes:} Pearson's $r$ (correlation), odds ratio (binary outcomes), $\eta^2$ (ANOVA). Each context has its own measure.}}\\
-{\footnotesize\textcolor{warnred}{\textbf{Warning:} Cohen's benchmarks (0.2/0.5/0.8) are \textbf{context-dependent}. In education, $d = 0.2$ can be large. Always define the \textbf{smallest effect size of interest} (SESOI) from domain knowledge, not from a table.}}
+{\footnotesize\textcolor{warnred}{\textbf{Warning:} Cohen's benchmarks (0.2/0.5/0.8) are \textbf{context-dependent}. Always define the \textbf{smallest effect size of interest} (SESOI) from domain knowledge, not from a table.}}\\
+{\footnotesize\textcolor{warnred}{\textbf{Context matters:} In medicine, $d = 0.1$ applied to millions can save thousands of lives. In education, $d = 0.8$ is extraordinarily rare. Always interpret effect sizes in your domain.}}
 \end{frame}
 
 \begin{frame}
@@ -1225,7 +1384,8 @@ $d = 0.2$: $n \approx 394$
 
 \small
 Under $H_0$: drug and placebo groups come from the \textit{same} distribution.\\
-So the group labels are \textbf{arbitrary} --- shuffling them shouldn't change anything.
+So the group labels are \textbf{arbitrary} --- shuffling them shouldn't change anything.\\[4pt]
+\textit{Intuition:} Under $H_0$, swapping a patient between drug and placebo groups shouldn't change anything --- the groups are interchangeable. This is called \textbf{exchangeability}.
 
 \vspace{0.3cm}
 \begin{center}
