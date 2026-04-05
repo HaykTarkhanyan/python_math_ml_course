@@ -343,7 +343,7 @@ These topics are important for statisticians but not essential for a first data 
 ### YouTube Channels
 | Channel | Why |
 |---------|-----|
-| [Metric Academy](https://www.youtube.com/@MetricAcademy) | This course's own lectures (Armenian + English terms) |
+| [Metric Academy](https://www.youtube.com/@MetricAcademy) | Lecture videos referenced throughout this course (Armenian + English terms) |
 | [StatQuest (Josh Starmer)](https://www.youtube.com/@statquest) | Best bite-sized stats explainers on YouTube |
 | [3Blue1Brown](https://www.youtube.com/@3blue1brown) | Unmatched visual intuition |
 | [Harvard Stat 110](https://youtube.com/playlist?list=PL2SOU6wwxB0uwwH80KTQ6ht66KWxbzTIo) | Full probability course |
@@ -351,4 +351,4 @@ These topics are important for statisticians but not essential for a first data 
 
 ---
 
-*Auto-generated syllabus — YouTube links auto-extracted from Metric Academy channel. If you spot a mistake or broken link, please let me know.*
+*A [Data ARMs](https://www.linkedin.com/company/data-arms) course. YouTube links auto-extracted from the Metric Academy channel. If you spot a mistake or broken link, please let us know.*

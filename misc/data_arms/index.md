@@ -2,6 +2,8 @@
 title: "Probability & Statistics for Data Science"
 ---
 
+![](data_arms_logo.jpg){width=200 fig-align="center"}
+
 A compact probability and statistics course for undergraduates planning to go into data science.
 Designed for ~12 weeks (one 90-min lecture + one 60-min practical per week).
 
@@ -19,4 +21,4 @@ Designed for ~12 weeks (one 90-min lecture + one 60-min practical per week).
 
 ---
 
-*Part of the [Metric Academy](https://www.youtube.com/@MetricAcademy) course series.*
+*A [Data ARMs](https://www.linkedin.com/company/data-arms) course.*

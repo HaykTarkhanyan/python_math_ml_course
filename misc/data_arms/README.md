@@ -1,9 +1,13 @@
-# Probability & Statistics for Data Science — Short Course
+# Data ARMs — Probability & Statistics for Data Science
+
+<img src="data_arms_logo.jpg" width="150">
 
 A compact probability and statistics course for undergraduates planning to go into data science.
 Designed for ~12 weeks (one 90-min lecture + one 60-min practical per week).
 
 **Prerequisites:** Basic calculus (derivatives, integrals) and set theory. No programming required — the semester project uses only a spreadsheet and calculator. Python will be covered in a separate course.
+
+**LinkedIn:** [Data ARMs](https://www.linkedin.com/company/data-arms)
 
 ## Course Files
 
