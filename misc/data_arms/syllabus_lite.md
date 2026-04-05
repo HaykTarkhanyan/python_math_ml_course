@@ -24,8 +24,8 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 |----------|--------|
 | [3Blue1Brown — Essence of Calculus](https://youtube.com/playlist?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr) | Visual calculus intuition |
 | [Khan Academy — Integrals](https://www.khanacademy.org/math/integral-calculus) | Integration review |
-| [Metric Academy — Lecture 0: Sets, Combinatorics, Functions](https://youtu.be/7rIw7ocwMP4) | Set theory basics |
-| [Metric Academy — Lecture 11: Integrals](https://youtu.be/J2tU1cUlZok) | Definite & indefinite integrals |
+| [Metric Academy — Lecture 0: Sets, Combinatorics, Functions](<https://youtu.be/7rIw7ocwMP4)> | Set theory basics |
+| [Metric Academy — Lecture 11: Integrals](<https://youtu.be/J2tU1cUlZok)> | Definite & indefinite integrals |
 
 ---
 
@@ -49,14 +49,14 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 23 — Probability Intro | https://youtu.be/OhbCxYucA4s |
-| Metric Lecture 24 — Conditional Prob, Bayes, Independence | https://youtu.be/KkWwnFRd0YU |
-| Metric Lecture 25 — Geometric Probability *(optional)* | https://youtu.be/7WB-qkVn9lo |
-| Metric Practical 14 | https://youtu.be/twHQTcN_48E |
+| Metric Lecture 23 — Probability Intro | <https://youtu.be/OhbCxYucA4s> |
+| Metric Lecture 24 — Conditional Prob, Bayes, Independence | <https://youtu.be/KkWwnFRd0YU> |
+| Metric Lecture 25 — Geometric Probability *(optional)* | <https://youtu.be/7WB-qkVn9lo> |
+| Metric Practical 14 | <https://youtu.be/twHQTcN_48E> |
 | Slides | [L09_Probability__Independence__Bayes_Rule.pdf](../../math/Lectures/L09_Probability__Independence__Bayes_Rule.pdf) |
 | Textbook (Armenian) | [Կարճ մաթեմատիկա ՄԼ-ի համար.pdf](../../math/Lectures/%D4%BF%D5%A1%D6%80%D5%B3%20%D5%B4%D5%A1%D5%A9%D5%A5%D5%B4%20%D5%B4%D5%A5%D6%84%D5%A5%D5%B6%D5%A1%D5%B5%D5%A1%D5%AF%D5%A1%D5%B6%20%D5%B8%D6%82%D5%BD%D5%B8%D6%82%D6%81%D5%B4%D5%A1%D5%B6%20%D5%B0%D5%A1%D5%B4%D5%A1%D6%80.pdf) — probability chapters (stat not covered) |
-| [3Blue1Brown — Bayes' theorem](https://youtu.be/HZGCoVF3YvM) | Best visual explanation of Bayes |
-| [StatQuest — Probability concepts](https://youtu.be/uzkc-qNVoOk) | Quick overview |
+| [3Blue1Brown — Bayes' theorem](<https://youtu.be/HZGCoVF3YvM)> | Best visual explanation of Bayes |
+| [StatQuest — Probability concepts](<https://youtu.be/uzkc-qNVoOk)> | Quick overview |
 | Textbook | Blitzstein & Hwang, *Intro to Probability* — Ch. 1-2 |
 
 ---
@@ -70,11 +70,11 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 26 — Random Variables | https://youtu.be/eV1EaNM21_Q |
-| Metric Lecture 27 — PMF, CDF, PDF | https://youtu.be/oienebEeHAE |
-| Metric Practical 15 | https://youtu.be/_c_Jlt256Lc |
+| Metric Lecture 26 — Random Variables | <https://youtu.be/eV1EaNM21_Q> |
+| Metric Lecture 27 — PMF, CDF, PDF | <https://youtu.be/oienebEeHAE> |
+| Metric Practical 15 | <https://youtu.be/_c_Jlt256Lc> |
 | Slides | [L10_Random_Variables.pdf](../../math/Lectures/L10_Random_Variables.pdf) |
-| [StatQuest — Histograms](https://youtu.be/qBigTkBLU6g) | Connecting data to distributions |
+| [StatQuest — Histograms](<https://youtu.be/qBigTkBLU6g)> | Connecting data to distributions |
 | Textbook | Blitzstein & Hwang — Ch. 3 |
 
 ---
@@ -90,11 +90,11 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 28 — Expectation & Variance | https://youtu.be/sR-HbLj-Dg8 |
-| Metric Lecture 29 — Markov & Chebyshev *(optional)* | https://youtu.be/mDPO7KC5L-Q |
-| Metric Practical 16 — E[X], Var, Inequalities | https://youtu.be/8fkODa_yEEM |
+| Metric Lecture 28 — Expectation & Variance | <https://youtu.be/sR-HbLj-Dg8> |
+| Metric Lecture 29 — Markov & Chebyshev *(optional)* | <https://youtu.be/mDPO7KC5L-Q> |
+| Metric Practical 16 — E[X], Var, Inequalities | <https://youtu.be/8fkODa_yEEM> |
 | Slides | [L11_Expected_Value__Variance.pdf](../../math/Lectures/L11_Expected_Value__Variance.pdf) |
-| [StatQuest — Expected Values](https://youtu.be/KLs_7b7SKi4) | Quick and clear |
+| [StatQuest — Expected Values](<https://youtu.be/KLs_7b7SKi4)> | Quick and clear |
 | [Seeing Theory — Expectation](https://seeing-theory.brown.edu/basic-probability/) | Interactive visualizations |
 | Textbook | Blitzstein & Hwang — Ch. 4 |
 
@@ -111,14 +111,14 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 32 — Bernoulli | https://youtu.be/Pg8CFfxnI5I |
-| Metric Lecture 33 — Binomial, Poisson | https://youtu.be/jTA1swTAbCs |
-| Metric Lecture 34 — Continuous Distributions | https://youtu.be/3By51o8_-8w |
-| Metric Practical 18 — Distributions | https://youtu.be/YhT1p1sGFp8 |
-| Metric Practical 19 — Distribution Problems | https://youtu.be/D9JIZXNzios |
+| Metric Lecture 32 — Bernoulli | <https://youtu.be/Pg8CFfxnI5I> |
+| Metric Lecture 33 — Binomial, Poisson | <https://youtu.be/jTA1swTAbCs> |
+| Metric Lecture 34 — Continuous Distributions | <https://youtu.be/3By51o8_-8w> |
+| Metric Practical 18 — Distributions | <https://youtu.be/YhT1p1sGFp8> |
+| Metric Practical 19 — Distribution Problems | <https://youtu.be/D9JIZXNzios> |
 | Slides | [L13_Distributions.pdf](../../math/Lectures/L13_Distributions.pdf) |
-| [StatQuest — Normal Distribution](https://youtu.be/rzFX5NWojp0) | Visual explainer |
-| [StatQuest — Poisson Distribution](https://youtu.be/LN0xtUuJsEI) | Visual explainer |
+| [StatQuest — Normal Distribution](<https://youtu.be/rzFX5NWojp0)> | Visual explainer |
+| [StatQuest — Poisson Distribution](<https://youtu.be/LN0xtUuJsEI)> | Visual explainer |
 | [Seeing Theory — Distributions](https://seeing-theory.brown.edu/probability-distributions/) | Play with parameters |
 | Textbook | Blitzstein & Hwang — Ch. 5-6 |
 
@@ -137,15 +137,15 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 30 — Covariance & Correlation | https://youtu.be/bLpMxKkrKTI |
-| Metric Lecture 31 — Correlation Pitfalls, Spearman | https://youtu.be/5FdGFaG0pXg |
-| Metric Lecture 37 — LLN & CLT | https://youtu.be/uvdv-7ZlZNo |
-| Metric Practical 17 — Covariance & Correlation | https://youtu.be/XxhWp0gmb1U |
-| Metric Practical 20 — Convergence, LLN, CLT | https://youtu.be/xnT7eaba_UM |
+| Metric Lecture 30 — Covariance & Correlation | <https://youtu.be/bLpMxKkrKTI> |
+| Metric Lecture 31 — Correlation Pitfalls, Spearman | <https://youtu.be/5FdGFaG0pXg> |
+| Metric Lecture 37 — LLN & CLT | <https://youtu.be/uvdv-7ZlZNo> |
+| Metric Practical 17 — Covariance & Correlation | <https://youtu.be/XxhWp0gmb1U> |
+| Metric Practical 20 — Convergence, LLN, CLT | <https://youtu.be/xnT7eaba_UM> |
 | Slides (Correlation) | [L12_Covariance__Correlation.pdf](../../math/Lectures/L12_Covariance__Correlation.pdf) |
 | Slides (CLT) | [L14_Comvergence__LLN__CLT.pdf](../../math/Lectures/L14_Comvergence__LLN__CLT.pdf) |
 | [Spurious Correlations](https://www.tylervigen.com/spurious-correlations) | Hilarious and educational |
-| [3Blue1Brown — Central Limit Theorem](https://youtu.be/zeJD6dqJ5lo) | The definitive visual explanation |
+| [3Blue1Brown — Central Limit Theorem](<https://youtu.be/zeJD6dqJ5lo)> | The definitive visual explanation |
 | Textbook | Blitzstein & Hwang — Ch. 7, 10 |
 
 ---
@@ -159,12 +159,12 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 38 — Statistics Foundations | https://youtu.be/ulNS3QVenYo |
-| Metric Lecture 39 — Descriptive Stats & Visualization | https://youtu.be/ice5rtgBOcA |
+| Metric Lecture 38 — Statistics Foundations | <https://youtu.be/ulNS3QVenYo> |
+| Metric Lecture 39 — Descriptive Stats & Visualization | <https://youtu.be/ice5rtgBOcA> |
 | Slides (Foundations) | [01_stat.pdf](../../math/Lectures/stat/01_stat.pdf) |
 | Slides (Descriptive) | [02_stat.pdf](../../math/Lectures/stat/02_stat.pdf) |
 | Notes | [01_stat_notes.pdf](../../math/Lectures/stat/01_stat_notes.pdf), [02_stat_notes.pdf](../../math/Lectures/stat/02_stat_notes.pdf) |
-| [StatQuest — Histograms](https://youtu.be/qBigTkBLU6g) | |
+| [StatQuest — Histograms](<https://youtu.be/qBigTkBLU6g)> | |
 | [Khan Academy — Descriptive statistics](https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data) | |
 | Textbook | Wasserman, *All of Statistics* — Ch. 3 |
 
@@ -181,10 +181,10 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 40 — Bias, MSE, Bias-Variance Tradeoff | https://youtu.be/lAKPMjqQ6vc |
+| Metric Lecture 40 — Bias, MSE, Bias-Variance Tradeoff | <https://youtu.be/lAKPMjqQ6vc> |
 | Slides | [03_stat.pdf](../../math/Lectures/stat/03_stat.pdf) |
 | Notes | [03_stat_notes.pdf](../../math/Lectures/stat/03_stat_notes.pdf) |
-| [StatQuest — Bias and Variance](https://youtu.be/EuBBz3bI-aA) | The classic explanation |
+| [StatQuest — Bias and Variance](<https://youtu.be/EuBBz3bI-aA)> | The classic explanation |
 | Textbook | Wasserman — Ch. 9 (sections 9.1-9.3 only) |
 
 ---
@@ -201,11 +201,11 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 ### Resources
 | Type | Link |
 |------|------|
-| Metric Lecture 43 — MoM & MLE | https://youtu.be/xQKwAcaM410 |
+| Metric Lecture 43 — MoM & MLE | <https://youtu.be/xQKwAcaM410> |
 | Slides | [05_stat.pdf](../../math/Lectures/stat/05_stat.pdf) |
 | Notes | [05_stat_notes.pdf](../../math/Lectures/stat/05_stat_notes.pdf) |
-| [StatQuest — Maximum Likelihood](https://youtu.be/XepXtl9YKwc) | Must-watch |
-| [3Blue1Brown — Bayes theorem](https://youtu.be/HZGCoVF3YvM) | Visual Bayesian intuition (just watch, no math needed) |
+| [StatQuest — Maximum Likelihood](<https://youtu.be/XepXtl9YKwc)> | Must-watch |
+| [3Blue1Brown — Bayes theorem](<https://youtu.be/HZGCoVF3YvM)> | Visual Bayesian intuition (just watch, no math needed) |
 | Textbook | Wasserman — Ch. 9 (section 9.4) |
 
 ---
@@ -223,8 +223,8 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 |------|------|
 | Slides (Sampling Distributions) | [07_stat.pdf](../../math/Lectures/stat/07_stat.pdf) |
 | Slides (CIs & Bootstrap) | [08_stat.pdf](../../math/Lectures/stat/08_stat.pdf) |
-| [StatQuest — Confidence Intervals](https://youtu.be/TqOeMYtOc1w) | Clear walkthrough |
-| [StatQuest — Bootstrapping](https://youtu.be/Xz0x-8-cgaQ) | Must-watch |
+| [StatQuest — Confidence Intervals](<https://youtu.be/TqOeMYtOc1w)> | Clear walkthrough |
+| [StatQuest — Bootstrapping](<https://youtu.be/Xz0x-8-cgaQ)> | Must-watch |
 | [Seeing Theory — Frequentist Inference](https://seeing-theory.brown.edu/frequentist-inference/) | Interactive CI demo |
 | [Khan Academy — Confidence Intervals](https://www.khanacademy.org/math/statistics-probability/confidence-intervals-one-sample) | |
 | Textbook | Wasserman — Ch. 8 |
@@ -244,10 +244,10 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 |------|------|
 | Slides (Hypothesis Testing) | [09_stat.pdf](../../math/Lectures/stat/09_stat.pdf) |
 | Slides (Classical Tests) | [10_stat.pdf](../../math/Lectures/stat/10_stat.pdf) |
-| [StatQuest — p-values](https://youtu.be/vemZtEM63GY) | Most-watched p-value video on YouTube |
-| [StatQuest — Hypothesis Testing](https://youtu.be/0oc49DyA3hU) | Overview |
-| [StatQuest — t-tests](https://youtu.be/0Pd3dc1GcHc) | Practical walkthrough |
-| [StatQuest — Chi-squared test](https://youtu.be/ZjdBM7NO7bY) | Categorical data testing |
+| [StatQuest — p-values](<https://youtu.be/vemZtEM63GY)> | Most-watched p-value video on YouTube |
+| [StatQuest — Hypothesis Testing](<https://youtu.be/0oc49DyA3hU)> | Overview |
+| [StatQuest — t-tests](<https://youtu.be/0Pd3dc1GcHc)> | Practical walkthrough |
+| [StatQuest — Chi-squared test](<https://youtu.be/ZjdBM7NO7bY)> | Categorical data testing |
 | [Seeing Theory — Hypothesis Testing](https://seeing-theory.brown.edu/frequentist-inference/) | Interactive demo |
 | Textbook | Wasserman — Ch. 10 |
 
@@ -263,8 +263,8 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 | Type | Link |
 |------|------|
 | Slides (ANOVA & A/B Testing) | [11_stat.pdf](../../math/Lectures/stat/11_stat.pdf) |
-| [StatQuest — FDR and Benjamini-Hochberg](https://youtu.be/K8LQSvtjcEo) | Multiple testing correction |
-| [Cassie Kozyrkov — A/B Testing](https://youtu.be/DUNk4GPZ9bw) | Industry perspective |
+| [StatQuest — FDR and Benjamini-Hochberg](<https://youtu.be/K8LQSvtjcEo)> | Multiple testing correction |
+| [Cassie Kozyrkov — A/B Testing](<https://youtu.be/DUNk4GPZ9bw)> | Industry perspective |
 | Textbook | Wasserman — Ch. 10 (multiple testing section) |
 
 ---
@@ -282,8 +282,8 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 |------|------|
 | Slides (ANOVA & A/B Testing) | [11_stat.pdf](../../math/Lectures/stat/11_stat.pdf) |
 | Slides (Causal Inference) | [14_stat.pdf](../../math/Lectures/stat/14_stat.pdf) |
-| [StatQuest — One-way ANOVA](https://youtu.be/oOuu8IICZRo) | Visual walkthrough |
-| [StatQuest — Tukey's test](https://youtu.be/UMgiUOGT1qg) | Post-hoc comparisons |
+| [StatQuest — One-way ANOVA](<https://youtu.be/oOuu8IICZRo)> | Visual walkthrough |
+| [StatQuest — Tukey's test](<https://youtu.be/UMgiUOGT1qg)> | Post-hoc comparisons |
 | [Brady Neal — Causal Inference](https://youtube.com/playlist?list=PLoazKTcS0RzZ1SUgeOgc6SWt51gfT80N0) | If you want to go deeper |
 | Textbook | Wasserman — Ch. 10 (ANOVA section) |
 
@@ -304,7 +304,7 @@ A fun, non-technical wrap-up lecture. How graphs, averages, and p-values get wea
 |------|------|
 | Book | Darrell Huff, *How to Lie with Statistics* (1954) — short, funny, still relevant |
 | [Calling Bullshit — course videos](https://www.callingbullshit.org/videos.html) | Full university course by Carl Bergstrom & Jevin West (U of Washington) |
-| [StatQuest — p-hacking](https://youtu.be/Gx0fAjNHb1M) | What happens when you test everything |
+| [StatQuest — p-hacking](<https://youtu.be/Gx0fAjNHb1M)> | What happens when you test everything |
 | [Spurious Correlations](https://www.tylervigen.com/spurious-correlations) | Correlation between Nicolas Cage films and pool drownings |
 | [Survivorship bias — airplane example](../../math/Lectures/stat/survivorship_airplane.pdf) | The classic WWII bullet hole story |
 | Book | Joel Best, *Damned Lies and Statistics* — how bad stats spread through media |
