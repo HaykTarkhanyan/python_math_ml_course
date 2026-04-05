@@ -2,9 +2,9 @@
 
 - **Channel:** [@MetricAcademy](https://www.youtube.com/@MetricAcademy)
 - **Channel ID:** `UC5BavugdnUkti3Es7-deZDg`
-- **Total Videos:** 178
+- **Total Videos:** 182
 - **Total Playlists:** 11
-- **Last scraped:** 2026-03-20
+- **Last scraped:** 2026-04-06
 
 ---
 
@@ -28,7 +28,7 @@
 
 ## All Videos (178 total)
 
-### Math/ML Lectures (44 videos)
+### Math/ML Lectures (47 videos)
 
 | # | Video ID | Title | Views | Duration (s) | URL |
 |---|----------|-------|-------|-------------|-----|
@@ -76,8 +76,11 @@
 | 41 | `Ye0ZsTDnPx4` | Lecture 41 — Consistency, sufficiency | 71 | 2980 | https://youtu.be/Ye0ZsTDnPx4 |
 | 42 | `DDdzHnQsyrA` | Lecture 42 — Minimax | 43 | 3512 | https://youtu.be/DDdzHnQsyrA |
 | 43 | `xQKwAcaM410` | Lecture 43 — MLE | 40 | 5396 | https://youtu.be/xQKwAcaM410 |
+| 44 | `PNVE4gy1jt0` | Lecture 44 — MAP, regularization connection | — | — | https://youtu.be/PNVE4gy1jt0 |
+| 45 | `bxqLIYWc9C8` | Lecture 45 — Sampling distributions, Monte Carlo | — | — | https://youtu.be/bxqLIYWc9C8 |
+| 46 | `uzQ3mFOqcwo` | Lecture 46 — Confidence intervals, bootstrap | — | — | https://youtu.be/uzQ3mFOqcwo |
 
-#### Math/ML Practicals (22 videos)
+#### Math/ML Practicals (23 videos)
 
 | Session | Video ID | Title | Views | Duration (s) | URL |
 |---------|----------|-------|-------|-------------|-----|
@@ -102,6 +105,7 @@
 | 19 | `D9JIZXNzios` | Practical 19 | 64 | 2796 | https://youtu.be/D9JIZXNzios |
 | 20 | `xnT7eaba_UM` | Practical 20 | 44 | 8131 | https://youtu.be/xnT7eaba_UM |
 | 21 | `fxYxoHIz-P0` | Practical 21 (bonus) | 83 | 4405 | https://youtu.be/fxYxoHIz-P0 |
+| 22 | `8W9iOV7IVnA` | Practical 22 — MLE & MAP | — | — | https://youtu.be/8W9iOV7IVnA |
 
 ---
 
