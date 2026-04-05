@@ -95,7 +95,7 @@ Students (or instructor) bring a misleading graph from the news, social media, o
 
 **The exercise:** "I claim that the sample median is a biased estimator of the population mean for skewed distributions. Prove me wrong — or right — using simulation."
 
-Give students 10 minutes (on paper or mentally, since no Python yet):
+Give students 10 minutes (on paper or mentally — this course doesn't use Python):
 1. Imagine drawing 1000 samples of size 30 from an Exponential(1) distribution
 2. For each sample, compute the mean and the median
 3. What would the average of those 1000 means be? (≈ 1, the true mean)

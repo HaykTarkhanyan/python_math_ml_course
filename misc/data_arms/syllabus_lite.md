@@ -51,8 +51,10 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 |------|------|
 | Metric Lecture 23 — Probability Intro | https://youtu.be/OhbCxYucA4s |
 | Metric Lecture 24 — Conditional Prob, Bayes, Independence | https://youtu.be/KkWwnFRd0YU |
+| Metric Lecture 25 — Geometric Probability *(optional)* | https://youtu.be/7WB-qkVn9lo |
 | Metric Practical 14 | https://youtu.be/twHQTcN_48E |
 | Slides | [L09_Probability__Independence__Bayes_Rule.pdf](../../math/Lectures/L09_Probability__Independence__Bayes_Rule.pdf) |
+| Textbook (Armenian) | [Կარճ մdelays μeqenayakan ousoucman hamar.pdf](../../math/Lectures/%D4%BF%D5%A1%D6%80%D5%B3%20%D5%B4%D5%A1%D5%A9%D5%A5%D5%B4%20%D5%B4%D5%A5%D6%84%D5%A5%D5%B6%D5%A1%D5%B5%D5%A1%D5%AF%D5%A1%D5%B6%20%D5%B8%D6%82%D5%BD%D5%B8%D6%82%D6%81%D5%B4%D5%A1%D5%B6%20%D5%B0%D5%A1%D5%B4%D5%A1%D6%80.pdf) — probability chapters (stat not covered) |
 | [3Blue1Brown — Bayes' theorem](https://youtu.be/HZGCoVF3YvM) | Best visual explanation of Bayes |
 | [StatQuest — Probability concepts](https://youtu.be/uzkc-qNVoOk) | Quick overview |
 | Textbook | Blitzstein & Hwang, *Intro to Probability* — Ch. 1-2 |
@@ -89,6 +91,7 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 | Type | Link |
 |------|------|
 | Metric Lecture 28 — Expectation & Variance | https://youtu.be/sR-HbLj-Dg8 |
+| Metric Lecture 29 — Markov & Chebyshev *(optional)* | https://youtu.be/mDPO7KC5L-Q |
 | Metric Practical 16 — E[X], Var, Inequalities | https://youtu.be/8fkODa_yEEM |
 | Slides | [L11_Expected_Value__Variance.pdf](../../math/Lectures/L11_Expected_Value__Variance.pdf) |
 | [StatQuest — Expected Values](https://youtu.be/KLs_7b7SKi4) | Quick and clear |
@@ -112,6 +115,7 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 | Metric Lecture 33 — Binomial, Poisson | https://youtu.be/jTA1swTAbCs |
 | Metric Lecture 34 — Continuous Distributions | https://youtu.be/3By51o8_-8w |
 | Metric Practical 18 — Distributions | https://youtu.be/YhT1p1sGFp8 |
+| Metric Practical 19 — Distribution Problems | https://youtu.be/D9JIZXNzios |
 | Slides | [L13_Distributions.pdf](../../math/Lectures/L13_Distributions.pdf) |
 | [StatQuest — Normal Distribution](https://youtu.be/rzFX5NWojp0) | Visual explainer |
 | [StatQuest — Poisson Distribution](https://youtu.be/LN0xtUuJsEI) | Visual explainer |
@@ -126,6 +130,8 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 
 **Why it matters:** Correlation is probably the single most used (and misused) concept in data analysis. LLN/CLT explain why sampling works.
 
+> **Note:** This is a dense week. Consider covering correlation in the lecture and LLN/CLT in the practical session, or letting CLT spill into Week 6.
+
 > **Skipping:** Formal convergence modes (almost sure, in distribution, etc.). Just the intuition.
 
 ### Resources
@@ -135,6 +141,7 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 | Metric Lecture 31 — Correlation Pitfalls, Spearman | https://youtu.be/5FdGFaG0pXg |
 | Metric Lecture 37 — LLN & CLT | https://youtu.be/uvdv-7ZlZNo |
 | Metric Practical 17 — Covariance & Correlation | https://youtu.be/XxhWp0gmb1U |
+| Metric Practical 20 — Convergence, LLN, CLT | https://youtu.be/xnT7eaba_UM |
 | Slides (Correlation) | [L12_Covariance__Correlation.pdf](../../math/Lectures/L12_Covariance__Correlation.pdf) |
 | Slides (CLT) | [L14_Comvergence__LLN__CLT.pdf](../../math/Lectures/L14_Comvergence__LLN__CLT.pdf) |
 | [Spurious Correlations](https://www.tylervigen.com/spurious-correlations) | Hilarious and educational |
@@ -312,10 +319,11 @@ These topics are important for statisticians but not essential for a first data 
 | Topic | Why skipped | Where to learn |
 |-------|-------------|----------------|
 | Fisher information & Cramér-Rao | Beautiful theory, but you can do great data science without it | Metric Lecture 42, Casella & Berger Ch. 7 |
-| Sufficiency & exponential families | Theoretical elegance, rarely used directly in practice | Metric Lecture 41, Wasserman Ch. 9 |
+| Sufficiency & exponential families | Theoretical elegance, rarely used directly in practice | Metric Lecture 41, Practical 21, Wasserman Ch. 9 |
 | Formal convergence modes | You need LLN/CLT intuition, not the four types of convergence | Metric Lectures 35-36 |
 | Minimax estimation | Decision theory — fascinating but niche | Metric Lecture 42 |
-| MAP & Bayesian estimation | Important but better introduced alongside ML (regularization) | Metric Lecture 43 + stat slides 06 |
+| Estimator properties (deep) | Consistency, sufficiency, detailed theorems | [04_stat.pdf](../../math/Lectures/stat/04_stat.pdf), Metric Lectures 41-42 |
+| MAP & Bayesian estimation | Important but better introduced alongside ML (regularization) | [06_stat.pdf](../../math/Lectures/stat/06_stat.pdf), Metric Lecture 43 |
 | Linear regression (statistical view) | Will be covered in the ML course with hands-on code | Stat slides 12, StatQuest, Wasserman Ch. 13 |
 | GLMs (logistic, Poisson regression) | Better as the first topic of an ML course | Stat slides 13 |
 | Moment generating functions | Proof technique, not a practical tool | Blitzstein Ch. 6 |
@@ -327,6 +335,7 @@ These topics are important for statisticians but not essential for a first data 
 ### Textbooks
 | Book | Level | Best for |
 |------|-------|----------|
+| [Կարnothing մ...](../../math/Lectures/%D4%BF%D5%A1%D6%80%D5%B3%20%D5%B4%D5%A1%D5%A9%D5%A5%D5%B4%20%D5%B4%D5%A5%D6%84%D5%A5%D5%B6%D5%A1%D5%B5%D5%A1%D5%AF%D5%A1%D5%B6%20%D5%B8%D6%82%D5%BD%D5%B8%D6%82%D6%81%D5%B4%D5%A1%D5%B6%20%D5%B0%D5%A1%D5%B4%D5%A1%D6%80.pdf) — Math for ML (Armenian) | Undergrad | Weeks 1-5 probability chapters. Stat not covered. |
 | Blitzstein & Hwang, *Introduction to Probability* | Undergrad | Weeks 1-5. [Free PDF + Harvard Stat 110 lectures](https://projects.iq.harvard.edu/stat110) |
 | Wasserman, *All of Statistics* | Undergrad/Grad bridge | Weeks 6-12. Concise, data-science-friendly |
 | Diez, Cetinkaya-Rundel & Barr, *OpenIntro Statistics* | Intro | Gentler alternative. [Free PDF](https://www.openintro.org/book/os/) |
