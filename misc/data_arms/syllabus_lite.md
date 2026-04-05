@@ -54,7 +54,7 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 | Metric Lecture 25 — Geometric Probability *(optional)* | https://youtu.be/7WB-qkVn9lo |
 | Metric Practical 14 | https://youtu.be/twHQTcN_48E |
 | Slides | [L09_Probability__Independence__Bayes_Rule.pdf](../../math/Lectures/L09_Probability__Independence__Bayes_Rule.pdf) |
-| Textbook (Armenian) | [Կარճ մdelays μeqenayakan ousoucman hamar.pdf](../../math/Lectures/%D4%BF%D5%A1%D6%80%D5%B3%20%D5%B4%D5%A1%D5%A9%D5%A5%D5%B4%20%D5%B4%D5%A5%D6%84%D5%A5%D5%B6%D5%A1%D5%B5%D5%A1%D5%AF%D5%A1%D5%B6%20%D5%B8%D6%82%D5%BD%D5%B8%D6%82%D6%81%D5%B4%D5%A1%D5%B6%20%D5%B0%D5%A1%D5%B4%D5%A1%D6%80.pdf) — probability chapters (stat not covered) |
+| Textbook (Armenian) | [Կարճ մաթեմատիկա ՄԼ-ի համար.pdf](../../math/Lectures/%D4%BF%D5%A1%D6%80%D5%B3%20%D5%B4%D5%A1%D5%A9%D5%A5%D5%B4%20%D5%B4%D5%A5%D6%84%D5%A5%D5%B6%D5%A1%D5%B5%D5%A1%D5%AF%D5%A1%D5%B6%20%D5%B8%D6%82%D5%BD%D5%B8%D6%82%D6%81%D5%B4%D5%A1%D5%B6%20%D5%B0%D5%A1%D5%B4%D5%A1%D6%80.pdf) — probability chapters (stat not covered) |
 | [3Blue1Brown — Bayes' theorem](https://youtu.be/HZGCoVF3YvM) | Best visual explanation of Bayes |
 | [StatQuest — Probability concepts](https://youtu.be/uzkc-qNVoOk) | Quick overview |
 | Textbook | Blitzstein & Hwang, *Intro to Probability* — Ch. 1-2 |
