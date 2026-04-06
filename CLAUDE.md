@@ -27,6 +27,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `_quarto.yml` paths must be **exact case** — Linux CI is case-sensitive
 - Custom callouts defined: Links, Python, Libraries, Math, ML, Misc
 - Themes: cosmo (light) / darkly (dark) with toggle
+- **Markdown formatting gotcha:** Quarto requires a blank line before lists, blockquotes, and other block elements. Without it the content renders as plain text instead of formatted markup.
+
+```markdown
+<!-- BAD — Quarto won't render the list -->
+Some text:
+- item a
+- item b
+
+<!-- GOOD — blank line before the list -->
+Some text:
+
+- item a
+- item b
+```
+
+This also applies to ordered lists, blockquotes (`>`), code fences, and tables. Always leave a blank line before any block-level element.
 
 ## Homework .qmd Files
 
