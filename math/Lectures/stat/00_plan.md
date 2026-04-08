@@ -2,21 +2,21 @@
 
 ## Schedule Overview (~1.5 sessions/week, done early June)
 
-| # | Session | Type | Slides/Materials | Status |
-|---|---------|------|------------------|--------|
-| 1 | CI & Bootstrap | Practical | `24_stat_confidence_intervals.qmd` | [ ] |
-| 2 | Hypothesis Testing + Classical Tests | Lecture | `09_stat.tex` + `10_stat.tex` | [ ] |
-| 3 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` (TBD) | [ ] |
-| 4 | ANOVA & A/B Testing | Lecture | `11_stat.tex` | [ ] |
-| 5 | ANOVA & A/B Testing | Practical | TBD | [ ] |
-| 6 | Causal Inference + delta method | Lecture | `14_stat.tex` | [ ] |
-| 7 | Causal Inference | Practical | TBD | [ ] |
-| 8 | How to Lie with Statistics | Lecture | `16_stat.tex` | [ ] |
-| 9 | Q&A / Review | - | - | [ ] |
-| 10 | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
-| 11 | Info Theory for ML | Lecture | `info_02.tex` | [ ] |
-| 12 | Information Theory | Practical | TBD | [ ] |
-| 13 | Curse of Dimensionality | Lecture | `math/misc/cod/cod.tex` | [ ] |
+| # | Date | Session | Type | Slides/Materials | Status |
+|---|------|---------|------|------------------|--------|
+| 1 | Wed Apr 8 | CI & Bootstrap | Practical | `24_stat_confidence_intervals.qmd` | [x] |
+| 2 | Thu Apr 9 | Hypothesis Testing + Classical Tests | Lecture | `09_stat.tex` + `10_stat.tex` | [ ] |
+| 3 | Tue Apr 14 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` (TBD) | [ ] |
+| 4 | TBD | ANOVA & A/B Testing | Lecture | `11_stat.tex` | [ ] |
+| 5 | TBD | ANOVA & A/B Testing | Practical | TBD | [ ] |
+| 6 | TBD | Causal Inference + delta method | Lecture | `14_stat.tex` | [ ] |
+| 7 | TBD | Causal Inference | Practical | TBD | [ ] |
+| 8 | TBD | How to Lie with Statistics | Lecture | `16_stat.tex` | [ ] |
+| 9 | TBD | Q&A / Review | - | - | [ ] |
+| 10 | TBD | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
+| 11 | TBD | Info Theory for ML | Lecture | `info_02.tex` | [ ] |
+| 12 | TBD | Information Theory | Practical | TBD | [ ] |
+| 13 | TBD | Curse of Dimensionality | Lecture | `math/misc/cod/cod.tex` | [ ] |
 
 ---
 
@@ -66,7 +66,7 @@
 - Topics: misleading graphs, cherry-picking, survivorship bias, p-hacking, Simpson's paradox revisited, base rate fallacy, media literacy
 
 ### Q&A / Review Session
-- Open questions, recap of stat block, exam prep if needed
+- Open questions, recap of stat block,
 
 ### Regression & GLMs - skipping for now
 - `12_stat.tex` + `13_stat.tex` - deferred

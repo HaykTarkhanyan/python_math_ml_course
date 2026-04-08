@@ -44,6 +44,11 @@ Some text:
 
 This also applies to ordered lists, blockquotes (`>`), code fences, and tables. Always leave a blank line before any block-level element.
 
+## Armenian text (Opus bug)
+
+- Claude Opus has a known bug generating Armenian script - output often corrupts or produces garbage
+- When Armenian text is needed: use `[ARM: english description of what to write]` placeholders and let me fill them in, or copy-paste from a source verbatim - but never have the model generate Armenian directly when running on Opus
+
 ## Homework .qmd Files
 
 - Located in `math/00_*.qmd` through `math/25_*.qmd`
