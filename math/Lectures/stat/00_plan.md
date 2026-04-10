@@ -6,18 +6,17 @@
 |---|------|---------|------|------------------|--------|
 | 1 | Wed Apr 8 | CI & Bootstrap | Practical | `24_stat_confidence_intervals.qmd` | [x] |
 | 2 | Thu Apr 9 | Hypothesis Testing (p-values, power) | Lecture | `09_stat.tex` | [x] |
-| 3 | TBD | Classical Tests & LRT | Lecture | `10_stat.tex` | [ ] |
-| 4 | Tue Apr 14 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` (TBD) | [ ] |
-| 5 | TBD | ANOVA & A/B Testing | Lecture | `11_stat.tex` | [ ] |
-| 6 | TBD | ANOVA & A/B Testing | Practical | TBD | [ ] |
-| 7 | TBD | Causal Inference + delta method | Lecture | `14_stat.tex` | [ ] |
-| 8 | TBD | Causal Inference | Practical | TBD | [ ] |
-| 9 | TBD | How to Lie with Statistics | Lecture | `16_stat.tex` | [ ] |
-| 10 | TBD | Q&A / Review | - | - | [ ] |
-| 11 | TBD | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
-| 12 | TBD | Info Theory for ML | Lecture | `info_02.tex` | [ ] |
-| 13 | TBD | Information Theory | Practical | TBD | [ ] |
-| 14 | TBD | Curse of Dimensionality | Lecture | `math/misc/cod/cod.tex` | [ ] |
+| 3 | Tue Apr 14 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` | [ ] |
+| 4 | TBD | Classical Tests + ANOVA & A/B | Lecture | `10_stat.tex` + `11_stat.tex` | [ ] |
+| 5 | TBD | Classical Tests + ANOVA | Practical | `26` + `27` qmd | [ ] |
+| 6 | TBD | Causal Inference + delta method | Lecture | `14_stat.tex` | [ ] |
+| 7 | TBD | Causal Inference | Practical | TBD | [ ] |
+| 8 | TBD | How to Lie with Statistics | Lecture | `16_stat.tex` | [ ] |
+| 9 | TBD | Q&A / Review | - | - | [ ] |
+| 10 | TBD | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
+| 11 | TBD | Info Theory for ML | Lecture | `info_02.tex` | [ ] |
+| 12 | TBD | Information Theory | Practical | TBD | [ ] |
+| 13 | TBD | Curse of Dimensionality | Lecture | `math/misc/cod/cod.tex` | [ ] |
 
 ---
 
