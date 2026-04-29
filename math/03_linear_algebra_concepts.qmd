@@ -71,7 +71,65 @@ Imagine you're lost in a 2D world and receive distance signals from cell towers:
 
 Now for real GPS with 4 satellites in 3D space:
 - Why do you need exactly 4 satellites for 3D positioning when you only need 2 towers for 2D?
-- What happens if you only have 3 satellites? 
+- What happens if you only have 3 satellites?
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**Part A: 2D positioning.**
+
+Each tower-distance gives a circle equation. Tower A at $(0,0)$ at distance $5$:
+
+$$x^2 + y^2 = 25$$
+
+Tower B at $(6, 0)$ at distance $3$:
+
+$$(x-6)^2 + y^2 = 9$$
+
+Subtracting eq. 1 from eq. 2 to eliminate $y^2$:
+
+$$(x-6)^2 - x^2 = 9 - 25 \;\Rightarrow\; -12x + 36 = -16 \;\Rightarrow\; x = \tfrac{52}{12} = \tfrac{13}{3}$$
+
+Substitute back into eq. 1:
+
+$$y^2 = 25 - \tfrac{169}{9} = \tfrac{56}{9} \;\Rightarrow\; y = \pm \tfrac{2\sqrt{14}}{3} \approx \pm 2.49$$
+
+So **two solutions**: $\left(\tfrac{13}{3}, \pm \tfrac{2\sqrt{14}}{3}\right)$.
+
+```{=html}
+<svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:1em auto;max-width:100%;height:auto;font-family:sans-serif;">
+  <line x1="0" y1="120" x2="360" y2="120" stroke="currentColor" stroke-opacity="0.4"/>
+  <line x1="60" y1="0" x2="60" y2="240" stroke="currentColor" stroke-opacity="0.4"/>
+  <circle cx="60" cy="120" r="100" fill="none" stroke="#D90012" stroke-width="2"/>
+  <circle cx="180" cy="120" r="60" fill="none" stroke="#0033A0" stroke-width="2"/>
+  <circle cx="60" cy="120" r="3" fill="currentColor"/>
+  <circle cx="180" cy="120" r="3" fill="currentColor"/>
+  <circle cx="146" cy="70.2" r="4" fill="#F2A800"/>
+  <circle cx="146" cy="169.8" r="4" fill="#F2A800"/>
+  <text x="40" y="138" font-size="11" fill="currentColor">A(0,0)</text>
+  <text x="170" y="138" font-size="11" fill="currentColor">B(6,0)</text>
+  <text x="155" y="64" font-size="11" fill="#F2A800">P₁</text>
+  <text x="155" y="184" font-size="11" fill="#F2A800">P₂</text>
+</svg>
+```
+
+In 2D, two distance measurements give two circles — generically intersecting at *two* points. To pick the right one you'd need extra information (a third tower, or knowledge of which side of the line you're on).
+
+**Part B: 3D GPS.**
+
+In 3D, each satellite-distance gives a *sphere* of possible positions $\|\vec p - \vec p_{\text{sat}}\|^2 = d^2$. Geometrically:
+
+- 1 sphere → 2D surface of solutions
+- 2 spheres → 1D circle (where two spheres intersect)
+- 3 spheres → typically 2 isolated points
+- 4 spheres → 1 unique point
+
+So mathematically, *3 satellites are almost enough* — they give 2 candidate points, of which one is usually obviously wrong (deep inside Earth or far in space). But there's a hidden 4th unknown: **the receiver's clock offset**.
+
+GPS works by measuring how long signals take to arrive. Satellites carry atomic clocks; phones do not. So a receiver doesn't know "true" time exactly, only its time *plus an unknown offset* $\Delta t$. The actual unknowns are $(x, y, z, \Delta t)$ — **four** unknowns. Each satellite gives one equation, so you need **4 satellites** to solve uniquely.
+
+With only 3 satellites, you can't disentangle position from clock error and accuracy degrades. With 4+ satellites (which is what real receivers usually see), you over-determine the system and use least squares for noise-resistant positioning.
+
+:::
 
 
 ### 02: Linear regression with normal equations {data-difficulty="2"}
@@ -170,6 +228,32 @@ Given the conversion rates: 1 USD = 400 AMD and 1 kg = 2.2 pounds.
 
 4. **System solvability**: If you try to fit a model using all 4 features, what problems might arise? *Hint:* Think about the normal equation and matrix invertibility.
 
+::: {.callout-tip collapse="true" title="Solution"}
+
+**1. Linear dependencies.** With $1\,\text{USD} = 400\,\text{AMD}$ and $1\,\text{kg} = 2.2\,\text{lb}$:
+
+$$p_1 = 400 \cdot p_2, \qquad w_2 = 2.2 \cdot w_1$$
+
+Equivalently, $p_1 - 400\,p_2 = 0$ and $w_2 - 2.2\,w_1 = 0$. Each is a linear relation among the columns.
+
+**2. Maximum rank of the data matrix.** With 100 cheeses and 4 columns, the matrix is $100 \times 4$. The column rank is at most $\min(100, 4) = 4$, but the two dependencies above eliminate two independent directions: only "price" (one currency suffices) and "weight" (one unit suffices) carry independent information. So:
+
+$$\text{max rank} = 4 - 2 = 2$$
+
+**3. Feature selection.** Keep one feature per "real" quantity, e.g., $\{p_2, w_1\}$ (USD and kg). Either currency for price and either unit for weight gives identical information — they're just rescaled copies. Picking one of each removes the redundancy.
+
+**4. What goes wrong if you keep all 4 features?**
+
+The data matrix $X$ has linearly dependent columns. Then:
+
+- $X^T X$ is **singular** — its determinant is $0$ — so the normal-equation formula $\vec\theta = (X^TX)^{-1} X^T \vec y$ literally cannot be evaluated (no inverse exists).
+- Even if you regularize and force a solution, the individual coefficients become **uninterpretable and unstable**. Tiny numerical changes in $X$ cause large swings in $\vec\theta$. You can't separate "the effect of AMD price" from "the effect of USD price" — they're the same thing in disguise.
+- Common fixes: drop redundant features (feature selection), use **ridge regression** ($X^TX + \lambda I$ is always invertible), or project to a smaller independent feature set via PCA.
+
+This phenomenon is called **multicollinearity** and is one of the most common real-world ML pitfalls — especially when features come from automated pipelines that bring in different units or correlated metrics.
+
+:::
+
 
 ### 04: System consistency analysis {data-difficulty="2"}
 
@@ -182,9 +266,79 @@ x + 2y + z = 1 \\
 -x - y + (a-1)z = 0
 \end{cases}$$
 
+::: {.callout-tip collapse="true" title="Solution"}
+
+Form the augmented matrix and row-reduce. Apply $R_2 \to R_2 - 2R_1$ and $R_3 \to R_3 + R_1$:
+
+$$\left[\begin{array}{ccc|c} 1 & 2 & 1 & 1 \\ 2 & 4 & a & 2 \\ -1 & -1 & a-1 & 0 \end{array}\right] \;\longrightarrow\; \left[\begin{array}{ccc|c} 1 & 2 & 1 & 1 \\ 0 & 0 & a-2 & 0 \\ 0 & 1 & a & 1 \end{array}\right]$$
+
+Now swap rows 2 and 3 to get a clean staircase:
+
+$$\left[\begin{array}{ccc|c} 1 & 2 & 1 & 1 \\ 0 & 1 & a & 1 \\ 0 & 0 & a-2 & 0 \end{array}\right]$$
+
+The bottom-right entry $a - 2$ controls everything.
+
+**Case 1: $a \neq 2$.** Then $(a-2) z = 0$ gives $z = 0$. Back-substituting: $y + a \cdot 0 = 1 \Rightarrow y = 1$, and $x + 2 \cdot 1 + 0 = 1 \Rightarrow x = -1$.
+
+→ **Unique solution** $(x, y, z) = (-1, 1, 0)$.
+
+**Case 2: $a = 2$.** The third equation becomes $0 = 0$ — automatically satisfied, so it disappears. Two equations remain:
+
+$$y + 2z = 1, \qquad x + 2y + z = 1$$
+
+From the first: $y = 1 - 2z$. Substituting into the second: $x + 2(1 - 2z) + z = 1 \Rightarrow x = -1 + 3z$.
+
+→ **Infinitely many solutions** parameterized by $z \in \mathbb{R}$:
+
+$$(x, y, z) = (-1 + 3z, \; 1 - 2z, \; z)$$
+
+**Case 3: 0 solutions?** Never. The right-hand side of the second row stays at $0$ regardless of $a$, so we never get a contradiction like "$0 = (\text{nonzero})$". The system is consistent for every $a$.
+
+| $a$ | # of solutions |
+|---|---|
+| $a = 2$ | infinitely many |
+| $a \neq 2$ | exactly one |
+| any | never $0$ |
+
+*Geometric interpretation.* Each equation defines a plane in $\mathbb{R}^3$. For $a \neq 2$, the three planes meet at a single point. For $a = 2$, two of them are essentially the same equation (rows 1 and 2 become parallel) — the three planes share a common line, so the solutions form a line in $\mathbb{R}^3$.
+
+:::
+
 ### 05: Linear independence in polynomial space {data-difficulty="2"}
 
 Determine if the set $\{1 + t, 1 + 2t, 1 + t + t^2\} \subset P_2$ is linearly independent. If dependent, express one polynomial as a linear combination of the others.
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+Set up the linear-independence test:
+
+$$c_1(1+t) + c_2(1+2t) + c_3(1+t+t^2) = 0$$
+
+For this polynomial to be the zero polynomial, the coefficient of each power of $t$ must be $0$:
+
+| coefficient of | equation |
+|---|---|
+| $t^2$ | $c_3 = 0$ |
+| $t^1$ | $c_1 + 2c_2 + c_3 = 0$ |
+| $t^0$ | $c_1 + c_2 + c_3 = 0$ |
+
+From the first: $c_3 = 0$. Substituting into the other two: $c_1 + 2c_2 = 0$ and $c_1 + c_2 = 0$. Subtracting these gives $c_2 = 0$, hence $c_1 = 0$.
+
+Only the trivial solution $c_1 = c_2 = c_3 = 0$ → **the set is linearly independent**.
+
+*Alternative method via the coordinate-vector trick.* Each polynomial maps to a coordinate vector in the standard basis $\{1, t, t^2\}$:
+
+$$1+t \leftrightarrow (1, 1, 0), \quad 1+2t \leftrightarrow (1, 2, 0), \quad 1+t+t^2 \leftrightarrow (1, 1, 1)$$
+
+Place them as columns of a matrix and compute the determinant:
+
+$$\det\begin{pmatrix} 1 & 1 & 1 \\ 1 & 2 & 1 \\ 0 & 0 & 1 \end{pmatrix} = 1\cdot(2 - 0) - 1\cdot(1 - 0) + 1\cdot 0 = 1 \neq 0$$
+
+Nonzero determinant ⇒ columns are linearly independent ⇒ the original polynomials are linearly independent.
+
+This trick — "convert vectors in any 3-dimensional vector space to $\mathbb{R}^3$ via coordinates, then use a determinant" — is one of the main payoffs of the basis machinery. It works for matrices, polynomials, function spaces — anything with a finite basis.
+
+:::
 
 ### 06: Matrix subspaces and trace {data-difficulty="3"}
 
@@ -192,6 +346,40 @@ Let $V = \{M \in M_{2 \times 2} : \text{tr}(M) = 0\}$ be the set of $2 \times 2$
 
 1. Prove that $V$ is a subspace of $M_{2 \times 2}$.
 2. Find a basis and determine the dimension of $V$.
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**Part 1: $V$ is a subspace.**
+
+We check the three subspace axioms.
+
+(i) **Zero vector.** The zero matrix has $\text{tr}(0) = 0$, so $0 \in V$. ✓
+
+(ii) **Closed under addition.** If $A, B \in V$, then $\text{tr}(A) = \text{tr}(B) = 0$. Trace is linear in its argument, so
+
+$$\text{tr}(A + B) = \text{tr}(A) + \text{tr}(B) = 0$$
+
+Hence $A + B \in V$. ✓
+
+(iii) **Closed under scalar multiplication.** If $A \in V$ and $c \in \mathbb{R}$, then $\text{tr}(cA) = c\,\text{tr}(A) = 0$, so $cA \in V$. ✓
+
+**Part 2: Basis and dimension.**
+
+A general $2 \times 2$ matrix is $M = \begin{pmatrix} a & b \\ c & d \end{pmatrix}$ with $\text{tr}(M) = a + d$. The constraint $\text{tr}(M) = 0$ forces $d = -a$, leaving three free parameters $a, b, c$:
+
+$$M = \begin{pmatrix} a & b \\ c & -a \end{pmatrix} = a\underbrace{\begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}}_{E_1} + b\underbrace{\begin{pmatrix} 0 & 1 \\ 0 & 0 \end{pmatrix}}_{E_2} + c\underbrace{\begin{pmatrix} 0 & 0 \\ 1 & 0 \end{pmatrix}}_{E_3}$$
+
+These three matrices $E_1, E_2, E_3$ span $V$ by construction, and they're linearly independent (each one has a $1$ in a unique position the others don't). So:
+
+$$\mathcal{B} = \{E_1, E_2, E_3\}, \qquad \dim(V) = 3$$
+
+*Sanity check via "constraint counting".* $M_{2\times 2}$ has dimension $4$. The trace condition $a + d = 0$ is one linear constraint, so it cuts the dimension by exactly $1$:
+
+$$\dim(V) = \dim(M_{2\times2}) - 1 = 4 - 1 = 3 \;\checkmark$$
+
+This is a general principle: each independent linear constraint on a vector space reduces dimension by exactly $1$.
+
+:::
 
 ### 07: Change of basis and coordinates {data-difficulty="3"}
 
@@ -248,6 +436,33 @@ In each case, determine whether $S$ is a basis for $V$:
 
 **d)** $V = P_1$, $S = \{1 - 2x, 2 - x\}$
 
+::: {.callout-tip collapse="true" title="Solution"}
+
+A subset $S$ is a basis of $V$ iff (i) $|S| = \dim(V)$, and (ii) the elements of $S$ are linearly independent. (Either condition combined with the size match implies spanning.)
+
+**a)** $V = P_3$ has dimension $4$. $|S| = 4$, but $S$ contains the zero polynomial. **Not a basis.** Any set containing the zero vector is automatically linearly dependent — the relation $1 \cdot 0 = 0$ is non-trivial.
+
+**b)** $V = M_{2 \times 2}$ has dimension $4$. $|S| = 3 < 4$. **Not a basis.** Three vectors can never span a $4$-dimensional space, no matter what they are.
+
+**c)** $V = \mathbb{R}^3$ has dimension $3$. $|S| = 3$, but check linear independence: the third vector is
+
+$$e_1 + 3e_2 = 1 \cdot e_1 + 3 \cdot e_2 + 0 \cdot e_3$$
+
+a linear combination of the first two. **Not a basis.** Equivalently: every linear combination of $S$ stays in the $xy$-plane, so $S$ doesn't reach $e_3$.
+
+**d)** $V = P_1$ has dimension $2$. $|S| = 2$, so we just need linear independence. Check $c_1(1 - 2x) + c_2(2 - x) = 0$:
+
+| coefficient of | equation |
+|---|---|
+| constant | $c_1 + 2c_2 = 0$ |
+| $x$ | $-2c_1 - c_2 = 0$ |
+
+From the first: $c_1 = -2c_2$. Substituting into the second: $-2(-2c_2) - c_2 = 3c_2 = 0$, so $c_2 = 0$ and $c_1 = 0$. Only the trivial solution.
+
+**$S$ is a basis** of $P_1$.
+
+:::
+
 ### 09: Linear transformation from coordinates {data-difficulty="3"}
 
 ::: {.callout-note collapse="true" appearance="minimal"}
@@ -259,6 +474,46 @@ Suppose $T$ is a linear transformation from $\mathbb{R}^2$ to $P_2$ such that:
 $$T\begin{pmatrix} -1 \\ 1 \end{pmatrix} = x + 3, \quad T\begin{pmatrix} 2 \\ 3 \end{pmatrix} = 2x^2 - x$$
 
 Find $T\begin{pmatrix} a \\ b \end{pmatrix}$ for arbitrary $a, b \in \mathbb{R}$.
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**Key idea.** A linear transformation is fully determined by its action on a basis. So once we express $(a, b)$ in terms of the given input vectors, linearity hands us $T(a, b)$ for free.
+
+**Step 1: Verify the inputs form a basis.**
+
+The vectors $\vec{v}_1 = (-1, 1)$ and $\vec{v}_2 = (2, 3)$ have
+
+$$\det\begin{pmatrix} -1 & 2 \\ 1 & 3 \end{pmatrix} = -3 - 2 = -5 \neq 0$$
+
+so they're linearly independent — and any 2 independent vectors in $\mathbb{R}^2$ form a basis.
+
+**Step 2: Express $(a, b)$ in this basis.**
+
+Find $\alpha, \beta$ such that $(a, b) = \alpha\vec{v}_1 + \beta\vec{v}_2$:
+
+$$-\alpha + 2\beta = a, \qquad \alpha + 3\beta = b$$
+
+Adding: $5\beta = a + b \;\Rightarrow\; \beta = \frac{a + b}{5}$.
+
+Substituting into $\alpha = b - 3\beta$: $\alpha = b - \frac{3(a+b)}{5} = \frac{2b - 3a}{5}$.
+
+**Step 3: Apply linearity.**
+
+$$T\!\begin{pmatrix} a \\ b \end{pmatrix} = \alpha \cdot T(\vec{v}_1) + \beta \cdot T(\vec{v}_2) = \frac{2b - 3a}{5}(x + 3) + \frac{a + b}{5}(2x^2 - x)$$
+
+Expanding and grouping by powers of $x$:
+
+$$\boxed{\;T\!\begin{pmatrix} a \\ b \end{pmatrix} = \frac{2(a+b)}{5}\,x^2 + \frac{b - 4a}{5}\,x + \frac{6b - 9a}{5}\;}$$
+
+**Verification.**
+
+For $(a, b) = (-1, 1)$: $\alpha = \frac{2 + 3}{5} = 1$, $\beta = 0$. So $T = 1 \cdot (x + 3) + 0 = x + 3$ ✓
+
+For $(a, b) = (2, 3)$: $\alpha = \frac{6 - 6}{5} = 0$, $\beta = \frac{5}{5} = 1$. So $T = 0 + 1 \cdot (2x^2 - x) = 2x^2 - x$ ✓
+
+*Why this matters.* This "specify-on-a-basis, extend-by-linearity" recipe is **the** way linear transformations are defined and stored in practice. A neural-network weight matrix $W \in \mathbb{R}^{m \times n}$ is exactly this: $W$ tells you what the transformation does to each standard basis vector $e_j$ (column $j$ of $W$ is $W e_j$), and linearity gives you the action on every other input.
+
+:::
 
 ### 10: Geometric eigenvalue intuition {data-difficulty="2"}
 
@@ -280,6 +535,42 @@ Understanding eigenvalues geometrically helps build intuition for principal comp
 
 - **d) Scaling matrix:** $D = \begin{pmatrix} 3 & 0 \\ 0 & 2 \end{pmatrix}$
 
+::: {.callout-tip collapse="true" title="Solution"}
+
+The recipe in all four cases: an eigenvector is a direction that the matrix maps to *the same line through the origin*; the eigenvalue is the stretch factor (negative if reversed).
+
+**a) Shear $S = \begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}$.**
+
+Vectors on the $x$-axis ($y = 0$) don't move at all: $S(k, 0)^T = (k, 0)^T$. So the $x$-axis is fixed → eigenvalue $\lambda = 1$ with eigenvector $(1, 0)^T$.
+
+What about other directions? A vector $(x, y)$ with $y \neq 0$ goes to $(x + y, y)$ — **not** a scalar multiple of $(x, y)$. So this is the *only* eigenvector direction.
+
+→ One eigenvalue $\lambda = 1$ with one independent eigenvector. Such a matrix is called **defective** — it doesn't have enough eigenvectors to form a basis of $\mathbb{R}^2$, and so it cannot be diagonalized.
+
+**b) Rotation $R = \begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$ (90° CCW).**
+
+Every direction gets rotated by 90°. **No real direction stays the same**, so there are no real eigenvectors. (Algebraically, the characteristic polynomial $\lambda^2 + 1 = 0$ has only complex roots $\pm i$.) This generalizes: a 2D rotation by $\theta \neq 0°, 180°$ has no real eigenvectors at all.
+
+**c) Reflection $F = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$ (across $x$-axis).**
+
+Two natural fixed directions:
+
+- Along the **mirror line** ($x$-axis): $F(k, 0)^T = (k, 0)^T$. Eigenvalue $\lambda_1 = 1$, eigenvector $(1, 0)^T$.
+- **Perpendicular to the mirror** ($y$-axis): $F(0, k)^T = (0, -k)^T$. Eigenvalue $\lambda_2 = -1$, eigenvector $(0, 1)^T$.
+
+The eigenvalues $\pm 1$ are characteristic of *every* reflection: the mirror gets $+1$, the perpendicular gets $-1$. In any orthonormal eigenbasis a reflection looks exactly like the diagonal matrix $\text{diag}(1, -1)$.
+
+**d) Scaling $D = \begin{pmatrix} 3 & 0 \\ 0 & 2 \end{pmatrix}$.**
+
+The matrix is already diagonal, so:
+
+- $D(1, 0)^T = (3, 0)^T = 3 \cdot (1, 0)^T$ → $\lambda_1 = 3$, eigenvector $(1, 0)^T$.
+- $D(0, 1)^T = (0, 2)^T = 2 \cdot (0, 1)^T$ → $\lambda_2 = 2$, eigenvector $(0, 1)^T$.
+
+For a diagonal matrix, **the diagonal entries are the eigenvalues** and the standard basis vectors are the eigenvectors. This is why people work so hard to *diagonalize* general matrices — once you have a matrix in (or transformed to) diagonal form, eigenvalues and eigenvectors are immediate.
+
+:::
+
 ### 11: Matrix powers using eigenvalues {data-difficulty="3"}
 
 
@@ -292,6 +583,90 @@ Consider the matrix $A = \begin{pmatrix} 5 & 8 \\ 2 & 5 \end{pmatrix}$. We want 
 3. **Compute high powers efficiently**: Use diagonalization to find $A^{10}$ without multiplying the matrix 10 times.
 
 4. **Pattern recognition**: What happens to $A^n$ as $n \to \infty$? Which eigenvalue dominates?
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**1. Eigenvalues and eigenvectors of $A = \begin{pmatrix} 5 & 8 \\ 2 & 5 \end{pmatrix}$.**
+
+Solve the characteristic equation $\det(A - \lambda I) = 0$:
+
+$$\det\begin{pmatrix} 5 - \lambda & 8 \\ 2 & 5 - \lambda \end{pmatrix} = (5 - \lambda)^2 - 16 = 0$$
+
+So $(5 - \lambda)^2 = 16 \Rightarrow 5 - \lambda = \pm 4 \Rightarrow \lambda = 1 \text{ or } 9$.
+
+For $\lambda = 9$: solve $(A - 9I)\vec v = 0$:
+
+$$\begin{pmatrix} -4 & 8 \\ 2 & -4 \end{pmatrix}\vec v = 0 \;\Rightarrow\; -4v_1 + 8v_2 = 0 \;\Rightarrow\; v_1 = 2v_2$$
+
+Eigenvector: $\vec v_9 = (2, 1)^T$.
+
+For $\lambda = 1$: solve $(A - I)\vec v = 0$:
+
+$$\begin{pmatrix} 4 & 8 \\ 2 & 4 \end{pmatrix}\vec v = 0 \;\Rightarrow\; v_1 = -2v_2$$
+
+Eigenvector: $\vec v_1 = (-2, 1)^T$.
+
+**2. Diagonalize $A = PDP^{-1}$.**
+
+Place the eigenvectors as columns of $P$ (in the order matching the eigenvalues on $D$'s diagonal):
+
+$$P = \begin{pmatrix} 2 & -2 \\ 1 & 1 \end{pmatrix}, \quad D = \begin{pmatrix} 9 & 0 \\ 0 & 1 \end{pmatrix}$$
+
+$\det(P) = 2 \cdot 1 - (-2) \cdot 1 = 4$, so
+
+$$P^{-1} = \frac{1}{4}\begin{pmatrix} 1 & 2 \\ -1 & 2 \end{pmatrix}$$
+
+*Sanity check.* $A P = P D$? Column-by-column: $A(2,1)^T = (18, 9)^T = 9 \cdot (2, 1)^T$ ✓ and $A(-2, 1)^T = (-2, 1)^T = 1 \cdot (-2, 1)^T$ ✓.
+
+**3. Compute $A^{10}$ via diagonalization.**
+
+The trick: $A^n = (PDP^{-1})^n = PDP^{-1} \cdot PDP^{-1} \cdots PDP^{-1} = P D^n P^{-1}$, with all the inner $P^{-1}P$ pairs collapsing to $I$. And $D^n$ is trivial — just power each diagonal entry:
+
+$$D^{10} = \begin{pmatrix} 9^{10} & 0 \\ 0 & 1 \end{pmatrix}$$
+
+So:
+
+$$A^{10} = P D^{10} P^{-1} = \begin{pmatrix} 2 & -2 \\ 1 & 1 \end{pmatrix}\begin{pmatrix} 9^{10} & 0 \\ 0 & 1 \end{pmatrix} \cdot \frac{1}{4}\begin{pmatrix} 1 & 2 \\ -1 & 2 \end{pmatrix}$$
+
+Multiplying out the first two:
+
+$$= \begin{pmatrix} 2 \cdot 9^{10} & -2 \\ 9^{10} & 1 \end{pmatrix} \cdot \frac{1}{4}\begin{pmatrix} 1 & 2 \\ -1 & 2 \end{pmatrix} = \frac{1}{4}\begin{pmatrix} 2\cdot 9^{10} + 2 & 4\cdot 9^{10} - 4 \\ 9^{10} - 1 & 2\cdot 9^{10} + 2 \end{pmatrix}$$
+
+Cleaning up:
+
+$$A^{10} = \begin{pmatrix} \dfrac{9^{10}+1}{2} & 9^{10} - 1 \\[4pt] \dfrac{9^{10}-1}{4} & \dfrac{9^{10}+1}{2} \end{pmatrix}$$
+
+(Numerically, $9^{10} = 3{,}486{,}784{,}401$.)
+
+The same calculation gives a closed form for **every** power:
+
+$$A^n = \begin{pmatrix} \dfrac{9^n + 1}{2} & 9^n - 1 \\[4pt] \dfrac{9^n - 1}{4} & \dfrac{9^n + 1}{2} \end{pmatrix}$$
+
+Sanity-check at $n = 0$: $A^0 = I$ (since $9^0 = 1$, the top-left becomes $\frac{1+1}{2} = 1$, etc.) ✓ and at $n = 1$ the formula reproduces $A$ itself. ✓
+
+*Why this is a big deal.* Computing $A^{10}$ by direct multiplication takes $9$ matrix multiplications, each $O(n^3)$ for an $n \times n$ matrix. With diagonalization, you do **one** factorization plus a trivial power of a diagonal matrix — and you also get a closed-form formula for every power simultaneously, not just $n = 10$.
+
+**4. Behavior as $n \to \infty$.**
+
+The dominant eigenvalue $\lambda_1 = 9$ controls the growth — entries of $A^n$ scale like $9^n$. The smaller eigenvalue $\lambda_2 = 1$ contributes a constant correction that becomes negligible compared to $9^n$. For large $n$:
+
+$$A^n \;\approx\; \frac{9^n}{4}\begin{pmatrix} 2 & 4 \\ 1 & 2 \end{pmatrix}$$
+
+Notice that the matrix on the right is **rank 1**: the second column is just twice the first, and the matrix factors as
+
+$$\begin{pmatrix} 2 & 4 \\ 1 & 2 \end{pmatrix} = \begin{pmatrix} 2 \\ 1 \end{pmatrix}\begin{pmatrix} 1 & 2 \end{pmatrix}$$
+
+— the **outer product of the dominant eigenvector $(2, 1)^T$** with another vector. So as $n \to \infty$, $A^n$ collapses onto a rank-1 matrix in the direction of the dominant eigenvector, scaled by $9^n$.
+
+This is the seed of several powerful ideas:
+
+- **Power method** for finding dominant eigenvectors: just iterate $\vec x \mapsto A\vec x$ and (almost) any starting vector converges (after normalization) to the dominant eigenvector.
+- **PageRank**: Google ranks web pages as the dominant eigenvector of a giant link-graph matrix, computed by iterated multiplication.
+- **PCA**: the principal component is the dominant eigenvector of the covariance matrix.
+
+In every case, the largest-magnitude eigenvalue dominates and "pulls" the iteration onto its eigenvector direction.
+
+:::
 
 <!-- ### 12: Cayley-Hamilton theorem exploration {data-difficulty="3"}
 
