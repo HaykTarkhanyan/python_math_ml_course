@@ -1,0 +1,72 @@
+# AGENTS.md
+
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+
+## Build & Deployment
+
+- **GitHub Actions** auto-renders Quarto site on every push to `main` (~5 min). No local rendering needed.
+- Workflow: `.github/workflows/publish.yml` — renders `.qmd`/`.ipynb` files, deploys `docs/` to GitHub Pages
+- Legacy `Makefile` and `render_only_changed.py` still exist but are superseded by Actions
+- `make push render=false msg="message"` — quick commit+push without rendering
+- Site: https://hayktarkhanyan.github.io/python_math_ml_course/
+
+## LaTeX / Beamer Slides
+
+- **pdflatex** via TeX Live 2025; compile with `pdflatex -interaction=nonstopmode FILE.tex`
+- Two slide collections: `math/Lectures/stat/` (16 decks, 541 frames) and `math/Lectures/optim/` (6 decks)
+- Also: `misc/Codex/slides/` (5 decks on Codex topics)
+- Shared conventions: Beamer `default` theme, `dove` color scheme, 16:9 aspect ratio
+- Color palette: `popblue` (theory), `sampred` (data), `paramgreen` (parameters), `warnred` (warnings), `orange1`, `violet1`
+- All diagrams are TikZ/pgfplots code — no external images
+- Use `/beamer-overflow-check <pdf_path>` skill after compiling to visually detect clipped content
+
+## Quarto Configuration
+
+- Project type: **book** (`_quarto.yml`)
+- `execute: enabled: false` — notebooks are pre-rendered, not executed during build
+- `_quarto.yml` paths must be **exact case** — Linux CI is case-sensitive
+- Custom callouts defined: Links, Python, Libraries, Math, ML, Misc
+- Themes: cosmo (light) / darkly (dark) with toggle
+- **Markdown formatting gotcha:** Quarto requires a blank line before lists, blockquotes, and other block elements. Without it the content renders as plain text instead of formatted markup.
+
+```markdown
+<!-- BAD — Quarto won't render the list -->
+Some text:
+- item a
+- item b
+
+<!-- GOOD — blank line before the list -->
+Some text:
+
+- item a
+- item b
+```
+
+This also applies to ordered lists, blockquotes (`>`), code fences, and tables. Always leave a blank line before any block-level element.
+
+## Armenian text (Opus bug)
+
+- Codex Opus has a known bug generating Armenian script - output often corrupts or produces garbage
+- When Armenian text is needed: use `[ARM: english description of what to write]` placeholders and let me fill them in, or copy-paste from a source verbatim - but never have the model generate Armenian directly when running on Opus
+
+## Homework .qmd Files
+
+- Located in `math/00_*.qmd` through `math/25_*.qmd`
+- Difficulty: `{data-difficulty="1"}` → 🧀, `"2"` → 🧀🧀, `"3"` → 🧀🧀🧀
+- Bonus: `.bonus-problem` class → 🎁
+- Solutions use Quarto profiles: `{.content-visible when-profile="solution"}`
+
+## Testing
+
+- pytest configured for `python_libs/` directory
+- Run: `pytest python_libs/` or individual test files
+- Tests are teaching examples (calculator, elections, movies), not CI-enforced
+
+## Architecture
+
+- **python/** — 18 Jupyter notebooks: Python fundamentals → OOP → capstone
+- **python_libs/** — 18 Jupyter notebooks: data science stack (NumPy, Pandas, etc.)
+- **math/** — 26 `.qmd` homework modules + `Lectures/` (Beamer slide decks)
+- **ml/** — skeleton only (6 empty chapter dirs), not started
+- **misc/** — supplementary materials: Google Colab guide, dl4nlp lectures, Codex slides
+- Course is bilingual: Armenian (Հայերեն) + English throughout all materials
