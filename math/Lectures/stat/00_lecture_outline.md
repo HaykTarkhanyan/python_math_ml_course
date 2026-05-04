@@ -96,47 +96,39 @@ Builds on: L7 (sampling distributions, SE), L8 (CIs, bootstrap), L6 (Bayesian fo
 
 ---
 
-### Lecture 10: Classical Tests & the LRT Framework (`10_stat.tex`, 30 frames)
+### Lectures 10–11 (merged): Classical Tests, ANOVA & A/B Testing (`10_stat.tex`, ~59 frames)
 
-*"Which test do I actually use?"*
+*"Which test do I actually use? — and how does industry run experiments?"*
 
-**Part I — The Unifying Principle:** Nested models (restricted vs full) → Likelihood ratio statistic (Λ) → Wilks' theorem ($-2\log\Lambda \to \chi^2_k$) → The χ² distribution (density curves, key facts, decision rule).
+L10 and L11 were merged into a single deck. Cuts applied during the merge: dropped "Why $-2\log\Lambda$?", the LRT worked example for normal mean, the Two-Sample Teaching Methods worked example, Two-Way ANOVA, and Sequential Testing (O'Brien–Fleming).
 
-**Part II — Tests for Means:** One-sample t-test (coffee shop example) → Paired t-test (blood pressure before/after, why pairing matters) → Two-sample t-test (pooled + **Welch's** — default to Welch's) → Teaching methods example → Test for proportions (z-test, coin flip example, two-proportion formula).
+**Part I — The Unifying Principle:** Nested models (restricted vs full) → Likelihood ratio statistic (Λ) → χ² distribution (density curves, key facts) → Wilks' theorem ($-2\log\Lambda \to \chi^2_k$).
+
+**Part II — Tests for Means:** One-sample t-test (coffee shop example) → Paired t-test (blood pressure before/after, why pairing matters) → Two-sample t-test (pooled + **Welch's** — default to Welch's) → Test for proportions (z-test, coin flip example, two-proportion formula).
 
 **Part III — Chi-Squared Tests:** Goodness-of-fit (die fairness example with bar chart) → Test of independence (smoking/cancer 2×2 contingency table, expected counts formula).
 
 **Part IV — When Assumptions Fail:** Mann–Whitney U test (rank-based, visualization of ranking procedure) → Wilcoxon signed-rank test (paired nonparametric, bar chart of differences).
 
-**Decision Flowchart:** TikZ decision tree (data type → number of groups → paired? → specific test).
+**Decision Flowchart + Python Cheat Sheet + Mid-deck Recap.**
 
-Builds on: L9 (hypothesis testing, p-values, power), L7 (sampling distributions, CLT), L5 (MLE), L4 (Fisher info).
+**Part V — Three Groups:** Multiple t-tests inflate false positives ($1-(1-\alpha)^m$ explosion plot) → Need a single test for k groups.
 
-**Homework:** (1) One-sample t + CI (manufacturer weight claim), (2) Paired vs unpaired t on runners' times, (3) χ² GoF on transport preferences, (4) χ² independence on study method vs exam result.
+**Part VI — One-Way ANOVA:** Between vs within variability (scatter visualization) → SS decomposition (SST = SSB + SSW) → F-statistic (MS ratio, F distribution plots) → ANOVA table (template + numerical example) → Assumptions (independence, normality, equal variances, Welch's ANOVA, Kruskal-Wallis).
 
----
+**Part VII — Post-Hoc Tests:** Tukey's HSD vs Bonferroni (when to use which) → Visualizing post-hoc results (means with CIs and significance brackets).
 
-### Lecture 11: ANOVA & A/B Testing (`11_stat.tex`, 34 frames)
+**Part VIII — Effect Size:** η² (eta-squared, small/medium/large benchmarks).
 
-*"Three groups, three t-tests — what could go wrong?"*
+**Part IX — A/B Testing:** What is A/B testing (randomization diagram) → A/B test = hypothesis test (5-step recipe, MDE) → Sample size planning (proportions formula, 8K users example) → Button color example (z-test, relative lift).
 
-**Part I — The Problem:** Multiple t-tests inflate false positives (1-(1-α)^m explosion plot) → Need a single test for k groups.
-
-**Part II — One-Way ANOVA:** Between vs within variability (scatter visualization) → SS decomposition (SST = SSB + SSW, three explanation boxes) → F-statistic (MS ratio, F distribution plots) → ANOVA table (template + numerical example) → Assumptions (independence, normality, equal variances, Welch's ANOVA, Kruskal-Wallis).
-
-**Part III — Post-Hoc Tests:** Tukey's HSD vs Bonferroni (when to use which) → Visualizing post-hoc results (means with CIs and significance brackets).
-
-**Part IV — Beyond Basics:** Effect size η² (eta-squared, small/medium/large benchmarks) → Two-way ANOVA (interaction plot, non-parallel lines = interaction).
-
-**Part V — A/B Testing:** What is A/B testing (randomization diagram) → A/B test = hypothesis test (5-step recipe, MDE) → Sample size planning (proportions formula, 8K users example) → Button color example (z-test, relative lift).
-
-**Part VI — A/B Testing Pitfalls:** Peeking (p-value trajectory plot, 26% false positive rate) → Too many metrics → Novelty/primacy, Simpson's paradox, interference, survivorship bias → Sequential testing (O'Brien–Fleming boundaries plot).
+**Part X — A/B Testing Pitfalls:** Peeking (p-value trajectory plot, 26% false positive rate) → Too many metrics → Novelty/primacy, Simpson's paradox, interference, survivorship bias.
 
 **Big Picture:** ANOVA vs A/B testing comparison table → When to use what (decision guide).
 
-Builds on: L9 (hypothesis testing, p-values, power, multiple testing), L10 (t-tests, chi-squared, decision flowchart).
+Builds on: L9 (hypothesis testing, p-values, power, multiple testing), L7 (sampling distributions, CLT), L5 (MLE), L4 (Fisher info).
 
-**Homework:** (1) Three fertilizers one-way ANOVA + η² + Bonferroni, (2) E-commerce A/B test (z-test + sample size planning), (3) Peeking simulation in Python, (4) A/B/C test via χ² homogeneity + pairwise z-tests.
+**Homework (combined):** (1) One-sample t + CI (manufacturer weight claim), (2) Paired vs unpaired t on runners' times, (3) χ² GoF on transport preferences, (4) χ² independence on study method vs exam result, (5) Mann–Whitney on startup salaries, (6) Three fertilizers one-way ANOVA + η² + Bonferroni, (7) E-commerce A/B test (z-test + sample size planning), (8) Peeking simulation in Python, (9) A/B/C test via χ² homogeneity + pairwise z-tests.
 
 ---
 
@@ -156,7 +148,7 @@ Builds on: L9 (hypothesis testing, p-values, power, multiple testing), L10 (t-te
 
 **Part VI — Logistic Regression:** Logistic as MLE (sigmoid, cross-entropy) → $Z$-test for coefficients (asymptotic normality from Fisher info) → Odds ratios ($e^{\hat\beta_j}$, interpretation, CIs) → OLS vs Logistic comparison table.
 
-Builds on: L5 (MLE, cross-entropy), L6 (regularization = MAP), L7 (sampling distributions, SE), L10 (t-tests), L11 (ANOVA, F-test), L3 (bias-variance, Cramér-Rao), L4 (Fisher info).
+Builds on: L5 (MLE, cross-entropy), L6 (regularization = MAP), L7 (sampling distributions, SE), L10 (t-tests, ANOVA, F-test), L3 (bias-variance, Cramér-Rao), L4 (Fisher info).
 
 **Homework:** (1) Simulated regression ($\beta_2 = 0$, check significance + CIs + $R^2$), (2) Diabetes dataset diagnostics (influential points, Cook's distance), (3) Logistic regression on breast cancer (odds ratios + CIs), (4) Theory: why $R^2$ always increases but $R^2_\text{adj}$ can decrease.
 
@@ -204,7 +196,7 @@ Builds on: L3 (exponential family), L5 (MLE), L10 (LRT, chi-squared), L12 (regre
 
 **Part VII — Practical Checklist:** Ladder of causation (association/intervention/counterfactual) → 7-step checklist → Common pitfalls (controlling for everything, big data ≠ no confounding, post-treatment conditioning, external validity) → Course journey diagram (Describe → Estimate → Test → Model → Cause).
 
-Builds on: L2 (Simpson's paradox), L9 (hypothesis testing, p-values), L11 (A/B testing), L12 (regression, logistic), L13 (GLMs).
+Builds on: L2 (Simpson's paradox), L9 (hypothesis testing, p-values), L10 (A/B testing), L12 (regression, logistic), L13 (GLMs).
 
 **Homework:** (1) Surgery mortality DAG + propensity scores, (2) Ads vs purchases alternative explanations + A/B test design, (3) Collider simulation (conditioning creates correlation), (4) IV assumptions for "distance to hospital."
 
@@ -223,8 +215,7 @@ Builds on: L2 (Simpson's paradox), L9 (hypothesis testing, p-values), L11 (A/B t
 | 7 | `07_stat.tex` | Sampling distributions, Monte Carlo, CLT in action, SD vs SE |
 | 8 | `08_stat.tex` | CIs (Wald, Wilson, t, delta) + bootstrap (SE, percentile, BCa) |
 | 9 | `09_stat.tex` | Hypothesis testing, p-values, power, permutation tests, multiple testing |
-| 10 | `10_stat.tex` | Classical tests & LRT: t-tests, chi-squared, nonparametric, decision flowchart |
-| 11 | `11_stat.tex` | ANOVA, A/B testing, post-hoc, sequential testing |
+| 10 | `10_stat.tex` | Classical tests & LRT: t-tests, chi-squared, nonparametric, decision flowchart, ANOVA, A/B testing, post-hoc (merged L10+L11) |
 | 12 | `12_stat.tex` | Regression inference: SE, t-tests, R², Gauss-Markov, diagnostics, logistic |
 | 13 | `13_stat.tex` | GLMs: exp family + link functions, Poisson regression |
 | 14 | `14_stat.tex` | Causal inference, DAGs, potential outcomes, propensity |
@@ -248,5 +239,5 @@ Builds on: L2 (Simpson's paradox), L9 (hypothesis testing, p-values), L11 (A/B t
 | OLS, normal equation | Module 03 (linear regression) |
 | Bayes' theorem, priors | Module 16 (conditional probability) |
 | Delta method | Module 07 (Taylor expansion, derivatives) |
-| GLMs, link functions | L3 (exp family), L5 (MLE), L11 (regression) |
+| GLMs, link functions | L3 (exp family), L5 (MLE), L12 (regression inference) |
 | Causal inference, DAGs | L2 (Simpson's paradox), L9 (hypothesis testing) |

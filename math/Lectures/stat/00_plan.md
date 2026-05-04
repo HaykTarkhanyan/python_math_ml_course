@@ -6,8 +6,8 @@
 |---|------|---------|------|------------------|--------|
 | 1 | Wed Apr 8 | CI & Bootstrap | Practical | `24_stat_confidence_intervals.qmd` | [x] |
 | 2 | Thu Apr 9 | Hypothesis Testing (p-values, power) | Lecture | `09_stat.tex` | [x] |
-| 3 | Tue Apr 14 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` | [ ] |
-| 4 | TBD | Classical Tests + ANOVA & A/B | Lecture | `10_stat.tex` + `11_stat.tex` | [ ] |
+| 3 | Sat May 2 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` | [x] [video](https://youtu.be/deBUJ8pMomU) |
+| 4 | TBD | Classical Tests + ANOVA & A/B | Lecture | `10_stat.tex` (merged L10+L11) | [ ] |
 | 5 | TBD | Classical Tests + ANOVA | Practical | `26` + `27` qmd | [ ] |
 | 6 | TBD | Causal Inference + delta method | Lecture | `14_stat.tex` | [ ] |
 | 7 | TBD | Causal Inference | Practical | TBD | [ ] |
@@ -43,9 +43,9 @@
 
 ## After That
 
-### ANOVA & A/B Testing (lecture 11)
-- `11_stat.tex` (34 frames)
-- Topics: one-way ANOVA, post-hoc tests, A/B testing, peeking problem, sequential testing
+### Classical Tests + ANOVA & A/B (lecture 10, merged)
+- `10_stat.tex` (59 frames; L10 + former L11 merged with cuts: dropped Why $-2\log\Lambda$, LRT worked example, Two-Sample Teaching example, Two-Way ANOVA, Sequential Testing)
+- Topics: LRT framework, t-tests (one-sample, paired, Welch), proportions z-test, $\chi^2$ (GoF, independence), nonparametric (Mann--Whitney, Wilcoxon), one-way ANOVA, post-hoc (Tukey, Bonferroni), $\eta^2$, A/B testing, pitfalls (peeking, multiple metrics, novelty, Simpson's, interference)
 
 ### Practical: ANOVA & A/B Testing
 - Exercises TBD
@@ -98,6 +98,6 @@
 ---
 
 ## Prep TODO
-- [ ] Create `25_stat_hypothesis_testing.qmd` exercises (before Apr 14)
-- [ ] Create hypothesis testing solutions PDF + notebook
-- [ ] Review `09_stat.tex` and `10_stat.tex` before Thu lecture
+- [x] Create `25_stat_hypothesis_testing.qmd` exercises
+- [x] Create hypothesis testing solutions PDF + notebook
+- [x] Review `09_stat.tex` and `10_stat.tex` before Thu lecture
