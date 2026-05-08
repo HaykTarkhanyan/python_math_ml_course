@@ -11,7 +11,7 @@ Tracks every `math/*.qmd` file (excluding optim 08–15 per user instruction):
 ## Legend
 
 - **inline** = at least some `::: {.callout-tip collapse="true" title="Solution"}` blocks in the qmd
-- **external** = solutions live in `Lectures/stat/hw_*_solutions.{tex,ipynb,pdf}`
+- **external** = solutions live in `Lectures/stat/solutions/hw_*_solutions.{tex,ipynb,pdf}`
 - **none** = no solutions anywhere
 - **skeleton** = qmd has no problems yet (just materials/links section)
 - **partial** = some problems solved, others not

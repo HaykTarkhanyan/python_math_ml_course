@@ -317,9 +317,9 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Type | Link |
 |------|------|
 | Slides (ANOVA & A/B Testing) | [11_stat.pdf](../../math/Lectures/stat/11_stat.pdf) |
-| Slides (Regression Inference) | [12_stat.pdf](../../math/Lectures/stat/12_stat.pdf) |
-| Slides (GLMs) | [13_stat.pdf](../../math/Lectures/stat/13_stat.pdf) |
-| Slides (Causal Inference) | [14_stat.pdf](../../math/Lectures/stat/14_stat.pdf) |
+| Slides (Regression Inference) *(deferred)* | [deferred_regression_inference.pdf](../../ml/deferred_lectures/deferred_regression_inference.pdf) |
+| Slides (GLMs) *(deferred)* | [deferred_glms.pdf](../../ml/deferred_lectures/deferred_glms.pdf) |
+| Slides (Causal Inference) *(deferred)* | [deferred_causal_inference.pdf](../../ml/deferred_lectures/deferred_causal_inference.pdf) |
 
 > No Metric Academy YouTube lectures cover these topics yet. No homework exists yet.
 > Week 12 is dense — consider splitting into two weeks if time allows.

@@ -14,7 +14,7 @@ type: project
 ├── math/
 │   ├── 00-25_*.qmd      # 26 math/prob/stat homework modules
 │   ├── Lectures/
-│   │   ├── stat/         # 16 stat presentations (01-16_stat.tex) + plan + audit
+│   │   ├── stat/         # 12 stat presentations (01-12_stat.tex; L11=recap, L12=How to Lie) + plan + outline
 │   │   └── optim/        # 6 optimization presentations + ~10 Jupyter notebooks
 │   ├── Homeworks/        # ~16 PDF handouts + Xournal++ (.xopp) source files
 │   └── assets/           # Images, knn.csv, 2 Jupyter notebooks
@@ -51,11 +51,11 @@ math/Lectures/stat/
 ├── 09_stat.tex (43 frames) — Hypothesis testing, p-values, power, multiple testing
 ├── 10_stat.tex (28 frames) — Classical tests & LRT, decision flowchart
 ├── 11_stat.tex (34 frames) — ANOVA & A/B testing
-├── 12_stat.tex (31 frames) — Regression inference, diagnostics
-├── 13_stat.tex (29 frames) — GLMs: exponential family, link functions, Poisson
-├── 14_stat.tex (37 frames) — Causal inference: DAGs, potential outcomes, propensity
-├── 15_stat.tex (17 frames) — Course recap
-├── 16_stat.tex (67 frames) — How to Lie with Statistics
+├── (12_stat moved → ml/deferred_lectures/deferred_regression_inference.tex)
+├── (13_stat moved → ml/deferred_lectures/deferred_glms.tex)
+├── (14_stat moved → ml/deferred_lectures/deferred_causal_inference.tex)
+├── 11_stat.tex (~17 frames, was 15_stat) — Course recap
+├── 12_stat.tex (~67 frames, was 16_stat) — How to Lie with Statistics
 └── Total: 541 frames across 16 lectures
 ```
 

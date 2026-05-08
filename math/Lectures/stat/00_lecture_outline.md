@@ -132,7 +132,7 @@ Builds on: L9 (hypothesis testing, p-values, power, multiple testing), L7 (sampl
 
 ---
 
-### Lecture 12: Regression Inference (`12_stat.tex`, 32 frames)
+### Lecture 12: Regression Inference (`12_stat.tex`, 32 frames) — [DEFERRED → `ml/deferred_lectures/deferred_regression_inference.{tex,pdf}`]
 
 *"From fitting lines to testing coefficients."*
 
@@ -154,7 +154,7 @@ Builds on: L5 (MLE, cross-entropy), L6 (regularization = MAP), L7 (sampling dist
 
 ---
 
-### Lecture 13: Generalized Linear Models (`13_stat.tex`, 29 frames)
+### Lecture 13: Generalized Linear Models (`13_stat.tex`, 29 frames) — [DEFERRED → `ml/deferred_lectures/deferred_glms.{tex,pdf}`]
 
 *"OLS and logistic regression look different — but they're the same machine."*
 
@@ -178,7 +178,7 @@ Builds on: L3 (exponential family), L5 (MLE), L10 (LRT, chi-squared), L12 (regre
 
 ---
 
-### Lecture 14: Causal Inference (`14_stat.tex`, 37 frames)
+### Lecture 14: Causal Inference (`14_stat.tex`, 37 frames) — [DEFERRED → `ml/deferred_lectures/deferred_causal_inference.{tex,pdf}`]
 
 *"Correlation is not causation — so how do we get causation?"*
 
@@ -216,9 +216,9 @@ Builds on: L2 (Simpson's paradox), L9 (hypothesis testing, p-values), L10 (A/B t
 | 8 | `08_stat.tex` | CIs (Wald, Wilson, t, delta) + bootstrap (SE, percentile, BCa) |
 | 9 | `09_stat.tex` | Hypothesis testing, p-values, power, permutation tests, multiple testing |
 | 10 | `10_stat.tex` | Classical tests & LRT: t-tests, chi-squared, nonparametric, decision flowchart, ANOVA, A/B testing, post-hoc (merged L10+L11) |
-| 12 | `12_stat.tex` | Regression inference: SE, t-tests, R², Gauss-Markov, diagnostics, logistic |
-| 13 | `13_stat.tex` | GLMs: exp family + link functions, Poisson regression |
-| 14 | `14_stat.tex` | Causal inference, DAGs, potential outcomes, propensity |
+| 12 | `ml/deferred_lectures/deferred_regression_inference.tex` *(deferred)* | Regression inference: SE, t-tests, R², Gauss-Markov, diagnostics, logistic |
+| 13 | `ml/deferred_lectures/deferred_glms.tex` *(deferred)* | GLMs: exp family + link functions, Poisson regression |
+| 14 | `ml/deferred_lectures/deferred_causal_inference.tex` *(deferred)* | Causal inference, DAGs, potential outcomes, propensity |
 
 ---
 

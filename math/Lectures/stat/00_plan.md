@@ -9,14 +9,12 @@
 | 3 | Sat May 2 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` | [x] [video](https://youtu.be/deBUJ8pMomU) |
 | 4 | TBD | Classical Tests + ANOVA & A/B | Lecture | `10_stat.tex` (merged L10+L11) | [ ] |
 | 5 | TBD | Classical Tests + ANOVA | Practical | `26` + `27` qmd | [ ] |
-| 6 | TBD | Causal Inference + delta method | Lecture | `14_stat.tex` | [ ] |
-| 7 | TBD | Causal Inference | Practical | TBD | [ ] |
-| 8 | TBD | How to Lie with Statistics | Lecture | `16_stat.tex` | [ ] |
-| 9 | TBD | Q&A / Review | - | - | [ ] |
-| 10 | TBD | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
-| 11 | TBD | Info Theory for ML | Lecture | `info_02.tex` | [ ] |
-| 12 | TBD | Information Theory | Practical | TBD | [ ] |
-| 13 | TBD | Curse of Dimensionality | Lecture | `math/misc/cod/cod.tex` | [ ] |
+| 6 | TBD | How to Lie with Statistics | Lecture | `12_stat.tex` | [ ] |
+| 7 | TBD | Q&A / Review | - | - | [ ] |
+| 8 | TBD | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
+| 9 | TBD | Info Theory for ML | Lecture | `info_02.tex` | [ ] |
+| 10 | TBD | Information Theory | Practical | TBD | [ ] |
+| 11 | TBD | Curse of Dimensionality | Lecture | `math/misc/cod/cod.tex` | [ ] |
 
 ---
 
@@ -26,7 +24,7 @@
 
 ### Wed Apr 8 - Practical: Confidence Intervals & Bootstrap
 - Exercises: `24_stat_confidence_intervals.qmd` (5 problems, ready)
-- Solutions: `hw_07_08_solutions.pdf` + `.ipynb`
+- Solutions: `solutions/hw_07_08_solutions.pdf` + `.ipynb`
 - Covers lectures 07, 08
 
 ### Thu Apr 9 - Lecture: Hypothesis Testing + Classical Tests (long session)
@@ -51,25 +49,19 @@
 - Exercises TBD
 - Topics to cover: one-way ANOVA, A/B test with z-test, sample size planning, peeking simulation
 
-### Causal Inference + Leftovers (lecture 14)
-- `14_stat.tex` (37 frames)
-- Topics: DAGs, potential outcomes, propensity scores, IV
-- Also cover: delta method (from lecture 08, not yet taught)
-
-### Practical: Causal Inference
-- Exercises TBD
-- Topics to cover: DAG reasoning, propensity scores, collider simulation, IV assumptions
-
 ### How to Lie with Statistics (final stat lecture)
-- `16_stat.tex`
+- `12_stat.tex` (renamed from former `16_stat.tex`)
 - Wrapping up the stat block
 - Topics: misleading graphs, cherry-picking, survivorship bias, p-hacking, Simpson's paradox revisited, base rate fallacy, media literacy
 
 ### Q&A / Review Session
 - Open questions, recap of stat block,
 
-### Regression & GLMs - skipping for now
-- `12_stat.tex` + `13_stat.tex` - deferred
+### Deferred to `ml/deferred_lectures/`
+- `deferred_regression_inference.{tex,pdf}` (was `12_stat`, 32 frames) — OLS regression inference, Gauss-Markov, diagnostics, logistic
+- `deferred_glms.{tex,pdf}` (was `13_stat`, 29 frames) — exp family, link functions, Poisson regression, IRLS, deviance
+- `deferred_causal_inference.{tex,pdf}` (was `14_stat`, 37 frames) — RCTs, potential outcomes, DAGs, propensity scores, IV
+- Note: delta method (from L8) was meant to ride along with causal — now untaught. Consider weaving into Q&A session or info theory lectures.
 
 ---
 

@@ -281,7 +281,7 @@ Basic **calculus** (derivatives, definite integrals) and **set theory** (unions,
 | Type | Link |
 |------|------|
 | Slides (ANOVA & A/B Testing) | [11_stat.pdf](../../math/Lectures/stat/11_stat.pdf) |
-| Slides (Causal Inference) | [14_stat.pdf](../../math/Lectures/stat/14_stat.pdf) |
+| Slides (Causal Inference) *(deferred)* | [deferred_causal_inference.pdf](../../ml/deferred_lectures/deferred_causal_inference.pdf) |
 | [StatQuest — One-way ANOVA](<https://youtu.be/oOuu8IICZRo)> | Visual walkthrough |
 | [StatQuest — Tukey's test](<https://youtu.be/UMgiUOGT1qg)> | Post-hoc comparisons |
 | [Brady Neal — Causal Inference](https://youtube.com/playlist?list=PLoazKTcS0RzZ1SUgeOgc6SWt51gfT80N0) | If you want to go deeper |
@@ -306,7 +306,7 @@ A fun, non-technical wrap-up lecture. How graphs, averages, and p-values get wea
 | [Calling Bullshit — course videos](https://www.callingbullshit.org/videos.html) | Full university course by Carl Bergstrom & Jevin West (U of Washington) |
 | [StatQuest — p-hacking](<https://youtu.be/Gx0fAjNHb1M)> | What happens when you test everything |
 | [Spurious Correlations](https://www.tylervigen.com/spurious-correlations) | Correlation between Nicolas Cage films and pool drownings |
-| [Survivorship bias — airplane example](../../math/Lectures/stat/survivorship_airplane.pdf) | The classic WWII bullet hole story |
+| [Survivorship bias — airplane example](../../math/assets/survivorship_airplane.pdf) | The classic WWII bullet hole story |
 | Book | Joel Best, *Damned Lies and Statistics* — how bad stats spread through media |
 | Book | Tim Harford, *The Data Detective* — 10 rules for thinking clearly about numbers |
 
