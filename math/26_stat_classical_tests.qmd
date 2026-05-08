@@ -39,6 +39,68 @@ with_ai = np.array([24, 23, 19, 26, 26, 22, 18, 24, 28, 19, 27, 22])
 - c) Compute $S_D$ and the two within-group SDs $S_\text{without}, S_\text{with}$. Why is $S_D$ so much smaller? What does that tell you about the source of variation?
 - d) Suppose two developers had been measured without Copilot and twelve different developers had been measured with Copilot. Now you'd be forced to use Welch's. Is the cost of unpaired design justified? Discuss.
 
+::: {.callout-tip collapse="true" title="Solution"}
+
+**(a) Paired $t$-test.**
+
+The paired test is just a one-sample $t$-test on the differences:
+
+$$H_0\!: \mu_D = 0 \quad \text{vs} \quad H_1\!: \mu_D \neq 0,$$
+
+where $D_i = \text{with}_i - \text{without}_i$ is the per-developer change.
+
+Computing the differences:
+
+$$D = (6, 1, 4, 6, 1, 5, -1, 3, 5, 3, 3, 2)$$
+
+$\bar D = 38/12 = 3.167$, $\quad S_D = 2.167$.
+
+$$T = \frac{\bar D}{S_D / \sqrt{n}} = \frac{3.167}{2.167/\sqrt{12}} = \frac{3.167}{0.626} = 5.06, \quad \text{df} = 11.$$
+
+Two-sided $p \approx 0.00037$. Reject $H_0$ very strongly.
+
+Cohen's $d_z = \bar D / S_D = 3.17 / 2.17 = 1.46$. ($d_z$ measures the change in SD-units of the differences. The standard small / medium / large benchmarks are $0.2 / 0.5 / 0.8$, so $1.46$ is "very large".)
+
+**(b) Welch's two-sample $t$ on the same data (the wrong analysis).**
+
+$\bar X_\text{without} = 20.0$, $S_\text{without} = 3.16$. $\quad \bar X_\text{with} = 23.17$, $S_\text{with} = 3.30$.
+
+$$T = \frac{23.17 - 20.0}{\sqrt{3.16^2/12 + 3.30^2/12}} = \frac{3.17}{\sqrt{0.83 + 0.91}} = \frac{3.17}{1.32} = 2.40.$$
+
+Welch-Satterthwaite df $\approx 22$. Two-sided $p \approx 0.025$. Still rejects, but the $p$-value is about $70 \times$ larger than the paired test gave on exactly the same numbers.
+
+**(c) Why is $S_D$ so much smaller?**
+
+$S_D = 2.17$ vs $S_\text{without} = 3.16$ and $S_\text{with} = 3.30$.
+
+The within-condition SDs include developer-to-developer variability: dev 5 is intrinsically faster ($25$ lines/h without Copilot) than dev 3 ($15$), and that natural spread inflates both $S_\text{without}$ and $S_\text{with}$. When we form $D_i = \text{with}_i - \text{without}_i$, each developer's baseline cancels out. What remains in $S_D$ is just the Copilot effect plus measurement noise.
+
+Concretely, the variance of the test statistic's denominator drops:
+
+- Paired: $\text{Var}(\bar D) = S_D^2/n = 4.70/12 = 0.39$.
+- Unpaired: $\text{Var}(\bar X_1 - \bar X_2) = S_1^2/n_1 + S_2^2/n_2 = 0.83 + 0.91 = 1.74$.
+
+The unpaired variance is $\sim 4.4 \times$ larger. The same observed mean difference ($3.17$) is divided by a denominator that's $\sqrt{4.4} \approx 2.1 \times$ larger, which is exactly why $T$ drops from $5.06$ to $2.40$.
+
+**Slogan:** *whenever you can pair, you cancel between-subject variance for free.*
+
+**(d) Is the unpaired design ever justified?**
+
+Two reframings to keep separate:
+
+- **At analysis time:** if the data is already collected unpaired, you analyze unpaired. Welch's still rejects at $\alpha = 0.05$ here, so the conclusion holds (with weaker evidence).
+- **At design time:** if you're choosing between paired and unpaired *before* the study, paired is almost always better because it's strictly more powerful on the same population.
+
+Unpaired is the right design when:
+
+- pairing is infeasible (different products, different organisations, can't expose one developer to both conditions);
+- you want to estimate the population-average effect, not the within-developer change;
+- carryover, learning, or order effects would contaminate the second measurement (a developer who used Copilot first might write differently without it next).
+
+Paired's costs you should keep in mind: each subject must provide two measurements (doubles the per-subject workload), and you must control order effects, e.g. randomize which condition comes first.
+
+:::
+
 ---
 
 ## 2) Chi-Squared Tests
@@ -59,6 +121,48 @@ counts = np.array([12, 16, 18, 22, 35, 8, 28, 18, 22, 21])
 - b) Compute $\chi^2 = \sum (O_i - E_i)^2 / E_i$ and state the degrees of freedom.
 - c) Find the $p$-value. Verify with `scipy.stats.chisquare`. Reject at $\alpha = 0.05$?
 
+::: {.callout-tip collapse="true" title="Solution"}
+
+**(a) Hypotheses and expected counts.**
+
+$H_0$: each bucket is hit with probability $1/10$ (uniform). $\;H_1$: at least one bucket has a different probability.
+
+Under $H_0$, $E_i = n \cdot p_i^0 = 200 \cdot 0.1 = 20$ for each bucket.
+
+Sanity check on the assumption: every $E_i = 20 \geq 5$, so the $\chi^2$ approximation to the true (multinomial) distribution is reliable. (If any $E_i < 5$ we'd merge categories or use an exact test.)
+
+**(b) Compute $\chi^2$.**
+
+$(O_i - E_i)^2$ for each bucket: $64, 16, 4, 4, 225, 144, 64, 4, 4, 1$.
+
+$$\chi^2 = \sum_{i=1}^{10} \frac{(O_i - E_i)^2}{E_i} = \frac{64 + 16 + 4 + 4 + 225 + 144 + 64 + 4 + 4 + 1}{20} = \frac{530}{20} = 26.5.$$
+
+**Why $\text{df} = k - 1 = 9$, not $10$?** The ten counts are constrained to sum to $n = 200$, so once any nine are known, the tenth is fixed by subtraction. Only nine of them are "free" to deviate from their expected values.
+
+**(c) $p$-value and decision.**
+
+$\chi^2_{9,\,0.05} = 16.92$, $\;\chi^2_{9,\,0.01} = 21.67$, $\;\chi^2_{9,\,0.001} = 27.88$.
+
+Our statistic $26.5$ sits between the $0.01$ and $0.001$ critical values, so $p \approx 0.0017$.
+
+```python
+from scipy import stats
+stats.chisquare(counts)
+# Power_divergenceResult(statistic=26.5, pvalue=0.001693)
+```
+
+$p \ll 0.05$: **reject** uniformity. The RNG is biased.
+
+**Diagnostic.** The $\chi^2$ test only tells you "the data don't match a uniform distribution"; it doesn't tell you *where* the mismatch is. The per-bucket contributions $(O_i - E_i)^2 / E_i$ do:
+
+| Bucket | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|--------|---|---|---|---|---|---|---|---|---|----|
+| Contribution | $3.2$ | $0.8$ | $0.2$ | $0.2$ | $\mathbf{11.25}$ | $\mathbf{7.20}$ | $3.2$ | $0.2$ | $0.2$ | $0.05$ |
+
+Buckets $5$ and $6$ alone account for $18.5$ of the $26.5$ total. If you wanted to debug the function, that's where to look first.
+
+:::
+
 ### 03 ✏️ Spam Detection: Is "Free" a Real Signal? {data-difficulty="2"}
 You have $500$ labelled emails. You count whether each contains the word "free":
 
@@ -71,6 +175,62 @@ You have $500$ labelled emails. You count whether each contains the word "free":
 - a) Compute the four expected counts under independence.
 - b) Compute $\chi^2$ and df. Test at $\alpha = 0.05$.
 - c) Which cell contributes most to $\chi^2$? Interpret in plain language: is "free" a useful flag for spam?
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**(a) Hypotheses and expected counts.**
+
+$H_0$: word presence ("free" / not) is independent of label (spam / legit). $\;H_1$: they are associated.
+
+Under independence the joint factors as the product of marginals, which gives the expected-counts formula
+
+$$E_{ij} = \frac{(\text{row } i \text{ total}) \times (\text{col } j \text{ total})}{n}.$$
+
+Plugging in:
+
+|        | Free | Not free |
+|--------|------|----------|
+| Spam   | $150 \cdot 140/500 = 42$ | $150 \cdot 360/500 = 108$ |
+| Legit  | $350 \cdot 140/500 = 98$ | $350 \cdot 360/500 = 252$ |
+
+(Row and column sums of the expected table match the marginals of the observed table by construction.)
+
+**(b) Compute $\chi^2$.**
+
+| Cell           | $O$ | $E$ | $(O-E)^2/E$ |
+|----------------|-----|-----|-------------|
+| Spam, Free     | 80  | 42  | $1444/42 = 34.4$ |
+| Spam, No-free  | 70  | 108 | $1444/108 = 13.4$ |
+| Legit, Free    | 60  | 98  | $1444/98 = 14.7$ |
+| Legit, No-free | 290 | 252 | $1444/252 = 5.7$ |
+
+$$\chi^2 = 34.4 + 13.4 + 14.7 + 5.7 = 68.2.$$
+
+**Why $\text{df} = (r-1)(c-1) = 1$?** Once you fix the row totals ($150, 350$), the column totals ($140, 360$), and the grand total ($500$), only one of the four cells is free. Pick any cell and the other three are determined by subtraction. With one free cell, the test has one degree of freedom.
+
+$\chi^2_{1,\,0.001} = 10.83$, and $68.2 \gg 10.83$, so $p \ll 0.001$. Reject independence.
+
+(`scipy.stats.chi2_contingency` applies Yates' continuity correction by default and returns $\chi^2 \approx 66.4$ instead of $68.2$. Same conclusion. Pass `correction=False` to match the textbook formula above.)
+
+**(c) Which cell contributes most, and what does it mean?**
+
+The largest contribution is **(Spam, Free)** at $34.4$ out of $68.2$, more than half the total.
+
+Note what the global $\chi^2$ statistic *doesn't* tell you on its own: it only says "association exists", not which way or how strong. The cell-by-cell residuals do that. Here all four residuals point the same direction:
+
+- Spam contains "free" more than expected ($80 > 42$).
+- Spam doesn't contain "free" less than expected ($70 < 108$).
+- Legit contains "free" less than expected ($60 < 98$).
+- Legit doesn't contain "free" more than expected ($290 > 252$).
+
+In rates:
+
+- $80/150 = 53\%$ of spam emails contain "free".
+- $60/350 = 17\%$ of legit emails contain "free".
+
+A roughly $3 \times$ ratio. Yes, "free" is a strong spam signal: emails that contain it are about $3 \times$ more likely to be spam than the population average. A simple bag-of-words classifier would (rightly) put weight on this token.
+
+:::
 
 ---
 
@@ -95,6 +255,68 @@ colemak = np.array([58, 60, 57, 59, 58, 60, 59, 57])
 - c) Verify with `scipy.stats.f_oneway`. Compute $\eta^2$ — small, medium, or large?
 - d) Run Tukey HSD with `statsmodels.stats.multicomp.pairwise_tukeyhsd`. Which layouts differ from which?
 - e) Check the equal-variance assumption with `scipy.stats.levene`. If it failed, what would you switch to?
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**(a) Hypotheses.**
+
+$H_0: \mu_\text{QWERTY} = \mu_\text{Dvorak} = \mu_\text{Colemak}$. $\;H_1$: at least one mean differs.
+
+(Notice $H_1$ is *not* "all three differ" --- it's the weaker "not all equal". ANOVA is an *omnibus* test: it tells you that something differs, not what. Identifying which specific pairs differ is post-hoc work, in part (d).)
+
+**(b) Sums of squares and $F$.**
+
+Group means: $\bar X_Q = 56.0$, $\;\bar X_D = 62.5$, $\;\bar X_C = 58.5$. Grand mean $\bar X_{\cdot\cdot} = 59.0$.
+
+$$\text{SS}_\text{B} = \sum_{i=1}^{3} n_i (\bar X_i - \bar X_{\cdot\cdot})^2 = 8 \cdot \big[(56-59)^2 + (62.5-59)^2 + (58.5-59)^2\big] = 8 \cdot [9 + 12.25 + 0.25] = 172.$$
+
+$\text{SS}_\text{W}$ is the sum of squared within-group deviations. For QWERTY, deviations from $\bar X_Q = 56$ are $0, -3, 3, 1, -2, 2, -1, 0$, squared and summed: $0+9+9+1+4+4+1+0 = 28$. (Equivalently, $S_Q^2 = 28/(8-1) = 4.0$, so $S_Q = 2.0$.) Same procedure gives $18$ for Dvorak and $10$ for Colemak. Total
+
+$$\text{SS}_\text{W} = 28 + 18 + 10 = 56.$$
+
+ANOVA table:
+
+| Source  | SS  | df | MS    | $F$ |
+|---------|-----|----|-------|-----|
+| Between | 172 | 2  | 86    | $86 / 2.667 = 32.25$ |
+| Within  | 56  | 21 | 2.667 |     |
+| Total   | 228 | 23 |       |     |
+
+The $F$-statistic is a **signal-to-noise ratio**: $\text{MS}_\text{B}$ measures variance *between* group means (the signal), $\text{MS}_\text{W}$ measures variance *within* groups (the noise). Under $H_0$ both estimate the same thing and $F \approx 1$. Here $F = 32$, meaning the spread of group means is way bigger than typical within-group noise.
+
+**(c) $F$-test and effect size.**
+
+$F_{2,\,21,\,0.05} = 3.47$, and $F = 32.25 \gg 3.47$, so $p \approx 4 \times 10^{-7}$. Reject $H_0$.
+
+$\eta^2 = \text{SS}_\text{B}/\text{SS}_\text{T} = 172/228 = 0.754$. **Very large** effect: ~75% of the variation in typing speed is explained by which layout you used. (Cohen's benchmarks for $\eta^2$: $0.01$ small, $0.06$ medium, $0.14$ large.)
+
+**(d) Tukey HSD.**
+
+ANOVA only said "something differs". Now we want pairwise comparisons. Running three independent $t$-tests would inflate Type I error: with $\alpha = 0.05$ each, the probability of *any* false positive is $1 - 0.95^3 \approx 0.14$. Tukey controls the **family-wise** error rate (overall $\alpha = 0.05$ across all pairs at once) using the *studentized range* distribution, which models the maximum gap among $k$ group means rather than the gap of one fixed pair.
+
+Studentized range critical value $q_{0.05,\,3,\,21} \approx 3.58$.
+
+$$\text{HSD} = q \cdot \sqrt{\text{MS}_\text{W} / n} = 3.58 \cdot \sqrt{2.667/8} = 3.58 \cdot 0.577 = 2.07.$$
+
+Any pair whose mean difference exceeds $2.07$ wpm is significant at family-wise $\alpha = 0.05$:
+
+| Pair               | $|\bar X_i - \bar X_j|$ | vs HSD = 2.07 | Verdict             |
+|--------------------|----------------------|---------------|---------------------|
+| QWERTY vs Dvorak   | $6.5$                | $> 2.07$      | significant         |
+| QWERTY vs Colemak  | $2.5$                | $> 2.07$      | significant         |
+| Dvorak vs Colemak  | $4.0$                | $> 2.07$      | significant         |
+
+All three pairs differ. Ordered fastest to slowest: Dvorak ($62.5$) > Colemak ($58.5$) > QWERTY ($56.0$).
+
+**(e) Equal-variance check.**
+
+Within-group SDs: $S_Q = 2.0$, $\;S_D = 1.6$, $\;S_C = 1.2$. Largest/smallest $= 1.67 < 2$, well within the rule of thumb.
+
+`scipy.stats.levene` returns $W \approx 0.60$, $p \approx 0.56$: do not reject equal variances. Standard ANOVA is fine here.
+
+If Levene's had rejected, switch to **Welch's ANOVA** (`pingouin.welch_anova`), which doesn't require equal variances. Pair it with **Games-Howell** post-hoc instead of Tukey HSD.
+
+:::
 
 ---
 
@@ -123,6 +345,37 @@ The scenarios:
 - **H.** A new ad design is shown to $500$ users; $32$ click through. The historical baseline click-through rate is $4\%$. Is the new design different?
 - **I.** Two website variants each get $5{,}000$ visitors. $260$ convert on A and $310$ convert on B. Are the conversion rates different?
 - **J.** Three sorting algorithms are timed on $10$ random inputs each. You want to know whether they differ overall *and* which specific pairs differ.
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+| # | Test | Why this fits |
+|---|------|---------------|
+| **A** | One-sample $t$-test | One sample, continuous outcome, comparing the sample mean to a fixed historical value. |
+| **B** | Paired $t$-test | Same patients measured twice. Pairing removes between-patient BP variation. |
+| **C** | Welch's two-sample $t$-test | Two independent groups, continuous outcome. Don't pre-test for equal variances; Welch's is the safe default. |
+| **D** | $\chi^2$ goodness-of-fit | One categorical variable (face $1$ to $6$), testing observed counts against a fixed distribution (uniform). |
+| **E** | $\chi^2$ test of independence | Two categorical variables. Tests whether the joint distribution factors as the product of marginals. |
+| **F** | One-way ANOVA | Four independent groups, continuous outcome. ANOVA controls overall Type I error in one shot. (Add Tukey HSD if you also want to know *which* doses differ.) |
+| **G** | Mann-Whitney $U$ | Two independent groups, but the $1$-to-$5$ scale is ordinal and outliers would dominate a $t$-test. Rank-based is the right call. |
+| **H** | One-sample $z$-test for proportion | One sample, single proportion ($\hat p = 32/500 = 0.064$), comparing to a fixed value $p_0 = 0.04$. |
+| **I** | Two-proportion $z$-test | Two independent proportions ($260/5000$ vs $310/5000$). |
+| **J** | One-way ANOVA + Tukey HSD | Three groups, continuous outcome, *and* the question explicitly asks which pairs differ. |
+
+**Common confusions to watch for:**
+
+- **D vs H.** Both have a "fixed-rate" claim, but D has *six* categories whose probabilities all need to be tested at once ($\chi^2$ goodness-of-fit), while H reduces to a single proportion against one fixed value. A $z$-test for proportion in D would only check whether one face appears at $1/6$, not whether the whole distribution is uniform.
+- **B vs C.** Both compare "two means", but the structure is different. In B the same person provides two readings (paired); in C two independent groups (unpaired). Pairing is a property of the *design*, not the data type.
+- **G's $1$-to-$5$ scale.** A first instinct is "the data is numerical, do a $t$-test". But the scale is ordinal (the gap between "$2$" and "$3$" isn't necessarily the same as between "$4$" and "$5$"), the prompt mentions outliers, and the distribution is skewed. Mann-Whitney ranks the ratings and avoids both problems.
+- **F vs J.** ANOVA alone tells you whether *any* group differs (omnibus test). If the question goes on to ask *which* pairs differ (as in J), you also need Tukey HSD as the post-hoc step. Apply post-hoc only after ANOVA rejects.
+- **E vs D.** Both involve $\chi^2$, but goodness-of-fit (D) tests one variable against a fixed distribution; independence (E) tests whether *two* variables vary together. Different df formulas: $k-1$ vs $(r-1)(c-1)$.
+
+**General decision recipe.** Walk the flowchart from the slides:
+
+1. *What kind of data?* Continuous? Proportions? Counts in categories?
+2. *How many groups?* One vs a fixed value (one-sample), two (paired or independent), three or more (ANOVA).
+3. *Are the assumptions OK?* If continuous data is heavily skewed or ordinal, use the nonparametric cousin (Mann-Whitney, Wilcoxon, Kruskal-Wallis).
+
+:::
 
 # 🎲 38 (01) TODO
 - ▶️[ToDo]()
