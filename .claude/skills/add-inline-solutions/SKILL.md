@@ -36,6 +36,35 @@ If the callout nests another `:::` block (raw HTML SVG via `{=html}`,
 sub-callout, etc.), bump the outer fence to 4 colons (`::::`) so the
 parser knows where each ends.
 
+## Display math: break long equalities
+
+Quarto/MathJax does **not** auto-wrap display math, and the rendered
+homework column is narrow (~600-700px after the right-side TOC eats
+real estate). A chained equality of three or more steps written on one
+line will overflow horizontally — the right end runs under the TOC or
+gets clipped.
+
+Break any chained equality with three or more `=` steps into an
+`aligned` block:
+
+```
+$$\begin{aligned}
+\text{LHS} &= \text{step 1} \\
+&= \text{step 2} \\
+&= \text{step 3}
+\end{aligned}$$
+```
+
+The `&=` aligns each `=` sign vertically. `aligned` works inside
+solution callouts without bumping fence count (it's MathJax syntax,
+not pandoc fence syntax).
+
+Single-line display equations (one `=`, like $f'(x) = 2x e^{x^2}$) are
+fine — the issue is *only* chains. Rule of thumb: if your `$$...$$`
+line is >120 characters in the source, it's probably too wide rendered.
+Visual check: render and view in a browser at typical width before
+claiming the work is done.
+
 ## Old → new style conversion
 
 Replace this:
@@ -103,9 +132,9 @@ duplicating here:
   `memory/feedback_concept_position.md`. Critical — never reference
   unseen concepts (no eigenvalues in HW 02, no random variables before
   HW 17, etc.).
-- **No Armenian generation, no em-dashes, Armenian flag colors for
-  plots (red `#D90012`, blue `#0033A0`, orange `#F2A800`), don't
-  over-engineer**: project and global `CLAUDE.md`.
+- **No em-dashes, Armenian flag colors for plots (red `#D90012`, blue
+  `#0033A0`, orange `#F2A800`), don't over-engineer**: project and
+  global `CLAUDE.md`.
 
 ## Depth calibration
 
@@ -137,5 +166,8 @@ the path and let the user open it.
 
 - Commit automatically — wait for the user
 - Touch files other than the target `.qmd`
-- Write Armenian (Opus has a generation bug)
 - Add a `#### Solution` heading inside the callout
+- Cite numbers without verifying — if you write "$x \approx 309$ years"
+  or any specific quantitative claim, compute it first with `python -c`.
+  Hallucinated numbers in solutions train students to distrust the
+  source.
