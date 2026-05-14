@@ -1,0 +1,33 @@
+- **Extrema, convexity, Taylor series**
+  - [chapter](https://hayktarkhanyan.github.io/python_math_ml_course/math/05_calc_extrema_convexity_taylor.html)
+  - [lecture video](https://youtu.be/OHXH7zn65zU)
+  - [practical video](https://youtu.be/d5bAQnILhvs)
+  - Note - this will be quite important for the optimization section of the course.
+  - homework problems:
+    - 02
+    - 03
+    - 04
+    - 05 (there is some extra terminology (e.g. regularizer parameter) - it's safe to ignore it for now, just focus on the math component)
+    - 08
+
+- **Integrals**
+  - [chapter](https://hayktarkhanyan.github.io/python_math_ml_course/math/06_calc_integrals.html)
+  - [lecture video](https://youtu.be/J2tU1cUlZok)
+  - [practical video](https://youtu.be/FRjc1KiAbaw)
+  - Note - exact formulas for calculations (e.g. integration by parts) are not important for ML, but the general idea of what integral represents is quite important.
+  - homework:
+    - 01 (safe to skip some boring calculations)
+    - 02
+    - 04 (the convolution here is foreshadowing the convolution operation which we'll cover in far future lectures)
+    - 05 (this is more of a brain teaser, and a cool thing to derive yourself, but not super important for ML)
+
+- **Multivariate calculus (gradients, Jacobians, Hessians)**
+  - [chapter](https://hayktarkhanyan.github.io/python_math_ml_course/math/07_calc_multivar.html)
+  - [multivar func, gd](https://youtu.be/tFiDNbpZNFw)
+  - [extremes, hessian](https://youtu.be/Fc8lIjjDE5U)
+  - [Practical](https://youtu.be/XFF03oPjAyE)
+  - homework:
+    - 01 (good opportunity to give the house price project we talked about today a new try)
+    - 02
+    - 03
+    - 04, 05, 06 - those are more computation heavy, if you feel comfortable with the topic, no need to fully do them.
