@@ -1,6 +1,6 @@
-"""Generate 01_calc.xlsx as a student-facing study sheet.
+"""Generate study_plan.xlsx with multiple topic sheets for student supervision.
 
-Run: uv run --with openpyxl python misc/solo/make_calc_xlsx.py
+Run: uv run --with openpyxl python misc/solo/make_study_xlsx.py
 """
 
 import logging
@@ -18,33 +18,34 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("logs/make_calc_xlsx.log"),
+        logging.FileHandler("logs/make_study_xlsx.log"),
     ],
 )
 log = logging.getLogger(__name__)
 
 
-OUT = Path("misc/solo/01_calc.xlsx")
+OUT = Path("misc/solo/study_plan.xlsx")
 
 HEADERS = ["Section", "Item", "Link", "Teacher's note", "Done", "Student's question / comment"]
 
-# Light tints of the Armenian flag colors for section banding
+# Light tints of the Armenian flag palette
 COLOR_RED = "F9D5D8"
 COLOR_BLUE = "D6DBEC"
 COLOR_ORANGE = "FCEBC8"
 
+
+# --- Calculus sheet ---
 SEC_EXT = "Extrema, convexity, Taylor series"
 SEC_INT = "Integrals"
 SEC_MUL = "Multivariate calculus (gradients, Jacobians, Hessians)"
 
-SECTION_COLOR = {
+CALC_COLORS = {
     SEC_EXT: COLOR_RED,
     SEC_INT: COLOR_BLUE,
     SEC_MUL: COLOR_ORANGE,
 }
 
-# (section, item, link, teacher_note)
-ROWS = [
+CALC_ROWS = [
     (SEC_EXT, "Chapter", "https://hayktarkhanyan.github.io/python_math_ml_course/math/05_calc_extrema_convexity_taylor.html",
      "This will be quite important for the optimization section of the course."),
     (SEC_EXT, "Lecture video", "https://youtu.be/OHXH7zn65zU", ""),
@@ -77,12 +78,35 @@ ROWS = [
 ]
 
 
-def main() -> None:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Calculus"
+# --- Optimization sheet ---
+SEC_GD = "Gradient descent: prerequisites & vanilla GD"
 
-    # header row
+OPTIM_COLORS = {
+    SEC_GD: COLOR_BLUE,
+}
+
+# HW content lives in the chapter qmd; rows below just track progress per problem.
+OPTIM_ROWS = [
+    (SEC_GD, "Chapter", "https://hayktarkhanyan.github.io/python_math_ml_course/math/09_optim_prereq__gradient_descent.html",
+     "Builds on multivariate calculus (gradients, Hessians) and Taylor series. Big new idea: iterative optimization - no more closed-form solutions."),
+    (SEC_GD, "Lecture 15 — Prerequisites, 1st/2nd order conditions", "https://youtu.be/7bl1k6TZ9_Q", ""),
+    (SEC_GD, "Lecture 16 — (In)Exact Line Search, GD intro", "https://youtu.be/UjGD31i8Ji4", ""),
+    (SEC_GD, "Practical — GD learning rate schedule", "https://youtu.be/H8M6p-uSxCM", ""),
+    (SEC_GD, "HW 01 — Condition number by hand", "", "Pen-and-paper warmup."),
+    (SEC_GD, "HW 02 — Implement vanilla GD from scratch", "", "numpy only, no sklearn or torch. Build the loop yourself."),
+    (SEC_GD, "HW 03 — Find the divergence threshold", "", "There's a clean theoretical bound (η < 2/λ_max) - your number should match closely."),
+    (SEC_GD, "HW 04 — Beat constant LR with a custom schedule", "", "There's a starter cell already in Lectures/optim/03_gd_step_size.ipynb."),
+    (SEC_GD, "HW 05 — Visualize the zig-zag", "", "Picture is way more convincing than the math alone."),
+    (SEC_GD, "HW 06 — Stuck at a saddle?", "", "Tiny perturbation in starting point changes everything - the whole point of the problem."),
+    (SEC_GD, "HW 07 — GD for linear regression", "", "First time applying GD to real data. Compare against the closed-form solution."),
+]
+
+
+def build_sheet(wb: Workbook, title: str, rows: list, section_colors: dict) -> None:
+    """Build one sheet with the standard layout."""
+    ws = wb.create_sheet(title)
+
+    # header
     header_fill = PatternFill("solid", fgColor="333333")
     header_font = Font(bold=True, color="FFFFFF")
     for col, h in enumerate(HEADERS, start=1):
@@ -93,8 +117,8 @@ def main() -> None:
     ws.row_dimensions[1].height = 28
 
     # data rows
-    for i, (section, item, link, note) in enumerate(ROWS, start=2):
-        fill = PatternFill("solid", fgColor=SECTION_COLOR[section])
+    for i, (section, item, link, note) in enumerate(rows, start=2):
+        fill = PatternFill("solid", fgColor=section_colors[section])
 
         ws.cell(row=i, column=1, value=section)
         ws.cell(row=i, column=2, value=item)
@@ -105,8 +129,8 @@ def main() -> None:
             link_cell.font = Font(color="0563C1", underline="single")
 
         ws.cell(row=i, column=4, value=note)
-        ws.cell(row=i, column=5, value="")  # Done
-        ws.cell(row=i, column=6, value="")  # Student's question/comment
+        ws.cell(row=i, column=5, value="")
+        ws.cell(row=i, column=6, value="")
 
         for col in range(1, 7):
             c = ws.cell(row=i, column=col)
@@ -114,21 +138,29 @@ def main() -> None:
             c.alignment = Alignment(wrap_text=True, vertical="top")
 
     # column widths
-    widths = {1: 38, 2: 32, 3: 55, 4: 50, 5: 8, 6: 45}
+    widths = {1: 38, 2: 40, 3: 55, 4: 60, 5: 8, 6: 45}
     for col, w in widths.items():
         ws.column_dimensions[get_column_letter(col)].width = w
 
     # checkbox-style dropdown on Done column
     dv = DataValidation(type="list", formula1='"✓"', allow_blank=True)
-    dv.add(f"E2:E{len(ROWS) + 1}")
+    dv.add(f"E2:E{len(rows) + 1}")
     ws.add_data_validation(dv)
 
     # freeze header
     ws.freeze_panes = "A2"
 
+
+def main() -> None:
+    wb = Workbook()
+    wb.remove(wb.active)  # drop default empty sheet
+
+    build_sheet(wb, "Calculus", CALC_ROWS, CALC_COLORS)
+    build_sheet(wb, "Optimization", OPTIM_ROWS, OPTIM_COLORS)
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     wb.save(OUT)
-    log.info(f"Wrote {OUT.resolve()} ({len(ROWS)} rows)")
+    log.info(f"Wrote {OUT.resolve()} (calc={len(CALC_ROWS)} rows, optim={len(OPTIM_ROWS)} rows)")
 
 
 if __name__ == "__main__":
