@@ -3,6 +3,7 @@
 Run: uv run --with openpyxl python misc/solo/make_study_xlsx.py
 """
 
+import csv
 import logging
 from pathlib import Path
 
@@ -25,8 +26,9 @@ log = logging.getLogger(__name__)
 
 
 OUT = Path("misc/solo/study_plan.xlsx")
+OPTIM_CSV = Path("misc/solo/optimization.csv")
 
-HEADERS = ["Section", "Item", "Link", "Teacher's note", "Done", "Student's question / comment"]
+HEADERS = ["Section", "Item", "Link", "Note", "Done", "Questions / comments"]
 
 # Light tints of the Armenian flag palette
 COLOR_RED = "F9D5D8"
@@ -80,9 +82,11 @@ CALC_ROWS = [
 
 # --- Optimization sheet ---
 SEC_GD = "Gradient descent: prerequisites & vanilla GD"
+SEC_MOMENTUM = "Momentum, Adam, and friends"
 
 OPTIM_COLORS = {
     SEC_GD: COLOR_BLUE,
+    SEC_MOMENTUM: COLOR_ORANGE,
 }
 
 # HW content lives in the chapter qmd; rows below just track progress per problem.
@@ -94,11 +98,24 @@ OPTIM_ROWS = [
     (SEC_GD, "Practical — GD learning rate schedule", "https://youtu.be/H8M6p-uSxCM", ""),
     (SEC_GD, "HW 01 — Condition number by hand", "", "Pen-and-paper warmup."),
     (SEC_GD, "HW 02 — Implement vanilla GD from scratch", "", "numpy only, no sklearn or torch. Build the loop yourself."),
-    (SEC_GD, "HW 03 — Find the divergence threshold", "", "There's a clean theoretical bound (η < 2/λ_max) - your number should match closely."),
+    (SEC_GD, "HW 03 — Find the divergence threshold", "", "Experimental — just trial and error with the learning rate."),
     (SEC_GD, "HW 04 — Beat constant LR with a custom schedule", "", "There's a starter cell already in Lectures/optim/03_gd_step_size.ipynb."),
     (SEC_GD, "HW 05 — Visualize the zig-zag", "", "Picture is way more convincing than the math alone."),
     (SEC_GD, "HW 06 — Stuck at a saddle?", "", "Tiny perturbation in starting point changes everything - the whole point of the problem."),
     (SEC_GD, "HW 07 — GD for linear regression", "", "First time applying GD to real data. Compare against the closed-form solution."),
+
+    (SEC_MOMENTUM, "Chapter", "https://hayktarkhanyan.github.io/python_math_ml_course/math/10_optim_momentum_first_order_algs.html",
+     "Builds on chapter 09. Adam/RMSProp/Adagrad fix vanilla GD's two big weaknesses: zig-zagging on ill-conditioned problems, and slow convergence."),
+    (SEC_MOMENTUM, "Lecture 17 — Momentum, ADAM, RMSProp, Adagrad", "https://youtu.be/JsSnSHZtG_o", ""),
+    (SEC_MOMENTUM, "Practical 11 — Adam and friends in optimization", "https://youtu.be/mGOCt9ZcWJg", ""),
+    (SEC_MOMENTUM, "HW 01 — Write out the update rules", "", "Recall from lecture / notes, then verify against the notebook."),
+    (SEC_MOMENTUM, "HW 02 — Implement momentum from scratch", "", "Builds on chapter 09 HW 02 (vanilla GD)."),
+    (SEC_MOMENTUM, "HW 03 — Momentum kills the zig-zag", "", "Side-by-side with chapter 09 HW 05. Visual punchline."),
+    (SEC_MOMENTUM, "HW 04 — Implement Adam from scratch", "", "Most substantial implementation in the chapter. Follow the formulas exactly."),
+    (SEC_MOMENTUM, "HW 05 — The bias correction matters", "", "Quick experiment - the 'why' explanation is the key part."),
+    (SEC_MOMENTUM, "HW 06 — When does Adam fail?", "", "Counter-example to 'always use Adam'."),
+    (SEC_MOMENTUM, "HW 07 — Robustness to the learning rate", "", "Adam's main practical sell. 5 LRs spanning 4 orders of magnitude."),
+    (SEC_MOMENTUM, "HW 08 — Adam for linear regression", "", "Builds on chapter 09 HW 07. Often surprising: Adam doesn't help on convex problems."),
 ]
 
 
@@ -161,6 +178,14 @@ def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     wb.save(OUT)
     log.info(f"Wrote {OUT.resolve()} (calc={len(CALC_ROWS)} rows, optim={len(OPTIM_ROWS)} rows)")
+
+    # standalone CSV of the optimization sheet (utf-8-sig for Excel compat)
+    with OPTIM_CSV.open("w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(HEADERS)
+        for section, item, link, note in OPTIM_ROWS:
+            w.writerow([section, item, link, note, "", ""])
+    log.info(f"Wrote {OPTIM_CSV.resolve()} ({len(OPTIM_ROWS)} rows)")
 
 
 if __name__ == "__main__":
