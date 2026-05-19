@@ -1,5 +1,5 @@
 ---
-title: "29: TODO Information Theory - Entropy, Cross-Entropy, KL Divergence"
+title: "29: Information Theory - Entropy, Cross-Entropy, KL Divergence"
 format:
   html:
     css: homework-styles.css
@@ -9,21 +9,301 @@ format:
 
 # 📚 Նյութը
 
-::: {.callout-tip collapse="true"}
-## ⚠️ Note
-YouTube links in this section were auto-extracted. If you spot a mistake, please let me know!
-:::
-
 ## Դասախոսություն
-- [🎞️ Սլայդեր — info 01](Lectures/info/info_01.pdf)
+- [🎞️ Սլայդեր — info 01 (Entropy, Source Coding, Cross-Entropy, KL)](Lectures/info/info_01.pdf)
+- [🎞️ Սլայդեր — info 02 (MLE, MaxEnt, Mutual Information)](Lectures/info/info_02.pdf)
+- [🎞️ Սլայդեր — info 03 (DPI, f-divergences, ELBO, Information Bottleneck)](Lectures/info/info_03.pdf)
 
 # 🏡 Տնային
 
+---
+
+## 01 🐍 Wordle as an Information Game {data-difficulty="2"}
+
+Wordle has roughly $N = 2{,}315$ valid answer words. Each guess returns one of $3^5 = 243$ possible color patterns (green / yellow / gray on each of 5 letters).
+
+**a)** What's the information-theoretic *upper bound* on the average bits any single guess can reveal? (Use $\log_2$ on the number of distinct color patterns.)
+
+**b)** What's the upper bound on bits-per-guess set by the answer-list size? Combine the two: in principle, what's the minimum number of guesses an optimal solver needs in the worst case?
+
+**c)** Implement a greedy solver. For each candidate guess $g$, partition the current answer set by their color pattern against $g$, and compute the entropy of that partition. Pick the $g$ with maximum entropy.
+
+```python
+from collections import Counter
+import math
+
+def feedback(guess: str, answer: str) -> tuple:
+    """Return the color pattern as a 5-tuple of 'G', 'Y', '.' (gray)."""
+    # Watch out: a letter that appears once in the answer but twice in the guess
+    # only earns one Y/G total. Wordle is fiddly here.
+    ...
+
+def entropy_of_guess(guess, candidates):
+    counts = Counter(feedback(guess, a) for a in candidates)
+    n = len(candidates)
+    return -sum((c/n) * math.log2(c/n) for c in counts.values())
+```
+
+**d)** Report the **top-5 first guesses** your solver finds and their entropies in bits. Compare to popular openers (CRANE, SLATE, RAISE, SOARE).
+
+**e)** Why does the solver not recommend `AAAAA` or `QXZWK`?
+
+::: {.callout-tip collapse="true" title="Sanity check / hints"}
+
+- Upper bound (a): $\log_2 243 \approx 7.92$ bits.
+- Upper bound (b): $\log_2 2315 \approx 11.18$ bits ⇒ at least $\lceil 11.18 / 7.92 \rceil = 2$ in info-theoretic ideal, but the practical optimum is around 3.42 guesses on average (Selby, 2022).
+- Top guess: usually **SALET** or **REAST**, with entropy ~ 5.88 bits.
+- Why not `AAAAA`? Most answers share zero/one A — the color-pattern distribution collapses to a few buckets, entropy is tiny.
+
+:::
 
 ---
 
-*Exercises coming soon.*
+## 02 ✏️🐍 Armenian Alphabet Entropy {data-difficulty="1"}
 
+The Armenian alphabet has 39 letters (Mashtots' original 36 + ՈՒ, Օ, Ֆ).
+
+**a)** Compute the uniform entropy: how many bits per letter if every letter were equally likely?
+
+**b)** English's uniform bound is $\log_2 26 \approx 4.70$ bits/letter. Real English text has empirical entropy around $1.3$ bits/letter (Shannon, 1951). Why is the empirical entropy so much smaller than the uniform bound?
+
+**c)** (Python) Download or paste a paragraph of Armenian text — Wikipedia's [Mashtots article](https://hy.wikipedia.org/wiki/Մեսրոպ_Մաշտոց) intro works well. Strip punctuation, spaces, numbers. Compute the empirical letter-frequency distribution and its entropy in bits/letter.
+
+**d)** Compare your empirical Armenian entropy to the uniform bound. Does it fall in the same ballpark as English's $1.3$ bits?
+
+**e)** A 100-page Armenian e-book has roughly $200{,}000$ characters. Estimate the lower bound on its compressed size (in KB) if compressed character-by-character at your empirical entropy rate.
+
+::: {.callout-tip collapse="true" title="Sanity check"}
+
+- Uniform bound: $\log_2 39 \approx 5.29$ bits/letter.
+- Real Armenian text typically gives $\sim 4.2$ bits/letter at the character level (letter frequencies aren't uniform — Ա, Ե, Ի, Ն dominate).
+- Modeling word context drops this further to $\sim 1.5$--$2$ bits/letter.
+- 200k chars × 4.2 bits ≈ 105 KB.
+
+:::
+
+---
+
+## 03 ✏️🐍 The Asymmetry of Surprise {data-difficulty="2"}
+
+Spam-filter setup: the *true* distribution of "is this email spam" is $p = \text{Bern}(0.01)$ (1% spam rate in your inbox). Your model assumes a prior $q = \text{Bern}(0.1)$ (10× too pessimistic).
+
+**a)** Compute $D_{\text{KL}}(p \| q)$ and $D_{\text{KL}}(q \| p)$ in bits, by hand.
+
+**b)** One direction is dramatically larger than the other. **Predict which one before computing.** Then check.
+
+**c)** Give a *causal* explanation: which observations contribute the most "surprise" in each direction? Why does the model's overestimate of spam frequency hurt one direction far more than the other?
+
+**d)** Now repeat with $p = \text{Bern}(0.5)$ and $q = \text{Bern}(0.4)$ — distributions much closer in shape. The two KL directions should be nearly equal. Verify and explain.
+
+**e)** (ML tie-in) Forward KL minimization $\min_q D_{\text{KL}}(p \| q)$ tends to make $q$ **cover** all modes of $p$ (it can't tolerate $q(x) \approx 0$ where $p(x) > 0$). Reverse KL $\min_q D_{\text{KL}}(q \| p)$ tends to make $q$ **lock onto one mode**. Use your answer to (c) to explain why.
+
+::: {.callout-tip collapse="true" title="Hint for (a)"}
+
+$D_{\text{KL}}(p\|q) = \sum_x p(x) \log_2 \frac{p(x)}{q(x)}$ — sum over the two outcomes $\{0, 1\}$.
+
+Forward: $0.01 \log_2(0.01/0.10) + 0.99 \log_2(0.99/0.90) \approx -0.0332 + 0.1361 = 0.103$ bits.
+
+Reverse: $0.10 \log_2(0.10/0.01) + 0.90 \log_2(0.90/0.99) \approx 0.332 - 0.124 = 0.208$ bits.
+
+The reverse direction is $\sim 2\times$ larger here. The asymmetry grows fast as $q$'s "wrong mass" lands where $p$ is small.
+
+:::
+
+---
+
+## 04 ✏️🐍 MaxEnt: The Honest Biased Die {data-difficulty="2"}
+
+A 6-sided die is rolled many times and the empirical mean is 4.8 (recall the fair-die mean is 3.5 — someone weighted the high faces). You're asked: *given only this constraint*, what's the most honest distribution to assign?
+
+**a)** Set up the MaxEnt optimization: maximize $H(p) = -\sum p_i \log p_i$ subject to $\sum p_i = 1$ and $\sum_{i=1}^{6} i \cdot p_i = 4.8$. Show (via Lagrange multipliers) that $p_i^* = \frac{e^{\lambda i}}{Z(\lambda)}$ for some scalar $\lambda$ to be determined.
+
+**b)** Solve numerically for $\lambda$: find the value such that the mean constraint is satisfied.
+
+```python
+from scipy.optimize import brentq
+import numpy as np
+
+def mean_at(lam):
+    p = np.exp(lam * np.arange(1, 7))
+    p /= p.sum()
+    return (p * np.arange(1, 7)).sum() - 4.8
+
+lam_star = brentq(mean_at, -2, 2)
+```
+
+**c)** Report $p^*$. Plot it as a bar chart, alongside the fair die for reference.
+
+**d)** Why is this distribution the *right* answer (in an information-theoretic sense) when you know only the mean? What additional assumption would be needed to commit to a more specific distribution?
+
+::: {.callout-tip collapse="true" title="Sanity check"}
+
+$\lambda^* \approx 0.514$, giving $p^* \approx (0.032, 0.054, 0.090, 0.151, 0.252, 0.421)$. The high faces are favored, as the mean suggests; the *shape* (exponential tilt) is what MaxEnt gives you for free. Verify by computing $\sum i \cdot p_i^* \approx 4.80$.
+
+:::
+
+---
+
+## 05 ✏️ XOR Channels and the Limits of Single Features {data-difficulty="3"}
+
+Let $X, Y \sim \text{Bern}(0.5)$ be independent fair coins. Define $Z = X \oplus Y$ (XOR, no noise).
+
+**a)** Compute $I(X; Z)$ and $I(Y; Z)$. (Hint: $Z$ marginally is also fair. What's $H(Z | X)$?)
+
+**b)** Compute $I(X, Y; Z)$. *Now compare to (a).*
+
+**c)** The shocking part: $I(X; Z) = 0$ and $I(Y; Z) = 0$, but $I(X, Y; Z) = 1$. Explain this in plain language. What does it imply for a classifier that examines features one at a time?
+
+**d)** Now add a small noise: $Z = X \oplus Y \oplus N$ where $N \sim \text{Bern}(0.1)$ independent. Compute $I(X; Z)$, $I(X; Z | Y)$. Why does conditioning on $Y$ make $X$ informative about $Z$?
+
+**e)** (ML tie-in) Greedy feature-selection methods that score features one at a time will *completely miss* the XOR signal. This is the classic motivating example for decision-tree algorithms, embedded methods (Lasso doesn't help here either), and deep nets. Name one architectural choice that makes neural nets robust to this failure mode.
+
+::: {.callout-tip collapse="true" title="Hint"}
+
+For (a): if $X = 0$, then $Z = Y$, which is still fair. So $H(Z | X = 0) = 1$, $H(Z | X = 1) = 1$, thus $H(Z | X) = 1 = H(Z)$ ⇒ $I(X; Z) = 0$.
+
+For (b): once you know both $X$ and $Y$, $Z$ is determined.
+
+For (e): hidden layers can compute compositional features (like $X \oplus Y$) before the final classifier sees them.
+
+:::
+
+---
+
+## 06 🐍 Forward vs Reverse KL: Fitting a Bimodal {data-difficulty="3"}
+
+Let $p$ be a 2-mode Gaussian mixture: $p(x) = \tfrac{1}{2} \, \mathcal{N}(x; -2, 1) + \tfrac{1}{2} \, \mathcal{N}(x; +2, 1)$.
+
+We'll fit $q_\phi = \mathcal{N}(\mu, \sigma^2)$ to it by two different objectives.
+
+**a)** **Forward KL** $\min_\phi D_{\text{KL}}(p \| q_\phi)$: show that the closed-form optimum is moment-matching, $\mu^* = \mathbb{E}_p[X] = 0$ and $\sigma^{2*} = \text{Var}_p(X)$.
+
+**b)** Compute $\text{Var}_p(X)$ analytically (mixture variance = within-mode + between-mode).
+
+**c)** **Reverse KL** $\min_\phi D_{\text{KL}}(q_\phi \| p)$: optimize via SGD on $(\mu, \log \sigma)$, sampling from $q_\phi$ for the expectation. Use **5 random initializations** of $\mu \in \{-3, -1, 0, 1, 3\}$ — report all 5 final $(\mu, \sigma)$ values.
+
+```python
+import torch
+import torch.distributions as D
+
+def log_p(x):
+    m1 = D.Normal(-2.0, 1.0)
+    m2 = D.Normal(+2.0, 1.0)
+    return torch.log(0.5 * m1.log_prob(x).exp() + 0.5 * m2.log_prob(x).exp())
+
+# Reverse KL: optimize mu, log_sigma to minimize E_q[log q - log p]
+mu = torch.tensor([0.0], requires_grad=True)
+log_sigma = torch.tensor([0.0], requires_grad=True)
+opt = torch.optim.Adam([mu, log_sigma], lr=0.05)
+# Sample x ~ q, compute objective, .backward(), step.
+```
+
+**d)** Plot both fits over $p$. Confirm: forward KL gives a single wide Gaussian covering both modes; reverse KL collapses onto *one* of the two modes.
+
+**e)** (VI tie-in) Variational inference approximates an intractable posterior. Which direction of KL does it minimize, and why does that direction's behavior matter for the bias of VI estimates?
+
+::: {.callout-tip collapse="true" title="Expected results"}
+
+- Forward KL closed form: $\mu^* = 0$, $\sigma^{2*} = 1 + 4 = 5 \Rightarrow \sigma^* \approx 2.24$.
+- Reverse KL: 5 restarts ⇒ 2 cluster near $\mu \approx -2$, others near $\mu \approx +2$, with $\sigma \approx 1$. **Mode-seeking.**
+- VI minimizes reverse KL (because it's tractable via the reparameterization trick); this is why VI underestimates posterior variance.
+
+:::
+
+---
+
+## 07 ✏️🐍 Information Gain in a Decision Tree {data-difficulty="2"}
+
+You're predicting whether a Yerevan resident takes the metro (Y = 1) or drives (Y = 0) for their commute. Sample of 30 people:
+
+| Age bucket | Lives near metro | $Y=1$ (metro) | $Y=0$ (drives) |
+|------------|------------------|---------------|----------------|
+| young      | yes              | 7             | 1              |
+| young      | no               | 2             | 5              |
+| old        | yes              | 3             | 4              |
+| old        | no               | 1             | 7              |
+
+**a)** Compute $H(Y)$ in bits.
+
+**b)** Compute $H(Y \mid \text{Age})$ and $H(Y \mid \text{LivesNearMetro})$.
+
+**c)** Which feature has higher information gain $I(\text{feature}; Y) = H(Y) - H(Y \mid \text{feature})$? Which would ID3 split on first?
+
+**d)** Compute $H(Y \mid \text{Age}, \text{LivesNearMetro})$ (joint conditional). What's the remaining uncertainty after both features are used?
+
+**e)** (Tie-in to L09–L10 stat lectures) Why is "information gain" *not* the same as Pearson correlation? Find one row in the table where the two could give different intuitions.
+
+::: {.callout-tip collapse="true" title="Sanity check"}
+
+- $H(Y) \approx 0.989$ bits (since $p(Y{=}1) = 13/30 \approx 0.433$).
+- $H(Y \mid \text{Age}) \approx 0.905$, $H(Y \mid \text{LivesNearMetro}) \approx 0.820$.
+- LivesNearMetro wins (IG $\approx 0.169$ vs Age IG $\approx 0.084$).
+- After both features: $H(Y \mid \text{both}) \approx 0.72$ — still residual noise (irreducible at this granularity).
+
+:::
+
+---
+
+## 08 ✏️ JS Divergence and the GAN Failure Mode {.bonus-problem data-difficulty="3"}
+
+The Jensen–Shannon divergence is
+$$JS(p, q) \;=\; \tfrac{1}{2} D_{\text{KL}}(p \| m) + \tfrac{1}{2} D_{\text{KL}}(q \| m), \quad m = \tfrac{p + q}{2}.$$
+
+**a)** Show $0 \leq JS(p, q) \leq 1$ bit. *(Hint: think about the worst case where $p, q$ have disjoint supports.)*
+
+**b)** Take two Diracs: $p = \delta_{x = 0}$, $q = \delta_{x = 1}$. Compute $JS(p, q)$ directly.
+
+**c)** Now slightly perturb: $p_\epsilon = \delta_{x = 0}$, $q_\epsilon = \delta_{x = \epsilon}$ with $\epsilon > 0$. Compute $JS(p_\epsilon, q_\epsilon)$. **Show that $JS$ is *constant in $\epsilon$* whenever $\epsilon \neq 0$**, then jumps to $0$ at $\epsilon = 0$.
+
+**d)** Vanilla GANs train the generator $G_\theta$ by (implicitly) minimizing $JS(p_{\text{data}}, p_{G_\theta})$. Real image manifolds in $\mathbb{R}^{H \times W \times 3}$ have measure zero. Use (c) to explain why the generator gets **no useful gradient** to move toward the data distribution, even when it's "close."
+
+**e)** Wasserstein GAN (Arjovsky et al., 2017) replaces $JS$ with the Wasserstein-1 distance, which behaves like $|\epsilon|$ in the example above — continuous and informative. Briefly explain why this fixes the gradient problem.
+
+---
+
+## 09 ✏️ Information Bottleneck: A Hand-Solvable Toy {.bonus-problem data-difficulty="3"}
+
+Let $X = (S, N)$ where:
+
+- $S \sim \text{Bern}(0.5)$ is the **signal** with $Y = S$ deterministically.
+- $N \sim \text{Bern}(0.5)$ is **noise**, independent of $(S, Y)$.
+
+So $X$ has 2 bits of total entropy, but only 1 bit relates to $Y$.
+
+**a)** Compute $H(X)$, $H(Y)$, $I(X; Y)$.
+
+**b)** The information bottleneck principle: find a representation $T = f(X)$ that solves
+$$\max_{p(t | x)} I(T; Y) \quad \text{subject to} \quad I(T; X) \leq R.$$
+
+For $R = 1$ bit, what's the optimal $T$? (You should be able to guess by inspection.) Compute $I(T; Y)$ and $I(T; X)$ for your choice.
+
+**c)** For $R = 0.5$ bits, the optimal $T$ is *stochastic*: it must throw away information about $S$ on some examples. Sketch the tradeoff curve $I(T; Y)$ vs $I(T; X)$ as $R$ ranges from $0$ to $2$.
+
+**d)** (Deep learning tie-in) Tishby & Zaslavsky (2015) argued that training a neural net traces this curve: the network first fits ("memorizes") then compresses ("forgets"). This view is contested — name one counter-example or critique.
+
+---
+
+## 10 ✏️ The Meter Problem: Why ML Uses KL Instead of $h$ {.bonus-problem data-difficulty="2"}
+
+Let $X$ be a continuous random variable with differential entropy $h(X) = 5$ bits, when measured in **meters**.
+
+**a)** What's $h(X)$ when $X$ is measured in **centimeters**? *(Use $h(aX) = h(X) + \log_2 |a|$.)*
+
+**b)** What's $h(X)$ when $X$ is measured in **micrometers**?
+
+**c)** Now consider two variables $X$ and $Y$. Show that $I(X; Y)$ does **not** change under independent unit changes $X \to aX$, $Y \to bY$.
+
+**d)** (Moral) Differential entropy depends on the units you measure in — it's not a property of the random variable alone. Explain in one sentence why this makes it a *bad loss function* for ML, and why cross-entropy / KL / MI are preferred.
+
+::: {.callout-tip collapse="true" title="Sanity check"}
+
+- (a) $5 + \log_2 100 = 5 + 6.64 = 11.64$ bits.
+- (b) $5 + \log_2 10^6 = 5 + 19.93 = 24.93$ bits.
+- (c) The Jacobians cancel: $I(aX; bY) = h(aX) + h(bY) - h(aX, bY) = (\log a + \log b - \log a - \log b) + I(X; Y) = I(X; Y)$.
+
+:::
+
+---
 
 # 🎲 38 (01) TODO
 - ▶️[ToDo]()

@@ -9,7 +9,7 @@
 | 3 | Sat May 2 | Hypothesis Testing | Practical | `25_stat_hypothesis_testing.qmd` | [x] [video](https://youtu.be/deBUJ8pMomU) |
 | 4 | TBD | Classical Tests + ANOVA & A/B | Lecture | `10_stat.tex` (merged L10+L11) | [ ] |
 | 5 | TBD | Classical Tests + ANOVA | Practical | `26` + `27` qmd | [ ] |
-| 6 | TBD | How to Lie with Statistics | Lecture | `12_stat.tex` | [ ] |
+| 6 | Sun May 17 | How to Lie with Statistics | Lecture | `12_stat.tex` | [x] [video](https://youtu.be/1KB7Riu_p_o) |
 | 7 | TBD | Q&A / Review | - | - | [ ] |
 | 8 | TBD | Entropy, Cross-Entropy, KL | Lecture | `info_01.tex` | [ ] |
 | 9 | TBD | Info Theory for ML | Lecture | `info_02.tex` | [ ] |

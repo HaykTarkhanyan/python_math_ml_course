@@ -2,9 +2,9 @@
 
 - **Channel:** [@MetricAcademy](https://www.youtube.com/@MetricAcademy)
 - **Channel ID:** `UC5BavugdnUkti3Es7-deZDg`
-- **Total Videos:** 182
+- **Total Videos:** 186
 - **Total Playlists:** 11
-- **Last scraped:** 2026-04-06
+- **Last scraped:** 2026-05-19
 
 ---
 
@@ -26,9 +26,9 @@
 
 ---
 
-## All Videos (178 total)
+## All Videos (182 total)
 
-### Math/ML Lectures (47 videos)
+### Math/ML Lectures (49 videos)
 
 | # | Video ID | Title | Views | Duration (s) | URL |
 |---|----------|-------|-------|-------------|-----|
@@ -76,11 +76,13 @@
 | 41 | `Ye0ZsTDnPx4` | Lecture 41 — Consistency, sufficiency | 71 | 2980 | https://youtu.be/Ye0ZsTDnPx4 |
 | 42 | `DDdzHnQsyrA` | Lecture 42 — Minimax | 43 | 3512 | https://youtu.be/DDdzHnQsyrA |
 | 43 | `xQKwAcaM410` | Lecture 43 — MLE | 40 | 5396 | https://youtu.be/xQKwAcaM410 |
-| 44 | `PNVE4gy1jt0` | Lecture 44 — MAP, regularization connection | — | — | https://youtu.be/PNVE4gy1jt0 |
-| 45 | `bxqLIYWc9C8` | Lecture 45 — Sampling distributions, Monte Carlo | — | — | https://youtu.be/bxqLIYWc9C8 |
-| 46 | `uzQ3mFOqcwo` | Lecture 46 — Confidence intervals, bootstrap | — | — | https://youtu.be/uzQ3mFOqcwo |
+| 44 | `PNVE4gy1jt0` | Lecture 44 — MAP, regularization connection | 64 | 3492 | https://youtu.be/PNVE4gy1jt0 |
+| 45 | `bxqLIYWc9C8` | Lecture 45 — Sampling distributions, Monte Carlo | 86 | 2847 | https://youtu.be/bxqLIYWc9C8 |
+| 46 | `uzQ3mFOqcwo` | Lecture 46 — Confidence intervals, bootstrap | 48 | 4793 | https://youtu.be/uzQ3mFOqcwo |
+| 47 | `PYHNsndAnXE` | Lecture 47 — Hypothesis testing | 50 | 5038 | https://youtu.be/PYHNsndAnXE |
+| 48 | `f9In1q_cBgE` | Lecture 48 — Statistical tests | 49 | 4136 | https://youtu.be/f9In1q_cBgE |
 
-#### Math/ML Practicals (23 videos)
+#### Math/ML Practicals (25 videos)
 
 | Session | Video ID | Title | Views | Duration (s) | URL |
 |---------|----------|-------|-------|-------------|-----|
@@ -105,7 +107,9 @@
 | 19 | `D9JIZXNzios` | Practical 19 | 64 | 2796 | https://youtu.be/D9JIZXNzios |
 | 20 | `xnT7eaba_UM` | Practical 20 | 44 | 8131 | https://youtu.be/xnT7eaba_UM |
 | 21 | `fxYxoHIz-P0` | Practical 21 (bonus) | 83 | 4405 | https://youtu.be/fxYxoHIz-P0 |
-| 22 | `8W9iOV7IVnA` | Practical 22 — MLE & MAP | — | — | https://youtu.be/8W9iOV7IVnA |
+| 22 | `8W9iOV7IVnA` | Practical 22 — MLE & MAP | 54 | 3624 | https://youtu.be/8W9iOV7IVnA |
+| 23 | `Z1LNPERo87g` | Practical 23 — Bootstrapping, Confidence intervals | 26 | 2581 | https://youtu.be/Z1LNPERo87g |
+| 24 | `deBUJ8pMomU` | Practical 24 — Hypothesis testing | 56 | 4337 | https://youtu.be/deBUJ8pMomU |
 
 ---
 
