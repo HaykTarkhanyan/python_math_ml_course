@@ -11,295 +11,340 @@ format:
 
 ## Դասախոսություն
 - [🎞️ Սլայդեր — info 01 (Entropy, Source Coding, Cross-Entropy, KL)](Lectures/info/info_01.pdf)
-- [🎞️ Սլայդեր — info 02 (MLE, MaxEnt, Mutual Information)](Lectures/info/info_02.pdf)
-- [🎞️ Սլայդեր — info 03 (DPI, f-divergences, ELBO, Information Bottleneck)](Lectures/info/info_03.pdf)
+
+::: {.callout-note collapse="true"}
+## Scope
+This practical covers **info_01 only**: entropy, surprisal, source coding, cross-entropy, KL divergence, and differential entropy. Mutual information, MLE, and MaxEnt come in the next lecture (info_02).
+:::
 
 # 🏡 Տնային
 
 ---
 
-## 01 🐍 Wordle as an Information Game {data-difficulty="2"}
+## 01 ✏️🐍 Armenian Alphabet Entropy {data-difficulty="1"}
 
-Wordle has roughly $N = 2{,}315$ valid answer words. Each guess returns one of $3^5 = 243$ possible color patterns (green / yellow / gray on each of 5 letters).
+The Armenian alphabet has **39 letters** (Mashtots' original 36 + ՈՒ, Օ, Ֆ).
 
-**a)** What's the information-theoretic *upper bound* on the average bits any single guess can reveal? (Use $\log_2$ on the number of distinct color patterns.)
+**a)** Compute the **uniform entropy**: how many bits per letter if every letter were equally likely?
 
-**b)** What's the upper bound on bits-per-guess set by the answer-list size? Combine the two: in principle, what's the minimum number of guesses an optimal solver needs in the worst case?
+**b)** English's uniform bound is $\log_2 26 \approx 4.70$ bits/letter, yet real English text has empirical entropy around $1.3$ bits/letter (Shannon, 1951). Explain *why* the empirical entropy is so much smaller than the uniform bound. Name the **two** distinct effects.
 
-**c)** Implement a greedy solver. For each candidate guess $g$, partition the current answer set by their color pattern against $g$, and compute the entropy of that partition. Pick the $g$ with maximum entropy.
+**c)** (Python) Estimate the *real* per-letter entropy of Armenian. Use the provided file [`assets/panir_hy.txt`](assets/panir_hy.txt) (the «Պանիր» Wikipedia article), or download fresh text yourself with the snippet below. Keep only Armenian letters, lowercase them, and compute the empirical letter-frequency distribution and its entropy.
+
+```python
+# Option A — read the provided file:
+text = open("assets/panir_hy.txt", encoding="utf-8").read()
+
+# Option B — download any Armenian article's plain text yourself:
+import urllib.request, urllib.parse, json
+title = "Պանիր"  # try any article title
+url = "https://hy.wikipedia.org/w/api.php?" + urllib.parse.urlencode({
+    "action": "query", "prop": "extracts", "explaintext": 1,
+    "titles": title, "format": "json", "redirects": 1,
+})
+req = urllib.request.Request(url, headers={"User-Agent": "course/1.0"})
+page = next(iter(json.load(urllib.request.urlopen(req))["query"]["pages"].values()))
+text = page["extract"]
+```
+
+**d)** Compare your empirical entropy to the uniform bound from (a). By roughly how many bits per letter does the frequency skew save you?
+
+**e)** A 100-page Armenian e-book has roughly $200{,}000$ characters. Estimate the entropy **lower bound** on its size (KB). Then explain the catch: you'll get $\approx 4.5$ bits/letter, but a real code must assign a **whole** number of bits to each letter — so how do you actually get close to the entropy?
+
+::: {.callout-tip collapse="true" title="Solution"}
+
+**(a)** A uniform distribution over $g$ outcomes has entropy $\log_2 g$. So
+$$H_{\text{uniform}} = \log_2 39 \approx 5.29 \text{ bits/letter}.$$
+This is the **maximum** possible per-letter entropy for a 39-letter alphabet.
+
+**(b)** Two separate effects pull the real entropy below the uniform bound:
+
+1. **Non-uniform letter frequencies.** Entropy is maximized *only* by the uniform distribution; any skew lowers it. Common letters (ա, ե, ի, ն, ո) appear far more than rare ones, so each letter carries less than the maximal $5.29$ bits.
+2. **Inter-letter correlations.** Real text is not i.i.d. — after «ա» some letters are much likelier than others. Modeling context (letter pairs, words) reduces the per-letter entropy much further. The $1.3$ bits/letter figure for English uses this contextual structure.
+
+**(c)** Full implementation. The one subtlety is filtering to the Armenian Unicode block, or Latin letters from foreign words and references inflate the alphabet to 70+ "letters":
+
+```python
+from collections import Counter
+import math
+
+text = open("assets/panir_hy.txt", encoding="utf-8").read()
+
+def is_armenian(ch):  # U+0531–U+0556 upper, U+0561–U+0587 lower
+    o = ord(ch)
+    return 0x0531 <= o <= 0x0556 or 0x0561 <= o <= 0x0587
+
+letters = [c for c in text.lower() if is_armenian(c)]
+counts = Counter(letters)
+n = len(letters)
+H = -sum((c / n) * math.log2(c / n) for c in counts.values())
+print(f"{n} letters, {len(counts)} distinct")
+print(f"empirical entropy = {H:.3f} bits/letter")
+```
+
+Output on the provided file:
+```
+22417 letters, 39 distinct
+empirical entropy = 4.484 bits/letter
+```
+
+**(d)** Empirical $4.48$ vs uniform $5.29$ ⇒ the frequency skew saves about $\mathbf{0.8}$ bits/letter. The single most common letter «ա» is already ~15% of all letters. (Contextual modeling would save far more.)
+
+**(e)** Naive entropy lower bound:
+$$200{,}000 \times 4.48 \text{ bits} = 896{,}000 \text{ bits} \approx \mathbf{109 \text{ KB}}.$$
+
+**The discrete catch.** Entropy is $4.48$ bits/letter, but a real prefix code assigns an *integer* number of bits per symbol — you can't literally spend $4.48$ bits on one letter. So:
+
+- A **fixed-length** code needs $\lceil\log_2 39\rceil = \mathbf{6}$ bits/letter ⇒ $200{,}000 \times 6 / 8 / 1024 \approx 146$ KB. Easy, but wastes $6 - 4.48 = 1.5$ bits/letter.
+- A **Huffman** code on single letters does better (frequent letters get short codewords), landing between $H$ and $H + 1$.
+- To actually *approach* $4.48$ you must encode **blocks** of several letters at once (or use arithmetic coding). The source coding theorem is asymptotic: expected bits/symbol $\to H$ only as block length grows. So $4.48$ is the theoretical floor — an *average* you approach with block coding, not a per-letter code length you can use directly.
+
+:::
+
+---
+
+## 02 🐍 Wordle as an Information Game {data-difficulty="2"}
+
+Wordle has $N = 2{,}315$ valid answer words. Each guess comes back as a **color pattern**: every one of the 5 letters is green (right letter, right spot), yellow (right letter, wrong spot), or gray (not in the word). With 3 colors on 5 positions there are $3^5 = 243$ possible patterns.
+
+Grab the official answer list (2,315 words) like this:
+
+```python
+import urllib.request
+url = ("https://gist.githubusercontent.com/cfreshman/"
+       "a03ef2cba789d8cf00c08f767e0fad7b/raw/wordle-answers-alphabetical.txt")
+words = urllib.request.urlopen(url).read().decode().split()
+assert len(words) == 2315
+```
+
+**a)** Think of a guess as a *question* whose answer is the color pattern. At most how many distinct answers can that question have — and therefore how many **bits** can one guess reveal at most?
+
+**b)** How many bits of uncertainty does the answer carry before any guess? Combining (a) and (b), what's the minimum number of guesses an *ideal* solver would need in the best case?
+
+**c)** Implement a greedy solver: for each candidate guess $g$, partition the current answer set by their color pattern against $g$, and compute the **entropy of that partition**. Pick the $g$ with the highest entropy (it splits the candidates most evenly).
 
 ```python
 from collections import Counter
 import math
 
 def feedback(guess: str, answer: str) -> tuple:
-    """Return the color pattern as a 5-tuple of 'G', 'Y', '.' (gray)."""
-    # Watch out: a letter that appears once in the answer but twice in the guess
-    # only earns one Y/G total. Wordle is fiddly here.
+    """Color pattern as a 5-tuple of 'G' (green), 'Y' (yellow), '.' (gray).
+    Careful: a letter appearing once in the answer but twice in the guess
+    earns only one Y/G total."""
     ...
 
-def entropy_of_guess(guess, candidates):
+def expected_info(guess, candidates):
     counts = Counter(feedback(guess, a) for a in candidates)
     n = len(candidates)
     return -sum((c/n) * math.log2(c/n) for c in counts.values())
 ```
 
-**d)** Report the **top-5 first guesses** your solver finds and their entropies in bits. Compare to popular openers (CRANE, SLATE, RAISE, SOARE).
+**d)** Report the **top-5 first guesses** your solver finds and their entropies in bits. Compare to popular openers (CRANE, SLATE, RAISE).
 
-**e)** Why does the solver not recommend `AAAAA` or `QXZWK`?
+**e)** Explain in entropy terms why the solver never recommends a word like `FUZZY` or `AAHED` as a first guess.
 
-::: {.callout-tip collapse="true" title="Sanity check / hints"}
+**f)** **(Bardle — Armenian Wordle.)** The same game exists in Armenian: [Bardle](https://github.com/Iamnerses/Bardle). Re-run your *exact* solver on the Armenian 5-letter answer set [`assets/bardle_hy_5_answers.txt`](assets/bardle_hy_5_answers.txt) (178 words); the allowed-guess list is [`assets/bardle_hy_5_guesses.txt`](assets/bardle_hy_5_guesses.txt) (2,855 words). Then answer:
 
-- Upper bound (a): $\log_2 243 \approx 7.92$ bits.
-- Upper bound (b): $\log_2 2315 \approx 11.18$ bits ⇒ at least $\lceil 11.18 / 7.92 \rceil = 2$ in info-theoretic ideal, but the practical optimum is around 3.42 guesses on average (Selby, 2022).
-- Top guess: usually **SALET** or **REAST**, with entropy ~ 5.88 bits.
-- Why not `AAAAA`? Most answers share zero/one A — the color-pattern distribution collapses to a few buckets, entropy is tiny.
+- How much starting uncertainty (bits) does the 178-word answer set carry, vs English Wordle's 2,315?
+- Is the per-guess ceiling still $\log_2 243$? Why or why not — does Armenian's 39-letter alphabet change it?
+- Report the top-3 Armenian opening guesses your solver finds.
 
-:::
+::: {.callout-tip collapse="true" title="Solution"}
 
----
+**(a) What $\log_2 243$ represents.** A guess does not return a word — it returns one of the **243 possible color patterns**. So a guess behaves like a *question with up to 243 possible answers*. Any question is most informative when all its answers are equally likely; then the answer carries
+$$\log_2(\text{number of possible answers}) = \log_2 243 \approx 7.92 \text{ bits}.$$
+That is the ceiling: **no single guess can ever reveal more than $7.92$ bits**, because there are only 243 distinguishable responses to read. (Real guesses reveal less — many of the 243 patterns almost never occur, so they are far from equally likely.)
 
-## 02 ✏️🐍 Armenian Alphabet Entropy {data-difficulty="1"}
+**(b)** Before guessing, the hidden word is roughly uniform over 2,315 words, so the starting uncertainty is
+$$H = \log_2 2315 \approx 11.18 \text{ bits}.$$
+If every guess delivered the full $7.92$ bits you'd need $\lceil 11.18 / 7.92 \rceil = 2$ guesses. In reality a guess reveals only $\sim 5$–$6$ bits, so the proven optimum averages about $3.42$ guesses (Selby, 2022).
 
-The Armenian alphabet has 39 letters (Mashtots' original 36 + ՈՒ, Օ, Ֆ).
+**A worked turn.** Suppose the hidden word is `ROBIN` and you open with `SLATE`:
 
-**a)** Compute the uniform entropy: how many bits per letter if every letter were equally likely?
+| Letter | In ROBIN? | Color |
+|--------|-----------|-------|
+| S | no | gray `.` |
+| L | no | gray `.` |
+| A | no | gray `.` |
+| T | no | gray `.` |
+| E | no | gray `.` |
 
-**b)** English's uniform bound is $\log_2 26 \approx 4.70$ bits/letter. Real English text has empirical entropy around $1.3$ bits/letter (Shannon, 1951). Why is the empirical entropy so much smaller than the uniform bound?
+The pattern is `.....` (all gray). Every answer that contains none of S, L, A, T, E returns this *same* pattern — still hundreds of words — so this particular turn revealed only a few bits. You now keep only answers consistent with "no S, L, A, T, E" and pick the next max-entropy guess. A sharper guess like `CRANE` against `ROBIN` returns a pattern with R and N yellow, which slices the candidate set far more.
 
-**c)** (Python) Download or paste a paragraph of Armenian text — Wikipedia's [Mashtots article](https://hy.wikipedia.org/wiki/Մեսրոպ_Մաշտոց) intro works well. Strip punctuation, spaces, numbers. Compute the empirical letter-frequency distribution and its entropy in bits/letter.
-
-**d)** Compare your empirical Armenian entropy to the uniform bound. Does it fall in the same ballpark as English's $1.3$ bits?
-
-**e)** A 100-page Armenian e-book has roughly $200{,}000$ characters. Estimate the lower bound on its compressed size (in KB) if compressed character-by-character at your empirical entropy rate.
-
-::: {.callout-tip collapse="true" title="Sanity check"}
-
-- Uniform bound: $\log_2 39 \approx 5.29$ bits/letter.
-- Real Armenian text typically gives $\sim 4.2$ bits/letter at the character level (letter frequencies aren't uniform — Ա, Ե, Ի, Ն dominate).
-- Modeling word context drops this further to $\sim 1.5$--$2$ bits/letter.
-- 200k chars × 4.2 bits ≈ 105 KB.
-
-:::
-
----
-
-## 03 ✏️🐍 The Asymmetry of Surprise {data-difficulty="2"}
-
-Spam-filter setup: the *true* distribution of "is this email spam" is $p = \text{Bern}(0.01)$ (1% spam rate in your inbox). Your model assumes a prior $q = \text{Bern}(0.1)$ (10× too pessimistic).
-
-**a)** Compute $D_{\text{KL}}(p \| q)$ and $D_{\text{KL}}(q \| p)$ in bits, by hand.
-
-**b)** One direction is dramatically larger than the other. **Predict which one before computing.** Then check.
-
-**c)** Give a *causal* explanation: which observations contribute the most "surprise" in each direction? Why does the model's overestimate of spam frequency hurt one direction far more than the other?
-
-**d)** Now repeat with $p = \text{Bern}(0.5)$ and $q = \text{Bern}(0.4)$ — distributions much closer in shape. The two KL directions should be nearly equal. Verify and explain.
-
-**e)** (ML tie-in) Forward KL minimization $\min_q D_{\text{KL}}(p \| q)$ tends to make $q$ **cover** all modes of $p$ (it can't tolerate $q(x) \approx 0$ where $p(x) > 0$). Reverse KL $\min_q D_{\text{KL}}(q \| p)$ tends to make $q$ **lock onto one mode**. Use your answer to (c) to explain why.
-
-::: {.callout-tip collapse="true" title="Hint for (a)"}
-
-$D_{\text{KL}}(p\|q) = \sum_x p(x) \log_2 \frac{p(x)}{q(x)}$ — sum over the two outcomes $\{0, 1\}$.
-
-Forward: $0.01 \log_2(0.01/0.10) + 0.99 \log_2(0.99/0.90) \approx -0.0332 + 0.1361 = 0.103$ bits.
-
-Reverse: $0.10 \log_2(0.10/0.01) + 0.90 \log_2(0.90/0.99) \approx 0.332 - 0.124 = 0.208$ bits.
-
-The reverse direction is $\sim 2\times$ larger here. The asymmetry grows fast as $q$'s "wrong mass" lands where $p$ is small.
-
-:::
-
----
-
-## 04 ✏️🐍 MaxEnt: The Honest Biased Die {data-difficulty="2"}
-
-A 6-sided die is rolled many times and the empirical mean is 4.8 (recall the fair-die mean is 3.5 — someone weighted the high faces). You're asked: *given only this constraint*, what's the most honest distribution to assign?
-
-**a)** Set up the MaxEnt optimization: maximize $H(p) = -\sum p_i \log p_i$ subject to $\sum p_i = 1$ and $\sum_{i=1}^{6} i \cdot p_i = 4.8$. Show (via Lagrange multipliers) that $p_i^* = \frac{e^{\lambda i}}{Z(\lambda)}$ for some scalar $\lambda$ to be determined.
-
-**b)** Solve numerically for $\lambda$: find the value such that the mean constraint is satisfied.
+**(c)** Full implementation (the greens-before-yellows order with a letter pool is the only tricky part):
 
 ```python
-from scipy.optimize import brentq
-import numpy as np
+from collections import Counter
+import math
 
-def mean_at(lam):
-    p = np.exp(lam * np.arange(1, 7))
-    p /= p.sum()
-    return (p * np.arange(1, 7)).sum() - 4.8
+def feedback(guess, answer):
+    res = ['.'] * 5
+    pool = Counter(answer)
+    for i in range(5):                       # greens first
+        if guess[i] == answer[i]:
+            res[i] = 'G'; pool[guess[i]] -= 1
+    for i in range(5):                       # then yellows from what's left
+        if res[i] == '.' and pool[guess[i]] > 0:
+            res[i] = 'Y'; pool[guess[i]] -= 1
+    return tuple(res)
 
-lam_star = brentq(mean_at, -2, 2)
+def expected_info(guess, candidates):
+    counts = Counter(feedback(guess, a) for a in candidates)
+    n = len(candidates)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+best = sorted(words, key=lambda g: expected_info(g, words), reverse=True)[:5]
+for g in best:
+    print(g.upper(), round(expected_info(g, words), 2), "bits")
 ```
 
-**c)** Report $p^*$. Plot it as a bar chart, alongside the fair die for reference.
+**(d)** This prints top openers like **SALET, REAST, CRATE, TRACE, SLATE**, each $\approx 5.8$–$5.9$ bits. Human favorites (CRANE, RAISE) score nearly as high — that is *why* they are good: they split the answer set evenly.
 
-**d)** Why is this distribution the *right* answer (in an information-theoretic sense) when you know only the mean? What additional assumption would be needed to commit to a more specific distribution?
+**(e)** `FUZZY` has a repeated `Z` and rare letters. Most answers contain none of F, U, Z, Y, so they all return the same all-gray pattern — the 2,315 words collapse into a few big buckets. Few buckets ⇒ **low partition entropy** ⇒ little information. Good openers use 5 distinct, common letters to spread answers across many buckets.
 
-::: {.callout-tip collapse="true" title="Sanity check"}
-
-$\lambda^* \approx 0.514$, giving $p^* \approx (0.032, 0.054, 0.090, 0.151, 0.252, 0.421)$. The high faces are favored, as the mean suggests; the *shape* (exponential tilt) is what MaxEnt gives you for free. Verify by computing $\sum i \cdot p_i^* \approx 4.80$.
-
-:::
-
----
-
-## 05 ✏️ XOR Channels and the Limits of Single Features {data-difficulty="3"}
-
-Let $X, Y \sim \text{Bern}(0.5)$ be independent fair coins. Define $Z = X \oplus Y$ (XOR, no noise).
-
-**a)** Compute $I(X; Z)$ and $I(Y; Z)$. (Hint: $Z$ marginally is also fair. What's $H(Z | X)$?)
-
-**b)** Compute $I(X, Y; Z)$. *Now compare to (a).*
-
-**c)** The shocking part: $I(X; Z) = 0$ and $I(Y; Z) = 0$, but $I(X, Y; Z) = 1$. Explain this in plain language. What does it imply for a classifier that examines features one at a time?
-
-**d)** Now add a small noise: $Z = X \oplus Y \oplus N$ where $N \sim \text{Bern}(0.1)$ independent. Compute $I(X; Z)$, $I(X; Z | Y)$. Why does conditioning on $Y$ make $X$ informative about $Z$?
-
-**e)** (ML tie-in) Greedy feature-selection methods that score features one at a time will *completely miss* the XOR signal. This is the classic motivating example for decision-tree algorithms, embedded methods (Lasso doesn't help here either), and deep nets. Name one architectural choice that makes neural nets robust to this failure mode.
-
-::: {.callout-tip collapse="true" title="Hint"}
-
-For (a): if $X = 0$, then $Z = Y$, which is still fair. So $H(Z | X = 0) = 1$, $H(Z | X = 1) = 1$, thus $H(Z | X) = 1 = H(Z)$ ⇒ $I(X; Z) = 0$.
-
-For (b): once you know both $X$ and $Y$, $Z$ is determined.
-
-For (e): hidden layers can compute compositional features (like $X \oplus Y$) before the final classifier sees them.
-
-:::
-
----
-
-## 06 🐍 Forward vs Reverse KL: Fitting a Bimodal {data-difficulty="3"}
-
-Let $p$ be a 2-mode Gaussian mixture: $p(x) = \tfrac{1}{2} \, \mathcal{N}(x; -2, 1) + \tfrac{1}{2} \, \mathcal{N}(x; +2, 1)$.
-
-We'll fit $q_\phi = \mathcal{N}(\mu, \sigma^2)$ to it by two different objectives.
-
-**a)** **Forward KL** $\min_\phi D_{\text{KL}}(p \| q_\phi)$: show that the closed-form optimum is moment-matching, $\mu^* = \mathbb{E}_p[X] = 0$ and $\sigma^{2*} = \text{Var}_p(X)$.
-
-**b)** Compute $\text{Var}_p(X)$ analytically (mixture variance = within-mode + between-mode).
-
-**c)** **Reverse KL** $\min_\phi D_{\text{KL}}(q_\phi \| p)$: optimize via SGD on $(\mu, \log \sigma)$, sampling from $q_\phi$ for the expectation. Use **5 random initializations** of $\mu \in \{-3, -1, 0, 1, 3\}$ — report all 5 final $(\mu, \sigma)$ values.
+**(f)** The color-pattern logic is identical (5 positions, 3 colors), so the *same* `feedback`/`expected_info` code runs unchanged on Armenian strings — it indexes characters generically:
 
 ```python
-import torch
-import torch.distributions as D
-
-def log_p(x):
-    m1 = D.Normal(-2.0, 1.0)
-    m2 = D.Normal(+2.0, 1.0)
-    return torch.log(0.5 * m1.log_prob(x).exp() + 0.5 * m2.log_prob(x).exp())
-
-# Reverse KL: optimize mu, log_sigma to minimize E_q[log q - log p]
-mu = torch.tensor([0.0], requires_grad=True)
-log_sigma = torch.tensor([0.0], requires_grad=True)
-opt = torch.optim.Adam([mu, log_sigma], lr=0.05)
-# Sample x ~ q, compute objective, .backward(), step.
+ans = open("assets/bardle_hy_5_answers.txt", encoding="utf-8").read().split()
+guesses = open("assets/bardle_hy_5_guesses.txt", encoding="utf-8").read().split()
+best = sorted(guesses, key=lambda g: expected_info(g, ans), reverse=True)[:3]
 ```
 
-**d)** Plot both fits over $p$. Confirm: forward KL gives a single wide Gaussian covering both modes; reverse KL collapses onto *one* of the two modes.
-
-**e)** (VI tie-in) Variational inference approximates an intractable posterior. Which direction of KL does it minimize, and why does that direction's behavior matter for the bias of VI estimates?
-
-::: {.callout-tip collapse="true" title="Expected results"}
-
-- Forward KL closed form: $\mu^* = 0$, $\sigma^{2*} = 1 + 4 = 5 \Rightarrow \sigma^* \approx 2.24$.
-- Reverse KL: 5 restarts ⇒ 2 cluster near $\mu \approx -2$, others near $\mu \approx +2$, with $\sigma \approx 1$. **Mode-seeking.**
-- VI minimizes reverse KL (because it's tractable via the reparameterization trick); this is why VI underestimates posterior variance.
+- **Starting uncertainty:** $\log_2 178 \approx \mathbf{7.48}$ bits — far less than English Wordle's $\log_2 2315 \approx 11.18$, because Bardle's curated answer set is much smaller.
+- **The per-guess ceiling is still $\log_2 243 \approx 7.92$ bits.** It depends only on the number of distinguishable responses ($3^5$ patterns from 5 positions × 3 colors), **not** on the alphabet size — Armenian's 39 letters do not change it. (Notably, the starting uncertainty $7.48$ is *below* the single-guess ceiling, so a perfect opener could in principle pin most answers in just one or two guesses.)
+- **Top-3 openers:** **կարեն** (5.34 bits), **նոտար** (5.30), **կարին** (5.25). Fittingly, «Կարեն» — one of the most common Armenian names — is the single best opening guess.
 
 :::
 
 ---
 
-## 07 ✏️🐍 Information Gain in a Decision Tree {data-difficulty="2"}
+## 03 ✏️ Source Coding: Huffman & the Kraft Inequality {.bonus-problem data-difficulty="2"}
 
-You're predicting whether a Yerevan resident takes the metro (Y = 1) or drives (Y = 0) for their commute. Sample of 30 people:
+*Optional.* A source emits 5 symbols with probabilities
+$$p = (\,A{:}\,0.4,\; B{:}\,0.2,\; C{:}\,0.2,\; D{:}\,0.1,\; E{:}\,0.1\,).$$
 
-| Age bucket | Lives near metro | $Y=1$ (metro) | $Y=0$ (drives) |
-|------------|------------------|---------------|----------------|
-| young      | yes              | 7             | 1              |
-| young      | no               | 2             | 5              |
-| old        | yes              | 3             | 4              |
-| old        | no               | 1             | 7              |
+**a)** Compute the entropy $H(p)$ in bits.
 
-**a)** Compute $H(Y)$ in bits.
+**b)** Build a **Huffman code**: repeatedly merge the two least-probable nodes. Draw the final tree and list each codeword and its length.
 
-**b)** Compute $H(Y \mid \text{Age})$ and $H(Y \mid \text{LivesNearMetro})$.
+**c)** Compute the **expected code length** $\mathbb{E}[L] = \sum_i p_i L_i$. Verify Shannon's bound $H(p) \le \mathbb{E}[L] < H(p) + 1$.
 
-**c)** Which feature has higher information gain $I(\text{feature}; Y) = H(Y) - H(Y \mid \text{feature})$? Which would ID3 split on first?
+**d)** Verify your code satisfies the **Kraft inequality** $\sum_i 2^{-L_i} \le 1$. Is it saturated (equal to 1)? Why does that make sense for a Huffman code?
 
-**d)** Compute $H(Y \mid \text{Age}, \text{LivesNearMetro})$ (joint conditional). What's the remaining uncertainty after both features are used?
+**e)** A naive fixed-length code needs $\lceil \log_2 5 \rceil = 3$ bits per symbol. How many bits per symbol does Huffman save on average?
 
-**e)** (Tie-in to L09–L10 stat lectures) Why is "information gain" *not* the same as Pearson correlation? Find one row in the table where the two could give different intuitions.
+::: {.callout-tip collapse="true" title="Solution"}
 
-::: {.callout-tip collapse="true" title="Sanity check"}
+**(a)** Plug into $H = -\sum_i p_i \log_2 p_i$. Useful values: $\log_2 0.4 = -1.322$, $\log_2 0.2 = -2.322$, $\log_2 0.1 = -3.322$.
+$$H(p) = -\big(0.4(-1.322) + 2\cdot 0.2(-2.322) + 2\cdot 0.1(-3.322)\big) = 0.529 + 0.929 + 0.664 = \mathbf{2.12 \text{ bits}}.$$
 
-- $H(Y) \approx 0.989$ bits (since $p(Y{=}1) = 13/30 \approx 0.433$).
-- $H(Y \mid \text{Age}) \approx 0.905$, $H(Y \mid \text{LivesNearMetro}) \approx 0.820$.
-- LivesNearMetro wins (IG $\approx 0.169$ vs Age IG $\approx 0.084$).
-- After both features: $H(Y \mid \text{both}) \approx 0.72$ — still residual noise (irreducible at this granularity).
+**(b)** Huffman repeatedly merges the two **least-probable** nodes; the merged node's probability is their sum. Track it step by step:
+
+| Step | Pool (prob) | Merge | New node |
+|------|-------------|-------|----------|
+| 1 | A·4, B·2, C·2, **D·1, E·1** | D+E | DE = 0.2 |
+| 2 | A·4, **B·2, C·2**, DE·2 | B+C | BC = 0.4 |
+| 3 | A·4, **DE·2**, BC·4 | DE+A | ADE = 0.6 |
+| 4 | **BC·4, ADE·6** | BC+ADE | root = 1.0 |
+
+(probabilities written ×10 for readability). Reading the tree from the root, assigning `0` to the left branch and `1` to the right:
+
+```
+              root
+          0 /      \ 1
+          BC        ADE
+        0/  \1     0/   \1
+        B    C     A     DE
+                       0/   \1
+                       D     E
+```
+
+| Symbol | $p$ | Codeword | Length $L_i$ | Surprisal $-\log_2 p_i$ |
+|--------|-----|----------|--------------|--------------------------|
+| A | 0.4 | `10`  | 2 | 1.32 |
+| B | 0.2 | `00`  | 2 | 2.32 |
+| C | 0.2 | `01`  | 2 | 2.32 |
+| D | 0.1 | `110` | 3 | 3.32 |
+| E | 0.1 | `111` | 3 | 3.32 |
+
+Notice each length $L_i$ sits right next to the surprisal $-\log_2 p_i$ — Huffman approximates the ideal $L_i = -\log_2 p_i$ using *whole* bits. (Tie-breaking can give a different but equally good tree.)
+
+**(c)**
+$$\mathbb{E}[L] = 0.4(2) + 0.2(2) + 0.2(2) + 0.1(3) + 0.1(3) = \mathbf{2.2 \text{ bits}}.$$
+Shannon's bound holds: $2.12 \le 2.2 < 3.12$. ✓ Efficiency $H/\mathbb{E}[L] = 2.12/2.2 \approx 0.96$.
+
+**(d)**
+$$\sum_i 2^{-L_i} = \underbrace{3\cdot 2^{-2}}_{A,B,C} + \underbrace{2\cdot 2^{-3}}_{D,E} = \tfrac{3}{4} + \tfrac{1}{4} = 1.$$
+**Saturated** ($=1$). A Huffman tree has no unused leaves, so there's no spare bit-budget — the same "no room for a 5th codeword" idea from the lecture's Kraft slide.
+
+**(e)** Fixed-length costs $\lceil\log_2 5\rceil = 3$ bits/symbol; Huffman costs $2.2$. Saving $3 - 2.2 = \mathbf{0.8}$ bits/symbol ($\sim 27\%$), landing just above the $2.12$-bit entropy floor:
+
+![Huffman lands just above the entropy floor, well below fixed-length.](assets/huffman_comparison.png){width=70%}
 
 :::
 
 ---
 
-## 08 ✏️ JS Divergence and the GAN Failure Mode {.bonus-problem data-difficulty="3"}
+## 04 ✏️ Cross-Entropy and KL: The Cost of the Wrong Code {data-difficulty="2"}
 
-The Jensen–Shannon divergence is
-$$JS(p, q) \;=\; \tfrac{1}{2} D_{\text{KL}}(p \| m) + \tfrac{1}{2} D_{\text{KL}}(q \| m), \quad m = \tfrac{p + q}{2}.$$
+The true distribution of a 4-symbol source is $p = (\tfrac{1}{2}, \tfrac{1}{4}, \tfrac{1}{8}, \tfrac{1}{8})$. A lazy engineer assumes it's **uniform**, $q = (\tfrac{1}{4}, \tfrac{1}{4}, \tfrac{1}{4}, \tfrac{1}{4})$, and builds the optimal code *for* $q$ (i.e. a fixed-length 2-bit code).
 
-**a)** Show $0 \leq JS(p, q) \leq 1$ bit. *(Hint: think about the worst case where $p, q$ have disjoint supports.)*
+**a)** Compute $H(p)$ and $H(q)$.
 
-**b)** Take two Diracs: $p = \delta_{x = 0}$, $q = \delta_{x = 1}$. Compute $JS(p, q)$ directly.
+**b)** Compute the **cross-entropy** $H(p \| q) = -\sum_x p(x)\log_2 q(x)$ — the average code length when the data really comes from $p$ but we use $q$'s code.
 
-**c)** Now slightly perturb: $p_\epsilon = \delta_{x = 0}$, $q_\epsilon = \delta_{x = \epsilon}$ with $\epsilon > 0$. Compute $JS(p_\epsilon, q_\epsilon)$. **Show that $JS$ is *constant in $\epsilon$* whenever $\epsilon \neq 0$**, then jumps to $0$ at $\epsilon = 0$.
+**c)** Compute $D_{\text{KL}}(p \| q)$ and verify the identity $H(p\|q) = H(p) + D_{\text{KL}}(p\|q)$.
 
-**d)** Vanilla GANs train the generator $G_\theta$ by (implicitly) minimizing $JS(p_{\text{data}}, p_{G_\theta})$. Real image manifolds in $\mathbb{R}^{H \times W \times 3}$ have measure zero. Use (c) to explain why the generator gets **no useful gradient** to move toward the data distribution, even when it's "close."
+**d)** In one sentence: how many bits per symbol does the engineer waste by using the uniform (fixed-length) code instead of the optimal one for $p$?
 
-**e)** Wasserstein GAN (Arjovsky et al., 2017) replaces $JS$ with the Wasserstein-1 distance, which behaves like $|\epsilon|$ in the example above — continuous and informative. Briefly explain why this fixes the gradient problem.
+**e)** Is $D_{\text{KL}}$ symmetric? State whether $D_{\text{KL}}(p\|q) = D_{\text{KL}}(q\|p)$ holds *in general* (you don't need to recompute — just recall the lecture).
 
----
+::: {.callout-tip collapse="true" title="Solution"}
 
-## 09 ✏️ Information Bottleneck: A Hand-Solvable Toy {.bonus-problem data-difficulty="3"}
+**(a)**
+$$H(p) = \tfrac{1}{2}(1) + \tfrac{1}{4}(2) + \tfrac{1}{8}(3) + \tfrac{1}{8}(3) = \mathbf{1.75 \text{ bits}}, \qquad H(q) = \log_2 4 = \mathbf{2 \text{ bits}}.$$
 
-Let $X = (S, N)$ where:
+**(b)** Since $q(x) = \tfrac14$ for all $x$, $\log_2 q(x) = -2$, so
+$$H(p\|q) = -\sum_x p(x)(-2) = 2\sum_x p(x) = \mathbf{2 \text{ bits}}.$$
+(Makes sense: $q$'s optimal code is the fixed-length 2-bit code, so every symbol costs 2 bits.)
 
-- $S \sim \text{Bern}(0.5)$ is the **signal** with $Y = S$ deterministically.
-- $N \sim \text{Bern}(0.5)$ is **noise**, independent of $(S, Y)$.
+**(c)**
+$$D_{\text{KL}}(p\|q) = \sum_x p(x)\log_2\tfrac{p(x)}{q(x)} = \tfrac12\log_2 2 + \tfrac14\log_2 1 + 2\cdot\tfrac18\log_2\tfrac12 = \tfrac12 - \tfrac14 = \mathbf{0.25 \text{ bits}}.$$
+Identity check: $H(p) + D_{\text{KL}}(p\|q) = 1.75 + 0.25 = 2 = H(p\|q)$. ✓
 
-So $X$ has 2 bits of total entropy, but only 1 bit relates to $Y$.
+**(d)** The engineer wastes exactly $D_{\text{KL}}(p\|q) = \mathbf{0.25}$ bits per symbol — the gap between the $2$-bit wrong code and the $1.75$-bit optimal code.
 
-**a)** Compute $H(X)$, $H(Y)$, $I(X; Y)$.
+**(e)** **No** — $D_{\text{KL}}$ is *not* symmetric in general: $D_{\text{KL}}(p\|q) \ne D_{\text{KL}}(q\|p)$ for most pairs. It is a divergence, not a distance. (This particular $p$/uniform-$q$ pair is a special case where the two happen to coincide, but don't be fooled — it fails as soon as $q$ is non-uniform.)
 
-**b)** The information bottleneck principle: find a representation $T = f(X)$ that solves
-$$\max_{p(t | x)} I(T; Y) \quad \text{subject to} \quad I(T; X) \leq R.$$
-
-For $R = 1$ bit, what's the optimal $T$? (You should be able to guess by inspection.) Compute $I(T; Y)$ and $I(T; X)$ for your choice.
-
-**c)** For $R = 0.5$ bits, the optimal $T$ is *stochastic*: it must throw away information about $S$ on some examples. Sketch the tradeoff curve $I(T; Y)$ vs $I(T; X)$ as $R$ ranges from $0$ to $2$.
-
-**d)** (Deep learning tie-in) Tishby & Zaslavsky (2015) argued that training a neural net traces this curve: the network first fits ("memorizes") then compresses ("forgets"). This view is contested — name one counter-example or critique.
+:::
 
 ---
 
-## 10 ✏️ The Meter Problem: Why ML Uses KL Instead of $h$ {.bonus-problem data-difficulty="2"}
+## 05 ✏️ Differential Entropy of a Gaussian (and the Units Trap) {data-difficulty="2"}
 
-Let $X$ be a continuous random variable with differential entropy $h(X) = 5$ bits, when measured in **meters**.
+For a continuous $X$ with density $f$, the differential entropy is $h(X) = -\int f(x)\log_2 f(x)\,dx$. For a Gaussian $N(\mu,\sigma^2)$,
+$$h(X) = \tfrac{1}{2}\log_2(2\pi e\,\sigma^2).$$
 
-**a)** What's $h(X)$ when $X$ is measured in **centimeters**? *(Use $h(aX) = h(X) + \log_2 |a|$.)*
+**a)** Compute $h(X)$ for a standard Gaussian ($\sigma = 1$).
 
-**b)** What's $h(X)$ when $X$ is measured in **micrometers**?
+**b)** Find the value of $\sigma$ at which $h(X) = 0$. For smaller $\sigma$, what is the sign of $h(X)$? Give a concrete example. (This is impossible for discrete entropy, where $H \ge 0$ always — what's different?)
 
-**c)** Now consider two variables $X$ and $Y$. Show that $I(X; Y)$ does **not** change under independent unit changes $X \to aX$, $Y \to bY$.
+**c)** Suppose $X$ is a length measured in **meters**, with $\sigma = 1$ m. You now re-express the same physical quantity in **centimeters**. Using the scaling property $h(aX) = h(X) + \log_2|a|$, compute the new differential entropy. By how many bits did it change?
 
-**d)** (Moral) Differential entropy depends on the units you measure in — it's not a property of the random variable alone. Explain in one sentence why this makes it a *bad loss function* for ML, and why cross-entropy / KL / MI are preferred.
+**d)** The random variable didn't change — only the units did. In one or two sentences, explain why this makes differential entropy a poor stand-alone "amount of information," and name a quantity from the lecture that *is* invariant to such unit changes.
 
-::: {.callout-tip collapse="true" title="Sanity check"}
+::: {.callout-tip collapse="true" title="Solution"}
 
-- (a) $5 + \log_2 100 = 5 + 6.64 = 11.64$ bits.
-- (b) $5 + \log_2 10^6 = 5 + 19.93 = 24.93$ bits.
-- (c) The Jacobians cancel: $I(aX; bY) = h(aX) + h(bY) - h(aX, bY) = (\log a + \log b - \log a - \log b) + I(X; Y) = I(X; Y)$.
+**(a)**
+$$h(X) = \tfrac{1}{2}\log_2(2\pi e) = \tfrac{1}{2}\log_2(17.08) \approx \mathbf{2.05 \text{ bits}}.$$
+
+**(b)** Set $2\pi e\,\sigma^2 = 1 \Rightarrow \sigma = \dfrac{1}{\sqrt{2\pi e}} \approx \mathbf{0.242}$. For $\sigma < 0.242$, $h(X) < 0$. Example: $\sigma = 0.1$ gives $h = \tfrac12\log_2(2\pi e\cdot 0.01) \approx -1.28$ bits. **Differential entropy can be negative** because it measures bits relative to a *unit-width* interval, not an absolute count — a tightly concentrated density packs into less than one unit of width. Discrete entropy counts actual outcomes, so it's always $\ge 0$.
+
+**(c)** Centimeters means $X \to 100X$, so
+$$h(100X) = h(X) + \log_2 100 = 2.05 + 6.64 = \mathbf{8.69 \text{ bits}}.$$
+It grew by $\log_2 100 \approx \mathbf{6.64}$ bits.
+
+**(d)** The $+6.64$ bits is pure bookkeeping — finer units mean more bins to distinguish, not more real information. So $h$ alone isn't a meaningful "amount of information": you can inflate it arbitrarily by changing units. **KL divergence** $D_{\text{KL}}(p\|q) = \int p\log_2\tfrac{p}{q}$ is invariant to such re-scalings (the Jacobians cancel), which is why ML objectives lean on KL / cross-entropy rather than raw differential entropy.
 
 :::
 
