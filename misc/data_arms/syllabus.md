@@ -64,7 +64,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Practical 14 — Probability Foundations | <https://youtu.be/twHQTcN_48E> |
 | Slides | [L09_Probability__Independence__Bayes_Rule.pdf](../../math/Lectures/L09_Probability__Independence__Bayes_Rule.pdf) |
 | Homework (qmd) | [16_probability_intro.qmd](../../math/16_probability_intro.qmd) |
-| Homework (PDF) | [hw_18_prob_1.pdf](../../math/Homeworks/hw_18_prob_1.pdf) |
+| Homework (PDF) | [hw_08_prob_1.pdf](../../math/Homeworks/hw_08_prob_1.pdf) |
 
 ### External Resources
 - [3Blue1Brown — Bayes' theorem](<https://youtu.be/HZGCoVF3YvM)> — best visual intuition for Bayes
@@ -85,7 +85,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Lecture 27 — PMF, CDF, PDF, Uniform Distribution | <https://youtu.be/oienebEeHAE> |
 | Practical 15 — Density/Distribution Functions, Independence | <https://youtu.be/_c_Jlt256Lc> |
 | Slides | [L10_Random_Variables.pdf](../../math/Lectures/L10_Random_Variables.pdf) |
-| Homework (PDF) | [hw_19_prob_2_rvs.pdf](../../math/Homeworks/hw_19_prob_2_rvs.pdf) |
+| Homework (PDF) | [hw_09_prob_2_rvs.pdf](../../math/Homeworks/hw_09_prob_2_rvs.pdf) |
 
 ### External Resources
 - [3Blue1Brown — But what is a convolution?](<https://youtu.be/KuXjwB4LzSA)> — PDFs and convolutions
@@ -107,7 +107,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Practical 16 — E[X], Var, Inequalities | <https://youtu.be/8fkODa_yEEM> |
 | Slides | [L11_Expected_Value__Variance.pdf](../../math/Lectures/L11_Expected_Value__Variance.pdf) |
 | Homework (qmd) | [17_probability_exp_var_inequalities.qmd](../../math/17_probability_exp_var_inequalities.qmd) |
-| Homework (PDF) | [hw_20_prob_3_exp_var_inequalities.pdf](../../math/Homeworks/hw_20_prob_3_exp_var_inequalities.pdf) |
+| Homework (PDF) | [hw_10_prob_3_exp_var_inequalities.pdf](../../math/Homeworks/hw_10_prob_3_exp_var_inequalities.pdf) |
 
 ### External Resources
 - [StatQuest — Expected Values](<https://youtu.be/KLs_7b7SKi4)>
@@ -129,7 +129,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Practical 17 — Covariance & Correlation | <https://youtu.be/XxhWp0gmb1U> |
 | Slides | [L12_Covariance__Correlation.pdf](../../math/Lectures/L12_Covariance__Correlation.pdf) |
 | Homework (qmd) | [18_probability_corr_cov.qmd](../../math/18_probability_corr_cov.qmd) |
-| Homework (PDF) | [hw_21_prob_4_corr_cov.pdf](../../math/Homeworks/hw_21_prob_4_corr_cov.pdf) |
+| Homework (PDF) | [hw_11_prob_4_corr_cov.pdf](../../math/Homeworks/hw_11_prob_4_corr_cov.pdf) |
 
 ### External Resources
 - [StatQuest — Covariance and Correlation](<https://youtu.be/qtaqvPAeEJY)>
@@ -153,7 +153,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Practical 19 — Distribution Problems | <https://youtu.be/D9JIZXNzios> |
 | Slides | [L13_Distributions.pdf](../../math/Lectures/L13_Distributions.pdf) |
 | Homework (qmd) | [19_probability_distributions.qmd](../../math/19_probability_distributions.qmd) |
-| Homework (PDF) | [hw_22_prob_5_distribs.pdf](../../math/Homeworks/hw_22_prob_5_distribs.pdf) |
+| Homework (PDF) | [hw_12_prob_5_distribs.pdf](../../math/Homeworks/hw_12_prob_5_distribs.pdf) |
 
 ### External Resources
 - [StatQuest — Normal Distribution](<https://youtu.be/rzFX5NWojp0)>
@@ -177,7 +177,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Practical 20 — Convergence, LLN, CLT | <https://youtu.be/xnT7eaba_UM> |
 | Slides | [L14_Comvergence__LLN__CLT.pdf](../../math/Lectures/L14_Comvergence__LLN__CLT.pdf) |
 | Homework (qmd) | [20_probability_convergence_modes_lln_clt.qmd](../../math/20_probability_convergence_modes_lln_clt.qmd) |
-| Homework (PDF) | [hw_23_prob_6_convergence_lln_clt.pdf](../../math/Homeworks/hw_23_prob_6_convergence_lln_clt.pdf) |
+| Homework (PDF) | [hw_13_prob_6_convergence_lln_clt.pdf](../../math/Homeworks/hw_13_prob_6_convergence_lln_clt.pdf) |
 
 ### External Resources
 - [3Blue1Brown — Central Limit Theorem](<https://youtu.be/zeJD6dqJ5lo)> — the definitive visual explanation
@@ -226,7 +226,7 @@ This course assumes basic **calculus** and **set theory**. You'll need these to 
 | Slides (Fisher Info & CR) | [04_stat.pdf](../../math/Lectures/stat/04_stat.pdf) |
 | Notes (Fisher Info & CR) | [04_stat_notes.pdf](../../math/Lectures/stat/04_stat_notes.pdf) |
 | Homework (qmd) | [22_stat_estimators.qmd](../../math/22_stat_estimators.qmd) |
-| Homework (PDF) | [hw_24_stat_1_estimator_properties.pdf](../../math/Homeworks/hw_24_stat_1_estimator_properties.pdf) |
+| Homework (PDF) | [hw_14_stat_1_estimator_properties.pdf](../../math/Homeworks/hw_14_stat_1_estimator_properties.pdf) |
 
 ### External Resources
 - [StatQuest — Bias and Variance](<https://youtu.be/EuBBz3bI-aA)> — the classic explanation

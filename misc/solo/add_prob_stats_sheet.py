@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 
 XLSX = Path("misc/solo/study_plan_2026.xlsx")
-SHEET_NAME = "Probability, Stats & Extras"
+SHEET_NAME = "Probability, Stats and Extras"  # no ampersand: Google Sheets escapes & to &amp;
 
 HEADERS = ["Section", "Item", "Link", "Note", "Done", "Question / comment"]
 
@@ -82,11 +82,11 @@ ROWS = [
     (SEC_STAT, "25 Hypothesis testing", BASE + "25_stat_hypothesis_testing.html",
      "Good to understand the intuition; the rest isn't super important."),
     (SEC_STAT, "26 Classical tests", BASE + "26_stat_classical_tests.html", "Very optional."),
-    (SEC_STAT, "28 How to lie with statistics", BASE + "28_stat_how_to_lie.html", "Just for fun."),
+    (SEC_STAT, "27 How to lie with statistics", BASE + "27_stat_how_to_lie.html", "Just for fun."),
 
-    (SEC_INFO, "29 Information theory (entropy, KL)", BASE + "29_info_theory_entropy_kl.html",
+    (SEC_INFO, "28 Information theory (entropy, KL)", BASE + "28_info_theory_entropy_kl.html",
      "More of a bonus, but would be nice to watch."),
-    (SEC_INFO, "31 Curse of dimensionality", BASE + "31_curse_of_dimensionality.html",
+    (SEC_INFO, "30 Curse of dimensionality", BASE + "30_curse_of_dimensionality.html",
      "Video not available yet. Good for building the intuition you'll need later."),
 ]
 
@@ -94,9 +94,10 @@ ROWS = [
 def main() -> None:
     wb = load_workbook(XLSX)
 
-    # drop scratch + any prior version of the overview sheet (idempotency)
-    for name in ("Sheet2", SHEET_NAME):
-        if name in wb.sheetnames:
+    # drop scratch + any prior version of the overview sheet (idempotency).
+    # Match any "Probability, Stats..." variant, incl. Google-Sheets-escaped "&amp;".
+    for name in list(wb.sheetnames):
+        if name == "Sheet2" or name.startswith("Probability, Stats"):
             del wb[name]
 
     ws = wb.create_sheet(SHEET_NAME)

@@ -48,10 +48,10 @@ Tracks every `math/*.qmd` file (excluding optim 08–15 per user instruction):
 | 25_stat_hypothesis_testing.qmd                | 5        | 5/5              | hw_09_solutions.{tex,ipynb,pdf}  | inline         | -                     | -                     |
 | 26_stat_classical_tests.qmd                   | 6        | 0/6              | -                                | none           | -                     | -                     |
 | 27_stat_anova_ab_testing.qmd                  | 4        | 0/4              | -                                | none           | -                     | -                     |
-| 28_stat_how_to_lie.qmd                        | 0        | -                | -                                | skeleton       | -                     | -                     |
-| 29_info_theory_entropy_kl.qmd                 | 0        | -                | -                                | skeleton       | -                     | -                     |
-| 30_info_theory_ml.qmd                         | 0        | -                | -                                | skeleton       | -                     | -                     |
-| 31_curse_of_dimensionality.qmd                | 0        | -                | -                                | skeleton       | -                     | -                     |
+| 27_stat_how_to_lie.qmd                        | 0        | -                | -                                | skeleton       | -                     | -                     |
+| 28_info_theory_entropy_kl.qmd                 | 0        | -                | -                                | skeleton       | -                     | -                     |
+| 29_info_theory_ml.qmd                         | 0        | -                | -                                | skeleton       | -                     | -                     |
+| 30_curse_of_dimensionality.qmd                | 0        | -                | -                                | skeleton       | -                     | -                     |
 
 ## Roll-up
 

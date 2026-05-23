@@ -35,9 +35,9 @@ These topics show up the moment you open PyTorch, scikit-learn, or any ML paper.
 - **MLE and MAP** - cross-entropy = negative log-likelihood, L2 regularization = Gaussian prior. This is the bridge from probability to loss functions.
   <https://hayktarkhanyan.github.io/python_math_ml_course/math/23_stat_mle_map.html>
 - **Entropy and KL divergence** - cross-entropy loss, VAEs, RLHF, knowledge distillation
-  <https://hayktarkhanyan.github.io/python_math_ml_course/math/29_info_theory_entropy_kl.html>
+  <https://hayktarkhanyan.github.io/python_math_ml_course/math/28_info_theory_entropy_kl.html>
 - **Information theory in ML** - direct application: cross-entropy, mutual information, ELBO
-  <https://hayktarkhanyan.github.io/python_math_ml_course/math/30_info_theory_ml.html>
+  <https://hayktarkhanyan.github.io/python_math_ml_course/math/29_info_theory_ml.html>
 
 ## Tier 2 - Strongly recommended (you'll hit this within your first year)
 
@@ -52,9 +52,9 @@ Useful for understanding why ML works, debugging models that go sideways, and re
 - **Estimators (bias, variance, consistency)** - the bias-variance tradeoff is a statistics concept, not an ML one
   <https://hayktarkhanyan.github.io/python_math_ml_course/math/22_stat_estimators.html>
 - **Curse of dimensionality** - why kNN dies in high dimensions, why embeddings need to be learned
-  <https://hayktarkhanyan.github.io/python_math_ml_course/math/31_curse_of_dimensionality.html>
+  <https://hayktarkhanyan.github.io/python_math_ml_course/math/30_curse_of_dimensionality.html>
 - **How to lie with statistics** - critical reading skill for ML papers, benchmarks, and product metrics
-  <https://hayktarkhanyan.github.io/python_math_ml_course/math/28_stat_how_to_lie.html>
+  <https://hayktarkhanyan.github.io/python_math_ml_course/math/27_stat_how_to_lie.html>
 
 ## Tier 3 - Useful but specialized
 
@@ -103,7 +103,7 @@ If you only have time for the bare minimum, do these in order:
 11. `19_probability_distributions`
 12. `22_stat_estimators`
 13. `23_stat_mle_map`
-14. `29_info_theory_entropy_kl`
-15. `30_info_theory_ml`
+14. `28_info_theory_entropy_kl`
+15. `29_info_theory_ml`
 
 That's the spine. Everything else is depth.
