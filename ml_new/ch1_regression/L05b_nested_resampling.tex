@@ -1,0 +1,204 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Lecture 05b: Nested Resampling}
+\subtitle{The untouched test set principle, generalized}
+\date{}
+
+\begin{document}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Why Nested Resampling?}
+
+\begin{frame}{The overtuning problem}
+  Model selection — across learners, HP configs, feature sets, preprocessings — is core to ML.
+  \vfill
+  \textbf{Trap}: if we evaluate our \emph{final} selected learner on the same resampling splits that we used to \emph{select} it, information about the test data leaks into the model-building process.
+  \vfill
+  \begin{itemize}
+    \item Result: the reported CV score is too optimistic
+    \item Worse with many HP configurations / large search spaces
+    \item Worse on small datasets where CV scores are already noisy
+    \item The more we tune, the more we ``cheat''
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The untouched test set principle}
+  To get an honest estimate of generalization error, the test set must be:
+  \begin{itemize}
+    \item Not used for training
+    \item Not used for HP selection
+    \item Not used for feature selection
+    \item Not used for any decision about the model
+  \end{itemize}
+  \vfill
+  In short: the test set is \emph{looked at exactly once}, at the very end.
+  \vfill
+  Two practical implementations:
+  \begin{enumerate}
+    \item \textbf{Train / validation / test split} — 3-way data split
+    \item \textbf{Nested resampling} — 3-way idea generalized via two nested CV loops
+  \end{enumerate}
+\end{frame}
+
+% ================================================================
+\section{Train / Validation / Test Split}
+
+\begin{frame}{The 3-way split}
+  \begin{columns}
+    \column{0.55\textwidth}
+    \begin{itemize}\small
+      \item Split data into \textbf{train}, \textbf{validation}, and \textbf{test}
+      \item Tune by training on \emph{train}, scoring on \emph{validation}
+      \item Pick best HP $\lamv^*$
+      \item Refit on train$+$validation
+      \item Score \emph{once} on \emph{test} $\to$ unbiased GE estimate
+    \end{itemize}
+    \column{0.45\textwidth}
+    \includegraphics[width=\textwidth]{figures/train_valid_test.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Tuning becomes part of training}
+  \begin{columns}
+    \column{0.55\textwidth}
+    \begin{itemize}\small
+      \item Conceptually: the train$+$validation procedure is the ``real'' training algorithm
+      \item Hyperparameters move from being \emph{inputs} of training to being \emph{outputs} (the algorithm now ``self-tunes'')
+      \item This view makes nesting natural: just resample the outer level
+    \end{itemize}
+    \column{0.45\textwidth}
+    \includegraphics[width=\textwidth]{figures/autotune_in_model_fit.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Limitation of 3-way split}
+  \begin{itemize}
+    \item Only \emph{one} validation set $\Rightarrow$ noisy HP selection
+    \item Only \emph{one} test set $\Rightarrow$ noisy GE estimate
+    \item Both worse on small datasets
+  \end{itemize}
+  \vfill
+  Solution: replace each split with a \emph{resampling loop}. That gives \textbf{nested resampling}.
+\end{frame}
+
+% ================================================================
+\section{Nested Resampling}
+
+\begin{frame}{Two nested resampling loops}
+  \begin{columns}
+    \column{0.55\textwidth}
+    \begin{itemize}\small
+      \item \textbf{Outer loop}: estimate GE
+      \item \textbf{Inner loop}: tune HPs (returns the best $\lamv^*$ for the outer training split)
+    \end{itemize}
+    \vfill
+    Example: 3-fold outer CV with 4-fold inner CV.
+    \begin{itemize}\small
+      \item In each outer iteration, the dark-green part is the training set for ``self-tuning''
+      \item Inside it, 4-fold CV picks $\lamv^*$
+      \item Then refit on the full dark-green part, score once on light-green
+    \end{itemize}
+    \column{0.45\textwidth}
+    \includegraphics[width=\textwidth]{figures/Nested_Resampling.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Per-iteration mechanics}
+  In each outer iteration:
+  \begin{enumerate}
+    \item Split off the outer test fold (light green)
+    \item On the outer training part (dark green):
+      \begin{itemize}
+        \item Run inner CV across all candidate $\lamv_i$
+        \item Return the winner $\lamv^*$ (best mean inner-CV score)
+      \end{itemize}
+    \item Refit the model with $\lamv^*$ on the \emph{full} outer training part
+    \item Evaluate \emph{once} on the outer test fold
+  \end{enumerate}
+  \vfill
+  Aggregate the outer test-fold scores $\to$ honest estimate of GE for the tuned learner.
+\end{frame}
+
+\begin{frame}{Why nested resampling is unbiased}
+  The outer test folds were:
+  \begin{itemize}
+    \item Never used to fit model parameters
+    \item Never used to select hyperparameters
+    \item Never seen during inner CV
+  \end{itemize}
+  \vfill
+  $\Rightarrow$ The outer-fold scores are honest estimates of how the tuned procedure would perform on truly fresh data.
+\end{frame}
+
+\begin{frame}{Cost}
+  Nested resampling is expensive:
+  \begin{itemize}
+    \item For each of $k_{\text{outer}}$ outer folds: train $|\Lambda| \cdot k_{\text{inner}}$ models
+    \item Plus one final refit per outer fold
+    \item Total: $k_{\text{outer}} \cdot (|\Lambda| \cdot k_{\text{inner}} + 1)$ model fits
+  \end{itemize}
+  \vfill
+  Practical defaults:
+  \begin{itemize}
+    \item Outer: 3- or 5-fold CV (sometimes just hold-out if data is large)
+    \item Inner: 5-fold CV, or random search with a fixed budget
+    \item Random search inside the inner loop scales better than grid for many HPs
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{Practical Notes}
+
+\begin{frame}{When you really need nested resampling}
+  \begin{itemize}
+    \item You will report a single performance number for ``your method''
+    \item You've tuned multiple HPs, possibly searched over many models
+    \item Dataset is small enough that a single hold-out is noisy
+    \item You're comparing your method against alternatives — the comparison must be honest
+  \end{itemize}
+  \vfill
+  When you can skip it:
+  \begin{itemize}
+    \item Very large data: a single hold-out test set is fine
+    \item Final deployed model: you already chose HPs; just refit on all data
+    \item Exploratory work: be honest about ``this is a CV score after tuning, not a true GE estimate''
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Common mistakes}
+  \begin{itemize}
+    \item Tuning then reporting the best inner-CV score as ``test error''. \textbf{Optimistic bias} that grows with search size.
+    \item Doing feature selection on the full dataset \emph{before} CV. \textbf{Leakage}.
+    \item Standardizing / imputing / oversampling using the full dataset. \textbf{Leakage}.
+    \item Choosing a metric \emph{after} seeing CV results. \textbf{Selection bias}.
+  \end{itemize}
+  \vfill
+  Rule: \emph{anything} that uses the labels must be inside the CV loop. If unsure, ask ``would this be the same in production where I don't have the labels yet?''
+\end{frame}
+
+\begin{frame}{Wrap-up}
+  \begin{enumerate}
+    \item Tuning + evaluation on the same data $\to$ optimistic bias
+    \item Untouched test set principle: test data is looked at exactly once
+    \item 3-way split (train/valid/test) is the simplest implementation
+    \item Nested resampling generalizes this with inner+outer CV loops
+    \item Expensive but the only honest way to report a tuned learner's GE on small data
+  \end{enumerate}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance (Phase 1 port from 2026-05-26):
+%   - _reference/lecture_i2ml/slides/nested-resampling/slides-nested-nestedintro.tex
+%   - _reference/lecture_i2ml/slides/nested-resampling/slides-nested-trainvalidtest.tex
+%   - _reference/lecture_i2ml/slides/nested-resampling/slides-nested-nestedresampling.tex
+% Notes:
+%   - Companion to L05; can be taught back-to-back or skipped on short courses
+%   - Added "Common mistakes" frame (leakage examples; not in upstream)
+% =============================================================
