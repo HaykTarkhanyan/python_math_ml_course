@@ -2,9 +2,9 @@
 
 - **Channel:** [@MetricAcademy](https://www.youtube.com/@MetricAcademy)
 - **Channel ID:** `UC5BavugdnUkti3Es7-deZDg`
-- **Total Videos:** 186
+- **Total Videos:** 191
 - **Total Playlists:** 11
-- **Last scraped:** 2026-05-19
+- **Last scraped:** 2026-05-28
 
 ---
 
@@ -26,9 +26,9 @@
 
 ---
 
-## All Videos (182 total)
+## All Videos (187 total)
 
-### Math/ML Lectures (49 videos)
+### Math/ML Lectures (53 videos)
 
 | # | Video ID | Title | Views | Duration (s) | URL |
 |---|----------|-------|-------|-------------|-----|
@@ -81,6 +81,10 @@
 | 46 | `uzQ3mFOqcwo` | Lecture 46 — Confidence intervals, bootstrap | 48 | 4793 | https://youtu.be/uzQ3mFOqcwo |
 | 47 | `PYHNsndAnXE` | Lecture 47 — Hypothesis testing | 50 | 5038 | https://youtu.be/PYHNsndAnXE |
 | 48 | `f9In1q_cBgE` | Lecture 48 — Statistical tests | 49 | 4136 | https://youtu.be/f9In1q_cBgE |
+| 49 | `1KB7Riu_p_o` | Lecture 49 — How to lie with statistics | — | — | https://youtu.be/1KB7Riu_p_o |
+| 50 | `MxakqkjXtQY` | Lecture 50 — Information theory | — | — | https://youtu.be/MxakqkjXtQY |
+| 51 | `zXwYdYFj6io` | Lecture 51 — KL = MLE, MaxEnt, Mutual Information | — | — | https://youtu.be/zXwYdYFj6io |
+| 52 | `oU0uip1w9HM` | Lecture 52 — Curse of Dimensionality | — | — | https://youtu.be/oU0uip1w9HM |
 
 #### Math/ML Practicals (25 videos)
 
@@ -110,6 +114,7 @@
 | 22 | `8W9iOV7IVnA` | Practical 22 — MLE & MAP | 54 | 3624 | https://youtu.be/8W9iOV7IVnA |
 | 23 | `Z1LNPERo87g` | Practical 23 — Bootstrapping, Confidence intervals | 26 | 2581 | https://youtu.be/Z1LNPERo87g |
 | 24 | `deBUJ8pMomU` | Practical 24 — Hypothesis testing | 56 | 4337 | https://youtu.be/deBUJ8pMomU |
+| 25 | `MW6aNvmZc0w` | Practical 25 — Information theory | — | — | https://youtu.be/MW6aNvmZc0w |
 
 ---
 
