@@ -1,0 +1,514 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{L01e: Hyperparameter Tuning}
+\subtitle{Manual, Grid, Random, and Bayesian Optimization}
+\date{}
+
+\begin{document}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Why tune?}
+
+\begin{frame}{Parameters vs.\ hyperparameters}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Parameters $\thetav$} are what the model \emph{learns} from data.
+    \begin{itemize}\small
+      \item Linear regression: the coefficients (one per feature + intercept).
+      \item Decision tree: the split points and feature choices at each node.
+      \item Neural net: all the weights and biases.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Hyperparameters $\lamv$} are what the model \emph{doesn't} learn - you have to choose them.
+    \begin{itemize}\small
+      \item Ridge regression: \texttt{alpha} (regularization strength).
+      \item Decision tree: \texttt{max\_depth}, \texttt{min\_samples\_leaf}.
+      \item Neural net: learning rate, number of layers, batch size, weight decay.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  Different hyperparameter choices $\Rightarrow$ different fitted models $\Rightarrow$ different generalization. \textbf{Tuning} = systematically picking $\lamv$ to optimize a validation/CV score.
+\end{frame}
+
+\begin{frame}{Predict-first: how many hyperparameters?}
+  \pause
+  \textbf{Predict the count of meaningfully tunable hyperparameters for each model:}
+  \begin{itemize}
+    \item Ridge regression (sklearn)
+    \item Random forest (sklearn)
+    \item XGBoost
+    \item GPT-style transformer training
+  \end{itemize}
+  \vfill
+  \pause
+  Rough answers:
+  \begin{itemize}
+    \item \textbf{Ridge:} 1 (\texttt{alpha}). Most people only tune this.
+    \item \textbf{Random forest:} 4-6 (\texttt{n\_estimators}, \texttt{max\_depth}, \texttt{min\_samples\_leaf}, \texttt{max\_features}, \texttt{bootstrap}).
+    \item \textbf{XGBoost:} 10-15 sensitive ones (\texttt{learning\_rate}, \texttt{max\_depth}, \texttt{subsample}, \texttt{colsample\_bytree}, \texttt{min\_child\_weight}, regularization, $\ldots$).
+    \item \textbf{Transformer training:} dozens (architecture + optimization + data + regularization).
+  \end{itemize}
+  Tuning effort scales with the search-space size. Method choice should too.
+\end{frame}
+
+\begin{frame}{The bilevel optimization view}
+  Tuning is an \emph{outer} optimization wrapping the model's own \emph{inner} optimization.
+  \vfill
+  \begin{center}
+    \begin{tikzpicture}[
+      every node/.style={font=\small},
+      outer/.style={rectangle, draw=armblue, very thick, rounded corners=4pt, fill=armblue!8, inner sep=8pt, minimum width=11.5cm, minimum height=2.6cm},
+      inner/.style={rectangle, draw=paramgreen, very thick, rounded corners=4pt, fill=paramgreen!10, inner sep=6pt},
+    ]
+      \node[outer] (outer) {};
+      \node[anchor=north west, font=\small\bfseries, armblue] at (outer.north west) {\;Outer loop (tuning): pick best $\lamv^*$};
+      \node[inner, below=0.5cm of outer.north, anchor=north] (inner) {
+        \begin{minipage}{7.5cm}\centering
+          \textbf{Inner loop (training):} given $\lamv$, solve
+          $\thetah(\lamv) = \argmin_{\thetav}\, \riske(\thetav;\, \lamv)$
+        \end{minipage}};
+      \node[anchor=south, font=\scriptsize, armblue!80!black] at ([yshift=0.05cm]outer.south) {pass $\lamv$ in $\to$ get back $\thetah(\lamv)$, score it on validation/CV $\to$ outer search picks next $\lamv$};
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  Choices on outer search strategy:
+  \begin{itemize}\small
+    \item \textbf{Manual} - you propose $\lamv$ values from intuition.
+    \item \textbf{Grid} - exhaustive over a Cartesian product.
+    \item \textbf{Random} - sample uniformly from distributions.
+    \item \textbf{Bayesian} - build a surrogate model of score vs.\ $\lamv$, query smartly.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{Manual tuning}
+
+\begin{frame}{Manual tuning: ``grad student descent''}
+  The simplest strategy: a human proposes one $\lamv$, evaluates, then proposes another based on what they saw.
+  \vfill
+  Typical workflow:
+  \begin{enumerate}
+    \item Start with the library's defaults. Get a baseline.
+    \item Identify the most-likely-impactful hyperparameter (domain knowledge or quick experiments).
+    \item Sweep it across $\sim 5$ values, plot validation score, pick the best.
+    \item Fix that value, move to the next hyperparameter, repeat.
+    \item Stop when changes don't improve validation score.
+  \end{enumerate}
+  \vfill
+  Also called \emph{manual coordinate descent} - you adjust one hyperparameter at a time.
+\end{frame}
+
+\begin{frame}{When manual works (and when it doesn't)}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Manual is best when:}
+    \begin{itemize}\small
+      \item You have strong intuition about the model (you've trained 50 Ridge regressions already).
+      \item The search space is small (1-2 hyperparameters).
+      \item Each evaluation is slow (you don't want to launch 100 jobs by accident).
+      \item You're \emph{developing} a sense for the model, not just optimizing.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Manual breaks down when:}
+    \begin{itemize}\small
+      \item More than $\sim 3$ hyperparameters interact (you can't visualize the surface).
+      \item You can't afford to be inconsistent across runs.
+      \item Multiple people work on the same model (reproducibility).
+      \item You're shipping to production and need a defensible methodology.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  Manual tuning teaches you the most per evaluation but scales the worst.
+\end{frame}
+
+\begin{frame}{Pitfalls of manual tuning}
+  \begin{enumerate}
+    \item \textbf{Confirmation bias.} You notice the run that worked, forget the three that didn't. Mitigation: write down every run, including failures.
+    \item \textbf{Validation-set abuse.} The 50th hyperparameter setting you tried still gets evaluated on the same validation set. You're effectively overfitting validation. Mitigation: cross-validation, separate test set, count your evaluations.
+    \item \textbf{No reproducibility.} ``I'll try \texttt{alpha=0.3} next... or was it 0.03?'' Mitigation: a notebook log, or skip manual and use a configured automated search.
+    \item \textbf{Local optimum.} Coordinate descent gets stuck. The best Ridge \texttt{alpha} \emph{given the current data preprocessing} may differ from the best after you change features. Mitigation: redo the whole sweep occasionally.
+  \end{enumerate}
+\end{frame}
+
+% ================================================================
+\section{Grid search}
+
+\begin{frame}{Grid search: exhaustive over a Cartesian product}
+  Pick a finite list of candidate values for each hyperparameter. Evaluate \emph{every} combination.
+  \vfill
+  Example for Ridge with polynomial features:
+  \begin{center}\small
+    \begin{tabular}{ll}
+      Hyperparameter & Candidate values \\
+      \hline
+      \texttt{alpha} & $\{10^{-3}, 10^{-2}, 10^{-1}, 1, 10, 100\}$ \\
+      \texttt{poly\_degree} & $\{1, 2, 3, 4, 5\}$ \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  Total: $6 \times 5 = 30$ configurations. With 5-fold CV, $30 \times 5 = 150$ model fits.
+  \vfill
+  Exhaustive, reproducible, embarrassingly parallel. Also potentially \emph{very} expensive.
+\end{frame}
+
+\begin{frame}{Predict-first: combinatorial blowup}
+  You want to tune XGBoost with 4 hyperparameters, 5 candidate values each, using 5-fold CV.
+  \vfill
+  \pause
+  \textbf{Predict:}
+  \begin{itemize}
+    \item How many model fits will grid search require?
+    \item If each fit takes 30 seconds, how long does the whole search take (single-threaded)?
+  \end{itemize}
+  \vfill
+  \pause
+  Answers:
+  \begin{itemize}
+    \item $5^4 \times 5 = 625 \times 5 = \mathbf{3125}$ model fits.
+    \item $3125 \times 30\text{s} \approx 26$ hours single-threaded.
+  \end{itemize}
+  \vfill
+  Add one more hyperparameter (5 values): $\mathbf{15{,}625}$ fits, $\mathbf{5.4}$ days. The curse of dimensionality strikes early.
+\end{frame}
+
+\begin{frame}[fragile]{Code: \texttt{GridSearchCV} with Pipeline}
+\begin{lstlisting}
+from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
+
+pipe = Pipeline([("poly", PolynomialFeatures()),
+                 ("scale", StandardScaler()),
+                 ("ridge", Ridge())])
+
+grid = {
+    "poly__degree": [1, 2, 3, 4, 5],
+    "ridge__alpha": [1e-3, 1e-2, 1e-1, 1, 10, 100],
+}
+
+gs = GridSearchCV(pipe, grid, cv=5,
+                  scoring="neg_mean_squared_error", n_jobs=-1)
+gs.fit(X_train, y_train)
+print(gs.best_params_, -gs.best_score_)
+\end{lstlisting}
+  \vfill
+  \footnotesize \texttt{n\_jobs=-1} uses all CPU cores. Parameters are accessed as \texttt{step\_name\_\_param\_name}.
+\end{frame}
+
+\begin{frame}{When grid is OK}
+  \begin{itemize}
+    \item $\leq 2{-}3$ hyperparameters AND each has $\leq 6$ candidate values.
+    \item Each model fit is cheap (small data, simple model).
+    \item Reproducibility / publication: ``we evaluated all $X$ configurations.''
+    \item Inputs have clearly preferred discrete values (e.g., \texttt{max\_depth} $\in \{3, 5, 7\}$).
+  \end{itemize}
+  \vfill
+  Once you have 4+ hyperparameters or 10+ values each, grid stops being practical. Random search is almost always better.
+\end{frame}
+
+% ================================================================
+\section{Random search}
+
+\begin{frame}{Why grid wastes compute in high dimensions}
+  Most hyperparameters don't matter equally. For a typical Ridge + polynomial model:
+  \begin{itemize}
+    \item \texttt{alpha} matters a lot.
+    \item \texttt{poly\_degree} matters a lot.
+    \item Other small dials (e.g., \texttt{tol}, \texttt{max\_iter}) barely affect the score.
+  \end{itemize}
+  \vfill
+  Grid search spends \emph{equal} compute on each axis. If $9$ out of $10$ axes are flat, you've used 90\% of your budget exploring flat directions.
+  \vfill
+  \textbf{Random search} samples each hyperparameter from a distribution. Every trial visits a new value on \emph{every} axis - including the ones that matter.
+\end{frame}
+
+\begin{frame}{Bergstra--Bengio: random $>$ grid in high dimensions}
+  Classic visualization. 9 trials in 2D. Imagine the \emph{horizontal} axis matters, the \emph{vertical} axis doesn't.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}
+      \textbf{Grid search (3x3)}
+      \begin{tikzpicture}[scale=1]
+        \draw[gray!50] (0,0) rectangle (3,3);
+        \foreach \x in {0.5, 1.5, 2.5}
+          \foreach \y in {0.5, 1.5, 2.5}
+            \fill[armblue] (\x, \y) circle (3pt);
+        % projection lines
+        \foreach \x in {0.5, 1.5, 2.5}
+          \draw[armred, dashed, thick] (\x, 0) -- (\x, -0.3);
+        \node[font=\scriptsize] at (1.5, -0.7) {only 3 unique x values};
+        \node[font=\tiny, anchor=east] at (0, 1.5) {y};
+        \node[font=\tiny, anchor=north] at (1.5, 0) {x};
+      \end{tikzpicture}
+    \end{center}
+    \column{0.5\textwidth}
+    \begin{center}
+      \textbf{Random search (9 samples)}
+      \begin{tikzpicture}[scale=1]
+        \draw[gray!50] (0,0) rectangle (3,3);
+        \foreach \x/\y in {0.3/2.1, 0.6/0.8, 1.0/2.6, 1.3/1.4, 1.7/0.4,
+                           2.0/2.2, 2.3/1.1, 2.6/2.5, 2.9/0.7}
+          \fill[armblue] (\x, \y) circle (3pt);
+        \foreach \x in {0.3, 0.6, 1.0, 1.3, 1.7, 2.0, 2.3, 2.6, 2.9}
+          \draw[armred, dashed, thick] (\x, 0) -- (\x, -0.3);
+        \node[font=\scriptsize] at (1.5, -0.7) {9 unique x values};
+        \node[font=\tiny, anchor=east] at (0, 1.5) {y};
+        \node[font=\tiny, anchor=north] at (1.5, 0) {x};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vfill
+  \footnotesize Random search gets 9 distinct samples along the important axis; grid gets 3. The wider the gap between effective dimensionality and total dimensionality, the bigger the random-search win.
+\end{frame}
+
+\begin{frame}{Random search advantage in one line}
+  If only $d_{\text{eff}}$ of your $d$ hyperparameters matter (and you don't know which), random search with $n$ trials finds a near-optimal value on each important axis - because every trial is a fresh sample on every axis.
+  \vfill
+  \textbf{Rule of thumb:} for $d \geq 4$ hyperparameters, random search with $60$ trials typically matches or beats grid search with $10^d$ trials.
+  \vfill
+  \textbf{Bonus benefits:}
+  \begin{itemize}
+    \item You can stop anytime (early-stopping the search). Grid forces you to finish.
+    \item Easy to bound budget: set \texttt{n\_iter}.
+    \item Mixes naturally with continuous distributions (\texttt{loguniform}, \texttt{uniform}, \texttt{normal}).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Code: \texttt{RandomizedSearchCV}}
+\begin{lstlisting}
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import loguniform, randint
+
+dist = {
+    "ridge__alpha":   loguniform(1e-4, 1e3),   # continuous, log-scale
+    "poly__degree":   randint(1, 7),           # discrete 1..6
+}
+
+rs = RandomizedSearchCV(pipe, dist,
+        n_iter=60,                  # budget
+        cv=5,
+        scoring="neg_mean_squared_error",
+        random_state=509,           # reproducibility
+        n_jobs=-1)
+rs.fit(X_train, y_train)
+print(rs.best_params_, -rs.best_score_)
+\end{lstlisting}
+  \vfill
+  \footnotesize Use \texttt{loguniform} for hyperparameters that span orders of magnitude (regularization strength, learning rate). Use \texttt{uniform} for bounded ranges. Use \texttt{randint} for integer-valued discrete ones.
+\end{frame}
+
+% ================================================================
+\section{Bayesian optimization}
+
+\begin{frame}{Bayesian optimization: learn from each evaluation}
+  Random search treats each trial as independent. But you've \emph{seen} the previous scores - you could pick the next trial based on what looks promising.
+  \vfill
+  Bayesian optimization (BO):
+  \begin{enumerate}
+    \item Fit a probabilistic \textbf{surrogate model} to the (hyperparameter $\to$ score) pairs seen so far. Typically a Gaussian Process or Tree-structured Parzen Estimator (TPE).
+    \item Use the surrogate's mean and uncertainty to compute an \textbf{acquisition function} that scores ``how good would it be to evaluate here?''
+    \item Pick the next hyperparameter as the maximum of the acquisition function.
+    \item Evaluate, add to history, update surrogate. Repeat.
+  \end{enumerate}
+  \vfill
+  Each trial uses the information from all previous trials. Random search doesn't.
+\end{frame}
+
+\begin{frame}{The surrogate + acquisition picture}
+  \begin{center}
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=0.85\textwidth, height=4.5cm,
+        xlabel={hyperparameter $\lambda$}, ylabel={validation score},
+        xlabel style={font=\footnotesize}, ylabel style={font=\footnotesize},
+        xtick=\empty, ytick=\empty,
+        axis line style={gray!60}, grid=major, grid style={dashed,gray!30},
+        xmin=0, xmax=6, ymin=-1.5, ymax=5.0,
+        legend style={font=\scriptsize, at={(0.02,0.02)}, anchor=south west},
+      ]
+        % posterior mean (smooth)
+        \addplot[paramgreen, very thick, smooth, name path=mean] coordinates {
+          (0,-1.0) (0.5,0.0) (1.0,1.3) (1.5,1.8) (2.0,2.7) (2.5,3.5)
+          (3.0,3.9) (3.5,3.5) (4.0,2.5) (4.5,1.8) (5.0,0.7) (5.5,0.0) (6.0,-0.8)};
+        \addlegendentry{surrogate (posterior mean)}
+        % upper / lower bounds for confidence band
+        \path[name path=upper] (0,0.2) -- (0.5,0.4) -- (1.0,1.8) -- (1.5,2.0) -- (2.0,3.6) -- (2.5,3.9) -- (3.0,4.7) -- (3.5,3.9) -- (4.0,3.4) -- (4.5,2.0) -- (5.0,1.7) -- (5.5,0.4) -- (6.0,0.5);
+        \path[name path=lower] (0,-2.2) -- (0.5,-0.4) -- (1.0,0.8) -- (1.5,1.6) -- (2.0,1.8) -- (2.5,3.1) -- (3.0,3.1) -- (3.5,3.1) -- (4.0,1.6) -- (4.5,1.6) -- (5.0,-0.3) -- (5.5,-0.4) -- (6.0,-2.1);
+        \addplot[fill=armblue!20, draw=none] fill between[of=upper and lower];
+        \addlegendentry{95\% uncertainty}
+        % evaluated points
+        \addplot[only marks, mark=*, mark size=2.5pt, armred] coordinates {(0.5,0.0) (1.5,1.8) (2.5,3.5) (3.5,3.5) (4.5,1.8) (5.5,0.0)};
+        \addlegendentry{evaluated trials}
+        % next eval marker
+        \draw[->, armorange, very thick] (axis cs:3.0, 4.8) -- (axis cs:3.0, 4.0);
+        \node[armorange, font=\tiny, anchor=south] at (axis cs:3.0, 4.8) {next: max acquisition};
+      \end{axis}
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \footnotesize The surrogate is confident near observed points (narrow band) and uncertain elsewhere (wide band). The acquisition function trades off \emph{exploit} (go where the mean is high) and \emph{explore} (go where the uncertainty is high).
+\end{frame}
+
+\begin{frame}{Acquisition functions}
+  Three popular acquisition functions:
+  \vfill
+  \begin{itemize}
+    \item \textbf{Expected Improvement (EI).} How much better do we expect to do here than at the best-seen point? Smooth tradeoff between mean and uncertainty. Default in most libraries.
+    \item \textbf{Upper Confidence Bound (UCB).} mean $+\, \kappa \cdot$ std. The constant $\kappa$ explicitly controls explore-vs-exploit. Used in multi-armed-bandit theory.
+    \item \textbf{Probability of Improvement (PI).} Probability that the score here exceeds the current best. Greedy - tends to under-explore.
+  \end{itemize}
+  \vfill
+  The acquisition function is itself optimized over $\lamv$ (cheap - no model fits required), then we evaluate the model only at the chosen point.
+\end{frame}
+
+\begin{frame}[fragile]{Code: Optuna (modern default)}
+\begin{lstlisting}
+import optuna
+from sklearn.model_selection import cross_val_score
+
+def objective(trial):
+    alpha = trial.suggest_float("alpha", 1e-4, 1e3, log=True)
+    degree = trial.suggest_int("degree", 1, 6)
+
+    pipe = make_pipeline(PolynomialFeatures(degree),
+                         StandardScaler(),
+                         Ridge(alpha=alpha))
+    score = cross_val_score(pipe, X_train, y_train,
+                            cv=5, scoring="neg_mean_squared_error").mean()
+    return score                       # Optuna maximizes by default
+
+study = optuna.create_study(direction="maximize")
+study.optimize(objective, n_trials=60)
+print(study.best_params, study.best_value)
+\end{lstlisting}
+  \vfill
+  \footnotesize Default sampler: TPE (Tree-structured Parzen Estimator). Free pruning + dashboard.
+\end{frame}
+
+\begin{frame}{When Bayesian opt is worth it}
+  \textbf{Use Bayesian opt when:}
+  \begin{itemize}\small
+    \item Each evaluation is expensive (training takes minutes-hours, not seconds).
+    \item You have $\geq 4$ hyperparameters with non-trivial interactions.
+    \item You want fewer total evaluations than random search would need.
+    \item You can keep evaluations sequential (Bayesian opt is inherently sequential, though batch variants exist).
+  \end{itemize}
+  \vfill
+  \textbf{Stick with random search when:}
+  \begin{itemize}\small
+    \item Evaluations are cheap (seconds) - the overhead of fitting a surrogate isn't justified.
+    \item You can run hundreds of parallel evaluations on a cluster - random is embarrassingly parallel; Bayesian is mostly sequential.
+    \item Your search space is largely categorical with no obvious order.
+  \end{itemize}
+  \vfill
+  \emph{Modern AutoML tools (Optuna, Hyperopt, Ray Tune) default to TPE-style Bayesian samplers because they ``just work'' across mixed search spaces.}
+\end{frame}
+
+% ================================================================
+\section{Wrap-up}
+
+\begin{frame}{The compute budget reality}
+  Hyperparameter tuning consumes most of an ML project's compute. Practical patterns:
+  \vfill
+  \begin{itemize}
+    \item \textbf{Subsample.} Tune on 10\% of training data, retrain best config on full data. Often within 1\% of fully-tuned.
+    \item \textbf{Early stopping.} For boosted trees and NNs, stop training early when validation stops improving. Cuts each trial's cost by 2-5x.
+    \item \textbf{Pruning.} Stop trials that look bad after a few epochs (Optuna does this for you).
+    \item \textbf{Multi-fidelity methods.} Hyperband / Successive Halving: run many trials cheaply, gradually allocate more budget to the survivors.
+    \item \textbf{Stop when score plateaus.} Track best-so-far; if it hasn't improved in 20 trials, you're done.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Honest reporting:} the score you tuned to optimize is \emph{optimistically biased}. Report the test-set score after tuning is complete (or use nested CV - L05b).
+  }}
+\end{frame}
+
+\begin{frame}{Decision flowchart}
+  \begin{center}
+    \begin{tikzpicture}[
+      node distance=0.45cm and 0.7cm,
+      box/.style={rectangle, draw=armblue, very thick, text width=2.9cm, align=center, font=\scriptsize, rounded corners=2pt, fill=armblue!5, minimum height=0.85cm},
+      result/.style={rectangle, draw=paramgreen, very thick, text width=2.7cm, align=center, font=\scriptsize, rounded corners=2pt, fill=paramgreen!10, minimum height=0.85cm},
+      arr/.style={->, >=stealth, thick, armblue},
+    ]
+      \node[box] (start) {How many hyperparameters?};
+      \node[result, right=of start] (manual) {Manual or grid (1-2 HPs)};
+      \node[box, below=of start] (expensive) {Each evaluation expensive (mins+)?};
+      \node[result, right=of expensive] (bo) {Bayesian opt (Optuna TPE)};
+      \node[box, below=of expensive] (parallel) {Heavily parallel hardware?};
+      \node[result, right=of parallel] (rs) {Random search};
+      \node[result, below=of parallel] (rs2) {Random search (default)};
+
+      \draw[arr] (start) -- node[above, font=\tiny]{$\leq 2$} (manual);
+      \draw[arr] (start) -- node[left, font=\tiny]{$\geq 3$} (expensive);
+      \draw[arr] (expensive) -- node[above, font=\tiny]{yes} (bo);
+      \draw[arr] (expensive) -- node[left, font=\tiny]{no} (parallel);
+      \draw[arr] (parallel) -- node[above, font=\tiny]{yes} (rs);
+      \draw[arr] (parallel) -- node[left, font=\tiny]{no} (rs2);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \footnotesize Defaults: $\leq 2$ HPs $\to$ grid is fine; otherwise random search; if compute is the bottleneck, Bayesian opt.
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Parameters} are learned from data. \textbf{Hyperparameters} are chosen by you. Tuning $=$ outer optimization wrapping the inner fit.
+    \item \textbf{Manual.} Cheap, intuition-building, doesn't scale. Watch for confirmation bias and validation-set abuse.
+    \item \textbf{Grid.} Exhaustive over Cartesian product. Fine for $\leq 2$ HPs; explodes in high dimensions.
+    \item \textbf{Random.} Default for $\geq 3$ HPs. Each trial is a fresh sample on every axis. Easy to budget and parallelize. Beats grid when effective dimensionality is low.
+    \item \textbf{Bayesian.} Models the score-vs-HP surface and queries smartly. Best when each evaluation is expensive. Optuna's TPE is the modern default.
+    \item \textbf{Honest reporting.} Tuning inflates the score; report on a held-out test set (or nested CV - L05b).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{HW01e - practice}
+  \footnotesize Estimated time: 90-120 minutes. Tasks 1-3 graded; bonuses optional.
+  \begin{enumerate}\small
+    \item On the Yerevan rent dataset: manually tune Ridge \texttt{alpha} on $\{0.001, 0.01, 0.1, 1, 10, 100, 1000\}$ using 5-fold CV. Plot validation MSE vs.\ \texttt{alpha} on a log-x axis. Report the best.
+    \item Use \texttt{GridSearchCV} to tune \texttt{poly\_degree} $\in \{1,2,3,4,5\}$ and \texttt{alpha} (same grid). Report best params and wall-clock time.
+    \item Replace step 2 with \texttt{RandomizedSearchCV}: \texttt{poly\_degree} $\sim$ \texttt{randint(1,6)}, \texttt{alpha} $\sim$ \texttt{loguniform(1e-4, 1e3)}, \texttt{n\_iter=60}. Compare best score and wall-clock time to grid.
+    \item \emph{Bonus 1:} run Optuna with TPE for 60 trials on the same search space. Compare to random search. Plot Optuna's history.
+    \item \emph{Bonus 2:} extend to XGBoost with 5 hyperparameters. Run grid (cap at 10 minutes), random ($n\_iter=60$), and Optuna ($n\_trials=60$). Which wins on a fixed time budget? \textbf{Most instructive question.}
+    \item \emph{Bonus 3:} wrap your best pipeline in nested CV (L05b) and report an honest generalization score. How much did tuning inflate the optimistic estimate?
+  \end{enumerate}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Topics: manual, grid, random, Bayesian HP tuning.
+%   - Follows L01d evaluation protocol naturally: CV is the scorer
+%     that all tuning methods rely on.
+%   - Yerevan running example continues.
+%   - Forward reference to L05b nested CV.
+%   - Math module 14 (Bayesian optimization) cross-reference implicit.
+%   - Predict-first frames per memory feedback_predict_first_slides.md.
+% =============================================================

@@ -34,7 +34,7 @@ Assumptions / BLUE
 Experiment tracking
 
 Interpretable ML
-
+error analysis
 
 ## Practical concepts
 1. Feature engineering

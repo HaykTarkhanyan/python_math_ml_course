@@ -1,0 +1,581 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{L01g: Feature Engineering}
+\subtitle{Where most of an ML project's time actually goes}
+\date{}
+
+\begin{document}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What and why}
+
+\begin{frame}{What is feature engineering?}
+  Three related-but-distinct activities on tabular data:
+  \vfill
+  \begin{itemize}
+    \item \textbf{Preprocessing (L01c).} \emph{Fix} the data: handle missing values, encode categoricals, scale numerics. Same columns, cleaner.
+    \item \textbf{Feature engineering.} \emph{Create} new columns from existing ones using domain knowledge or general patterns. New columns.
+    \item \textbf{Feature selection.} \emph{Choose} which features to keep. Reduces columns.
+  \end{itemize}
+  \vfill
+  \textbf{The classical-ML maxim:} ``Good features beat a better algorithm.'' Most Kaggle winners and most production wins on tabular data come from feature engineering, not the model class.
+  \vfill
+  \emph{Deep learning} learns features from raw inputs (pixels, tokens, audio). For tabular data, hand-engineered features still dominate.
+\end{frame}
+
+\begin{frame}{Predict-first: where does an ML project's time go?}
+  An ML project has several stages: data collection, EDA, preprocessing, feature engineering, modeling, tuning, evaluation, deployment.
+  \vfill
+  \pause
+  \textbf{Predict: what fraction of project time is spent on data \& features vs modeling \& tuning?}
+  \pause
+  \vfill
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Surveys (CrowdFlower 2016, Anaconda 2020) consistently report:
+    \begin{itemize}\small
+      \item \textbf{60-80\%} on data collection, cleaning, feature engineering.
+      \item \textbf{10-20\%} on modeling and tuning.
+      \item \textbf{5-15\%} on deployment and monitoring.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize Students often expect the reverse. The reality: \emph{the algorithm is the easy part}; the data preparation is the work.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4.2cm,
+                     xbar, xmin=0, xmax=80,
+                     symbolic y coords={deploy, tuning, modeling, data+features},
+                     ytick=data,
+                     xlabel={\% of project time}, xlabel style={font=\tiny},
+                     yticklabel style={font=\tiny},
+                     xticklabel style={font=\tiny},
+                     nodes near coords, nodes near coords style={font=\tiny},
+                     enlarge y limits=0.2,
+                     axis line style={gray!60}]
+          \addplot[fill=armblue!50, draw=armblue] coordinates {
+            (65,data+features) (15,modeling) (10,tuning) (10,deploy)};
+        \end{axis}
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Sources of new features}
+  Where do good features come from?
+  \vfill
+  \begin{enumerate}
+    \item \textbf{Domain knowledge.} The single biggest source. Examples: BMI = weight / height$^2$, loan-to-income ratio, price-per-m$^2$, click-through rate. A domain expert produces these in minutes; automated systems miss them.
+    \item \textbf{Numerical transformations.} Log, square root, binning, polynomial expansion.
+    \item \textbf{Combinations.} Ratios, differences, products, interactions.
+    \item \textbf{Aggregations.} Group-by statistics, rolling windows, expanding statistics.
+    \item \textbf{Temporal.} Lags, time-since-event, calendar features, cyclic encoding.
+    \item \textbf{Spatial.} Distances to landmarks, cluster IDs, grid cells.
+    \item \textbf{Text.} TF-IDF, n-grams, length, sentiment, embeddings.
+    \item \textbf{External data.} Joins to demographics, weather, prices, holidays.
+  \end{enumerate}
+  \vfill
+  The rest of this deck walks through each category with Yerevan apartment rent as the running example.
+\end{frame}
+
+% ================================================================
+\section{Numerical and transformation features}
+
+\begin{frame}[fragile]{Numerical transformations}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \footnotesize
+    \textbf{Log / power.} For skewed positive targets (recap L01c). \texttt{np.log1p(price)} compresses the tail.
+    \vskip 4pt
+    \textbf{Binning.} Convert a continuous feature into categories. Three strategies:
+    \begin{itemize}\footnotesize
+      \item Equal-width: same range per bin.
+      \item Equal-frequency (quantile): same count per bin.
+      \item Supervised: pick splits that maximize separation in $y$.
+    \end{itemize}
+    \vskip 4pt
+    \textbf{When to bin?} When the target depends \emph{non-monotonically} on the feature (e.g., rent peaks at 60 m$^2$ then plateaus) and you're using a linear model. Trees don't need binning.
+    \column{0.45\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.preprocessing \
+  import KBinsDiscretizer
+
+# 5 quantile bins on area
+binner = KBinsDiscretizer(
+    n_bins=5,
+    encode="ordinal",
+    strategy="quantile")
+df["area_bin"] = binner.fit_transform(
+    df[["area"]])
+\end{lstlisting}}
+    \vskip 4pt
+    \begin{center}
+      \begin{tikzpicture}[scale=0.7]
+        \draw[gray!50, thick] (0,0) -- (8,0);
+        \foreach \x in {0,2,4,6,8}
+          \draw[gray!50] (\x, 0.1) -- (\x, -0.1);
+        \foreach \i/\lbl in {1/B1, 3/B2, 5/B3, 7/B4} {
+          \node[font=\tiny, armblue] at (\i, -0.4) {\lbl};
+        }
+        \foreach \x in {0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2, 4.8, 5.4, 6.0, 6.6, 7.2}
+          \fill[armred] (\x, 0.3) circle (1pt);
+        \node[font=\scriptsize, anchor=south] at (4, 0.6) {continuous $\to$ 4 bins};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Polynomial and interaction features}
+  Linear regression on \emph{engineered} features is the most underrated trick in classical ML. From L01b: polynomial regression is OLS with $\phi(x) = (1, x, x^2, \ldots, x^d)$.
+  \vfill
+  \textbf{Interactions} extend this to multiple features. Given $x_1, x_2$:
+  \[
+    \phi(\xv) = (1,\; x_1,\; x_2,\; x_1^2,\; x_2^2,\; x_1 x_2)
+  \]
+  The product $x_1 x_2$ lets a linear model express ``effect of $x_1$ depends on level of $x_2$.''
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Predict-first:} you expect rent to depend on \texttt{area} $\times$ \texttt{floor}. Do you need to add the product explicitly for: (a) Ridge regression, (b) Random Forest?
+    \\[2pt]
+    Answers: (a) \textbf{Yes} - a linear model can't construct products. (b) \textbf{No} - trees discover interactions via nested splits. Polynomial features are a \emph{linear-model crutch}, not a universal good.
+  }}
+\end{frame}
+
+\begin{frame}[fragile]{Ratios and differences}
+  Many of the most predictive features are simple ratios or differences. Linear models can't construct them; trees can but slowly.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+# Yerevan-rent examples
+df["price_per_m2"]    = df["rent"] / df["area"]
+df["bedroom_density"] = df["rooms"] / df["area"]
+df["age_at_listing"]  = (df["year_listed"]
+                         - df["year_built"])
+
+# Classical examples
+df["bmi"]   = df["weight"] / df["height"]**2
+df["lti"]   = df["loan"] / df["income"]
+df["debt_to_equity"] = df["debt"] / df["equity"]
+\end{lstlisting}}
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Why ratios beat raw features:}
+    \begin{itemize}\footnotesize
+      \item Often more predictive than either component alone.
+      \item Express the underlying \emph{rate} or \emph{intensity}.
+      \item Scale-invariant - a 3000 USD loan to a 6000 USD earner is the same as 30k/60k.
+      \item Sparse - one engineered feature vs.\ two raw ones.
+    \end{itemize}
+    \textbf{When NOT to engineer:}
+    \begin{itemize}\footnotesize
+      \item If the denominator can be 0 or negative.
+      \item For deep learning on tabular - just feed in the raw inputs.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Datetime features}
+  Datetimes are rich. Extract components, time-since-events, calendar markers, and cyclic encodings.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+df["dt"] = pd.to_datetime(df["listed_at"])
+df["year"]    = df["dt"].dt.year
+df["month"]   = df["dt"].dt.month
+df["weekday"] = df["dt"].dt.dayofweek         # 0=Mon, 6=Sun
+df["is_weekend"]    = df["weekday"].isin([5, 6]).astype(int)
+df["days_since_listed"] = (today - df["dt"]).dt.days
+df["is_holiday"]    = df["dt"].dt.date.isin(holiday_calendar)
+
+# cyclic encoding for periodic features (recap L01c)
+df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+\end{lstlisting}}
+  \vfill
+  \footnotesize Watch for \textbf{leakage} when computing ``time since last event'' - use only events strictly before the row's timestamp.
+\end{frame}
+
+% ================================================================
+\section{Aggregations and time-series}
+
+\begin{frame}[fragile]{Group-by aggregations}
+  For each row, attach summary statistics of its group. Hugely effective for tabular ML.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+# Yerevan: for each apartment, learn the district's price profile
+df["avg_rent_district"]   = df.groupby("district")["rent"].transform("mean")
+df["med_rent_district"]   = df.groupby("district")["rent"].transform("median")
+df["std_rent_district"]   = df.groupby("district")["rent"].transform("std")
+df["count_in_district"]   = df.groupby("district")["rent"].transform("count")
+df["rank_in_district"]    = df.groupby("district")["rent"].rank(pct=True)
+df["rent_vs_district_avg"] = df["rent"] / df["avg_rent_district"]
+\end{lstlisting}}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Leakage warning:} computing group means on the \emph{full} dataset before splitting leaks the target into features. Either fit the aggregation on the train fold only, or use a CV-aware target encoder from \texttt{category\_encoders}.
+  }}
+\end{frame}
+
+\begin{frame}[fragile]{Time-series features: lags and rolling windows}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+df = df.sort_values("dt")
+
+# lag features
+df["lag_1"]  = df["price"].shift(1)
+df["lag_7"]  = df["price"].shift(7)
+
+# rolling windows (trailing!)
+df["ma_7"]  = df["price"].rolling(7).mean()
+df["std_7"] = df["price"].rolling(7).std()
+
+# expanding / EMA
+df["ema_7"] = df["price"].ewm(span=7).mean()
+
+# diff features
+df["diff_1"]   = df["price"].diff(1)
+df["pct_chg"]  = df["price"].pct_change()
+\end{lstlisting}}
+    \column{0.45\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=3.5cm,
+                     xlabel={time $t$}, ylabel={price},
+                     xlabel style={font=\tiny}, ylabel style={font=\tiny},
+                     xtick=\empty, ytick=\empty, axis line style={gray!60}]
+          \addplot[armblue, very thick, mark=*, mark size=1pt]
+            coordinates {(1,3) (2,3.2) (3,3.5) (4,3.8) (5,3.6) (6,4.2)
+                         (7,4.5) (8,4.7) (9,4.4) (10,5.0)};
+          \draw[armred, very thick, |-|] (axis cs:4,1.5) -- (axis cs:10,1.5);
+          \node[font=\tiny, armred] at (axis cs:7, 1.2) {trailing window};
+          \draw[armorange, very thick, ->] (axis cs:10.5, 5.0) -- (axis cs:11, 5.0);
+          \node[font=\tiny, armorange] at (axis cs:11, 4.5) {predict};
+        \end{axis}
+      \end{tikzpicture}
+    \end{center}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\scriptsize
+      \textbf{Look-ahead bias:} \texttt{rolling(7, center=True)} silently uses future values. \emph{Never} center rolling windows when forecasting.
+    }}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Geospatial features}
+  When you have lat/lon, the raw coordinates are usually useless; the \emph{relationships} are predictive.
+  \vfill
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from math import radians, sin, cos, asin, sqrt
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371      # km
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = (sin(dlat/2)**2
+         + cos(radians(lat1))
+         * cos(radians(lat2))
+         * sin(dlon/2)**2)
+    return 2 * R * asin(sqrt(a))
+
+# Distance to Republic Square (Yerevan center)
+df["dist_to_center"] = df.apply(lambda r:
+    haversine(r.lat, r.lon, 40.177, 44.512),
+    axis=1)
+\end{lstlisting}}
+    \column{0.45\textwidth}
+    \footnotesize
+    Useful geospatial features:
+    \begin{itemize}\footnotesize
+      \item \textbf{Distances} to landmarks (metro, river, parks).
+      \item \textbf{Cluster IDs} from k-means or DBSCAN on (lat, lon).
+      \item \textbf{Grid cells} via geohash, H3, or S2 - aggregations within a cell.
+      \item \textbf{Density features} (k-NN density estimate around each point).
+      \item \textbf{POI counts} within a radius (cafes, schools, public transport).
+    \end{itemize}
+    \vskip 4pt
+    Raw lat/lon as columns in a linear model: don't. Trees can split on lat/lon but distances/clusters are usually more efficient.
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Text features (intro)}
+  Text needs to become numbers. Three layers, increasing in power:
+  \vfill
+  \begin{itemize}
+    \item \textbf{Engineered scalars.} Length, word count, punctuation count, ALL-CAPS ratio, emoji count. Cheap and surprisingly predictive for spam, sentiment.
+    \item \textbf{Bag-of-words / TF-IDF / n-grams.} Tokenize, count, weight by inverse document frequency. The classical NLP workhorse.
+    \item \textbf{Embeddings.} Word2Vec, sentence-BERT, modern transformer encoders. Deferred to the NLP chapter.
+  \end{itemize}
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_extraction.text import TfidfVectorizer
+tfidf = TfidfVectorizer(max_features=2000, ngram_range=(1, 2),
+                        min_df=5, stop_words="english")
+X_text = tfidf.fit_transform(df["description"])
+
+df["desc_length"]  = df["description"].str.len()
+df["caps_ratio"]   = df["description"].str.count(r"[A-Z]") / df["desc_length"]
+df["num_exclaim"]  = df["description"].str.count(r"!")
+\end{lstlisting}}
+\end{frame}
+
+\begin{frame}[fragile]{Feature crosses for high-cardinality}
+  When two high-cardinality categoricals matter \emph{jointly}, you can either combine them into one feature (a ``cross'') or learn an embedding.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+# Manual cross: district x rooms -> Kentron_3br
+df["district_x_rooms"] = df["district"] + "_" + df["rooms"].astype(str)
+
+# Then encode the cross with target / frequency / OHE
+\end{lstlisting}}
+  \vfill
+  \begin{itemize}
+    \item Used heavily in classical CTR prediction (Google's Wide \& Deep paper, 2016).
+    \item Risk: explosion. 100 districts $\times$ 10 room counts $=$ 1000 categories.
+    \item Modern alternative: learn an \emph{embedding} per categorical, sum or concatenate. NN does this naturally; \texttt{category\_encoders} has \texttt{HashingEncoder} for the classical version.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{Feature selection}
+
+\begin{frame}{Why select features at all?}
+  More features is not always better.
+  \vfill
+  \begin{itemize}
+    \item \textbf{Curse of dimensionality} (math module 30). As $p$ grows, the volume of the feature space grows exponentially. You need exponentially more data to fill it.
+    \item \textbf{Multicollinearity.} Redundant features make linear coefficients unstable and uninterpretable (L01b).
+    \item \textbf{Overfitting.} The fewer features the simpler the model; the simpler the model the lower the variance.
+    \item \textbf{Compute and storage.} Linear in $p$ at inference time.
+    \item \textbf{Interpretability.} ``We use these 8 features'' is easier to defend than ``we use these 800''.
+  \end{itemize}
+  \vfill
+  Three families of methods, in increasing computational cost:
+  \begin{enumerate}\small
+    \item \textbf{Filter} - score each feature independently.
+    \item \textbf{Embedded} - use a model that selects as it fits.
+    \item \textbf{Wrapper} - search over subsets, evaluate each.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}[fragile]{Filter methods}
+  Score each feature individually against the target. Pick the top $k$.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection import (
+    SelectKBest, f_regression, mutual_info_regression, VarianceThreshold)
+
+# Correlation-based (regression)
+SelectKBest(score_func=f_regression, k=20).fit(X, y)
+
+# Mutual information - catches non-linear relationships
+SelectKBest(score_func=mutual_info_regression, k=20).fit(X, y)
+
+# Drop near-constant features
+VarianceThreshold(threshold=0.01).fit(X)
+\end{lstlisting}}
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Pros:} fast (linear in $p$), simple, model-agnostic.
+    \item \textbf{Cons:} misses interactions. A feature useless alone may be predictive in combination.
+    \item Best as a \emph{first pass} on a $p > 10{,}000$ feature space.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Embedded and wrapper methods}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \textbf{Embedded.} The model selects as part of fitting.
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection \
+    import SelectFromModel
+from sklearn.linear_model import LassoCV
+
+# L1 forces sparsity
+lasso = LassoCV(cv=5).fit(X, y)
+sel = SelectFromModel(lasso, prefit=True)
+X_sel = sel.transform(X)
+\end{lstlisting}}
+    \footnotesize Lasso, ElasticNet, tree feature importances, RF permutation importance.
+    \column{0.45\textwidth}
+    \textbf{Wrapper.} Search subsets, score each with CV.
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection \
+    import SequentialFeatureSelector
+
+sfs = SequentialFeatureSelector(
+    Ridge(),
+    n_features_to_select=10,
+    direction="forward",  # or "backward"
+    cv=5).fit(X, y)
+\end{lstlisting}}
+    \footnotesize Slow (fits the model $\mathcal{O}(p^2)$ times) but accurate.
+  \end{columns}
+  \vfill
+  \footnotesize \textbf{Rule of thumb:} filter for initial cut, embedded (Lasso or tree importance) for production, wrapper only when stakes justify the compute.
+\end{frame}
+
+% ================================================================
+\section{Automation, pitfalls, production}
+
+\begin{frame}[fragile]{Automated feature engineering}
+  Tools that generate features automatically from your raw data:
+  \vfill
+  \begin{itemize}
+    \item \textbf{featuretools.} ``Deep Feature Synthesis'' walks relational schemas and generates aggregations, transformations, and combinations.
+    \item \textbf{tsfresh.} Extracts hundreds of statistical features from time-series.
+    \item \textbf{autofeat, Featurewiz.} General-purpose automated FE.
+  \end{itemize}
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+import featuretools as ft
+es = ft.EntitySet(id="rent")
+es = es.add_dataframe(dataframe=df, dataframe_name="listings", index="id")
+es = es.add_dataframe(dataframe=districts, dataframe_name="districts", ...)
+feature_matrix, defs = ft.dfs(entityset=es,
+                              target_dataframe_name="listings",
+                              max_depth=2)
+\end{lstlisting}}
+  \vfill
+  \footnotesize \textbf{When to use:} early exploration, complex relational data, generating candidates.\\
+  \textbf{When NOT to use:} production (hard to maintain, slow at inference). Auto-generated features usually \emph{lose} to a handful of domain features.
+\end{frame}
+
+\begin{frame}{Six feature-engineering pitfalls}
+  \begin{enumerate}
+    \item \textbf{Target leakage.} Computing a target-derived feature (mean rent by district) on the \emph{full} dataset before splitting. Use train fold only or a CV-aware encoder.
+    \item \textbf{Look-ahead bias.} For time-series, using future values in a ``rolling'' or aggregate feature. Always trailing windows.
+    \item \textbf{Train-test inconsistency.} A feature that's easy to compute on training data but impossible at inference (e.g., ``count of total purchases'' when at inference you don't know the user's full history yet).
+    \item \textbf{Hardcoded statistics.} ``Just divide by the mean rent'' - whose mean? Save the fitted statistic, don't recompute on test.
+    \item \textbf{Over-engineering.} 500 features on 1000 rows. Curse of dimensionality + multicollinearity. Stop when CV stops improving.
+    \item \textbf{Forgetting documentation.} What was \texttt{feat\_03}? Six months from now you won't know. Name features descriptively (\texttt{rent\_zscore\_by\_district}).
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Feature stores: serving the same features in training and inference}
+  In production, the model you train and the model you serve see different code paths. Without care, they compute features differently.
+  \vfill
+  \textbf{Feature store} = a system that:
+  \begin{itemize}
+    \item Stores feature definitions (the code that computes each feature).
+    \item Serves both \emph{batch} (training queries against historical data) and \emph{online} (low-latency lookup for inference).
+    \item Guarantees train/serve consistency.
+    \item Versions features over time.
+    \item Handles point-in-time correctness for time-series (no leakage).
+  \end{itemize}
+  \vfill
+  Production-grade tools: \textbf{Feast} (open source), \textbf{Tecton}, \textbf{Vertex AI Feature Store}, \textbf{SageMaker Feature Store}.
+  \vfill
+  \footnotesize For coursework you don't need this; for any deployed model with a feedback loop, you do.
+\end{frame}
+
+% ================================================================
+\section{Wrap-up}
+
+\begin{frame}{Decision flowchart}
+  \begin{center}
+    \begin{tikzpicture}[
+      node distance=0.4cm and 0.7cm,
+      box/.style={rectangle, draw=armblue, very thick, text width=3cm, align=center, font=\scriptsize, rounded corners=2pt, fill=armblue!5, minimum height=0.85cm},
+      result/.style={rectangle, draw=paramgreen, very thick, text width=2.8cm, align=center, font=\scriptsize, rounded corners=2pt, fill=paramgreen!10, minimum height=0.85cm},
+      arr/.style={->, >=stealth, thick, armblue},
+    ]
+      \node[box] (start) {Have domain knowledge?};
+      \node[result, right=of start] (dom) {Start with domain features (ratios, diffs)};
+      \node[box, below=of start] (linear) {Linear / kernel model?};
+      \node[result, right=of linear] (poly) {Add polynomial + interactions};
+      \node[box, below=of linear] (time) {Time-series target?};
+      \node[result, right=of time] (lag) {Lag + rolling features};
+      \node[box, below=of time] (cat) {High-cardinality categoricals?};
+      \node[result, right=of cat] (te) {Target encoding (CV-aware!)};
+      \node[box, below=of cat] (auto) {Many tables, exploring?};
+      \node[result, right=of auto] (ft) {featuretools / tsfresh};
+
+      \draw[arr] (start) -- node[above, font=\tiny]{yes} (dom);
+      \draw[arr] (start) -- (linear);
+      \draw[arr] (linear) -- node[above, font=\tiny]{yes} (poly);
+      \draw[arr] (linear) -- (time);
+      \draw[arr] (time) -- node[above, font=\tiny]{yes} (lag);
+      \draw[arr] (time) -- (cat);
+      \draw[arr] (cat) -- node[above, font=\tiny]{yes} (te);
+      \draw[arr] (cat) -- (auto);
+      \draw[arr] (auto) -- node[above, font=\tiny]{yes} (ft);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \footnotesize After engineering, always do a feature-selection pass (Lasso or tree importance) and check CV improvement before keeping.
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{60-80\% of an ML project} is data and features, not modeling. The maxim ``good features beat a better algorithm'' holds for classical ML.
+    \item \textbf{Domain knowledge is the multiplier.} Ratios (BMI, price-per-m$^2$), differences (age, days-since), and rates beat raw features.
+    \item \textbf{Transformations:} log/power for skew, binning for non-monotonic effects, polynomial + interactions for linear models (not for trees).
+    \item \textbf{Aggregations:} group-by stats, rolling windows (trailing only), expanding stats. The leakage hides in the fit-on-full-data step.
+    \item \textbf{Specialty domains:} datetime (cyclic, components), geospatial (distances, clusters), text (TF-IDF), high-cardinality crosses.
+    \item \textbf{Selection:} filter $\to$ embedded $\to$ wrapper, in order of cost.
+    \item \textbf{Automation tools} (featuretools, tsfresh) for exploration, not production. Domain features still win.
+    \item \textbf{Pitfalls:} target leakage, look-ahead bias, train-serve skew. Wrap everything in a Pipeline (L01c) and serve from a feature store in production.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{HW01g - practice}
+  \footnotesize Estimated time: 90-120 minutes. Tasks 1-4 graded; bonuses optional.
+  \begin{enumerate}\small
+    \item On the Yerevan rent dataset, engineer 5 domain features by hand (\texttt{price\_per\_m2}, \texttt{age\_at\_listing}, \texttt{avg\_rent\_district}, \texttt{rent\_vs\_district\_avg}, \texttt{dist\_to\_center}). Fit Ridge with and without. Report test MAE.
+    \item Add \texttt{PolynomialFeatures(degree=2)} to the original feature set. Compare CV score to step 1.
+    \item Fit Lasso on the union of original + engineered + polynomial features. Which features survive? Compare CV score to manual domain features only.
+    \item Replace Ridge with a tree-based model (e.g.\ \texttt{HistGradientBoostingRegressor}). Drop the polynomial features. Compare CV score to the linear pipeline.
+    \item \emph{Bonus 1:} compute \texttt{avg\_rent\_district} the wrong way (on full data, then split). Report inflated vs honest CV scores.
+    \item \emph{Bonus 2:} use \texttt{featuretools} on the dataset. Compare auto-generated features to your manual ones. Which set wins on test? \textbf{Most instructive question.}
+    \item \emph{Bonus 3:} build a rolling 30-day average rent feature using listings sorted by date. Verify no look-ahead bias.
+  \end{enumerate}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Topic from plan_manual.md Practical concepts item 1.
+%   - Yerevan apartment running example continued from L01b-L01f.
+%   - Cross-references: L01b (polynomial), L01c (preprocessing, datetime, leakage),
+%     L01d (CV for unbiased reporting), math module 30 (curse of dimensionality).
+%   - Predict-first frames per memory feedback_predict_first_slides.md.
+% =============================================================
