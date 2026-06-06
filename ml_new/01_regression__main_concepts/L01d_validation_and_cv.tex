@@ -156,11 +156,12 @@ X_train, X_test, y_train, y_test = train_test_split(
 \end{frame}
 
 \begin{frame}{Critical rules}
+  Ranked by how often students miss them:
   \begin{enumerate}
-    \item \textbf{Split before you do anything else.} Especially before scaling, imputing, encoding. The leakage rule from L01c (\emph{fit on train, transform on train and test}) requires you to have split first.
-    \item \textbf{Don't iterate on the test set.} If you make modeling decisions based on test-set behavior, the test set becomes part of training. Look at test \emph{once}, at the end.
-    \item \textbf{Time series needs chronological splits.} A random shuffle leaks the future into the past. Use \texttt{TimeSeriesSplit} or a single chronological cutoff.
+    \item \textbf{Don't iterate on the test set.} The most-violated rule. If you make any modeling decision based on test-set behavior, the test set becomes part of training. Look at test \emph{once}, at the end.
+    \item \textbf{Split before any preprocessing.} The leakage rule from L01c (\emph{fit on train, transform on train and test}) requires you to have split first. Without this, mean-imputation and scaling silently leak.
     \item \textbf{Group-structured data needs group splits.} If you have 10 photos per person and randomly split, the same person appears in both train and test. The model memorizes faces, not features. Use \texttt{GroupShuffleSplit}.
+    \item \textbf{Time series needs chronological splits.} A random shuffle leaks the future into the past. Use \texttt{TimeSeriesSplit} or a single chronological cutoff.
   \end{enumerate}
   \vfill
   \small\emph{What about EDA?} Distribution-level facts (sizes, classes present, ranges) are fine to check on the full data before splitting. The rule is about \emph{modeling decisions} and \emph{performance numbers}, not about awareness.
@@ -270,6 +271,7 @@ X_train, X_test, y_train, y_test = train_test_split(
       \node[armblue, font=\scriptsize, anchor=west] at (4.5, -0.55) {training folds};
       \node[gray, font=\scriptsize, anchor=west] at (4.5, -1.65) {final score $=$ average};
       \node[gray, font=\scriptsize, anchor=west] at (4.5, -2.15) {of all $k$ validation scores};
+      \node[font=\scriptsize\bfseries, armorange!80!black] at (2, 0.4) {$k = 5$};
     \end{tikzpicture}
   \end{center}
   \vfill
@@ -323,9 +325,11 @@ print(f"MSE = {-scores.mean():.3f} +/- {scores.std():.3f}")
 \end{lstlisting}
   \vfill
   \begin{itemize}\small
+    \item \textbf{Mean and std across folds} give a sanity check on stability. \emph{Always report both.}
     \item Pass \texttt{X\_train}, not the full dataset - test set stays untouched.
     \item For out-of-fold predictions (used in stacking, calibration): \texttt{cross\_val\_predict} returns one prediction per row.
-    \item Mean and std across folds give a sanity check on stability.
+    \item Multiple metrics at once: \texttt{cross\_validate(...,~scoring=["neg\_mean\_squared\_error",~"r2"])} returns a dict.
+    \item Lower-variance estimates: \texttt{RepeatedKFold(n\_repeats=3)} averages over multiple shuffles when compute allows.
   \end{itemize}
 \end{frame}
 
@@ -362,7 +366,7 @@ print(f"MSE = {-scores.mean():.3f} +/- {scores.std():.3f}")
   Answers:
   \begin{itemize}
     \item \textbf{On average 2 positives per fold} (10 split across 5).
-    \item \textbf{Roughly 6\% chance} at least one fold is empty - the 10 positives can cluster by chance. With smaller imbalance (1\% positives, $n=200$) it's nearly guaranteed.
+    \item \textbf{Roughly 6\% chance} at least one fold is empty - the 10 positives can cluster by chance. (Each fold's probability of being empty is $\binom{190}{40}/\binom{200}{40} \approx 0.8^{10} \approx 11\%$; with 5 folds, $\approx 1 - (1 - 0.11)^5 \approx 44\%$ if independent, but folds are negatively correlated $\Rightarrow$ true probability is $\approx 6\%$.) With smaller imbalance (1\% positives, $n=200$) it's nearly guaranteed.
   \end{itemize}
   \vfill
   Solution: split each class separately, so every fold ends up with its share of the minority class. \textbf{Stratified $k$-fold.}
@@ -409,6 +413,10 @@ print(f"MSE = {-scores.mean():.3f} +/- {scores.std():.3f}")
   \end{columns}
   \vfill
   Stratified $k$-fold splits each class separately. Every fold receives its share. No more empty-positive folds.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{For classification: default to \texttt{StratifiedKFold}.} There's almost no reason to use plain \texttt{KFold} on classification data. The sklearn helpers (\texttt{cross\_val\_score}, \texttt{GridSearchCV}) auto-stratify if \texttt{y} is categorical, but be explicit.
+  }}
 \end{frame}
 
 \begin{frame}[fragile]{Stratified CV in code}
@@ -487,9 +495,18 @@ TimeSeriesSplit(n_splits=5)      # rolling-forward windows
   \end{columns}
   \vfill
   Both available as \texttt{sklearn.model\_selection.validation\_curve} and \texttt{learning\_curve}.
+  \vfill
+  \footnotesize \textbf{What to do with each shape:}
+  \begin{itemize}\scriptsize
+    \item Validation-curve sweet spot at the \emph{edge} of your range $\Rightarrow$ widen the hyperparameter range.
+    \item Learning-curve gap \emph{not closing} $\Rightarrow$ bias-dominated; more data won't help. Change the model class (L01d2 callback).
+    \item Learning-curve gap \emph{closing slowly} $\Rightarrow$ variance-dominated; more data WILL help.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Decision flowchart}
+  \footnotesize Single train/val/test split is fine if you don't need a CI on your score - for example, big data, fast prototyping, or compute-constrained settings. CV is for when score variance matters.
+  \vskip 4pt
   \begin{center}
     \begin{tikzpicture}[
       node distance=0.45cm and 0.7cm,
@@ -513,19 +530,18 @@ TimeSeriesSplit(n_splits=5)      # rolling-forward windows
       \draw[arr] (grp) -- node[left, font=\tiny]{no} (kf);
     \end{tikzpicture}
   \end{center}
-  \vfill
-  \small Single train/val/test split is fine when big data makes one split low-noise, when compute is tight, or when you don't need a CI on the score. CV is for when score variance matters.
 \end{frame}
 
 \begin{frame}{Recap}
-  \begin{itemize}
+  \begin{itemize}\small
     \item \textbf{Training error lies.} Always evaluate on data the model didn't see.
     \item \textbf{Train/test split.} Simplest fix. 80/20 typical. Split before any preprocessing (L01c leakage rule).
     \item \textbf{Validation set.} If you tune anything, you need a third set. Test set touched once at the end.
-    \item \textbf{Cross-validation.} Rotates validation through $k$ folds, reducing noise by $\approx 1/k$. Default $k=5$. Use for small/medium data and model selection.
+    \item \textbf{Cross-validation.} Rotates validation through $k$ folds, reducing noise by $\approx 1/k$. Default $k=5$. Use \texttt{cross\_validate} for multiple metrics; \texttt{RepeatedKFold} for lower-variance estimates.
     \item \textbf{Stratified CV.} Default for classification - preserves class ratio per fold.
     \item \textbf{Group / Time splits.} Use when rows aren't independent. Otherwise the model memorizes entities or peeks at the future.
     \item \textbf{Validation/learning curves.} CV-based diagnostics for under/overfitting and ``would more data help?''.
+    \item \textbf{Bias-variance lens (L01d2):} CV (and the choice of $k$) is itself a bias-variance tradeoff - small $k$ is biased, large $k$ is noisy. The framework is fractal.
   \end{itemize}
   \vfill
   \emph{Coming next: L05b - nested CV, the honest way to report a tuned model's generalization error.}

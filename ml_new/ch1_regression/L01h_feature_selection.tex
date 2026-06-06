@@ -1,0 +1,614 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{L01h: Feature Selection}
+\subtitle{Which features matter, and how to be sure}
+\date{}
+
+\begin{document}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Why and how}
+
+\begin{frame}{Why select features?}
+  Five reasons to drop features:
+  \begin{enumerate}
+    \item \textbf{Curse of dimensionality} (math module 30). Volume of $p$-dim space grows exponentially. With $n$ fixed, samples become sparse.
+    \item \textbf{Multicollinearity} (L01b). Correlated features make linear coefficients unstable; $\Xmat^\top \Xmat$ becomes ill-conditioned.
+    \item \textbf{Overfitting risk.} More features $\Rightarrow$ more flexibility $\Rightarrow$ higher variance. Regularization helps but doesn't eliminate.
+    \item \textbf{Compute and storage.} Linear-in-$p$ at inference, polynomial during fit.
+    \item \textbf{Interpretability.} ``We use 8 features'' defends better than ``we use 800''. Critical for healthcare, credit, audit.
+  \end{enumerate}
+  \vfill
+  \textbf{When NOT to select.} With heavy L1/L2 regularization, the model effectively selects \emph{soft}. Sometimes deleting features hurts more than it helps - the dropped features may carry small but real signal.
+\end{frame}
+
+\begin{frame}{Predict-first: does adding features always help?}
+  You have $n = 200$ samples. You add features one at a time, fitting a Ridge model after each addition. Each new feature is a real signal (correlated with $y$) plus some noise.
+  \vfill
+  \pause
+  \textbf{Predict:} as you keep adding features, what happens to
+  \begin{itemize}
+    \item training error?
+    \item test error?
+  \end{itemize}
+  \pause
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    Training error \textbf{always falls} - more features means more flexibility to fit the training set.
+    \vskip 4pt
+    Test error follows a \textbf{U-shape}. It falls while features carry signal, then rises as added features bring more variance than bias reduction. The minimum is the sweet spot.
+    \vskip 4pt
+    Feature selection is about finding that sweet spot.
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+                     xlabel={features kept ($k$)},
+                     ylabel={error}, xlabel style={font=\scriptsize},
+                     ylabel style={font=\scriptsize}, ytick=\empty,
+                     xtick={1,5,10,15,20}, xticklabel style={font=\tiny},
+                     axis line style={gray!60}, ymin=0,
+                     legend pos=north east, legend style={font=\tiny},
+                     grid=major, grid style={dashed,gray!30}]
+          \addplot[armblue, very thick, smooth] coordinates {
+            (1,0.95) (3,0.7) (5,0.5) (7,0.36) (9,0.25)
+            (11,0.18) (13,0.13) (15,0.09) (17,0.07) (20,0.04)};
+          \addlegendentry{training}
+          \addplot[armred, very thick, smooth] coordinates {
+            (1,1.0) (3,0.7) (5,0.5) (7,0.42) (9,0.40)
+            (11,0.45) (13,0.55) (15,0.70) (17,0.90) (20,1.25)};
+          \addlegendentry{test}
+          \addplot[armorange, only marks, mark=triangle*, mark size=4pt]
+            coordinates {(9, 0.40)};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize Sweet spot at $k \approx 9$; more features hurt.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The three families of selection methods}
+  \begin{center}\small
+    \begin{tabular}{p{2.8cm} p{4.5cm} p{4.5cm}}
+      \textbf{Family} & \textbf{How it works} & \textbf{Strengths / weaknesses} \\ \hline
+      \textbf{Filter} & Score each feature \emph{independently} against the target. Pick top $k$. & Fast, model-agnostic. \emph{Blind to interactions.} \\[2pt]
+      \textbf{Embedded} & Use a model that selects \emph{as it fits} (Lasso, tree importances). & Cheap, model-aware. Tied to the chosen model. \\[2pt]
+      \textbf{Wrapper} & Search over feature subsets, evaluate each via CV. & Most accurate. Expensive: refits the model $\mathcal{O}(p)$-$\mathcal{O}(p^2)$ times. \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  Cost goes up left-to-right. Accuracy (for the model you'll deploy) usually does too.
+  \vfill
+  \textbf{Typical workflow:}
+  \begin{enumerate}\small
+    \item Filter from $p = 10{,}000$ down to $p = 500$ (drop near-constants, very low MI).
+    \item Embedded selection (Lasso or tree importance) on the 500 to get 50-100 candidates.
+    \item Wrapper (RFE-CV or Boruta) on the 50-100 to get the final 10-20.
+  \end{enumerate}
+\end{frame}
+
+% ================================================================
+\section{Filter methods}
+
+\begin{frame}[fragile]{Variance threshold and univariate filters}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \footnotesize
+    \textbf{Variance threshold.} Drop near-constant features. Quick win - constant features carry no signal.
+    \vskip 4pt
+    \textbf{Univariate statistical tests.} Score each feature by its individual association with $y$:
+    \begin{itemize}\footnotesize
+      \item Regression: \texttt{f\_regression} (linear), \texttt{mutual\_info\_regression} (any monotonic).
+      \item Classification: \texttt{f\_classif} (ANOVA), \texttt{chi2} (categorical), \texttt{mutual\_info\_classif}.
+    \end{itemize}
+    \vskip 4pt
+    Pick top $k$ via \texttt{SelectKBest} or percentile via \texttt{SelectPercentile}.
+    \column{0.45\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection import (
+    VarianceThreshold,
+    SelectKBest,
+    f_regression,
+    mutual_info_regression)
+
+# Drop near-constants
+X = VarianceThreshold(0.01).fit_transform(X)
+
+# Top-20 by linear correlation
+sel = SelectKBest(f_regression, k=20)
+X_sel = sel.fit_transform(X, y)
+
+# Top-20 by mutual information
+sel_mi = SelectKBest(
+    mutual_info_regression, k=20)
+\end{lstlisting}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The independence trap}
+  Filter methods score each feature \emph{alone}. They miss \textbf{interactions}.
+  \vfill
+  \begin{columns}[T]
+    \column{0.45\textwidth}
+    \footnotesize
+    Consider 4 points: $(x_1, x_2, y)$
+    \vskip 2pt
+    \begin{center}\scriptsize
+      \begin{tabular}{ccc}
+        $x_1$ & $x_2$ & $y$ \\ \hline
+        0 & 0 & 0 \\
+        0 & 1 & 1 \\
+        1 & 0 & 1 \\
+        1 & 1 & 0
+      \end{tabular}
+    \end{center}
+    \vskip 4pt
+    Marginal correlations: $\text{corr}(x_1, y) = 0$, $\text{corr}(x_2, y) = 0$. Mutual information $\approx 0$ per feature.
+    \vskip 4pt
+    Jointly: $y = x_1 \oplus x_2$. Perfect predictor.
+    \column{0.55\textwidth}
+    Filter score on this data: \emph{both features look useless}. A linear model fed only $x_1$ or only $x_2$ confirms it.
+    \vfill
+    \textbf{Lesson:} filter is a screen, not a decision. A feature that fails the univariate test may still matter in combination.
+    \vfill
+    \textbf{Workarounds:}
+    \begin{itemize}\small
+      \item Add hand-engineered interactions before filtering (L01g).
+      \item Use a multivariate filter (next slide).
+      \item Use embedded methods on a tree model, which discovers interactions.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Multivariate filters}
+  Filters that consider feature \emph{combinations} instead of one-at-a-time.
+  \vfill
+  \begin{itemize}
+    \item \textbf{mRMR} (Minimum Redundancy Maximum Relevance). At each step, pick the feature that maximizes (relevance to $y$) minus (average correlation with already-picked features). Catches non-redundant signal.
+    \item \textbf{Cluster-and-represent.} Group features by mutual correlation (hierarchical clustering), pick one representative per cluster (the one with highest target correlation). Cheap, removes obvious redundancy.
+    \item \textbf{HSIC-Lasso} (Hilbert-Schmidt Independence Criterion). Kernel-based, captures non-linear dependence.
+  \end{itemize}
+  \vfill
+  \footnotesize Libraries: \texttt{pymrmr}, \texttt{mrmr-selection}, \texttt{scikit-feature}. Not as common as filter+embedded combinations, but useful when $p$ is large and many features are correlated (genomics, sensor data).
+\end{frame}
+
+% ================================================================
+\section{Embedded methods}
+
+\begin{frame}[fragile]{L1 / Lasso for sparsity}
+  Recall Ridge (L01b) minimizes $\|\yv - \Xmat\thetav\|^2 + \lambda\,\|\thetav\|_2^2$. The L2 penalty shrinks coefficients toward zero but rarely \emph{to} zero.
+  \vfill
+  \textbf{Lasso} replaces L2 with L1:
+  \[
+    \thetah_{\text{Lasso}} = \argmin_{\thetav}\; \| \yv - \Xmat\thetav \|^2 + \lambda \, \| \thetav \|_1
+  \]
+  The L1 penalty has a non-smooth corner at $\theta_j = 0$, which \emph{forces} coefficients exactly to zero. Features with zero coefficient are selected out.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=3.5cm,
+                     xlabel={$\log \lambda$ (increasing penalty $\to$)},
+                     ylabel={coefficient $\theta_j$},
+                     xlabel style={font=\tiny}, ylabel style={font=\tiny},
+                     xtick=\empty, ytick=\empty,
+                     axis line style={gray!60}, ymin=-1.5, ymax=2.0,
+                     grid=major, grid style={dashed,gray!30}]
+          \draw[gray!50, dashed] (axis cs:-3, 0) -- (axis cs:3, 0);
+          \addplot[armred, very thick, smooth] coordinates {(-3, 1.9) (-2, 1.6) (-1, 1.2) (0, 0.8) (1, 0.4) (2, 0.1) (3, 0)};
+          \addplot[armblue, very thick, smooth] coordinates {(-3, 1.3) (-2, 1.0) (-1, 0.7) (0, 0.4) (1, 0.1) (1.5, 0) (3, 0)};
+          \addplot[paramgreen, very thick, smooth] coordinates {(-3, -0.9) (-2, -0.6) (-1, -0.3) (-0.3, 0) (3, 0)};
+          \addplot[armorange, very thick, smooth] coordinates {(-3, 0.5) (-2, 0.3) (-1, 0.1) (-0.5, 0) (3, 0)};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize Lasso path. Less-important features hit 0 first.
+    \end{center}
+    \column{0.5\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.linear_model import LassoCV
+from sklearn.feature_selection \
+    import SelectFromModel
+
+lasso = LassoCV(cv=5,
+                random_state=509).fit(X, y)
+sel = SelectFromModel(lasso,
+                      prefit=True)
+X_sel = sel.transform(X)
+# Selected feature indices
+keep = sel.get_support(indices=True)
+\end{lstlisting}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tree impurity importance}
+  Tree models track how much each feature reduces the loss across all its splits.
+  \vfill
+  \begin{itemize}
+    \item For \textbf{regression trees}: importance$_j$ $=$ sum of (variance reduction at each split using feature $j$), weighted by samples reaching that split.
+    \item For \textbf{classification trees}: same idea with Gini decrease or entropy decrease.
+    \item Random Forest / GBM average importance across all trees.
+  \end{itemize}
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.ensemble import RandomForestRegressor
+rf = RandomForestRegressor(n_estimators=300,
+                           random_state=509).fit(X, y)
+importances = pd.Series(rf.feature_importances_, index=X.columns)
+importances.sort_values(ascending=False).head(10)
+\end{lstlisting}}
+  \vfill
+  Cheap (free with the model), intuitive, used everywhere. \textbf{Also: misleading} on correlated features and high-cardinality categoricals - the next slide is the most important warning in this deck.
+\end{frame}
+
+\begin{frame}{Predict-first: impurity importance on correlated features}
+  You have 5 features. Features $x_1$ and $x_2$ are nearly perfectly correlated (cor $\approx 0.99$) and both strongly predict $y$. Features $x_3, x_4, x_5$ are independent and predictive.
+  \vfill
+  \pause
+  \textbf{Predict:} when you fit a Random Forest and read off impurity importances, what does $x_1$'s importance look like?
+  \pause
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    Each tree splits on one of $\{x_1, x_2\}$ - whichever the random feature subsample saw first. The total ``true'' importance is split roughly half-and-half.
+    \vskip 4pt
+    \textbf{A naive reader concludes:} ``$x_1$ and $x_2$ are about as important as $x_3, x_4, x_5$. Drop $x_1$ to simplify.''
+    \vskip 4pt
+    \textbf{What actually happened:} $x_1$ alone is highly predictive; the importance is just shared with its near-duplicate. Dropping $x_1$ leaves $x_2$ to do the same work; dropping both is a disaster.
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+                     xbar, xmin=0, xmax=0.45,
+                     symbolic y coords={x5, x4, x3, x2, x1},
+                     ytick=data,
+                     xlabel={impurity importance},
+                     xlabel style={font=\tiny},
+                     yticklabel style={font=\scriptsize},
+                     xticklabel style={font=\tiny},
+                     nodes near coords, nodes near coords style={font=\tiny},
+                     enlarge y limits=0.1,
+                     axis line style={gray!60}]
+          \addplot[fill=armred!50, draw=armred] coordinates {
+            (0.18,x1) (0.18,x2) (0.20,x3) (0.21,x4) (0.23,x5)};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize $x_1$ and $x_2$ split the importance they jointly carry.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Permutation importance: the more reliable alternative}
+  \textbf{Idea.} Shuffle one column at a time; measure how much the model's score drops on a held-out set. Big drop $\Rightarrow$ feature mattered.
+  \vfill
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.inspection import (
+    permutation_importance)
+
+model = RandomForestRegressor().fit(X_tr, y_tr)
+res = permutation_importance(
+    model, X_val, y_val,
+    n_repeats=30,
+    random_state=509)
+# res.importances_mean, res.importances_std
+\end{lstlisting}}
+    \footnotesize Advantages:
+    \begin{itemize}\footnotesize
+      \item Model-agnostic - works for any \texttt{score} method.
+      \item Reflects \emph{validation} performance, not training.
+      \item Multiple shuffles give error bars.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+                     xbar, xmin=0, xmax=0.4,
+                     symbolic y coords={x5, x4, x3, x2, x1},
+                     ytick=data,
+                     xlabel={score drop after shuffle},
+                     xlabel style={font=\tiny},
+                     yticklabel style={font=\scriptsize},
+                     xticklabel style={font=\tiny},
+                     enlarge y limits=0.1,
+                     axis line style={gray!60}]
+          \addplot[fill=armblue!50, draw=armblue]
+            coordinates {
+              (0.32,x1) (0.30,x2) (0.15,x3) (0.10,x4) (0.02,x5)};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize Correlated $x_1, x_2$ are \emph{both} marked important.
+    \end{center}
+  \end{columns}
+  \vfill
+  \footnotesize \textbf{Caveat:} permutation breaks correlations the model relied on. If features are highly correlated, permutation importance over-credits them. The cure is to use \emph{conditional} permutation or pair with SHAP.
+\end{frame}
+
+\begin{frame}[fragile]{SHAP: model-agnostic, theoretically grounded}
+  SHAP (SHapley Additive exPlanations) gives each feature its \emph{Shapley value} from cooperative game theory: the average marginal contribution to the prediction across all possible feature subsets.
+  \vfill
+  \begin{itemize}\small
+    \item Works on any model. Fast for trees via \texttt{TreeExplainer} (exact, polynomial-time).
+    \item Local (per-prediction) and global (mean absolute SHAP across samples) importance.
+    \item Modern industry default for interpretability.
+    \item Handles correlated features more honestly than impurity importance.
+  \end{itemize}
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+import shap
+explainer = shap.TreeExplainer(model)
+shap_values = explainer.shap_values(X_val)         # one per (sample, feature)
+mean_abs_shap = np.abs(shap_values).mean(axis=0)   # global importance
+shap.summary_plot(shap_values, X_val)              # built-in plot
+\end{lstlisting}}
+  \vfill
+  \footnotesize \textbf{Caveat:} ``importance'' here means contribution to \emph{the model's prediction}, not to the true causal effect. A correlated nuisance feature can have high SHAP value if the model happens to use it.
+\end{frame}
+
+% ================================================================
+\section{Wrapper methods}
+
+\begin{frame}[fragile]{RFE and RFE-CV}
+  \textbf{Recursive Feature Elimination.} Fit the model, drop the least-important feature, refit, repeat until $k$ features remain.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection \
+    import RFE, RFECV
+from sklearn.linear_model import Ridge
+
+# Fixed k
+rfe = RFE(Ridge(), n_features_to_select=10).fit(X, y)
+
+# Auto k via CV (preferred)
+rfecv = RFECV(
+    Ridge(), cv=5,
+    scoring="neg_mean_squared_error",
+    min_features_to_select=2).fit(X, y)
+print(rfecv.n_features_)
+\end{lstlisting}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+                     xlabel={features kept ($k$)}, ylabel={CV score},
+                     xlabel style={font=\tiny}, ylabel style={font=\tiny},
+                     xtick={1,5,10,15,20}, xticklabel style={font=\tiny},
+                     ytick=\empty,
+                     axis line style={gray!60}, grid=major,
+                     grid style={dashed,gray!30}]
+          \addplot[armblue, very thick, smooth, mark=*, mark size=1pt]
+            coordinates {(1,0.3) (3,0.55) (5,0.72) (7,0.82) (9,0.87)
+                         (11,0.87) (13,0.86) (15,0.83) (17,0.79) (20,0.74)};
+          \addplot[armorange, only marks, mark=triangle*, mark size=4pt]
+            coordinates {(9, 0.87)};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize Elbow at $k = 9$. RFECV picks this.
+    \end{center}
+  \end{columns}
+  \vfill
+  \footnotesize Cost: $\mathcal{O}(p)$ model fits per fold. Use a fast model (Ridge / LogReg) or pre-filter to $p < 100$.
+\end{frame}
+
+\begin{frame}[fragile]{Sequential forward / backward selection}
+  Greedy alternatives to RFE. Slower but flexible across model classes.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection import SequentialFeatureSelector
+
+# Forward: start empty, add the feature that most improves CV
+sfs_fwd = SequentialFeatureSelector(
+    Ridge(), n_features_to_select=10,
+    direction="forward", cv=5).fit(X, y)
+
+# Backward: start full, drop the feature whose removal hurts CV least
+sfs_bwd = SequentialFeatureSelector(
+    Ridge(), n_features_to_select=10,
+    direction="backward", cv=5).fit(X, y)
+\end{lstlisting}}
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Forward} - fast when target $k \ll p$ (few features kept). Each step refits with one more feature.
+    \item \textbf{Backward} - fast when target $k \approx p$ (few features dropped). Each step refits with one fewer.
+    \item Both miss good \emph{combinations} that don't show in single-step additions. RFE often does better.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Boruta: the ``all-relevant'' approach}
+  Most methods find a \emph{minimal} relevant set. Boruta finds \emph{all} features that beat random chance.
+  \vfill
+  \textbf{Algorithm.}
+  \begin{enumerate}\small
+    \item For each real feature, create a \emph{shadow}: a shuffled copy. Shadow features carry no real signal.
+    \item Fit a Random Forest on real $+$ shadows.
+    \item Compare each real feature's importance to the \emph{maximum} shadow importance.
+    \item Repeat for many iterations. A feature that consistently beats the max shadow is ``confirmed'', one that consistently doesn't is ``rejected''.
+  \end{enumerate}
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from boruta import BorutaPy
+from sklearn.ensemble import \
+    RandomForestRegressor
+
+rf = RandomForestRegressor(
+    n_estimators=200, random_state=509)
+br = BorutaPy(rf, max_iter=100,
+              random_state=509).fit(
+    X.values, y.values)
+print(X.columns[br.support_])
+\end{lstlisting}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+                     xbar, xmin=0, xmax=0.45,
+                     symbolic y coords={x5, shmax, x4, x3, x2, x1},
+                     ytick=data,
+                     xlabel={importance}, xlabel style={font=\tiny},
+                     yticklabel style={font=\scriptsize},
+                     xticklabel style={font=\tiny},
+                     enlarge y limits=0.15,
+                     axis line style={gray!60}]
+          \addplot[fill=armred!50, draw=armred] coordinates {
+            (0.35,x1) (0.30,x2) (0.20,x3) (0.10,x4) (0.05,x5)};
+          \addplot[fill=gray!60, draw=gray] coordinates {(0.12,shmax)};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize Real features above shmax (gray) are kept; below it are rejected.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Stability and pitfalls}
+
+\begin{frame}[fragile]{Stability selection + how many features?}
+  ``Run Lasso once'' gives one answer. ``Run Lasso many times on bootstrap samples'' tells you which features show up \emph{robustly}.
+  \vfill
+  \textbf{Stability selection (Meinshausen \& Buhlmann, 2010).}
+  \begin{enumerate}\small
+    \item Draw $B = 100$ bootstrap subsamples.
+    \item Fit Lasso (with a range of $\lambda$s) on each.
+    \item For each feature, record fraction of bootstraps where it was selected at all.
+    \item Keep features with selection frequency $> 0.5$ (or any chosen threshold).
+  \end{enumerate}
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.utils import resample
+from sklearn.linear_model import LassoCV
+import numpy as np
+
+selected_counts = np.zeros(X.shape[1])
+for _ in range(100):
+    X_bs, y_bs = resample(X, y, random_state=None)
+    sel = LassoCV(cv=5).fit(X_bs, y_bs)
+    selected_counts += (sel.coef_ != 0)
+stability = selected_counts / 100
+keep = stability > 0.5
+\end{lstlisting}}
+  \vfill
+  \footnotesize \textbf{How many features?} Stability selection answers it automatically - $k =$ count of features above the threshold. Alternative: pick $k$ at the RFE-CV elbow.
+\end{frame}
+
+\begin{frame}{Pitfalls}
+  \begin{enumerate}
+    \item \textbf{Selection bias (the biggest one).} Doing feature selection on the \emph{full} dataset before splitting inflates CV scores. The chosen features were peeked at including test rows. Fix: nested CV with selection inside the inner loop, or do selection on train fold only.
+    \item \textbf{Leakage via target encoding.} If features were target-encoded (L01c) without CV, selection just propagates the leakage. Fix the encoder first.
+    \item \textbf{Model-dependence.} Features selected by Lasso may differ from those selected by tree importance. Selection results don't transfer across model classes; re-select if you switch models.
+    \item \textbf{Correlated features.} Impurity importance splits credit; Lasso picks arbitrarily; RFE drops one randomly. None handles correlation cleanly. SHAP and permutation help.
+    \item \textbf{Over-aggressive thresholds.} ``Keep features with importance $> 0.01$'' is arbitrary. Use CV elbow, stability frequency, or Boruta's shadow comparison instead.
+    \item \textbf{Forgetting the baseline.} Always compare to ``keep all features.'' Selection that doesn't improve CV \emph{wasn't worth doing}.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Decision flowchart}
+  \begin{center}
+    \begin{tikzpicture}[
+      node distance=0.4cm and 0.7cm,
+      box/.style={rectangle, draw=armblue, very thick, text width=3cm, align=center, font=\scriptsize, rounded corners=2pt, fill=armblue!5, minimum height=0.85cm},
+      result/.style={rectangle, draw=paramgreen, very thick, text width=2.8cm, align=center, font=\scriptsize, rounded corners=2pt, fill=paramgreen!10, minimum height=0.85cm},
+      arr/.style={->, >=stealth, thick, armblue},
+    ]
+      \node[box] (start) {$p > 1000$ features?};
+      \node[result, right=of start] (filter) {Filter first (Variance + MI), then re-decide};
+      \node[box, below=of start] (linear) {Using a linear model?};
+      \node[result, right=of linear] (lasso) {Lasso / ElasticNet};
+      \node[box, below=of linear] (tree) {Using a tree ensemble?};
+      \node[result, right=of tree] (perm) {Permutation importance + RFECV};
+      \node[box, below=of tree] (stable) {Need robust ``all-relevant''?};
+      \node[result, right=of stable] (bor) {Boruta or stability selection};
+      \node[result, below=of stable] (shap) {SHAP for production interpretability};
+
+      \draw[arr] (start) -- node[above, font=\tiny]{yes} (filter);
+      \draw[arr] (start) -- (linear);
+      \draw[arr] (linear) -- node[above, font=\tiny]{yes} (lasso);
+      \draw[arr] (linear) -- (tree);
+      \draw[arr] (tree) -- node[above, font=\tiny]{yes} (perm);
+      \draw[arr] (tree) -- (stable);
+      \draw[arr] (stable) -- node[above, font=\tiny]{yes} (bor);
+      \draw[arr] (stable) -- (shap);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \footnotesize Whatever method you use: do selection inside a CV loop, not before.
+\end{frame}
+
+% ================================================================
+\section{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Why select.} Curse of dimensionality, multicollinearity, overfitting, compute, interpretability. Not always worth it - check vs ``keep all + regularize''.
+    \item \textbf{Filter} - cheap, model-agnostic, blind to interactions. \texttt{SelectKBest} with \texttt{f\_regression} or \texttt{mutual\_info\_regression}.
+    \item \textbf{Embedded} - selection as part of fitting. Lasso for linear, tree importances for trees. Watch for the correlated-features trap.
+    \item \textbf{Permutation importance} - the reliable replacement for impurity importance. \texttt{SHAP} - the modern industry default.
+    \item \textbf{Wrapper} - RFE-CV picks $k$ automatically. Boruta finds \emph{all relevant} features via shadow comparisons.
+    \item \textbf{Stability selection} - bootstrap + Lasso, keep features that show up often.
+    \item \textbf{Pitfall \#1:} feature selection on full data before splitting inflates CV scores. Always select inside the CV loop.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{HW01h - practice}
+  \footnotesize Estimated time: 90-120 minutes. Tasks 1-4 graded; bonuses optional.
+  \begin{enumerate}\small
+    \item On the Yerevan rent dataset (with engineered features from L01g): compute \texttt{f\_regression} scores. Plot scores and pick top 10 by univariate filter. Report Ridge CV MAE on the filtered set.
+    \item Fit \texttt{LassoCV}. Plot the coefficient path (\texttt{lasso\_path}). Report which features survive at the CV-optimal $\lambda$ and compare to step 1.
+    \item Fit a Random Forest. Compute \emph{both} \texttt{feature\_importances\_} (impurity) and \texttt{permutation\_importance} on a held-out set. Identify any feature where the two disagree by more than 2$\times$. Explain why.
+    \item Run \texttt{RFECV} with Ridge. How does its chosen $k$ compare to the filter and Lasso choices?
+    \item \emph{Bonus 1:} run stability selection (bootstrap + Lasso, 100 iterations). Plot selection frequency per feature. How does it compare to a single Lasso fit?
+    \item \emph{Bonus 2:} install \texttt{boruta} (\texttt{pip install Boruta}) and run \texttt{BorutaPy}. Compare confirmed features to RFE-CV's selection.
+    \item \emph{Bonus 3:} simulate selection bias: do feature selection on the \emph{full} dataset, then CV. Compare to doing selection inside the CV loop. Report the gap. \textbf{Most instructive question.}
+  \end{enumerate}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Outline approved by user.
+%   - Yerevan apartment running example continued from L01b-L01g.
+%   - Callbacks: L01b (Ridge -> Lasso), L01g (filter/embedded/wrapper teaser),
+%     math module 30 (curse of dim), L05b (nested CV for honest reporting).
+%   - Predict-first frames per memory feedback_predict_first_slides.md.
+% =============================================================

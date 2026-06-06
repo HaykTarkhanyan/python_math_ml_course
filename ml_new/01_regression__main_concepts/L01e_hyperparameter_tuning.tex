@@ -34,6 +34,8 @@
 \section{Why tune?}
 
 \begin{frame}{Parameters vs.\ hyperparameters}
+  \textbf{The simple test:} can you \emph{compute} it from the data alone, or do you have to \emph{choose} it? Compute $\Rightarrow$ parameter. Choose $\Rightarrow$ hyperparameter.
+  \vfill
   \begin{columns}[T]
     \column{0.5\textwidth}
     \textbf{Parameters $\thetav$} are what the model \emph{learns} from data.
@@ -72,7 +74,7 @@
     \item \textbf{XGBoost:} 10-15 sensitive ones (\texttt{learning\_rate}, \texttt{max\_depth}, \texttt{subsample}, \texttt{colsample\_bytree}, \texttt{min\_child\_weight}, regularization, $\ldots$).
     \item \textbf{Transformer training:} dozens (architecture + optimization + data + regularization).
   \end{itemize}
-  Tuning effort scales with the search-space size. Method choice should too.
+  Tuning effort scales with the search-space size. \textbf{The number of hyperparameters dictates which search method makes sense:} Ridge ($1$ HP) $\to$ manual or grid; XGBoost ($15$) $\to$ random or Bayesian. The next sections develop this map.
 \end{frame}
 
 \begin{frame}{The bilevel optimization view}
@@ -95,6 +97,8 @@
     \end{tikzpicture}
   \end{center}
   \vfill
+  \footnotesize \textbf{In plain English:} the outer loop tries hyperparameter values; the inner loop fits the model with those values. \emph{One outer step = one full model training.}
+  \vskip 4pt
   Choices on outer search strategy:
   \begin{itemize}\small
     \item \textbf{Manual} - you propose $\lamv$ values from intuition.
@@ -120,6 +124,10 @@
   \end{enumerate}
   \vfill
   Also called \emph{manual coordinate descent} - you adjust one hyperparameter at a time.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Manual is fast to start and slow to scale.} It works for 1-2 HPs and an experienced practitioner. For everything else, the automated methods coming up are usually better. Treat the rest of this deck as upgrades, not replacements.
+  }}
 \end{frame}
 
 \begin{frame}{When manual works (and when it doesn't)}
@@ -193,6 +201,8 @@
   \end{itemize}
   \vfill
   Add one more hyperparameter (5 values): $\mathbf{15{,}625}$ fits, $\mathbf{5.4}$ days. The curse of dimensionality strikes early.
+  \vfill
+  \textbf{Grid search is impractical above 3 hyperparameters with non-trivial ranges.} The next section introduces random search, which solves this.
 \end{frame}
 
 \begin{frame}[fragile]{Code: \texttt{GridSearchCV} with Pipeline}
@@ -225,7 +235,8 @@ print(gs.best_params_, -gs.best_score_)
     \item $\leq 2{-}3$ hyperparameters AND each has $\leq 6$ candidate values.
     \item Each model fit is cheap (small data, simple model).
     \item Reproducibility / publication: ``we evaluated all $X$ configurations.''
-    \item Inputs have clearly preferred discrete values (e.g., \texttt{max\_depth} $\in \{3, 5, 7\}$).
+    \item \textbf{Discrete, narrow, well-known values} (e.g., \texttt{max\_depth} $\in \{3, 5, 7\}$ for trees) - there's nothing to randomize over.
+    \item Inputs have clearly preferred discrete values from prior knowledge.
   \end{itemize}
   \vfill
   Once you have 4+ hyperparameters or 10+ values each, grid stops being practical. Random search is almost always better.
@@ -285,6 +296,10 @@ print(gs.best_params_, -gs.best_score_)
   \end{columns}
   \vfill
   \footnotesize Random search gets 9 distinct samples along the important axis; grid gets 3. The wider the gap between effective dimensionality and total dimensionality, the bigger the random-search win.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Default: random search for $\geq 3$ hyperparameters.} With $\sim 60$ trials, random search typically matches a $10^d$ grid. Reach for grid only when you have specific known values.
+  }}
 \end{frame}
 
 \begin{frame}{Random search advantage in one line}
@@ -320,7 +335,7 @@ rs.fit(X_train, y_train)
 print(rs.best_params_, -rs.best_score_)
 \end{lstlisting}
   \vfill
-  \footnotesize Use \texttt{loguniform} for hyperparameters that span orders of magnitude (regularization strength, learning rate). Use \texttt{uniform} for bounded ranges. Use \texttt{randint} for integer-valued discrete ones.
+  \scriptsize Use \texttt{loguniform} for orders-of-magnitude HPs; \texttt{uniform} for bounded ranges; \texttt{randint} for discrete. Modern alternative: \texttt{HalvingRandomSearchCV} (sklearn-builtin Successive Halving).
 \end{frame}
 
 % ================================================================
@@ -372,7 +387,7 @@ print(rs.best_params_, -rs.best_score_)
     \end{tikzpicture}
   \end{center}
   \vfill
-  \footnotesize The surrogate is confident near observed points (narrow band) and uncertain elsewhere (wide band). The acquisition function trades off \emph{exploit} (go where the mean is high) and \emph{explore} (go where the uncertainty is high).
+  \footnotesize The surrogate is confident near observed points (narrow band) and uncertain elsewhere (wide band). The acquisition function trades off \emph{exploit} (go where the mean is high) and \emph{explore} (go where the uncertainty is high). The next slide gives three concrete acquisition functions.
 \end{frame}
 
 \begin{frame}{Acquisition functions}
@@ -385,6 +400,10 @@ print(rs.best_params_, -rs.best_score_)
   \end{itemize}
   \vfill
   The acquisition function is itself optimized over $\lamv$ (cheap - no model fits required), then we evaluate the model only at the chosen point.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Default: EI.} UCB if you want explicit control over the explore-vs-exploit dial. PI rarely - it under-explores. Optuna's TPE uses an EI-style criterion behind the scenes.
+  }}
 \end{frame}
 
 \begin{frame}[fragile]{Code: Optuna (modern default)}
@@ -427,6 +446,10 @@ print(study.best_params, study.best_value)
     \item Your search space is largely categorical with no obvious order.
   \end{itemize}
   \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
+    \textbf{Rule of thumb:} Bayesian opt pays off when each evaluation costs $\gtrsim 1$ minute AND you have $\geq 4$ hyperparameters. Below either threshold, the surrogate-fitting overhead isn't justified - use random search.
+  }}
+  \vfill
   \emph{Modern AutoML tools (Optuna, Hyperopt, Ray Tune) default to TPE-style Bayesian samplers because they ``just work'' across mixed search spaces.}
 \end{frame}
 
@@ -445,7 +468,7 @@ print(study.best_params, study.best_value)
   \end{itemize}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
-    \textbf{Honest reporting:} the score you tuned to optimize is \emph{optimistically biased}. Report the test-set score after tuning is complete (or use nested CV - L05b).
+    \textbf{Honest reporting:} the score you tuned to optimize is \emph{optimistically biased}. Report the test-set score after tuning is complete (or use nested CV - L05b). \emph{Conceptually: HP tuning navigates the bias-variance tradeoff (L01d2). Each HP setting moves the model along the U-shape; CV finds the sweet spot empirically.}
   }}
 \end{frame}
 
@@ -474,17 +497,19 @@ print(study.best_params, study.best_value)
     \end{tikzpicture}
   \end{center}
   \vfill
-  \footnotesize Defaults: $\leq 2$ HPs $\to$ grid is fine; otherwise random search; if compute is the bottleneck, Bayesian opt.
+  \footnotesize Defaults: $\leq 2$ HPs $\to$ grid is fine; otherwise random search; if compute is the bottleneck, Bayesian opt. \\[2pt]
+  \textbf{Whatever method:} use subsampling, early stopping, and pruning to multiply your effective budget (see compute-budget frame).
 \end{frame}
 
 \begin{frame}{Recap}
-  \begin{itemize}
+  \begin{itemize}\small
     \item \textbf{Parameters} are learned from data. \textbf{Hyperparameters} are chosen by you. Tuning $=$ outer optimization wrapping the inner fit.
     \item \textbf{Manual.} Cheap, intuition-building, doesn't scale. Watch for confirmation bias and validation-set abuse.
     \item \textbf{Grid.} Exhaustive over Cartesian product. Fine for $\leq 2$ HPs; explodes in high dimensions.
     \item \textbf{Random.} Default for $\geq 3$ HPs. Each trial is a fresh sample on every axis. Easy to budget and parallelize. Beats grid when effective dimensionality is low.
-    \item \textbf{Bayesian.} Models the score-vs-HP surface and queries smartly. Best when each evaluation is expensive. Optuna's TPE is the modern default.
-    \item \textbf{Honest reporting.} Tuning inflates the score; report on a held-out test set (or nested CV - L05b).
+    \item \textbf{Bayesian.} Models the score-vs-HP surface and queries smartly. Best when each evaluation is expensive. Optuna's TPE is the modern default; \texttt{HalvingRandomSearchCV} is the sklearn-builtin alternative.
+    \item \textbf{Bias-variance lens (L01d2):} HP tuning navigates the bias-variance U. Each candidate setting moves the model along the U; CV finds the sweet spot. Without this lens HP tuning feels arbitrary; with it, it's purposeful.
+    \item \textbf{Honest reporting.} Tuning inflates the score; report on a held-out test set or use nested CV (L05b).
   \end{itemize}
 \end{frame}
 
