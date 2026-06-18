@@ -26,12 +26,28 @@
 
 \begin{document}
 
-\begin{frame}{Train MSE = 0. Trust the model?}
+\begin{frame}{A few noisy points. Fit a line.}
   \begin{center}
-    \includegraphics[width=\linewidth]{figures/l01d_3pt_overfit.pdf}
+    \includegraphics[width=0.95\linewidth]{figures/l01d_open_1_line.pdf}
   \end{center}
   \vfill
-  \footnotesize \emph{Today: how to tell when our model is fooling us, and how to evaluate it honestly.}
+  \footnotesize Train MSE $\approx 0.03$. Not bad.
+\end{frame}
+
+\begin{frame}{Same points. Fit a degree-6 polynomial.}
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{figures/l01d_open_2_poly.pdf}
+  \end{center}
+  \vfill
+  \footnotesize Train MSE $\approx 10^{-26}$. \emph{Should we ship the polynomial?}
+\end{frame}
+
+\begin{frame}{Add 5 unseen points. Which model handles them?}
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{figures/l01d_open_3_test.pdf}
+  \end{center}
+  \vfill
+  \footnotesize Polynomial test MSE $\approx 0.12$ -- 7$\times$ worse than the line ($\approx 0.02$). Training error lies. \emph{Today: how to evaluate honestly.}
 \end{frame}
 
 \begin{frame}{Outline}
@@ -78,21 +94,43 @@
 \end{frame}
 
 \begin{frame}{Two ways a model can be wrong}
-  Before diving into how we detect this, let's name the two failure modes.
-  \vfill
+  Same noisy curved data fitted three ways:
+  \vskip -4pt
+  \begin{center}
+    \begin{tikzpicture}
+      \begin{groupplot}[
+        group style={group size=3 by 1, horizontal sep=18pt},
+        width=0.36\textwidth, height=3.2cm,
+        xmin=-0.05, xmax=1.05, ymin=-0.3, ymax=1.4,
+        xtick=\empty, ytick=\empty, axis line style={gray!60},
+        title style={font=\footnotesize},
+      ]
+        \nextgroupplot[title={\textbf{Underfit} (degree 1)}]
+          \addplot[only marks, mark=*, mark size=1pt, armred] coordinates {
+            (0.05,0.20) (0.15,0.50) (0.25,0.70) (0.35,0.85) (0.45,0.95)
+            (0.55,1.05) (0.65,0.90) (0.75,0.70) (0.85,0.45) (0.95,0.18)};
+          \addplot[armblue, very thick, domain=0:1, samples=2] {0.55 + 0.1*x};
+        \nextgroupplot[title={\textbf{Sweet spot} (degree 3)}]
+          \addplot[only marks, mark=*, mark size=1pt, armred] coordinates {
+            (0.05,0.20) (0.15,0.50) (0.25,0.70) (0.35,0.85) (0.45,0.95)
+            (0.55,1.05) (0.65,0.90) (0.75,0.70) (0.85,0.45) (0.95,0.18)};
+          \addplot[armblue, very thick, domain=0:1, samples=80] {4*x*(1-x) + 0.05};
+        \nextgroupplot[title={\textbf{Overfit} (degree 9)}]
+          \addplot[only marks, mark=*, mark size=1pt, armred] coordinates {
+            (0.05,0.20) (0.15,0.50) (0.25,0.70) (0.35,0.85) (0.45,0.95)
+            (0.55,1.05) (0.65,0.90) (0.75,0.70) (0.85,0.45) (0.95,0.18)};
+          \addplot[armblue, very thick, domain=0:1, samples=200] {4*x*(1-x) + 0.05 + 0.25*sin(deg(35*x))};
+      \end{groupplot}
+    \end{tikzpicture}
+  \end{center}
+  \vskip -2pt
   \begin{columns}[T]
     \column{0.48\textwidth}
-    \textbf{Underfit (high bias).}
-    The model is too simple to capture the pattern. Both training and test errors are large; the model is missing real structure.
-    \vskip 6pt
-    Example: predicting house prices using only the city name -- the data is fine, the model is too crude to use it.
+    \textbf{Underfit} (high bias). The model is too simple to capture the pattern. Training error AND test error are both large; the model is missing real structure.
     \column{0.48\textwidth}
-    \textbf{Overfit (high variance).}
-    The model captures the training data too tightly, including its noise. Training error is tiny; test error is huge.
-    \vskip 6pt
-    Example: a degree-10 polynomial fit to 3 data points -- the curve weaves through each point exactly, but predicts garbage between them.
+    \textbf{Overfit} (high variance). The model is too flexible -- it captures the training data and its noise. Training error is tiny; test error is huge.
   \end{columns}
-  \vfill
+  \vskip 4pt
   \emph{Both are bad. The art of ML is finding the sweet spot between them.}
 \end{frame}
 
@@ -129,25 +167,91 @@
   \footnotesize Bias falls as the model gets richer; variance rises. MSE bottoms out somewhere in between. \emph{The whole job of validation is to find that sweet spot empirically.}
 \end{frame}
 
+\begin{frame}{The dartboard analogy (from \texttt{03\_stat})}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.78]
+  % Top-left: High bias, low variance
+  \begin{scope}[xshift=-3.5cm, yshift=1.2cm]
+    \draw[thick, gray!40] (0,0) circle (1.1);
+    \draw[thick, gray!40] (0,0) circle (0.7);
+    \draw[thick, gray!40] (0,0) circle (0.3);
+    \fill[armred] (0,0) circle (2.5pt);
+    \foreach \x/\y in {0.8/0.7, 0.9/0.6, 0.75/0.8, 0.85/0.65, 0.95/0.75, 0.8/0.6} {
+      \fill[armblue] (\x, \y) circle (2.5pt);
+    }
+    \node[font=\footnotesize\bfseries] at (0, -1.4) {High bias, low var};
+    \node[font=\scriptsize, gray] at (0, -1.75) {Tight, but off-target};
+  \end{scope}
+  % Top-right: Low bias, high variance
+  \begin{scope}[xshift=3.5cm, yshift=1.2cm]
+    \draw[thick, gray!40] (0,0) circle (1.1);
+    \draw[thick, gray!40] (0,0) circle (0.7);
+    \draw[thick, gray!40] (0,0) circle (0.3);
+    \fill[armred] (0,0) circle (2.5pt);
+    \foreach \x/\y in {-0.7/0.5, 0.4/-0.8, -0.3/1.0, 0.8/0.3, -0.5/-0.6, 0.2/0.7} {
+      \fill[armblue] (\x, \y) circle (2.5pt);
+    }
+    \node[font=\footnotesize\bfseries] at (0, -1.4) {Low bias, high var};
+    \node[font=\scriptsize, gray] at (0, -1.75) {On average right, but scattered};
+  \end{scope}
+  % Bottom-left: High bias, high variance
+  \begin{scope}[xshift=-3.5cm, yshift=-2.2cm]
+    \draw[thick, gray!40] (0,0) circle (1.1);
+    \draw[thick, gray!40] (0,0) circle (0.7);
+    \draw[thick, gray!40] (0,0) circle (0.3);
+    \fill[armred] (0,0) circle (2.5pt);
+    \foreach \x/\y in {0.4/1.0, 1.1/0.3, 0.2/0.8, 0.9/0.9, 0.6/0.2, 0.3/1.2} {
+      \fill[armblue] (\x, \y) circle (2.5pt);
+    }
+    \node[font=\footnotesize\bfseries] at (0, -1.4) {High bias, high var};
+    \node[font=\scriptsize, gray] at (0, -1.75) {Worst of both worlds};
+  \end{scope}
+  % Bottom-right: Low bias, low variance
+  \begin{scope}[xshift=3.5cm, yshift=-2.2cm]
+    \draw[thick, gray!40] (0,0) circle (1.1);
+    \draw[thick, gray!40] (0,0) circle (0.7);
+    \draw[thick, gray!40] (0,0) circle (0.3);
+    \fill[armred] (0,0) circle (2.5pt);
+    \foreach \x/\y in {0.08/0.12, -0.08/-0.04, 0.04/0.08, -0.04/-0.12, 0.12/-0.08, -0.08/0.04} {
+      \fill[armblue] (\x, \y) circle (2.5pt);
+    }
+    \node[font=\footnotesize\bfseries, paramgreen] at (0, -1.4) {Low bias, low var};
+    \node[font=\scriptsize, paramgreen] at (0, -1.75) {The goal!};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+\vspace{-0.2cm}
+\begin{center}
+\small \textcolor{armred}{Bullseye} $=$ truth. \;\textcolor{armblue}{Blue dots} $=$ estimates from many training sets.
+\end{center}
+\end{frame}
+
 \begin{frame}{Bias-variance is everywhere in ML}
-  Same tradeoff, different knob:
+  The only model class you've met so far is \textbf{polynomial regression}, where the complexity knob is the degree $d$:
+  \begin{itemize}\small
+    \item Too simple: $d = 1$ (a line through curved data) -- high bias.
+    \item Too complex: $d = 20$ (wiggly, like Demo 1) -- high variance.
+    \item Sweet spot: somewhere in between, found by validation.
+  \end{itemize}
   \vfill
+  Every model class you'll meet later has its own ``complexity knob'' and the same U-shape applies:
+  \vskip 4pt
   \begin{center}\small
-  \renewcommand{\arraystretch}{1.4}
-  \begin{tabular}{lll}
-    \textbf{Model class} & \textbf{Too simple (high bias)} & \textbf{Too complex (high var)} \\
+  \begin{tabular}{ll}
+    \textbf{Model (upcoming chapter)} & \textbf{Complexity knob} \\
     \hline
-    Polynomial regression & degree 1 (line) & degree 20 (wiggly, like Demo 1) \\
-    KNN & large $k$ (oversmoothed) & $k = 1$ (memorizes noise) \\
-    Decision tree & shallow tree & deep tree, no pruning \\
-    Neural network & too few neurons & too many neurons, no dropout \\
-    Regularization & strong penalty ($\lambda$ large) & no penalty ($\lambda = 0$) \\
+    Polynomial regression (now) & degree $d$ \\
+    Ridge / Lasso (next chapter) & penalty strength $\lambda$ \\
+    KNN (classification chapter) & number of neighbors $k$ \\
+    Decision trees (later) & maximum depth \\
+    Neural networks (much later) & width / depth, dropout \\
     \hline
   \end{tabular}
   \end{center}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-    \textbf{Key insight.} In every case the total error bottoms out at an intermediate complexity. This is exactly why we need \textbf{held-out test sets}, \textbf{cross-validation}, and (later) \textbf{regularization} -- they're three different empirical ways to find that sweet spot.
+    \textbf{Key insight.} Different knobs, same shape. This is why we need \textbf{held-out test sets} and \textbf{cross-validation} -- two empirical ways to find the sweet spot, regardless of the model.
   }}
 \end{frame}
 
@@ -172,13 +276,20 @@
   \emph{The art of ML is in the middle: complex enough to match real structure, simple enough not to chase noise.}
 \end{frame}
 
-\begin{frame}{Kargin Haxordum examples}
-  \begin{itemize}\large
-    \item Serjant Soghomonyan
-    \item Ete qarakusi a meju klor a
-  \end{itemize}
-  \vfill
-  \footnotesize \emph{TODO: explain which is overfit, which is underfit -- to be filled in before delivery.}
+\begin{frame}{Underfit -- Kargin Haxordum example}
+  \begin{center}
+    \textbf{\large Serjant Soghomonyan}\\[6pt]
+    \includegraphics[height=5cm]{figures/kargin_underfit.jpg}\\[4pt]
+    \scriptsize \url{https://youtu.be/pv_4MVcjEik}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Overfit -- Kargin Haxordum example}
+  \begin{center}
+    \textbf{\large Ete qarakusi a meju klor a}\\[6pt]
+    \includegraphics[height=5cm]{figures/kargin_overfit.jpg}\\[4pt]
+    \scriptsize \url{https://youtu.be/7arnxebkEUU}
+  \end{center}
 \end{frame}
 
 \begin{frame}{Predict-first: can a degree-9 polynomial fit 10 points perfectly?}
@@ -211,23 +322,9 @@
       \end{groupplot}
     \end{tikzpicture}
   \end{center}
-  \pause
-  \textbf{Predict:} which has the smallest \emph{training} error? Is that the model you should deploy?
-  \pause
+  \textbf{Question:} which has the smallest \emph{training} error? Is that the model you should deploy?
   \vskip 4pt
   Degree 9 has the smallest training error (it interpolates every point). It is also the \emph{worst} model. Training error is not a measure of model quality.
-\end{frame}
-
-\begin{frame}{Demo: degree-10 polynomial on 3 points}
-  \emph{Callback: HW2's polynomial bonus showed train R$^2$ climbing while test R$^2$ dropped at $d = 3$ -- the same fingerprint, here pushed to the extreme.}
-  \vskip 4pt
-  Take 3 random points from a noisy linear dataset. Fit a degree-10 polynomial. \textbf{Train MSE = 0.} Now predict on the full 200-point dataset:
-  \vfill
-  \begin{center}
-    \includegraphics[width=\linewidth]{figures/l01d_3pt_overfit.pdf}
-  \end{center}
-  \vfill
-  \footnotesize Perfect training fit, useless predictions everywhere else. \emph{Train MSE is not a measure of model quality -- it is a measure of training quality.}
 \end{frame}
 
 \begin{frame}{The fix: hold out data the model never saw}
@@ -261,7 +358,7 @@
     \textbf{Parameter $\theta$.} A value the model \emph{learns} from data during training.
     \begin{itemize}\small
       \item Linear regression: the coefficients $\theta_0, \theta_1, \ldots$
-      \item Neural net: every weight.
+      \item Polynomial regression: same -- one per basis column.
     \end{itemize}
     Found by minimizing the empirical risk (L01, L01b).
     \column{0.5\textwidth}
@@ -269,9 +366,9 @@
     \begin{itemize}\small
       \item Polynomial regression: the degree $d$.
       \item Gradient descent: the learning rate $\alpha$.
-      \item KNN: the number of neighbors $k$.
-      \item Ridge / Lasso (next chapter): the penalty $\lambda$.
+      \item Train/test split: \texttt{test\_size}, \texttt{random\_state}.
     \end{itemize}
+    \footnotesize \emph{More hyperparameters appear as we meet new model classes in upcoming chapters.}
   \end{columns}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
@@ -282,27 +379,26 @@
 % ================================================================
 \section{Train/test split}
 
-\begin{frame}[fragile]{Mechanics: sklearn \texttt{train\_test\_split}}
-\begin{lstlisting}
-from sklearn.model_selection import train_test_split
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,        # fraction held out
-    random_state=509,     # default seed (see CLAUDE.md)
-    shuffle=True,         # default True; disable for time series
-)
-# For classification, add stratify=y to preserve class ratios (see Section 5).
-# >>> X_train.shape, X_test.shape
-# ((160, 5), (40, 5))
-\end{lstlisting}
+\begin{frame}{Mechanics: sklearn \texttt{train\_test\_split}}
+  Call signature:
+  \[
+    \texttt{train\_test\_split(X, y, test\_size=, random\_state=, shuffle=, stratify=)}
+  \]
+  Returns: \texttt{X\_train, X\_test, y\_train, y\_test}.
   \vfill
-  \begin{itemize}\small
-    \item \texttt{test\_size=0.2} $\Rightarrow$ 80/20 split.
-    \item \texttt{random\_state} fixes the seed - same split every run. Without it, debugging becomes impossible.
-    \item \texttt{stratify=y} for classification: preserves the class ratio. Formalized later as Stratified CV.
-    \item \texttt{shuffle=False} for time-series: keep chronological order (you can't train on tomorrow to predict today).
-  \end{itemize}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{l l}
+      \textbf{argument} & \textbf{what it controls} \\
+      \hline
+      \texttt{test\_size=0.2} & fraction held out (80/20 split) \\
+      \texttt{random\_state=509} & seed -- same split every run; required for debugging \\
+      \texttt{shuffle=True} (default) & randomize row order before split \\
+      \texttt{shuffle=False} & keep chronological order -- use for time-series data \\
+      \texttt{stratify=y} & preserve class ratio (classification only -- see Section 5) \\
+      \hline
+    \end{tabular}
+  \end{center}
 \end{frame}
 
 \begin{frame}{Critical rules}
@@ -319,24 +415,15 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 \begin{frame}[fragile]{Nuance: when the rows aren't independent}
   Random shuffle assumes every row is exchangeable. Two cases where this is wildly wrong:
-
+  \vfill
   \textbf{1. Multiple records per entity} (patients, users, photos).
   \footnotesize\\
-  100 patients $\times$ 5 visits $=$ 500 rows. Random 80/20 puts $\sim 4$ visits of the same patient in train and $\sim 1$ in test $\Rightarrow$ model memorizes \emph{the patient}, not the disease pattern.
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from sklearn.model_selection import GroupKFold
-GroupKFold(n_splits=5).split(X, y, groups=patient_id)
-\end{lstlisting}}
-  \normalsize
-  \textbf{2. Time-ordered data} (forecasting, sensor readings, prices).
+  100 patients $\times$ 5 visits $=$ 500 rows. Random 80/20 puts $\sim 4$ visits of the same patient in train and $\sim 1$ in test $\Rightarrow$ the model memorizes \emph{the patient}, not the disease pattern. Use \texttt{GroupKFold(...).split(X, y, groups=patient\_id)} -- the \texttt{groups=} argument pins all rows of an entity to a single fold.
+  \vfill
+  \normalsize\textbf{2. Time-ordered data} (forecasting, sensor readings, prices).
   \footnotesize\\
-  Random shuffle puts tomorrow's row in training and yesterday's row in the test set -- training on the future to predict the past.
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from sklearn.model_selection import TimeSeriesSplit
-TimeSeriesSplit(n_splits=5)  # expanding-window CV; or a chronological cutoff
-\end{lstlisting}}
+  Random shuffle puts tomorrow's row in training and yesterday's row in the test set -- training on the future to predict the past. Use \texttt{TimeSeriesSplit(n\_splits=5)} (expanding-window CV), or simply a single chronological cutoff: first 80\% train, last 20\% test.
+  \vfill
   \scriptsize \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\textbf{Diagnosis:} (a) no group ID in both train and test, (b) no test timestamp before the latest train timestamp. Violate either $\Rightarrow$ leaking.}}
 \end{frame}
 
@@ -373,27 +460,8 @@ TimeSeriesSplit(n_splits=5)  # expanding-window CV; or a chronological cutoff
   \textbf{Analogy.} You take a practice exam 100 times until you score perfectly. Do you expect to score perfectly on the real exam?
 \end{frame}
 
-\begin{frame}{Predict-first: tuning on the test set}
-  You try 50 different polynomial degrees on the same train/test split. You pick the degree with the smallest test MSE and report that MSE as your model's quality.
-  \vfill
-  \pause
-  \textbf{Predict:}
-  \begin{itemize}
-    \item Is the reported MSE an unbiased estimate of how the model will perform on \emph{new} unseen data?
-    \item By roughly how much does the reported MSE under-estimate the true generalization error?
-  \end{itemize}
-  \pause
-  \vfill
-  Answers:
-  \begin{itemize}
-    \item \textbf{No.} The chosen configuration happened to do well on \emph{this specific test set}. Some of that performance is noise that won't reproduce on truly new data.
-    \item \textbf{Typically 10-40\% optimistic} on small-to-medium datasets when tuning over $\sim 50$ configurations. The bias grows with the number of comparisons and shrinks with test-set size. On a fresh test set the reported model would score worse than reported.
-  \end{itemize}
-  Fix: use a separate \textbf{validation set} for tuning. Touch the test set only once.
-\end{frame}
-
-\begin{frame}{The three-way split}
-  Split the data into \emph{three} pieces.
+\begin{frame}{Three sets, three jobs}
+  Each split has exactly one purpose. Mixing them is how reported numbers stop predicting reality.
   \vfill
   \begin{center}
     \begin{tikzpicture}[scale=1.1]
@@ -406,30 +474,21 @@ TimeSeriesSplit(n_splits=5)  # expanding-window CV; or a chronological cutoff
     \end{tikzpicture}
   \end{center}
   \vfill
-  Workflow:
-  \begin{enumerate}
-    \item Fit each candidate model on \textcolor{armblue}{training}.
-    \item Evaluate each on \textcolor{armorange!80!black}{validation}. Pick the best.
-    \item Optionally \emph{refit} the chosen configuration on training $+$ validation (more data $=$ better fit).
-    \item Evaluate \textbf{once} on \textcolor{armred}{test}. Report that number.
-  \end{enumerate}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{l l l}
+      \textbf{set} & \textbf{purpose} & \textbf{how often you may touch it} \\
+      \hline
+      \textcolor{armblue}{\textbf{training}}    & fit \textbf{parameters} ($\theta$)         & as often as you want \\
+      \textcolor{armorange!80!black}{\textbf{validation}}  & fit \textbf{hyperparameters} (degree $d$, $\alpha$, $\lambda$) & many times, while tuning \\
+      \textcolor{armred}{\textbf{test}}         & estimate \textbf{true generalization}      & \textbf{exactly once}, at the end \\
+      \hline
+    \end{tabular}
+  \end{center}
   \vfill
-  \small Step 3 is common but not universal - some practitioners skip the refit and report the model that was actually tuned on validation. Both views are defensible.
-\end{frame}
-
-\begin{frame}{The discipline: test set looked at exactly once}
-  The hardest part isn't the code. It's the discipline:
-  \vfill
-  \begin{itemize}
-    \item Don't make modeling decisions based on test scores.
-    \item Don't engineer features after seeing test set behavior.
-    \item Don't iterate on hyperparameters after seeing the test score.
-    \item Don't compare models on test and pick the best.
-  \end{itemize}
-  \vfill
-  Treat the test set like a sealed envelope you open at the end. Awareness of the test set (sizes, class balance) is fine - making decisions based on it is not.
-  \vfill
-  \emph{Kaggle terminology: the test set is the ``private leaderboard''. Touch it more than once during development and your real-world performance will lag your reported performance.}
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Why?} Every time you look at a score and \emph{decide} something, you've used that data to fit. Training data fits $\theta$ (allowed). Validation data fits hyperparameters (allowed). If you peek at the test set and adjust anything, you've used it to fit too -- and the number you report is no longer an honest estimate.
+  }}
 \end{frame}
 
 % ================================================================
@@ -499,148 +558,82 @@ TimeSeriesSplit(n_splits=5)  # expanding-window CV; or a chronological cutoff
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{LOOCV: the boundary case $k = n$}
-  Push $k$ all the way to $n$: every fold leaves out exactly one row. With $n$ training rows you fit $n$ models.
+\begin{frame}{CV in code}
+  Call signature:
+  \[
+    \texttt{cross\_val\_score(model, X, y, cv=, scoring=)}
+  \]
+  Returns: array of $k$ scores (one per fold).
   \vfill
-  \begin{columns}[T]
-    \column{0.5\textwidth}
-    \textbf{Why it sounds appealing}
-    \begin{itemize}\small
-      \item Uses $(n-1)/n$ of the data each fold $\Rightarrow$ almost-unbiased.
-      \item Deterministic: no random fold assignment.
-    \end{itemize}
-    \column{0.5\textwidth}
-    \textbf{Why it rarely beats $k = 5$ or $10$}
-    \begin{itemize}\small
-      \item Compute: train $n$ models. Brutal for any non-trivial model.
-      \item Folds are nearly identical training sets $\Rightarrow$ scores are highly correlated $\Rightarrow$ a misleading variance estimate.
-      \item Empirically, $k = 5$ or $10$ gives a better bias-variance tradeoff for the CV estimate itself.
-    \end{itemize}
-  \end{columns}
-  \vskip 6pt
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from sklearn.model_selection import LeaveOneOut, cross_val_score
-cross_val_score(model, X, y, cv=LeaveOneOut())
-\end{lstlisting}}
-  \vfill
-  \footnotesize \textbf{Use when:} $n$ is tiny (say $< 50$) and a single held-out fold is too noisy. Otherwise: $k = 5$ or $10$.
-\end{frame}
-
-\begin{frame}[fragile]{CV in code}
-  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
-    \textbf{sklearn footgun:} \texttt{cross\_val\_score} \emph{maximizes} by convention. Error metrics are negated (\texttt{neg\_mean\_squared\_error}). Always flip the sign when reporting.
-  }}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{l p{0.5\linewidth}}
+      \textbf{argument} & \textbf{what it controls} \\
+      \hline
+      \texttt{model} & any sklearn estimator; refit per fold \\
+      \texttt{X, y} & pass \emph{train} subsets only -- test stays untouched \\
+      \texttt{cv=KFold(...)} & the splitter (see \texttt{n\_splits}, \texttt{shuffle}, \texttt{random\_state} above) \\
+      \texttt{scoring="neg\_mean\_squared\_error"} & error metric (note the sign $\ast$) \\
+      \hline
+    \end{tabular}
+  \end{center}
   \vskip 4pt
-\begin{lstlisting}
-from sklearn.model_selection import KFold, cross_val_score
-from sklearn.linear_model import Ridge
-
-kf = KFold(n_splits=5, shuffle=True, random_state=509)
-scores = cross_val_score(
-    Ridge(alpha=1.0), X_train, y_train,
-    cv=kf,
-    scoring="neg_mean_squared_error",
-)
-print(f"MSE = {-scores.mean():.3f} +/- {scores.std():.3f}")
-\end{lstlisting}
-  \vfill
-  \begin{itemize}\small
-    \item \textbf{Mean and std across folds} give a sanity check on stability. \emph{Always report both.}
-    \item Pass \texttt{X\_train}, not the full dataset - test set stays untouched.
-    \item For out-of-fold predictions (used in stacking, calibration): \texttt{cross\_val\_predict} returns one prediction per row.
-    \item Multiple metrics at once: \texttt{cross\_validate(...,~scoring=["neg\_mean\_squared\_error",~"r2"])} returns a dict.
-    \item Lower-variance estimates: \texttt{RepeatedKFold(n\_repeats=3)} averages over multiple shuffles when compute allows.
-  \end{itemize}
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\scriptsize
+    $\ast$ \textbf{sklearn footgun:} \texttt{cross\_val\_score} \emph{maximizes} by convention, so error metrics are negated. Flip the sign when reporting: \texttt{-scores.mean()}. Always report \texttt{scores.std()} too -- a single number hides instability.
+  }}
 \end{frame}
 
 \begin{frame}[fragile]{Pipeline + CV: how the leakage rule survives folds}
-  CV trains $k$ models. If you fit your preprocessor (scaler, imputer, encoder) on the full dataset \emph{before} the CV loop, you leak into every fold. The clean way: wrap preprocessing + model in a \texttt{Pipeline} and pass the pipeline to \texttt{cross\_val\_score}. sklearn refits the preprocessor on each fold's training rows only.
+  CV trains $k$ models. If you fit your preprocessor (scaler, imputer, encoder) on the full dataset \emph{before} the CV loop, you leak into every fold. The clean fix: wrap preprocessing + model in a \texttt{Pipeline}, then pass the \emph{pipeline} (not just the model) to \texttt{cross\_val\_score}.
+  \vfill
 {\lstset{basicstyle=\ttfamily\scriptsize}
 \begin{lstlisting}
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import KFold, cross_val_score
-
-pipe = Pipeline([
-    ("scaler", StandardScaler()),     # refit per fold
-    ("lr",     LinearRegression()),
-])
-cv = KFold(n_splits=5, shuffle=True, random_state=509)
-scores = cross_val_score(pipe, X_train, y_train, cv=cv,
-                         scoring="neg_mean_squared_error")
+pipe = Pipeline([("scaler", StandardScaler()), ("lr", LinearRegression())])
+cross_val_score(pipe, X_train, y_train, cv=KFold(...))
 \end{lstlisting}}
   \vfill
-  \footnotesize HW2 used \texttt{ColumnTransformer + LinearRegression}; that pipeline drops straight into \texttt{cross\_val\_score} -- encoders, scaler, imputer all refit per fold, leakage rule enforced for free.
+  \textbf{Why this works.} On each fold, sklearn refits \emph{every} step of the pipeline on that fold's training rows only. The scaler sees fold-train means/stds, never the fold-val rows. Same for OHE categories, imputer medians, target-encoder per-category means.
+  \vfill
+  \footnotesize \emph{HW2 used \texttt{ColumnTransformer + LinearRegression}; that pipeline drops straight into \texttt{cross\_val\_score}, no change needed.}
 \end{frame}
 
-\begin{frame}[fragile]{Demo: what happens when you leak}
+\begin{frame}{Demo: what happens when you leak}
   Toy demo: 100 rows, 1 numeric feature, scale it. Two ways:
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-# WRONG: fit scaler on ALL data, then split
-scaler = StandardScaler().fit(X)            # <-- leaks test stats
-Xs = scaler.transform(X)
-cross_val_score(LinearRegression(), Xs, y, cv=5)
-# -> CV MSE = 0.142   (optimistic, the scaler "saw" the test rows)
-
-# RIGHT: scaler lives inside the Pipeline, refit per fold
-pipe = Pipeline([("sc", StandardScaler()), ("lr", LinearRegression())])
-cross_val_score(pipe, X, y, cv=5)
-# -> CV MSE = 0.158   (honest, +11% higher)
-\end{lstlisting}}
   \vfill
-  \footnotesize On this toy dataset the gap is small ($\sim 11\%$). For \texttt{target encoding} or \texttt{KNNImputer} (which use the target or whole-row similarity), the gap can be 5--10 percentage points of $R^2$. Same rule, far worse consequence.
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{p{0.45\linewidth} p{0.45\linewidth}}
+      \textbf{\textcolor{armred}{WRONG}} -- scaler fit on full data \emph{before} CV
+       & \textbf{\textcolor{paramgreen}{RIGHT}} -- scaler inside Pipeline, refit per fold \\
+      \hline
+      CV MSE $\approx 0.142$ & CV MSE $\approx 0.158$ \\
+      \emph{looks $\sim 11\%$ better} & \emph{honest number, the truth} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize On this toy dataset the gap is small ($\sim 11\%$). For \texttt{target encoding} or \texttt{KNNImputer} (which use the target or whole-row similarity), the gap can be \textbf{5--10 percentage points of $R^2$}. Same rule, far worse consequence.
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\scriptsize
-    \textbf{Diagnosis:} if your CV score looks suspiciously good, check whether \emph{anything} fit before the CV loop touched all the rows. Imputers, scalers, encoders, target encoders, PCA -- all common culprits.
+    \textbf{Diagnosis:} if your CV score looks suspiciously good, check whether \emph{anything} that was fit before the CV loop touched all the rows. Imputers, scalers, encoders, target encoders, PCA -- all common culprits.
   }}
 \end{frame}
 
 \begin{frame}[fragile]{Always have a dumb baseline}
-  A CV-mean MSE of 0.16 sounds good. Is it?
+  A CV-mean MSE of 0.16 sounds good. \emph{Is it?} Beats predicting the mean every time? Beats predicting the most common class?
+  \vfill
 {\lstset{basicstyle=\ttfamily\scriptsize}
 \begin{lstlisting}
-from sklearn.dummy import DummyRegressor
-baseline = DummyRegressor(strategy="mean")     # predicts y.mean() every time
-cross_val_score(baseline, X, y, cv=5, scoring="neg_mean_squared_error")
-# -> MSE = 0.91   (a real model has to beat this)
-
-# Or for classification:
-from sklearn.dummy import DummyClassifier
-DummyClassifier(strategy="most_frequent")      # predicts the modal class
+DummyRegressor(strategy="mean")           # always predicts y.mean()
+DummyRegressor(strategy="median")
+DummyClassifier(strategy="most_frequent") # always predicts the modal class
+DummyClassifier(strategy="stratified")    # predicts proportional to class frequencies
 \end{lstlisting}}
   \vfill
-  \footnotesize Sounds obvious -- almost no one does it. ``Mean predictor'' R$^2 = 0$ \emph{by construction}, and your model's R$^2$ is the part you can claim credit for.
+  Run the dummy through the same \texttt{cross\_val\_score(...)} as your model. The gap is the part of the score you can claim credit for.
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
     \textbf{Workflow rule:} fit a dummy baseline first, every project. Then your fancy model has to clear that bar before you tune it. Saves you from celebrating models that aren't doing anything.
-  }}
-\end{frame}
-
-\begin{frame}{CV is noisy too -- the 1-SE rule}
-  Each fold gives one score. With $k = 5$ you get 5 numbers. Their mean is the headline; their spread tells you how much to trust it.
-  \vfill
-  Example: polynomial regression on the 30-point dataset from earlier, 5-fold CV across polynomial degree:
-  \vskip 4pt
-  \begin{center}\small
-    \begin{tabular}{r r r}
-      \textbf{degree $d$} & \textbf{CV mean MSE} & \textbf{CV std} \\
-      \hline
-      1 & 0.18 & 0.05 \\
-      2 & 0.17 & 0.06 \\
-      3 & \textbf{0.16} & 0.07 \\
-      4 & 0.19 & 0.10 \\
-      6 & 0.31 & 0.18 \\
-      9 & 1.42 & 0.85 \\
-    \end{tabular}
-  \end{center}
-  \vfill
-  Headline winner: $d = 3$ (mean 0.16). But its CV std is 0.07 -- the gap to $d = 1$ (0.18) is smaller than the standard error.
-  \vfill
-  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
-    \textbf{The 1-SE rule (Tibshirani / Hastie):} pick the \emph{simplest} model whose CV mean is within 1 standard error of the best. Here that's $d = 1$ -- the line. Same fit quality within noise, half the parameters. Prevents complexity creep when CV is noisy.
   }}
 \end{frame}
 
@@ -666,13 +659,11 @@ DummyClassifier(strategy="most_frequent")      # predicts the modal class
 \begin{frame}{Predict-first: 5-fold CV on 5\% positives}
   You have 200 rows of which 10 are positive (5\%). You run vanilla 5-fold CV.
   \vfill
-  \pause
-  \textbf{Predict:}
+  \textbf{Questions:}
   \begin{itemize}
     \item How many positives does each fold get \emph{on average}?
     \item What's the probability that at least one fold has zero positives?
   \end{itemize}
-  \pause
   \vfill
   Answers:
   \begin{itemize}
@@ -731,24 +722,24 @@ DummyClassifier(strategy="most_frequent")      # predicts the modal class
 \end{frame}
 
 \begin{frame}[fragile]{Stratified CV in code}
+  \footnotesize \emph{Preview of Ch.\ 2 (classification). We use a generic ``classifier'' here; specifics like Logistic Regression, F1, and ROC-AUC come later.}
+  \vskip 2pt
 \begin{lstlisting}
 from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.linear_model import LogisticRegression
 
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=509)
 scores = cross_val_score(
-    LogisticRegression(class_weight="balanced"),  # separate trick
+    classifier,           # any classification model
     X_train, y_train,
     cv=skf,
-    scoring="f1",       # not accuracy
+    scoring="accuracy",   # or a metric that handles imbalance better (Ch.2)
 )
-print(f"F1 = {scores.mean():.3f} +/- {scores.std():.3f}")
+print(f"score = {scores.mean():.3f} +/- {scores.std():.3f}")
 \end{lstlisting}
   \vfill
   \begin{itemize}\small
     \item Use \texttt{StratifiedKFold} \emph{by default} for classification. Almost no reason to use plain \texttt{KFold}.
-    \item Pair with the right metric. F1 / ROC-AUC / PR-AUC handle imbalance honestly; accuracy doesn't.
-    \item \texttt{class\_weight="balanced"} is a \emph{model} parameter (orthogonal to stratification) that tells the fit step to weight rare classes more. Commonly paired with stratified splitting on imbalanced data.
+    \item In Ch.\ 2 we'll see why \texttt{accuracy} is the wrong metric on imbalanced data (a 1\% positive class gets 99\% accuracy from the constant predictor).
   \end{itemize}
 \end{frame}
 
@@ -760,28 +751,82 @@ print(f"F1 = {scores.mean():.3f} +/- {scores.std():.3f}")
 % ================================================================
 \section{Nested CV}
 
-\begin{frame}[fragile]{Nested CV -- honest evaluation when you also tune}
-  When you pick a hyperparameter (say polynomial degree $d$) with CV \emph{and} evaluate with the same CV, you've used the validation procedure to make a modeling decision. The reported CV score is optimistically biased.
+\begin{frame}{The problem: tuning + evaluating with the same CV}
+  The standard three-way split has clean roles: train for parameters, validation for hyperparameters, test for the final number.
   \vfill
-  \textbf{Fix: two CV loops.}
+  But what if our dataset is small and we already need CV for tuning? Naive workflow:
+  \begin{enumerate}\small
+    \item Run 5-fold CV across polynomial degrees $d \in \{1, 2, 3, 5, 9\}$.
+    \item Pick $d^*$ with the best CV score.
+    \item Report that CV score as the model's quality.
+  \end{enumerate}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+    \textbf{The bug:} step 3 reports a score that step 2 \emph{used to pick the winner}. Whichever $d$ happened to do well on these specific folds gets chosen -- and we report its score. Same data fitted the choice and graded the choice. Optimism bias: typically 3--10 percentage points.
+  }}
+  \vfill
+  \footnotesize \emph{We need a second layer of CV: one for tuning, one for evaluation. That's nested CV.}
+\end{frame}
+
+\begin{frame}{Nested CV: how it works}
+  Two CV loops, one inside the other.
+  \vfill
+  \begin{center}
+    \begin{tikzpicture}[scale=0.92]
+      % Outer loop: 5 horizontal bars (each row = 1 outer fold split)
+      \foreach \k in {0,1,2,3,4} {
+        \pgfmathtruncatemacro{\y}{4-\k}
+        \foreach \i in {0,1,2,3,4} {
+          \ifnum\i=\k
+            \fill[armred!60, draw=armred, thick] (\i*1.6, \y*0.6) rectangle (\i*1.6+1.5, \y*0.6+0.5);
+          \else
+            \fill[armblue!25, draw=armblue!70, thick] (\i*1.6, \y*0.6) rectangle (\i*1.6+1.5, \y*0.6+0.5);
+          \fi
+        }
+        \node[font=\scriptsize, anchor=west] at (8.3, \y*0.6+0.25) {outer fold \k};
+      }
+      \node[armblue, font=\scriptsize] at (3, 3.5) {outer-train (used inside)};
+      \node[armred, font=\scriptsize] at (3, -0.3) {outer-test (one slice, opened once)};
+      % Zoom-in: inner CV on a single outer fold
+      \draw[->, thick, gray] (10.5, 1.5) -- (12, 1.5);
+      \begin{scope}[xshift=12.5cm, yshift=-0.7cm]
+        \node[font=\scriptsize\bfseries] at (1.5, 3.8) {inner CV};
+        \node[font=\scriptsize] at (1.5, 3.4) {(picks $d$)};
+        \foreach \k in {0,1,2} {
+          \pgfmathtruncatemacro{\y}{2-\k}
+          \foreach \i in {0,1,2} {
+            \ifnum\i=\k
+              \fill[armorange!60, draw=armorange, thick] (\i*1+0.1, \y*0.55) rectangle (\i*1+0.9, \y*0.55+0.4);
+            \else
+              \fill[armblue!25, draw=armblue!70, thick] (\i*1+0.1, \y*0.55) rectangle (\i*1+0.9, \y*0.55+0.4);
+            \fi
+          }
+        }
+        \node[armorange!80!black, font=\tiny] at (1.5, -0.3) {inner-val};
+      \end{scope}
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \small For \emph{each} outer fold: run a small inner CV on the outer-train to pick the best $d$. Then refit on the whole outer-train and score on the outer-test. The $K$ outer-test scores are the honest estimate.
+\end{frame}
+
+\begin{frame}{Nested CV: pattern + when to use}
+  Pseudocode:
+\begin{center}\small
+\fbox{\parbox{0.9\linewidth}{\ttfamily
+for tr\_idx, te\_idx in OuterKFold.split(X):          \hfill \textcolor{gray}{\rmfamily\# outer: evaluation}\\
+\quad best\_d = inner\_cv\_pick\_degree(X[tr\_idx], y[tr\_idx])  \hfill \textcolor{gray}{\rmfamily\# inner: tuning}\\
+\quad score = fit\_and\_score(X[tr\_idx], y[tr\_idx],\\
+\qquad\qquad\qquad\qquad\quad X[te\_idx], y[te\_idx], degree=best\_d)
+}}
+\end{center}
+  \vfill
+  \textbf{Key properties.}
   \begin{itemize}\small
-    \item \textbf{Outer loop} ($K$ folds) -- for evaluation. Each outer fold has its own held-out test slice.
-    \item \textbf{Inner loop} ($J$ folds, on outer-train) -- for picking the hyperparameter (degree $d$, learning rate, etc.).
-    \item Refit best HP on the full outer-train, score on outer-test. The outer scores are the honest estimate.
+    \item The outer-test slice is touched \textbf{once} per outer fold (just like a hold-out test set).
+    \item Picking $d$ uses only the outer-train -- the outer-test never influenced which $d$ was chosen.
+    \item Different outer folds may pick \emph{different} $d^*$ -- that's fine. We're not trying to ship one specific $d$; we're estimating how a \emph{tuning procedure} generalizes.
   \end{itemize}
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from sklearn.model_selection import KFold, cross_val_score
-outer = KFold(n_splits=5, shuffle=True, random_state=509)
-honest_scores = []
-for tr_idx, te_idx in outer.split(X):
-    X_tr, X_te = X[tr_idx], X[te_idx]
-    # inner CV on the outer-train to pick the best degree
-    best_d = pick_best_degree_via_cv(X_tr, y[tr_idx], degrees=[1,2,3,5,9])
-    # refit on the whole outer-train, score on outer-test
-    honest_scores.append(score_poly_fit(X_tr, y[tr_idx], X_te, y[te_idx], best_d))
-print(f"honest CV MSE = {np.mean(honest_scores):.3f}")
-\end{lstlisting}}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\scriptsize
     \textbf{When to use:} any time the number you report is the score of a \emph{tuned} model. The gap between optimism-biased single-CV and honest nested CV can be 3--10 percentage points -- enough to flip ``best in class'' to ``worse than baseline''.
@@ -791,45 +836,58 @@ print(f"honest CV MSE = {np.mean(honest_scores):.3f}")
 % ================================================================
 \section{Wrap-up}
 
-\begin{frame}{Validation curves and learning curves}
-  Two CV-based diagnostics every ML practitioner uses. Both plot CV score vs.\ a single axis.
+\begin{frame}{Three diagnostic curves}
+  Each plots train (blue) and validation (red) error vs.\ a single axis. Different axes diagnose different failure modes.
   \vskip -4pt
   \begin{columns}[T]
-    \column{0.5\textwidth}
+    \column{0.33\textwidth}
     \begin{center}
-      \textbf{Validation curve} \\ \scriptsize (score vs.\ hyperparameter)
+      \textbf{Validation curve} \\ \scriptsize (error vs.\ hyperparameter)
       \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=3.2cm, xlabel={$\log\lambda$}, ylabel={score}, xtick=\empty, ytick=\empty, axis line style={gray!60}, xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize}, legend style={font=\tiny, at={(0.02,0.4)}, anchor=west}]
-          \addplot[armblue, very thick, smooth] coordinates {(-3,0.30) (-2,0.50) (-1,0.70) (0,0.82) (1,0.86) (2,0.84) (3,0.78) (4,0.65) (5,0.45)};
+        \begin{axis}[width=\textwidth, height=3.1cm, xlabel={polynomial degree $d$}, ylabel={error}, xtick=\empty, ytick=\empty, axis line style={gray!60}, xlabel style={font=\tiny}, ylabel style={font=\tiny}, legend style={font=\tiny, at={(0.98,0.95)}, anchor=north east}]
+          \addplot[armblue, very thick, smooth] coordinates {(1,0.80) (2,0.55) (3,0.35) (4,0.22) (5,0.13) (6,0.07) (7,0.03) (8,0.01)};
           \addlegendentry{train}
-          \addplot[armred, very thick, smooth] coordinates {(-3,0.28) (-2,0.45) (-1,0.62) (0,0.72) (1,0.75) (2,0.72) (3,0.65) (4,0.55) (5,0.40)};
+          \addplot[armred, very thick, smooth] coordinates {(1,0.82) (2,0.58) (3,0.42) (4,0.36) (5,0.40) (6,0.52) (7,0.75) (8,1.10)};
           \addlegendentry{val}
         \end{axis}
       \end{tikzpicture}\\
-      \scriptsize Diagnoses: under/overfitting per hyperparameter setting.
+      \scriptsize Picks the \emph{best HP}.
     \end{center}
-    \column{0.5\textwidth}
+    \column{0.33\textwidth}
     \begin{center}
-      \textbf{Learning curve} \\ \scriptsize (score vs.\ train set size)
+      \textbf{Learning curve} \\ \scriptsize (error vs.\ train size)
       \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=3.2cm, xlabel={$n_\text{train}$}, ylabel={score}, xtick=\empty, ytick=\empty, axis line style={gray!60}, xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize}, legend style={font=\tiny, at={(0.98,0.4)}, anchor=east}]
-          \addplot[armblue, very thick, smooth] coordinates {(1,0.99) (2,0.96) (3,0.93) (4,0.90) (5,0.88) (6,0.86) (7,0.85) (8,0.84)};
+        \begin{axis}[width=\textwidth, height=3.1cm, xlabel={$n_\text{train}$}, ylabel={error}, xtick=\empty, ytick=\empty, axis line style={gray!60}, xlabel style={font=\tiny}, ylabel style={font=\tiny}, legend style={font=\tiny, at={(0.98,0.95)}, anchor=north east}]
+          \addplot[armblue, very thick, smooth] coordinates {(1,0.02) (2,0.05) (3,0.08) (4,0.11) (5,0.13) (6,0.15) (7,0.16) (8,0.17)};
           \addlegendentry{train}
-          \addplot[armred, very thick, smooth] coordinates {(1,0.40) (2,0.55) (3,0.65) (4,0.72) (5,0.76) (6,0.79) (7,0.81) (8,0.82)};
+          \addplot[armred, very thick, smooth] coordinates {(1,0.95) (2,0.70) (3,0.55) (4,0.42) (5,0.34) (6,0.28) (7,0.24) (8,0.21)};
           \addlegendentry{val}
         \end{axis}
       \end{tikzpicture}\\
-      \scriptsize Diagnoses: would more data help? (Gap closing $=$ yes.)
+      \scriptsize Would more data help?
+    \end{center}
+    \column{0.33\textwidth}
+    \begin{center}
+      \textbf{Training curve} \\ \scriptsize (error vs.\ iteration)
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=3.1cm, xlabel={iteration $t$}, ylabel={error}, xtick=\empty, ytick=\empty, axis line style={gray!60}, xlabel style={font=\tiny}, ylabel style={font=\tiny}, legend style={font=\tiny, at={(0.98,0.95)}, anchor=north east}]
+          \addplot[armblue, very thick, smooth] coordinates {(1,0.95) (2,0.65) (3,0.42) (4,0.28) (5,0.18) (6,0.10) (7,0.06) (8,0.03) (9,0.02) (10,0.01)};
+          \addlegendentry{train}
+          \addplot[armred, very thick, smooth] coordinates {(1,0.97) (2,0.70) (3,0.50) (4,0.38) (5,0.32) (6,0.30) (7,0.32) (8,0.38) (9,0.48) (10,0.62)};
+          \addlegendentry{val}
+          \draw[dashed, paramgreen, thick] (axis cs:6,0) -- (axis cs:6,0.85);
+          \node[font=\tiny, paramgreen] at (axis cs:6,0.95) {stop here};
+        \end{axis}
+      \end{tikzpicture}\\
+      \scriptsize When to \emph{stop training}.
     \end{center}
   \end{columns}
   \vfill
-  Both available as \texttt{sklearn.model\_selection.validation\_curve} and \texttt{learning\_curve}.
-  \vfill
   \footnotesize \textbf{What to do with each shape:}
   \begin{itemize}\scriptsize
-    \item Validation-curve sweet spot at the \emph{edge} of your range $\Rightarrow$ widen the hyperparameter range.
-    \item Learning-curve gap \emph{not closing} $\Rightarrow$ bias-dominated; more data won't help. Change the model class (L01d2 callback).
-    \item Learning-curve gap \emph{closing slowly} $\Rightarrow$ variance-dominated; more data WILL help.
+    \item \textbf{Validation curve} sweet spot at the \emph{edge} of your range $\Rightarrow$ widen the hyperparameter range.
+    \item \textbf{Learning curve} gap not closing $\Rightarrow$ bias-dominated, more data won't help. Closing slowly $\Rightarrow$ variance, more data WILL help.
+    \item \textbf{Training curve} val error climbing while train still falls $\Rightarrow$ early stopping. Halt at the dashed line above.
   \end{itemize}
 \end{frame}
 
@@ -864,16 +922,22 @@ print(f"honest CV MSE = {np.mean(honest_scores):.3f}")
 \begin{frame}{Recap}
   \begin{itemize}\small
     \item \textbf{Training error lies.} Always evaluate on data the model didn't see.
-    \item \textbf{Train/test split.} Simplest fix. 80/20 typical. Split before any preprocessing (L01c leakage rule).
-    \item \textbf{Validation set.} If you tune anything, you need a third set. Test set touched once at the end.
-    \item \textbf{Cross-validation.} Rotates validation through $k$ folds, reducing noise by $\approx 1/k$. Default $k=5$. Use \texttt{cross\_validate} for multiple metrics; \texttt{RepeatedKFold} for lower-variance estimates.
-    \item \textbf{Stratified CV.} Default for classification - preserves class ratio per fold.
-    \item \textbf{Group / Time splits.} Use when rows aren't independent. Otherwise the model memorizes entities or peeks at the future.
-    \item \textbf{Validation/learning curves.} CV-based diagnostics for under/overfitting and ``would more data help?''.
-    \item \textbf{Bias-variance lens (L01d2):} CV (and the choice of $k$) is itself a bias-variance tradeoff - small $k$ is biased, large $k$ is noisy. The framework is fractal.
+    \item \textbf{Three sets, three jobs.} Train fits $\theta$; validation fits hyperparameters; test is the final number, touched exactly once.
+    \item \textbf{Cross-validation.} Rotates validation through $k$ folds. Default $k=5$.
+    \item \textbf{Stratified CV.} Default for classification. \textbf{Group / Time splits.} For non-independent rows.
+    \item \textbf{Nested CV.} Honest evaluation when you also tune.
+    \item \textbf{Three diagnostic curves.} Validation curve (best HP), learning curve (would more data help?), training curve (when to stop).
   \end{itemize}
   \vfill
-  \emph{Coming next: L05b - nested CV, the honest way to report a tuned model's generalization error.}
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The workflow this lecture supports:}
+    \begin{enumerate}\small
+      \item \textbf{First fight underfitting.} Pick a model class rich enough to capture the pattern (more features, higher polynomial degree, etc.) -- until train error is low.
+      \item \textbf{Then fight overfitting.} Use validation to detect when the model is now memorizing noise, and use \textbf{regularization} (Ridge, Lasso -- \emph{next chapter}) to push complexity back down without losing capacity.
+    \end{enumerate}
+  }}
+  \vfill
+  \emph{Coming next: bias-variance decomposition (L01d2), then regularization (L03) -- the principled tool for the overfitting half of the workflow above.}
 \end{frame}
 
 \end{document}
