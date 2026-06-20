@@ -2,27 +2,20 @@
 \input{../preamble}
 
 \usepgfplotslibrary{groupplots, fillbetween}
-\usepackage{listings}
-
-\lstset{
-  basicstyle=\ttfamily\footnotesize,
-  keywordstyle=\color{armblue}\bfseries,
-  commentstyle=\color{paramgreen}\itshape,
-  stringstyle=\color{armred},
-  showstringspaces=false,
-  language=Python,
-  frame=single,
-  framerule=0pt,
-  backgroundcolor=\color{lightbg},
-  numbers=none,
-  breaklines=true,
-  xleftmargin=4pt,
-  xrightmargin=4pt,
-}
 
 \title{L01f: Regression Metrics and Diagnostics}
-\subtitle{What to compute, what to report, and what each metric hides}
+\subtitle{Why metrics matter, what to report, what to tune on, and what each metric hides}
 \date{}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \centering
+    \vfill
+    {\color{armblue}\Large\textbf{#1}}\\[14pt]
+    \begin{minipage}{0.78\textwidth}\centering\itshape #2\end{minipage}
+    \vfill
+  \end{frame}%
+}
 
 \begin{document}
 
@@ -30,112 +23,122 @@
   \tableofcontents
 \end{frame}
 
-\begin{frame}{Loss vs.\ metric: what's the difference?}
-  \begin{columns}[T]
-    \column{0.5\textwidth}
-    \textbf{Loss.} The function the model \emph{optimizes during fitting}. Must be differentiable for gradient-based methods.
-    \vskip 4pt
-    \emph{Examples:} MSE for OLS, log loss for logistic regression.
-    \column{0.5\textwidth}
-    \textbf{Metric.} The number you \emph{report} to humans. Doesn't have to be differentiable.
-    \vskip 4pt
-    \emph{Examples:} RMSE in kAMD, MAE, MAPE, $R^2$.
-  \end{columns}
+% ================================================================
+\section{Why metrics matter}
+
+\begin{frame}{Why even bother choosing a metric?}
+  A spam filter sees 100 emails: 99 legit, 1 spam.
   \vfill
-  Loss and metric \emph{can} be the same (often are for regression) - but they don't have to be. You might train to minimize MSE because of its math properties, then report MAE because stakeholders prefer ``typical error in real units.''
-  \vfill
-  \textbf{The key question:} \emph{what kind of mistake hurts you most?} The right metric depends on the answer.
-  \vfill
-  \begin{itemize}\small
-    \item One big error vs.\ many small ones?
-    \item Errors on cheap items vs.\ expensive items?
-    \item Over- vs.\ under-prediction?
+  A lazy model labels \emph{everything} ``legit'':
+  \begin{itemize}
+    \item \textbf{Accuracy: 99\%.} Looks excellent.
+    \item Spam caught: \textbf{zero}. The model is useless.
   \end{itemize}
+  \vfill
+  The model didn't change - only the \emph{number we chose to look at}. Accuracy quietly hid the one mistake that mattered.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\centering
+    A metric is a \textbf{definition of success}. Pick the wrong one and a worthless model looks great.}}
+\end{frame}
+
+\begin{frame}{Same trap in regression}
+  Two delivery-time models, evaluated on the same orders. \emph{Identical average error.}
+  \vfill
+  \begin{itemize}
+    \item \textbf{Model A:} every estimate is off by about 10 minutes.
+    \item \textbf{Model B:} usually spot-on, but once in a while off by 3 hours.
+  \end{itemize}
+  \vfill
+  Same mean error, completely different customer experience. If the \emph{worst case} is what burns you, you care about the \textbf{maximum absolute deviation}, not the average.
+  \vfill
+  A pricing model is the mirror image: being off by 50k AMD is a disaster on a 200k flat ($25\%$) and a rounding error on a 5M flat ($1\%$). There, \textbf{percentage error} is the honest metric.
+  \vfill
+  \footnotesize \textbf{Takeaway:} there is no universal ``accuracy.'' The metric encodes \emph{which mistake you cannot afford}.
+\end{frame}
+
+\begin{frame}{Loss: what the model optimizes}
+  \textbf{Loss} is the function minimized \emph{while the model is being fit}.
+  \vfill
+  \begin{itemize}
+    \item It drives the fitting algorithm, so for gradient-based methods it must be \textbf{differentiable}.
+    \item Examples: \textbf{MSE} for ordinary least squares, \textbf{log loss} for logistic regression.
+  \end{itemize}
+  \vfill
+  You rarely look at the loss value itself. It exists to \emph{steer the optimizer}, not to be reported.
+\end{frame}
+
+\begin{frame}{Metric: what you judge the model by}
+  \textbf{Metric} is the number you use to \emph{evaluate} a trained model. It need not be differentiable.
+  \vfill
+  A metric does \textbf{two jobs}:
+  \begin{enumerate}
+    \item \textbf{Reporting} - the number you hand to stakeholders (``typical error is 20 kAMD'').
+    \item \textbf{Selecting} - the score your cross-validation and hyperparameter search optimize. \emph{The metric you tune against is the model you end up with.}
+  \end{enumerate}
+  \vfill
+  Loss and metric \emph{can} coincide (often do in regression), but needn't: you might \textbf{train} on MSE for its smooth math, then \textbf{tune and report} MAE because stakeholders think in ``typical error.''
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.96\textwidth}{\small
+    \textbf{The question every metric answers:} what kind of mistake hurts you most? One big error or many small ones? Errors on cheap items or expensive ones? Over- or under-prediction?}}
 \end{frame}
 
 % ================================================================
 \section{Magnitude metrics}
+\sectiontransition{Magnitude metrics}{How big are the errors, in the units you actually care about? Every metric here answers that - they only disagree about how much a single big miss should count.}
 
-\begin{frame}[fragile]{MSE, RMSE, MAE: how the penalty shapes differ}
+\begin{frame}{MSE, RMSE, MAE: how the penalty shapes differ}
   \begin{columns}[T]
-    \column{0.5\textwidth}
-    \[
-      \text{MSE} = \tfrac{1}{n} \sum (y_i - \yh_i)^2
-      \quad\;\;
-      \text{RMSE} = \sqrt{\text{MSE}}
-    \]
-    \[
-      \text{MAE} = \tfrac{1}{n} \sum |y_i - \yh_i|
-    \]
-    \begin{itemize}\small
-      \item \textbf{MSE/RMSE} penalize residuals \emph{quadratically}: one error of 100 contributes $10\,000$; ten errors of 10 contribute $1000$ total. Big errors dominate.
-      \item \textbf{MAE} penalizes \emph{linearly}: one big and ten small contribute the same total. Robust.
-      \item Report RMSE to humans (units of $y$). Use MSE internally (smoother for optimization).
+    \column{0.46\textwidth}
+    \small
+    \textbf{MSE} (Mean Squared Error), \textbf{RMSE} (Root Mean Squared Error):
+    \[ \text{MSE} = \tfrac{1}{n}\sum (y_i-\yh_i)^2,\quad \text{RMSE}=\sqrt{\text{MSE}} \]
+    \textbf{MAE} (Mean Absolute Error):
+    \[ \text{MAE} = \tfrac{1}{n}\sum |y_i-\yh_i| \]
+    \begin{itemize}
+      \item \textbf{Squared} penalty: one error of 10 costs 100; ten errors of 1 cost 10 total. \emph{Big errors dominate.}
+      \item \textbf{Absolute} penalty: those two cases cost the same. \emph{Robust} to outliers.
+      \item Report \textbf{RMSE} (units of $y$); minimize \textbf{MSE} internally (smoother).
     \end{itemize}
-    \column{0.5\textwidth}
+    \column{0.54\textwidth}
     \begin{center}
       \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=4cm,
-                     xlabel={residual $e = y - \hat{y}$}, ylabel={penalty},
+        \begin{axis}[width=\textwidth, height=5.2cm,
+                     axis lines=left, axis line style={gray!55},
+                     xlabel={residual $e=y-\hat y$}, ylabel={penalty},
                      xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
-                     xtick=\empty, ytick=\empty, axis line style={gray!60},
-                     legend pos=north west, legend style={font=\scriptsize},
-                     xmin=-5, xmax=5, ymin=-1, ymax=12]
-          \addplot[armred, very thick, domain=-5:5, samples=100] {x*x};
+                     xmin=-3.3, xmax=3.3, ymin=0, ymax=9.6,
+                     xtick={-3,-2,-1,1,2,3}, ytick={2,4,6,8},
+                     tick label style={font=\scriptsize},
+                     legend pos=north west, legend style={font=\small, draw=gray!40}]
+          \addplot[armred, very thick, domain=-3:3, samples=120] {x^2};
           \addlegendentry{$e^2$ (MSE)}
-          \addplot[armblue, very thick, domain=-5:5, samples=2] {abs(x)};
+          \addplot[armblue, very thick, domain=-3:3, samples=120] {abs(x)};
           \addlegendentry{$|e|$ (MAE)}
         \end{axis}
-      \end{tikzpicture}\\[-2pt]
-      \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=2.5cm,
-                     xlabel style={font=\tiny}, ylabel style={font=\tiny},
-                     xtick=\empty, ytick=\empty, axis line style={gray!60},
-                     xmin=0, xmax=6, ymin=0, ymax=7,
-                     title={data + residuals}, title style={font=\scriptsize}]
-          \addplot[armblue, very thick, domain=0.3:5.7, samples=2] {0.9*x + 1};
-          \addplot[only marks, mark=*, mark size=1.4pt, armred] coordinates {
-            (1, 1.5) (2, 2.5) (3, 4.5) (4, 5.0) (5, 5.4)};
-          \draw[gray!80, thin] (axis cs:1, 1.5) -- (axis cs:1, 1.9);
-          \draw[gray!80, thin] (axis cs:2, 2.5) -- (axis cs:2, 2.8);
-          \draw[gray!80, thin] (axis cs:3, 4.5) -- (axis cs:3, 3.7);
-          \draw[gray!80, thin] (axis cs:4, 5.0) -- (axis cs:4, 4.6);
-        \end{axis}
-      \end{tikzpicture}\\
-      \scriptsize Same residuals; the penalty curve shape decides each metric.
+      \end{tikzpicture}\\[2pt]
+      \scriptsize The squared penalty curves upward fast; the absolute penalty grows at a constant rate.
     \end{center}
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{MAE and MedAE: robust variants}
+\begin{frame}{MAE and MedAE: robust variants}
   \[
     \text{MAE} = \frac{1}{n} \sum_{i=1}^n |y_i - \yh_i|
     \qquad
-    \text{MedAE} = \text{median}_i\, |y_i - \yh_i|
+    \text{MedAE} = \operatorname{median}_i\, |y_i - \yh_i|
   \]
   \vfill
   \begin{itemize}
-    \item \textbf{MAE.} Same units as $y$. Penalizes errors \emph{linearly} - an error of 100 contributes 100, an error of 10 contributes 10. Outliers don't dominate.
-    \item \textbf{MedAE.} The median absolute residual. Even more robust than MAE - half the errors are at most this big.
-    \item Where each shines: \emph{MAE} for real-estate, finance, anything with outlier-heavy targets. \emph{MedAE} for ``typical case'' reporting (``half of my predictions are within 30 kAMD'').
+    \item \textbf{MAE} (Mean Absolute Error). Units of $y$. Linear penalty - an outlier of 100 adds 100, not 10\,000.
+    \item \textbf{MedAE} (Median Absolute Error). The middle residual. Even more robust: half your predictions are at least this good.
+    \item Where each shines: \emph{MAE} for outlier-heavy targets (real estate, finance). \emph{MedAE} for ``typical case'' reporting: ``half my predictions land within 30 kAMD.''
   \end{itemize}
-  \vfill
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from sklearn.metrics import mean_absolute_error, median_absolute_error
-mae    = mean_absolute_error(y, y_pred)
-medae  = median_absolute_error(y, y_pred)
-\end{lstlisting}}
 \end{frame}
 
-\begin{frame}{Predict-first: which metric notices the outlier?}
-  10 predictions of Yerevan rent. 9 are off by 1 kAMD, 1 is off by 100 kAMD (a luxury apartment your model missed).
+\begin{frame}{Predict first: which metric notices the outlier?}
+  10 rent predictions. Nine are off by 1 kAMD; one is off by 100 kAMD (a luxury flat the model missed).
   \vfill
-  \pause
-  \textbf{Predict the four metrics:}
-  \begin{itemize}
-    \item MSE? \quad RMSE? \quad MAE? \quad MedAE?
-  \end{itemize}
+  Before looking: rank MSE, RMSE, MAE, MedAE from most to least disturbed by that one outlier.
   \pause
   \vfill
   \begin{center}\small
@@ -144,87 +147,68 @@ medae  = median_absolute_error(y, y_pred)
       MSE   & $\dfrac{9 \cdot 1^2 + 1 \cdot 100^2}{10} = 1000.9$ & dominated by the outlier \\[4pt]
       RMSE  & $\sqrt{1000.9} \approx 31.6$ & ``typical error 32 kAMD'' (misleading) \\[2pt]
       MAE   & $\dfrac{9 \cdot 1 + 100}{10} = 10.9$ & visible but moderate \\[4pt]
-      MedAE & $\text{median} = 1$ & outlier completely invisible \\
+      MedAE & $\operatorname{median} = 1$ & outlier completely invisible \\
     \end{tabular}
   \end{center}
   \vfill
-  \footnotesize \textbf{Lesson:} same model, four different stories. The metric you pick \emph{is} the conclusion you'll report.
-\end{frame}
-
-\begin{frame}[fragile]{RMSLE: for skewed positive targets}
-  \[
-    \text{RMSLE} = \sqrt{\frac{1}{n} \sum_{i=1}^n \bigl( \log(1+y_i) - \log(1+\yh_i) \bigr)^2 }
-  \]
-  \vfill
-  \begin{itemize}
-    \item Penalizes \emph{relative} errors, not absolute. Predicting 100 when truth is 110 has the same RMSLE as predicting 1000 when truth is 1100 (both $\sim 10\%$ off).
-    \item Penalizes under-prediction harder than over-prediction (the log function bends that way).
-    \item Default for prices, sales, counts - anything strictly positive and skewed. Kaggle's go-to for housing-price and demand-forecasting competitions.
-    \item Pairs with the \texttt{log1p} transform from L01c.
-  \end{itemize}
-  \vfill
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from sklearn.metrics import mean_squared_log_error
-import numpy as np
-rmsle = np.sqrt(mean_squared_log_error(y, y_pred))
-\end{lstlisting}}
-\end{frame}
-
-\begin{frame}{Magnitude metrics: comparison cheat sheet}
-  \begin{center}\small
-    \begin{tabular}{lllll}
-      Metric & Units & Outlier penalty & Best for & Watch out for \\ \hline
-      MSE   & $y^2$       & quadratic       & training loss            & not interpretable \\
-      RMSE  & $y$         & quadratic       & reporting in real units  & inflated by outliers \\
-      MAE   & $y$         & linear          & robust point estimate    & ignores error direction \\
-      MedAE & $y$         & zero            & ``typical'' error        & ignores half the data \\
-      RMSLE & log-units   & relative        & skewed positive targets  & undefined for $y < 0$ \\
-    \end{tabular}
-  \end{center}
-  \vfill
-  Lower is better for all five. None of them can be compared across datasets with different $y$ scales (Yerevan rent in kAMD vs.\ Berlin rent in EUR).
-  \vfill
-  \footnotesize \emph{Two-line rule of thumb:} report \textbf{RMSE} if outliers matter to you, \textbf{MAE} if they don't, \textbf{RMSLE} if the target is multiplicative.
+  \footnotesize \textbf{Same model, four different stories.} The metric you pick \emph{is} the conclusion you report.
 \end{frame}
 
 % ================================================================
 \section{Relative metrics}
+\sectiontransition{Relative metrics}{A raw error of ``20'' means nothing on its own - 20 kAMD or 20 EUR? These metrics normalize, so the number travels across problems and scales.}
 
-\begin{frame}{$R^2$ and adjusted $R^2$}
-  \[
-    R^2 = 1 - \frac{\sum (y_i - \yh_i)^2}{\sum (y_i - \bar{y})^2}
-    \qquad
-    R^2_\text{adj} = 1 - (1 - R^2)\, \frac{n-1}{n-p-1}
-  \]
-  \vfill
-  \begin{itemize}\small
-    \item \textbf{$R^2$}: fraction of variance explained, relative to the constant-mean baseline. $R^2 = 1$ is perfect; $R^2 = 0$ means ``no better than predicting $\bar{y}$''.
-    \item \textbf{Adjusted $R^2$} penalizes adding features that don't help. $R^2$ \emph{always} increases when you add a feature; adjusted $R^2$ can decrease.
-    \item Scale-free $\Rightarrow$ comparable across datasets (unlike MAE/RMSE).
-  \end{itemize}
-  \vfill
-  \textbf{Generalized $R^2$.} The same skeleton works with any loss and any baseline:
-  \[
-    R^2_\text{gen} \;=\; 1 - \frac{\text{Loss}_\text{complex}}{\text{Loss}_\text{baseline}}
-  \]
-  Classical $R^2$ is the special case (loss $=$ SSE, baseline $=$ constant mean). Use any loss, any reference. On test data, when the complex model is worse than the baseline, this is negative.
+\begin{frame}{$R^2$: fraction of variance explained}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \[
+      R^2 = 1 - \frac{\sum_i (y_i - \yh_i)^2}{\sum_i (y_i - \bar{y})^2}
+    \]
+    \small
+    \begin{itemize}
+      \item Compares your model (blue) to the dumbest baseline (orange dashed): \emph{always predict the mean} $\bar{y}$.
+      \item $R^2 = 1$: perfect. $R^2 = 0$: no better than $\bar{y}$.
+      \item \textbf{Scale-free} - no units, so it reads the same whether $y$ is in AMD or EUR (unlike MAE/RMSE).
+    \end{itemize}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4.6cm,
+                     axis lines=left, axis line style={gray!55},
+                     xlabel={$x$}, ylabel={$y$},
+                     xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+                     xmin=0, xmax=10, ymin=0, ymax=10,
+                     xtick={0,2,4,6,8,10}, ytick={0,2,4,6,8,10},
+                     tick label style={font=\tiny}]
+          \addplot[only marks, mark=*, mark size=1.3pt, armred] coordinates {
+            (0.5,1.2)(1.2,1.0)(1.9,2.6)(2.6,2.1)(3.3,3.9)(4.0,3.4)(4.7,5.2)
+            (5.4,4.6)(6.1,6.3)(6.8,5.9)(7.5,7.6)(8.2,7.0)(8.9,8.8)(9.5,8.3)};
+          \addplot[armorange, thick, dashed, domain=0:10, samples=2] {4.85};
+          \node[font=\tiny, armorange, anchor=south east] at (axis cs:9.9,4.95) {baseline: predict $\bar y$};
+          \addplot[armblue, very thick, domain=0:10, samples=2] {0.85*x + 0.6};
+          \node[font=\small, anchor=north west] at (axis cs:0.2,9.8) {$R^2 \approx 0.94$};
+        \end{axis}
+      \end{tikzpicture}\\[2pt]
+      \scriptsize Tight scatter around the line $\Rightarrow$ high $R^2$.
+    \end{center}
+  \end{columns}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
-    \textbf{$R^2$ on test can be negative.} It just means your model is worse than predicting the training mean. Investigate.
-  }}
+    \textbf{$R^2$ can go negative on test data.} It just means your model does worse than predicting the training mean. Not a bug - a warning. Investigate.}}
 \end{frame}
 
 \begin{frame}{Better $R^2 \neq$ better fit}
-  Same model, same MSE, two different views of the data. R$^2$ depends on the \emph{range} of $y$; MSE depends on the \emph{magnitude} of residuals.
+  Same model, same MSE, two views of the data. $R^2$ depends on the \emph{range} of $y$; MSE depends on the \emph{magnitude} of residuals.
   \vfill
   \begin{center}
     \begin{tikzpicture}
       \begin{groupplot}[
-        group style={group size=2 by 1, horizontal sep=20pt},
+        group style={group size=2 by 1, horizontal sep=26pt},
         width=0.42\textwidth, height=4cm,
-        xmin=0, xmax=1, ymin=-0.6, ymax=1.5,
-        xtick=\empty, ytick=\empty, axis line style={gray!60},
+        axis lines=left, axis line style={gray!55},
+        xmin=0, xmax=1, ymin=-0.3, ymax=1.4,
+        xtick={0,0.5,1}, ytick={0,0.5,1},
+        tick label style={font=\tiny},
         title style={font=\footnotesize},
       ]
         \nextgroupplot[title={half range: $R^2 = 0.74$, MSE $= 0.02$}]
@@ -242,9 +226,21 @@ rmsle = np.sqrt(mean_squared_log_error(y, y_pred))
     \end{tikzpicture}
   \end{center}
   \vfill
-  \footnotesize \textbf{Why?} $R^2 = 1 - \text{SSE}/\text{SST}$. Extending the range inflates SST much faster than SSE $\Rightarrow$ ratio shrinks $\Rightarrow$ $R^2$ goes up - even though the fit didn't actually improve.
-  \vskip 2pt
-  \textbf{Lesson:} $R^2$ is invariant under linear rescaling of $y$ in a way MSE isn't. Don't compare $R^2$ across datasets with different $y$-ranges. Pair it with RMSE/MAE.
+  \footnotesize \textbf{Why?} $R^2 = 1 - \text{SSE}/\text{SST}$. Extending the range inflates SST much faster than SSE $\Rightarrow$ the ratio shrinks $\Rightarrow$ $R^2$ rises, even though the fit didn't improve. \textbf{Don't compare $R^2$ across datasets with different $y$-ranges.} Pair it with RMSE/MAE.
+\end{frame}
+
+\begin{frame}{Adjusted and generalized $R^2$}
+  \textbf{Adjusted $R^2$} - penalizes useless features:
+  \[
+    R^2_\text{adj} = 1 - (1 - R^2)\, \frac{n-1}{n-p-1}
+  \]
+  Plain $R^2$ \emph{never} drops when you add a feature, even pure noise. Adjusted $R^2$ \emph{can} drop, so it won't reward bloating the model with junk.
+  \vfill
+  \textbf{Generalized $R^2$} - same skeleton, any loss, any baseline:
+  \[
+    R^2_\text{gen} \;=\; 1 - \frac{\text{Loss}_\text{model}}{\text{Loss}_\text{baseline}}
+  \]
+  Classical $R^2$ is the special case (loss $=$ SSE, baseline $=$ constant mean). Swap in MAE, or a smarter baseline, and the same ``fraction of the gap closed'' reading still holds.
 \end{frame}
 
 \begin{frame}{MAPE: the popular but flawed default}
@@ -253,12 +249,12 @@ rmsle = np.sqrt(mean_squared_log_error(y, y_pred))
     \[
       \text{MAPE} = \frac{100\%}{n} \sum_{i=1}^n \frac{|y_i - \yh_i|}{|y_i|}
     \]
-    Popular because it reports as a percentage. Stakeholders love it.
+    \textbf{MAPE} = Mean Absolute Percentage Error. Popular because it reports as a percentage; stakeholders love it.
     \vskip 4pt
     \footnotesize Three known problems:
     \begin{enumerate}\footnotesize
       \item \textbf{Undefined when $y_i = 0$.} Any zero target $\Rightarrow$ division by zero $\Rightarrow$ infinite MAPE.
-      \item \textbf{Asymmetric.} Under-prediction capped at 100\%; over-prediction unbounded. Plot shows this for fixed truth $y=10$.
+      \item \textbf{Asymmetric.} Under-prediction capped at 100\%; over-prediction unbounded (plot, fixed truth $y=10$).
       \item \textbf{Biases models toward under-prediction} when used as a loss.
     \end{enumerate}
     \column{0.45\textwidth}
@@ -281,113 +277,79 @@ rmsle = np.sqrt(mean_squared_log_error(y, y_pred))
           \node[font=\tiny, gray] at (axis cs:5, 200) {capped};
           \node[font=\tiny, gray] at (axis cs:35, 380) {unbounded};
         \end{axis}
-      \end{tikzpicture}\\[-2pt]
-      \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=2.3cm,
-                     xlabel style={font=\tiny}, ylabel style={font=\tiny},
-                     xtick=\empty, ytick=\empty, axis line style={gray!60},
-                     xmin=0, xmax=6, ymin=0, ymax=10,
-                     title={small $y$ dominates}, title style={font=\scriptsize}]
-          \addplot[armblue, very thick, domain=0.3:5.7, samples=2] {1.6*x};
-          \addplot[only marks, mark=*, mark size=1.4pt, armred] coordinates {
-            (1, 0.5) (2, 2.5) (3, 5.5) (4, 6.0) (5, 8.5)};
-          \node[font=\tiny, armred, anchor=west] at (axis cs:1.1, 0.7) {60\%};
-          \node[font=\tiny, gray, anchor=west] at (axis cs:5.1, 8.5) {1\%};
-        \end{axis}
-      \end{tikzpicture}\\
-      \scriptsize V: asymmetric around $y=10$.\\
-      Bottom: small $y$ blows up the percent.
+      \end{tikzpicture}\\[2pt]
+      \scriptsize Asymmetric around $y=10$: under- vs over-prediction are penalized unequally.
     \end{center}
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{SMAPE: the symmetric fix}
+\begin{frame}{SMAPE: the symmetric fix}
   \[
     \text{SMAPE} = \frac{100\%}{n} \sum_{i=1}^n \frac{2\,|y_i - \yh_i|}{|y_i| + |\yh_i|}
   \]
+  \textbf{SMAPE} = Symmetric Mean Absolute Percentage Error.
   \vfill
-  \begin{itemize}\small
+  \begin{itemize}
     \item Symmetric: a 50\% over-prediction and a 50\% under-prediction get the same score.
     \item Bounded in $[0\%, 200\%]$ - no infinities.
     \item Defined when $y_i = 0$ (as long as $\yh_i \neq 0$).
-    \item Still has its own quirks (the bound of 200\% means a missed prediction of 0 dominates), but generally better-behaved than MAPE.
+    \item Still quirky (a missed zero pins it near 200\%), but better-behaved than MAPE.
   \end{itemize}
   \vfill
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-import numpy as np
-def smape(y, y_pred):
-    return 200 * np.mean(np.abs(y - y_pred) / (np.abs(y) + np.abs(y_pred)))
-\end{lstlisting}}
-  \vfill
-  \footnotesize \textbf{MASE} (Mean Absolute Scaled Error): MAE of the model divided by MAE of a naïve forecast (e.g.,\ ``predict last value''). Scale-free, robust to zeros, standard for time-series competitions (M4, M5).
-\end{frame}
-
-\begin{frame}{MBE: catching systematic bias}
-  \[
-    \text{MBE} = \frac{1}{n} \sum_{i=1}^n (\yh_i - y_i)
-  \]
-  \vfill
-  \begin{itemize}
-    \item \textbf{Positive} $\Rightarrow$ model systematically over-predicts.
-    \item \textbf{Negative} $\Rightarrow$ model systematically under-predicts.
-    \item Symmetric error metrics (MSE, MAE) \emph{hide} bias - $+50$ and $-50$ errors cancel in MBE but add in MAE.
-    \item Critical for forecasting and demand planning, where a $1\%$ persistent bias compounds across millions of items.
-  \end{itemize}
-  \vfill
-  \textbf{Rule:} report MBE alongside MAE / RMSE whenever the cost of over-prediction differs from the cost of under-prediction.
-  \vfill
-  \footnotesize \emph{Yerevan example:} a rent-estimator with $\text{MBE} = +25$ kAMD over-prices every listing. Landlords love it; the marketplace loses to competitors with honest estimators.
+  \footnotesize \textbf{MASE} (Mean Absolute Scaled Error): MAE of the model divided by the MAE of a naive ``predict last value'' forecast. Scale-free, handles zeros, the standard for time-series competitions (M4, M5).
 \end{frame}
 
 % ================================================================
 \section{Rank and association}
+\sectiontransition{Rank and association}{Sometimes you don't need the exact value, only the right order - which listing is pricier, not by how much. These measures score the ordering.}
 
-\begin{frame}[fragile]{Pearson, Spearman, Kendall: correlations}
-  \begin{center}
-    \begin{tikzpicture}
-      \begin{groupplot}[
-        group style={group size=3 by 1, horizontal sep=14pt},
-        width=0.32\textwidth, height=3cm,
-        xmin=0, xmax=10, ymin=0, ymax=10,
-        xtick=\empty, ytick=\empty, axis line style={gray!60},
-        title style={font=\scriptsize}, xlabel=$y$, ylabel=$\hat{y}$,
-        xlabel style={font=\tiny}, ylabel style={font=\tiny},
-      ]
-        \nextgroupplot[title={linear: $r{=}\rho{\approx}1$}]
-          \addplot[only marks, mark=*, mark size=1.2pt, armblue] coordinates {
-            (1,1.2) (2,1.8) (3,2.9) (4,4.1) (5,5.0) (6,5.9) (7,7.1) (8,7.8) (9,9.1)};
-        \nextgroupplot[title={monotonic: $r{<}1$, $\rho{=}1$}]
-          \addplot[only marks, mark=*, mark size=1.2pt, armred] coordinates {
-            (1,0.5) (2,0.7) (3,1.1) (4,1.7) (5,2.5) (6,3.8) (7,5.4) (8,7.2) (9,9.5)};
-        \nextgroupplot[title={no relation: both $\approx 0$}]
-          \addplot[only marks, mark=*, mark size=1.2pt, armorange] coordinates {
-            (1,5.2) (2,3.1) (3,8.4) (4,2.7) (5,6.5) (6,4.3) (7,7.8) (8,1.9) (9,5.6)};
-      \end{groupplot}
-    \end{tikzpicture}
-  \end{center}
-  \vskip -2pt
+\begin{frame}{Pearson correlation: do predictions move with the truth?}
   \begin{columns}[T]
-    \column{0.55\textwidth}
-    \footnotesize
-    \textbf{Pearson $r$} - linear co-movement: $r = \text{cov}(y,\yh)/(\sigma_y\sigma_{\yh})$. High when relationship is straight.
-    \vskip 2pt
-    \textbf{Spearman $\rho$} - Pearson on \emph{ranks}. Robust to monotonic transforms; doesn't need linearity.
-    \vskip 2pt
-    \textbf{Kendall $\tau$} - fraction of concordant pairs minus discordant. Robust to ties, slower to compute.
-    \column{0.45\textwidth}
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-from scipy.stats import (
-  pearsonr, spearmanr, kendalltau)
-r, _   = pearsonr(y, y_pred)
-rho, _ = spearmanr(y, y_pred)
-tau, _ = kendalltau(y, y_pred)
-\end{lstlisting}}
+    \column{0.52\textwidth}
+    \[
+      r = \frac{\operatorname{cov}(y,\yh)}{\sigma_y\,\sigma_{\yh}} \in [-1,1]
+    \]
+    \small
+    \begin{itemize}
+      \item Measures \textbf{linear co-movement}: when $y$ goes up, does $\yh$ go up by a proportional amount?
+      \item \textbf{Bounded} in $[-1,1]$ and scale-free - which is exactly what makes it usable: unlike MAE/RMSE, $0.9$ reads as ``strong'' on its own, no units to look up. A clean \emph{screening} tool for which raw feature tracks the target.
+      \item $r = 1$: perfect straight-line agreement. $0$: none. $-1$: perfectly inverted.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4.4cm,
+                     axis lines=left, axis line style={gray!55},
+                     xlabel={$y$}, ylabel={$\hat y$},
+                     xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+                     xmin=0, xmax=10, ymin=0, ymax=10,
+                     xtick={0,2,4,6,8,10}, ytick={0,2,4,6,8,10},
+                     tick label style={font=\tiny}]
+          \addplot[only marks, mark=*, mark size=1.3pt, armblue] coordinates {
+            (1,1.2)(2,1.8)(3,2.9)(4,4.1)(5,5.0)(6,5.9)(7,7.1)(8,7.8)(9,9.1)};
+          \node[font=\small, anchor=north west] at (axis cs:0.2,9.8) {$r \approx 0.99$};
+        \end{axis}
+      \end{tikzpicture}\\[2pt]
+      \scriptsize Points hug a straight line $\Rightarrow$ $r$ near 1.
+    \end{center}
   \end{columns}
+  \vfill
+  \footnotesize \textbf{Catch:} $r$ only sees \emph{straight-line} structure. If $\yh$ tracks $y$ through a bent-but-always-increasing curve, $r$ drops below 1 even though the ranking is perfect.
 \end{frame}
 
-\begin{frame}{Predict-first: when correlation lies}
+\begin{frame}{Spearman: correlation on ranks}
+  \textbf{Spearman's $\rho$} is just Pearson computed on the \emph{ranks} of $y$ and $\yh$ instead of their raw values.
+  \vfill
+  \begin{itemize}
+    \item Sees any \textbf{monotonic} relationship, not only linear ones - a curved-but-increasing fit scores $\rho = 1$.
+    \item Robust to outliers and to monotone transforms (log, sqrt) of either variable.
+    \item Use it when you care about \textbf{getting the order right} (ranking listings, ordinal targets), not the exact values.
+  \end{itemize}
+  \vfill
+  \footnotesize Kendall's $\tau$ is a third option (fraction of correctly-ordered pairs minus incorrectly-ordered ones); same spirit, more robust to ties, slower to compute.
+\end{frame}
+
+\begin{frame}{Predict first: when correlation lies}
   Your model's predictions on a 3-row test set:
   \vskip 4pt
   \begin{center}\small
@@ -397,51 +359,36 @@ tau, _ = kendalltau(y, y_pred)
     \end{tabular}
   \end{center}
   \vfill
-  \pause
-  \textbf{Predict:}
-  \begin{itemize}
-    \item Pearson correlation $r$ between $y$ and $\yh$?
-    \item MAE?
-    \item Would you deploy this model?
-  \end{itemize}
+  Predict: Pearson $r$ between $y$ and $\yh$? MAE? Would you deploy this?
   \pause
   \vfill
-  Answers:
   \begin{itemize}
-    \item \textbf{Pearson $r = 1.0$.} The predictions are perfectly linearly related to truth - they're just shifted by $+1000$.
-    \item \textbf{MAE $= 1000$.} The predictions are uniformly terrible.
+    \item \textbf{Pearson $r = 1.0$.} Predictions are perfectly linearly related to truth - just shifted by $+1000$.
+    \item \textbf{MAE $= 1000$.} Predictions are uniformly terrible.
     \item No.
   \end{itemize}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
-    \textbf{Correlation measures association, not accuracy.} Use correlations for screening features. Use MAE/RMSE for evaluating models.
-  }}
+    \textbf{Correlation measures association, not accuracy.} Use correlations for screening features. Use MAE/RMSE for evaluating models.}}
 \end{frame}
 
 % ================================================================
 \section{Information criteria (AIC, BIC)}
 
-\begin{frame}[fragile]{AIC and BIC: model comparison, not evaluation}
+\begin{frame}{AIC and BIC: model comparison, not evaluation}
   \[
     \text{AIC} = 2k - 2 \ln(\hat{L})
     \qquad
     \text{BIC} = k \ln(n) - 2 \ln(\hat{L})
   \]
-  where $k$ = number of model parameters, $n$ = sample size, $\hat{L}$ = maximized likelihood.
+  \textbf{AIC} = Akaike Information Criterion, \textbf{BIC} = Bayesian Information Criterion; $k$ = number of parameters, $n$ = sample size, $\hat{L}$ = maximized likelihood.
   \vfill
   \begin{itemize}
     \item Both compare \emph{candidate models on the same data}. Lower is better.
     \item They balance \textbf{fit quality} ($-2 \ln \hat{L}$) against \textbf{model complexity} ($k$).
-    \item Require a probabilistic model so $\hat{L}$ is defined - typical with \texttt{statsmodels} OLS, not directly with sklearn estimators.
-    \item These are \emph{model selection} criteria, not accuracy metrics. They tell you which model to pick; they do not tell you how accurate that model is on unseen data.
+    \item Require a probabilistic model so $\hat{L}$ is defined - available from \texttt{statsmodels} OLS, not directly from sklearn estimators.
+    \item These are \emph{model selection} criteria, not accuracy metrics. They tell you which model to pick; they do not tell you how accurate it is on unseen data.
   \end{itemize}
-  \vfill
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-import statsmodels.api as sm
-res = sm.OLS(y, sm.add_constant(X)).fit()
-print(res.aic, res.bic)
-\end{lstlisting}}
 \end{frame}
 
 \begin{frame}{AIC vs.\ BIC: when each wins}
@@ -490,20 +437,54 @@ print(res.aic, res.bic)
 
 % ================================================================
 \section{Residual diagnostics}
+\sectiontransition{Residual diagnostics}{A metric collapses every mistake into one number. A plot shows you the \emph{shape} of those mistakes - and points at what to fix.}
 
-\begin{frame}{The four standard diagnostic plots}
-  Numerical metrics give you \emph{one number}. Plots show you \emph{what kind of wrong} your model is. Four standard plots (the R \texttt{plot.lm} set):
+\begin{frame}{The five diagnostic plots}
+  We'll use five standard plots, in the order you'd actually look at them:
   \vfill
   \begin{itemize}
-    \item \textbf{Residuals vs.\ fitted.} Are residuals patterned? (linearity, heteroscedasticity)
-    \item \textbf{Scale-Location.} Does residual spread depend on prediction? (heteroscedasticity, refined)
+    \item \textbf{Predicted vs.\ actual.} The intuitive overview - where and how predictions drift.
+    \item \textbf{Residuals vs.\ fitted.} Are residuals patterned? (missed nonlinearity, heteroscedasticity)
+    \item \textbf{Scale-Location.} Does the residual \emph{spread} depend on the prediction?
     \item \textbf{Normal QQ.} Are residuals roughly Gaussian? (matters for OLS inference)
-    \item \textbf{Residuals vs.\ leverage.} Which observations have unusual influence?
+    \item \textbf{Leverage / Cook's distance.} Which observations have outsized influence?
   \end{itemize}
   \vfill
-  Look at all four. A model with perfect $R^2 = 0.97$ can still be broken in ways the diagnostic plots reveal.
-  \vfill
-  \texttt{statsmodels} produces these via \texttt{sm.graphics.plot\_regress\_exog} or by manual matplotlib.
+  Look at all of them. A model with $R^2 = 0.97$ can still be broken in ways only these plots reveal.
+\end{frame}
+
+\begin{frame}{Predicted vs.\ actual: the first plot to draw}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Plot $\yh_i$ against $y_i$ with the reference line $\yh = y$. Perfect predictions sit exactly on it.
+    \vfill
+    \begin{itemize}\small
+      \item Points \textbf{above} the line: over-prediction. \textbf{Below}: under-prediction.
+      \item A \textbf{bend} away from the line at one end = systematic bias there (often the model compresses the extremes).
+      \item A \textbf{widening funnel} = error grows with the target (heteroscedasticity).
+    \end{itemize}
+    \vfill
+    \footnotesize The single most intuitive diagnostic, and the easiest to show a non-technical stakeholder.
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=5cm,
+                     axis lines=left, axis line style={gray!55},
+                     xlabel={actual $y$}, ylabel={predicted $\hat y$},
+                     xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+                     xmin=0, xmax=10, ymin=0, ymax=10,
+                     xtick={0,2,4,6,8,10}, ytick={0,2,4,6,8,10},
+                     tick label style={font=\tiny}]
+          \addplot[gray!75, dashed, domain=0:10, samples=2] {x};
+          \node[font=\tiny, gray, rotate=45, anchor=south] at (axis cs:7,7) {$\hat y = y$};
+          \addplot[only marks, mark=*, mark size=1.2pt, armblue] coordinates {
+            (1,1.3)(2,1.8)(2.5,2.9)(3,2.6)(4,3.7)(4.5,4.6)(5,4.7)(5.5,5.9)
+            (6,5.4)(6.5,6.8)(7,6.2)(7.5,6.7)(8,7.0)(8.5,7.4)(9,7.6)(9.5,8.1)};
+        \end{axis}
+      \end{tikzpicture}\\[2pt]
+      \scriptsize High-$y$ points fall below the line: the model under-predicts the top end.
+    \end{center}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Residuals vs.\ fitted}
@@ -512,10 +493,11 @@ print(res.aic, res.bic)
   \begin{center}
     \begin{tikzpicture}
       \begin{groupplot}[
-        group style={group size=3 by 1, horizontal sep=14pt},
+        group style={group size=3 by 1, horizontal sep=16pt},
         width=0.34\textwidth, height=3.4cm,
+        axis lines=left, axis line style={gray!55},
         xmin=0, xmax=10, ymin=-3, ymax=3,
-        xtick=\empty, ytick=\empty, axis line style={gray!60},
+        xtick=\empty, ytick={-2,0,2}, tick label style={font=\tiny},
         title style={font=\footnotesize}, xlabel=$\hat{y}$, ylabel=$r$,
         xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
       ]
@@ -524,61 +506,112 @@ print(res.aic, res.bic)
             (0.5,0.3) (1.2,-0.6) (1.8,0.8) (2.5,-0.2) (3.1,0.5) (3.8,-0.9)
             (4.5,0.4) (5.1,-0.5) (5.8,0.7) (6.4,-0.3) (7.1,0.6) (7.7,-0.7)
             (8.4,0.2) (9.0,-0.4) (9.6,0.8)};
-          \draw[gray!50, dashed] (0,0) -- (10,0);
+          \draw[gray!50, dashed] (axis cs:0,0) -- (axis cs:10,0);
         \nextgroupplot[title={heteroscedastic (fan)}]
           \addplot[only marks, mark=*, mark size=1.2pt, armred] coordinates {
             (0.5,0.2) (1.2,-0.1) (1.8,0.3) (2.5,-0.4) (3.1,0.6) (3.8,-0.7)
             (4.5,1.0) (5.1,-1.0) (5.8,1.4) (6.4,-1.3) (7.1,1.8) (7.7,-1.9)
             (8.4,2.3) (9.0,-2.4) (9.6,2.7)};
-          \draw[gray!50, dashed] (0,0) -- (10,0);
+          \draw[gray!50, dashed] (axis cs:0,0) -- (axis cs:10,0);
         \nextgroupplot[title={non-linear (curve)}]
           \addplot[only marks, mark=*, mark size=1.2pt, armorange] coordinates {
             (0.5,1.8) (1.2,1.4) (1.8,0.8) (2.5,0.4) (3.1,0.0) (3.8,-0.4)
             (4.5,-0.7) (5.1,-0.9) (5.8,-0.9) (6.4,-0.7) (7.1,-0.4) (7.7,0.0)
             (8.4,0.5) (9.0,1.1) (9.6,1.7)};
-          \draw[gray!50, dashed] (0,0) -- (10,0);
+          \draw[gray!50, dashed] (axis cs:0,0) -- (axis cs:10,0);
       \end{groupplot}
     \end{tikzpicture}
   \end{center}
   \vfill
-  \textbf{Fan shape:} variance grows with prediction (heteroscedasticity). Fix: log-transform $y$, use weighted least squares, or use robust standard errors.\\
+  \textbf{Fan shape:} variance grows with prediction (heteroscedasticity). Fix: log-transform $y$, weighted least squares, or robust standard errors.\\
   \textbf{Curve:} you're missing a non-linear term. Fix: add polynomial features, interaction terms, or switch to a tree.
 \end{frame}
 
-\begin{frame}{Normal QQ plot}
-  Plots empirical residual quantiles against theoretical Normal quantiles. Should fall on the diagonal if residuals are Gaussian.
+\begin{frame}{Scale-Location: a sharper read on spreading variance}
+  Plots $\sqrt{|\text{standardized residual}|}$ against the fitted value. It strips out the \emph{sign} of the error and isolates its \emph{size}, so a trend in spread is easier to see than in residuals-vs-fitted.
   \vfill
   \begin{center}
     \begin{tikzpicture}
       \begin{groupplot}[
-        group style={group size=3 by 1, horizontal sep=14pt},
+        group style={group size=2 by 1, horizontal sep=26pt},
+        width=0.42\textwidth, height=3.6cm,
+        axis lines=left, axis line style={gray!55},
+        xlabel={fitted $\hat{y}$}, ylabel={$\sqrt{|\text{std. resid}|}$},
+        xlabel style={font=\tiny}, ylabel style={font=\tiny},
+        xtick=\empty, ytick=\empty, xmin=0, xmax=10, ymin=0, ymax=2,
+        title style={font=\footnotesize},
+      ]
+        \nextgroupplot[title={constant variance (good)}]
+          \addplot[only marks, mark=*, mark size=1pt, armblue] coordinates {
+            (0.6,0.8)(1.3,1.0)(2.0,0.7)(2.8,1.1)(3.5,0.9)(4.2,1.2)(5.0,0.8)
+            (5.7,1.0)(6.4,1.1)(7.1,0.7)(7.8,1.0)(8.5,0.9)(9.2,1.1)};
+          \addplot[paramgreen, thick, domain=0:10, samples=2]{0.95};
+        \nextgroupplot[title={spreading variance (bad)}]
+          \addplot[only marks, mark=*, mark size=1pt, armred] coordinates {
+            (0.6,0.4)(1.3,0.5)(2.0,0.6)(2.8,0.7)(3.5,0.7)(4.2,0.9)(5.0,1.0)
+            (5.7,1.1)(6.4,1.2)(7.1,1.4)(7.8,1.5)(8.5,1.6)(9.2,1.8)};
+          \addplot[armred, thick, domain=0:10, samples=2]{0.12*x + 0.35};
+      \end{groupplot}
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \begin{itemize}
+    \item \textbf{Flat horizontal band}: constant variance (homoscedastic) - what you want.
+    \item \textbf{Rising line}: the model's errors grow with its predictions. Fix: log-transform $y$, weighted least squares, or robust errors.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Normal QQ plot: is the error Gaussian?}
+  A \textbf{quantile} is a ``what fraction falls below'' cut: the 0.9 quantile is the value 90\% of the data sits under.
+  \vfill
+  \textbf{How the plot is built:}
+  \begin{enumerate}
+    \item Sort the residuals from smallest to largest.
+    \item For each, ask: if these were truly Normal, where \emph{should} this ranked value land? That's its theoretical quantile.
+    \item Plot actual (sorted residual) on one axis vs.\ theoretical (Normal quantile) on the other.
+  \end{enumerate}
+  \vfill
+  If the residuals really are Normal, every point lands on the \textbf{45$^\circ$ diagonal}: the value they have equals the value Normal predicts. Departures from the line are departures from Normality - and the \emph{shape} of the departure tells you which way.
+\end{frame}
+
+\begin{frame}{Reading the QQ plot}
+  \begin{center}
+    \begin{tikzpicture}
+      \begin{groupplot}[
+        group style={group size=3 by 1, horizontal sep=16pt},
         width=0.34\textwidth, height=3.4cm,
+        axis lines=left, axis line style={gray!55},
         xmin=-2.5, xmax=2.5, ymin=-2.5, ymax=2.5,
-        xtick=\empty, ytick=\empty, axis line style={gray!60},
+        xtick={-2,0,2}, ytick={-2,0,2}, tick label style={font=\tiny},
         title style={font=\footnotesize},
         xlabel={theoretical}, ylabel={empirical},
         xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
       ]
         \nextgroupplot[title={good (on diagonal)}]
-          \addplot[gray!50, dashed, domain=-2.5:2.5] {x};
+          \addplot[gray!55, dashed, domain=-2.5:2.5] {x};
           \addplot[only marks, mark=*, mark size=1.2pt, armblue] coordinates {
             (-2.0,-1.9) (-1.5,-1.4) (-1.0,-1.1) (-0.7,-0.5) (-0.3,-0.4)
             (0.0,0.1) (0.3,0.2) (0.7,0.6) (1.0,1.1) (1.5,1.6) (2.0,2.0)};
         \nextgroupplot[title={heavy tails (S-curve)}]
-          \addplot[gray!50, dashed, domain=-2.5:2.5] {x};
+          \addplot[gray!55, dashed, domain=-2.5:2.5] {x};
           \addplot[only marks, mark=*, mark size=1.2pt, armred] coordinates {
             (-2.0,-2.4) (-1.5,-1.9) (-1.0,-1.2) (-0.7,-0.6) (-0.3,-0.2)
             (0.0,0.0) (0.3,0.2) (0.7,0.6) (1.0,1.2) (1.5,1.9) (2.0,2.4)};
         \nextgroupplot[title={right skew (curve up)}]
-          \addplot[gray!50, dashed, domain=-2.5:2.5] {x};
+          \addplot[gray!55, dashed, domain=-2.5:2.5] {x};
           \addplot[only marks, mark=*, mark size=1.2pt, armorange] coordinates {
             (-2.0,-1.5) (-1.5,-1.1) (-1.0,-0.7) (-0.7,-0.4) (-0.3,-0.1)
             (0.0,0.1) (0.3,0.4) (0.7,1.0) (1.0,1.5) (1.5,2.0) (2.0,2.5)};
       \end{groupplot}
     \end{tikzpicture}
   \end{center}
+  \begin{itemize}\small
+    \item \textbf{On the line}: residuals are Gaussian.
+    \item \textbf{S-curve} (ends peel below-left and above-right): \emph{heavy tails} - more extreme errors than Normal predicts.
+    \item \textbf{Upward bow}: \emph{right skew} - a long tail of large positive residuals.
+  \end{itemize}
   \vfill
-  \textbf{Why care?} OLS \emph{point estimates} don't need normality. OLS \emph{inference} (CIs, t-tests, F-tests) does. Heavy tails or skew $\Rightarrow$ p-values are wrong, but predictions are fine.
+  \footnotesize \textbf{Why care?} OLS \emph{point predictions} don't need Normal residuals. OLS \emph{inference} - CIs, $t$- and $F$-tests, $p$-values - does. Heavy tails or skew $\Rightarrow$ your $p$-values are wrong even when the predictions are fine.
 \end{frame}
 
 \begin{frame}{Leverage and Cook's distance}
@@ -595,10 +628,11 @@ print(res.aic, res.bic)
     \begin{center}
       \begin{tikzpicture}
         \begin{axis}[width=\textwidth, height=4cm,
+                     axis lines=left, axis line style={gray!55},
                      xlabel={$x$}, ylabel={$y$},
                      xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
                      xmin=0, xmax=17, ymin=0, ymax=22,
-                     xtick=\empty, ytick=\empty, axis line style={gray!60},
+                     xtick=\empty, ytick=\empty,
                      legend pos=north west, legend style={font=\tiny}]
           \addplot[only marks, mark=*, mark size=1.5pt, armblue] coordinates {
             (1.2, 1.5) (1.8, 2.1) (2.3, 2.8) (2.7, 3.3) (3.2, 3.0)
@@ -615,12 +649,12 @@ print(res.aic, res.bic)
   \end{columns}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
-    \textbf{Rule of thumb:} $D_i > 4/n$ is suspicious. Investigate before deleting. High-Cook's points are often (a) data-entry errors, (b) genuinely unusual but real cases (Yerevan 200 m$^2$ penthouse in training), or (c) telling you the model class is too rigid.
+    \textbf{Rule of thumb:} $D_i > 4/n$ is suspicious. Investigate before deleting. High-Cook's points are often (a) data-entry errors, (b) genuinely unusual but real cases (a Yerevan 200 m$^2$ penthouse in training), or (c) telling you the model class is too rigid.
   }}
 \end{frame}
 
 % ================================================================
-\section{Prediction intervals and coverage}
+\section{Prediction intervals}
 
 \begin{frame}{Point predictions aren't enough}
   ``This apartment will rent for 310 kAMD'' is a \emph{point prediction}. It says nothing about uncertainty.
@@ -646,91 +680,24 @@ print(res.aic, res.bic)
     \end{tikzpicture}
   \end{center}
   \vfill
-  \footnotesize Out of 8 truths, all 8 fell within the 90\% PI - actual coverage $100\%$. With a larger test set we'd expect roughly $90\%$.
-\end{frame}
-
-\begin{frame}[fragile]{Coverage: testing a prediction interval}
-  \textbf{Empirical coverage} = fraction of true values that fell inside their predicted interval.
-  \vfill
-  For a well-calibrated $1-\alpha$ PI, coverage on a held-out test set should be approximately $1-\alpha$. If you build 90\% PIs and only 75\% of test points land inside, your intervals are too narrow - you're claiming more confidence than you have.
-  \vfill
-{\lstset{basicstyle=\ttfamily\scriptsize}
-\begin{lstlisting}
-# Quick way: residual quantiles on a calibration split
-residuals = y_cal - model.predict(X_cal)
-q_lo, q_hi = np.quantile(residuals, [0.05, 0.95])     # 90% PI
-y_pred = model.predict(X_test)
-lo, hi = y_pred + q_lo, y_pred + q_hi
-coverage = np.mean((y_test >= lo) & (y_test <= hi))
-print(f"empirical coverage = {coverage:.2%}")        # should be ~90%
-\end{lstlisting}}
-  \vfill
-  \footnotesize \textbf{Modern tool:} \texttt{MAPIE} library implements \emph{conformal prediction}, which gives provable coverage guarantees regardless of model.
+  \footnotesize A well-calibrated 90\% interval should contain the truth about 90\% of the time on held-out data. The modern tool is \emph{conformal prediction} (\texttt{MAPIE}), which gives coverage guarantees regardless of model.
 \end{frame}
 
 % ================================================================
 \section{Wrap-up}
 
-\begin{frame}{Picking the right metric}
-  \begin{center}
-    \begin{tikzpicture}[
-      node distance=0.35cm and 0.6cm,
-      box/.style={rectangle, draw=armblue, very thick, text width=3cm, align=center, font=\scriptsize, rounded corners=2pt, fill=armblue!5, minimum height=0.75cm},
-      result/.style={rectangle, draw=paramgreen, very thick, text width=2.8cm, align=center, font=\scriptsize, rounded corners=2pt, fill=paramgreen!10, minimum height=0.75cm},
-      arr/.style={->, >=stealth, thick, armblue},
-    ]
-      \node[box] (start) {Want a single accuracy number?};
-      \node[result, right=of start] (rmse) {RMSE / MAE};
-      \node[box, below=of start] (skew) {Target skewed positive?};
-      \node[result, right=of skew] (rmsle) {RMSLE};
-      \node[box, below=of skew] (stake) {Reporting to non-tech?};
-      \node[result, right=of stake] (r2) {$R^2$ + MAPE caveats};
-      \node[box, below=of stake] (cmp) {Comparing nested models?};
-      \node[result, right=of cmp] (aic) {AIC / BIC};
-      \node[box, below=of cmp] (diag) {Diagnosing model assumptions?};
-      \node[result, right=of diag] (plots) {Residual + QQ + Cook's};
-      \node[box, below=of cmp, yshift=-1.7cm] (unc) {Reporting uncertainty?};
-      \node[result, right=of unc] (pi) {Prediction intervals + coverage};
-
-      \draw[arr] (start) -- node[above, font=\tiny]{yes} (rmse);
-      \draw[arr] (start) -- (skew);
-      \draw[arr] (skew) -- node[above, font=\tiny]{yes} (rmsle);
-      \draw[arr] (skew) -- (stake);
-      \draw[arr] (stake) -- node[above, font=\tiny]{yes} (r2);
-      \draw[arr] (stake) -- (cmp);
-      \draw[arr] (cmp) -- node[above, font=\tiny]{yes} (aic);
-      \draw[arr] (cmp) -- (diag);
-      \draw[arr] (diag) -- node[above, font=\tiny]{yes} (plots);
-      \draw[arr] (diag) -- (unc);
-      \draw[arr] (unc) -- node[above, font=\tiny]{yes} (pi);
-    \end{tikzpicture}
-  \end{center}
-\end{frame}
-
 \begin{frame}{Recap}
   \begin{itemize}\small
-    \item \textbf{Magnitude metrics} (MSE, RMSE, MAE, MedAE, RMSLE) all answer ``how big are the errors?'' but differ in how they treat outliers and scale. Report at least two together.
-    \item \textbf{Relative metrics} ($R^2$, adjusted $R^2$, MAPE, SMAPE, MBE) are scale-free or normalized. $R^2$ can be negative on test data; MAPE is asymmetric and ill-defined at $y=0$; MBE catches bias the symmetric metrics hide.
-    \item \textbf{Correlations} measure association, not accuracy. A perfect Pearson can coexist with terrible predictions.
-    \item \textbf{AIC / BIC} are for model \emph{comparison}, not absolute accuracy. Pair them with CV.
-    \item \textbf{Diagnostic plots} reveal what kind of wrong your model is. Residuals vs.\ fitted, QQ, scale-location, leverage-vs-Cook's.
-    \item \textbf{Prediction intervals + coverage} turn point predictions into honest uncertainty reports.
+    \item A metric is a \textbf{definition of success} - it decides which model wins your tuning, not just what you report.
+    \item \textbf{Magnitude} (MSE, RMSE, MAE, MedAE): how big are the errors? They differ entirely in how they treat outliers.
+    \item \textbf{Relative} ($R^2$, adjusted, MAPE, SMAPE): scale-free. $R^2$ can go negative on test; MAPE blows up near zero; SMAPE tames it.
+    \item \textbf{Correlation} measures association, not accuracy - a perfect Pearson can hide a constant offset of 1000.
+    \item \textbf{AIC / BIC}: compare candidate models, don't measure accuracy. Pair with CV.
+    \item \textbf{Diagnostics} (predicted-vs-actual, residuals-vs-fitted, scale-location, QQ, leverage/Cook's) show \emph{what kind} of wrong - one number can't.
+    \item \textbf{Prediction intervals} turn a point guess into an honest range.
   \end{itemize}
   \vfill
-  \emph{One model. Many metrics. Report the ones that match what your stakeholder will actually do with the output.}
-\end{frame}
-
-\begin{frame}{HW01f - practice}
-  \footnotesize Estimated time: 90-120 minutes. Tasks 1-4 graded; bonuses optional.
-  \begin{enumerate}\small
-    \item On the Yerevan rent dataset: fit Ridge with reasonable defaults. Compute MSE, RMSE, MAE, MedAE, R$^2$, MAPE on the test set. Report all six and discuss which one you'd lead with for (a) marketplace stakeholders, (b) ML team review.
-    \item Inject 5 outliers into the training data. Refit. Recompute the six metrics. Which moved the most? Which moved the least? Why?
-    \item Plot the four standard diagnostic plots for your fitted model. Identify any high-Cook's-distance points.
-    \item Build a 90\% prediction interval using the residual-quantile method. Report empirical coverage on test.
-    \item \emph{Bonus 1:} log-transform rent and re-fit. Report RMSLE before and after. Compare to RMSE on the original scale.
-    \item \emph{Bonus 2:} install \texttt{MAPIE} and produce conformal 90\% intervals. Compare coverage to your residual-quantile intervals.
-    \item \emph{Bonus 3:} fit two candidate models in \texttt{statsmodels}: one with 5 features, one with 10. Compare AIC, BIC, and 5-fold CV MSE. Do they agree? \textbf{Most instructive question.}
-  \end{enumerate}
+  \emph{One model, many metrics. Report - and tune on - the ones that match what the decision actually costs.}
 \end{frame}
 
 \end{document}
@@ -738,11 +705,15 @@ print(f"empirical coverage = {coverage:.2%}")        # should be ~90%
 % =============================================================
 % Provenance:
 %   - Topics from plan_manual.md line 29 (regression metrics).
-%   - Additions approved: RMSLE, SMAPE, MedAE, MBE, prediction intervals + coverage.
-%   - AIC/BIC kept as separate section ("model comparison, not evaluation").
-%   - Conceptual-first style with code mini-examples.
+%   - 2026-06-20 redesign: added motivating intro (classification + regression),
+%     split loss vs metric into two frames + tuning emphasis, fixed MSE/MAE
+%     penalty plot (axes + samples), dropped code blocks, spelled out
+%     abbreviations, removed RMSLE / cheat-sheet / MBE / coverage / metric-
+%     decision-tree / homework frames, R^2 basic-first (adjusted+generalized
+%     deferred), Pearson-first then Spearman, expanded QQ (construction frame),
+%     added predicted-vs-actual and scale-location diagnostics.
 %   - Yerevan rent running example continued.
-%   - Cross-references: L01b (OLS, MSE as loss), L01c (log transform pairs
-%     with RMSLE), L01d (CV pairs with AIC/BIC), L05b (nested CV).
+%   - Cross-references: L01b (OLS, MSE as loss), L01c (log transform),
+%     L01d (CV pairs with AIC/BIC), L05b (nested CV).
 %   - Predict-first frames per memory feedback_predict_first_slides.md.
 % =============================================================
