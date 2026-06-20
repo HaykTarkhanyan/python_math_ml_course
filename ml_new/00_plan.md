@@ -58,7 +58,7 @@ Video [14]:
 - **[19] XGBoost / LightGBM / CatBoost** — include monotonic + interaction constraints (~3-4 frames; required for credit / insurance / healthcare)
 - **[20] Stacking / blending**
 - **[21] Feature selection** — filter / wrapper / embedded, tree-based importances, SHAP
-- **[22] Other classic models** — KNN, SVM, Gaussian processes, Naive Bayes
+- **[22] Other classic models** — KNN, SVM, Gaussian processes, Naive Bayes, LDA, QDA
 - **[23] Neural networks** — likely multi-lecture (perceptron → MLP → backprop → frameworks)
 - **[24] Experiment tracking** — MLflow / W&B
 - **[25] TabPFN + tabular foundation models** — awareness lecture; in-context prior-fitted transformer that beats default XGBoost on small data (≤10k rows). Short, students will see this in interviews.

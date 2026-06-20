@@ -1,11 +1,64 @@
 \documentclass[aspectratio=169]{beamer}
 \input{../preamble}
 
-\title{Lecture 03: Regularization}
+\title{L03: Regularization}
 \subtitle{Bias-Variance $\cdot$ Ridge ($L_2$) $\cdot$ Lasso ($L_1$) $\cdot$ Geometric Intuition}
 \date{}
 
 \begin{document}
+
+% ================================================================
+% COLD OPEN -- one knob, three regimes (degree-20 poly + Ridge)
+% Figures from py_src/cold_open_ridge_demo.py (DGP: noisy cubic, sigma=20).
+\begin{frame}{One knob controls fit vs. memorization}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_open_1_overfit.pdf}
+    \column{0.36\textwidth}
+    \small
+    A \textbf{degree-20 polynomial} fit to a noisy cubic, with \textbf{no penalty} ($\lambda \approx 0$).
+    \vskip 6pt
+    It threads the training points but \textbf{thrashes} between them.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      train MSE $= 385$ \quad but \quad \textbf{test MSE $= 7808$}.\\
+      Classic overfitting: memorized the noise.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dial the penalty up: the fit calms down}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_open_2_sweet.pdf}
+    \column{0.36\textwidth}
+    \small
+    Same model class, same data. We just added a penalty $\lambda = 0.84$ that
+    \textbf{discourages large coefficients}.
+    \vskip 6pt
+    The curve now \textbf{hugs the true cubic}.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.95\linewidth}{\footnotesize
+      train MSE $= 469$ (up a bit) \quad
+      \textbf{test MSE $= 565$} (down $14\times$).}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Crank it too far: now we underfit}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_open_3_underfit.pdf}
+    \column{0.36\textwidth}
+    \small
+    With $\lambda = 10{,}000$ the penalty dominates: coefficients are crushed toward
+    $0$ and the fit goes \textbf{nearly flat}.
+    \vskip 6pt
+    Both errors climb (train $2263$, test $4051$).
+  \end{columns}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\small
+    \textbf{Regularization is a continuous knob.} Too little $\Rightarrow$ memorize noise.
+    Too much $\Rightarrow$ underfit. There is a \textbf{sweet spot} in between --- so how do we find it?}}
+\end{frame}
 
 \begin{frame}{Outline}
   \tableofcontents
@@ -14,128 +67,192 @@
 % ================================================================
 \section{Why Regularize?}
 
-\begin{frame}{Recap: overfitting}
-  \begin{columns}
-    \column{0.55\textwidth}
-    \begin{itemize}\small
-      \item Overfitting: model fits noise / artifacts in the training data
-      \item Symptom: small \emph{training} error, large \emph{test} error
-      \item L02 example: degree-15 polynomial on a tiny dataset
-      \item Three high-level fixes:
-        \begin{enumerate}
-          \item Collect more data (often infeasible)
-          \item Reduce hypothesis space (binary feature in/out — coarse)
-          \item Penalize complexity \emph{continuously} $\Rightarrow$ \textbf{regularization}
-        \end{enumerate}
-    \end{itemize}
-    \column{0.45\textwidth}
-    \includegraphics[width=\textwidth]{figures/complexity-vs-fit2.png}
-  \end{columns}
-\end{frame}
-
 \begin{frame}{What is regularization?}
   Methods that inject an \textbf{inductive bias} (typically ``low complexity'') into the model to reduce overfitting and improve the bias-variance tradeoff.
   \vfill
   \begin{itemize}
     \item \textbf{Explicit} regularization: add a complexity penalty to ERM ($L_1$, $L_2$).
-    \item \textbf{Implicit} regularization: early stopping, data augmentation, parameter sharing, dropout, ensembling.
-    \item \textbf{Structured} regularization: prior knowledge over groups of parameters (e.g., group lasso).
+    \item \textbf{Implicit} regularization: early stopping, data augmentation, dropout, ensembling.
+    \item \textbf{Structured} regularization: let the penalty use \emph{known structure} among the weights --- e.g., in a polynomial, penalize \emph{high-degree} coefficients harder than low-degree ones, encoding a preference for smooth, low-degree behaviour.
   \end{itemize}
   \vfill
-  This lecture focuses on \textbf{explicit} $L_1$ and $L_2$ penalties on the coefficients.
+  This lecture focuses on \textbf{explicit} $L_1$ and $L_2$ penalties on the coefficients --- exactly the knob we just turned.
 \end{frame}
 
 \begin{frame}{Regularized empirical risk minimization}
-  Trade off two competing goals:
-  \begin{itemize}
-    \item Maximize \textbf{fit} (minimize training loss)
-    \item Minimize \textbf{complexity} of the model
-  \end{itemize}
-  \vfill
-  Combine into a single objective:
+  Trade off two competing goals in a \textbf{single objective}:
   \[
-    \boxed{\;\riskr(\thetav) \;=\; \risket \;+\; \lambda \cdot J(\thetav)\;}
+    \boxed{\;\riskr(\thetav) \;=\; \underbrace{\risket}_{\text{fit the data}} \;+\; \lambda \cdot \underbrace{J(\thetav)}_{\text{stay simple}}\;}
   \]
   \begin{itemize}\small
-    \item $J(\thetav)$: \textbf{complexity penalty} / regularizer
-    \item $\lambda \ge 0$: \textbf{regularization strength}
-    \item $\lambda = 0$: plain ERM
-    \item $\lambda \to \infty$: model becomes as ``simple'' as possible (often 0 coefficients)
-    \item Choosing $\lambda$ is a tuning problem — usually via cross-validation (L05)
+    \item $J(\thetav)$: \textbf{complexity penalty} / regularizer (how ``big'' the model is)
+    \item $\lambda \ge 0$: \textbf{regularization strength} --- the knob from the cold open
+    \item $\lambda = 0$: plain ERM (overfit panel); \quad $\lambda \to \infty$: model as ``simple'' as possible (underfit panel)
+    \item Choosing $\lambda$ is a tuning problem --- usually via \textbf{cross-validation} (last week's lecture)
   \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\small
+    That penalty term \textbf{raises bias} and \textbf{lowers variance}. To see why that is a trade
+    worth making, we need a vocabulary for the two errors at play.}}
+\end{frame}
+
+\begin{frame}{The noise floor (Bayes risk): what no model can beat}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_bayes_risk.pdf}
+    \column{0.5\textwidth}
+    \small
+    Decompose expected test error:
+    \[
+      \text{MSE} = \underbrace{\text{Bias}^2 + \text{Var}}_{\text{we can shrink this}} + \underbrace{\sigma^2}_{\text{noise floor}}
+    \]
+    \begin{itemize}
+      \item The \textbf{Bayes risk} is $\sigma^2$: the error left even for an oracle that \emph{knew} the true $f$ (the \textbf{Bayes-optimal} predictor).
+      \item It is \textbf{irreducible} --- pure noise in the data, nothing to learn.
+      \item Here $\sigma = 20 \Rightarrow \sigma^2 \approx 400$. Our sweet-spot fit hit $565$ --- close to the floor!
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.95\linewidth}{\footnotesize
+      Regularization closes the gap \textbf{above} the floor --- never below it.}}
+  \end{columns}
 \end{frame}
 
 % ================================================================
 \section{Bias-Variance Tradeoff}
 
 \begin{frame}{Bias and variance, intuitively}
-  Two sources of error when an estimated model differs from the truth:
+  Two sources of \emph{reducible} error when an estimated model differs from the truth:
   \vfill
   \begin{itemize}
     \item \textbf{Bias}: how far the \emph{average} estimate is from the truth
-      \begin{itemize}
-        \item High bias $=$ model class too restrictive to capture truth (underfit)
-      \end{itemize}
+      \begin{itemize}\small \item High bias $=$ model class too restrictive to capture truth (\emph{underfit} --- our flat panel) \end{itemize}
     \item \textbf{Variance}: how much the estimate \emph{wiggles} across different training sets
-      \begin{itemize}
-        \item High variance $=$ model class so flexible it chases noise (overfit)
-      \end{itemize}
+      \begin{itemize}\small \item High variance $=$ model class so flexible it chases noise (\emph{overfit} --- our thrashing panel) \end{itemize}
   \end{itemize}
   \vfill
-  Regularization \textbf{increases bias} but \textbf{reduces variance}. Net effect on test error is often favorable.
+  Regularization \textbf{raises bias a little} to \textbf{cut variance a lot}. The very same trade has another, more precise name --- shown next.
 \end{frame}
 
-\begin{frame}{Visualizing the model spaces}
-  \begin{columns}
-    \column{0.55\textwidth}
-    \begin{itemize}\small
-      \item $\Hspace_0$: ``all'' functions; ideal Bayes-optimal $f^*_0 \in \Hspace_0$
-      \item $\Hspace$: our chosen model class; best-in-class $f^* \in \Hspace$
-      \item $\Hspace_R \subset \Hspace$: regularized class
-      \item $d(f^*_0, f^*) =$ \textbf{model bias}
-      \item $d(f^*, f^*_R) =$ \textbf{estimation bias} from regularization
+\begin{frame}{Estimation and approximation error}
+  We want $\fh_\Hspace$ to have risk close to the \textbf{Bayes risk} $\risk^*$ (the noise floor). Split that gap --- the \emph{excess risk} --- into two pieces:
+  \[
+    \small
+    \underbrace{\risk(\fh_\Hspace) - \risk^*}_{\text{excess risk}}
+    = \underbrace{\Big[\,\risk(\fh_\Hspace) - \inf_{f\in\Hspace}\risk(f)\,\Big]}_{\text{estimation error}}
+    \; + \;
+    \underbrace{\Big[\,\inf_{f\in\Hspace}\risk(f) - \risk^*\,\Big]}_{\text{approximation error}}
+  \]
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \centering
+    \begin{tikzpicture}[scale=0.82]
+      \draw[thick] (0,0) ellipse (2.5 and 1.5);
+      \node at (1.85,1.05) {$\Hspace$};
+      \coordinate (fh) at (-1.35,0.45);
+      \coordinate (inf) at (-0.05,-0.5);
+      \coordinate (bayes) at (3.25,0.2);
+      \draw[armred, very thick] (fh) -- (inf);
+      \draw[armblue, very thick] (inf) -- (bayes);
+      \fill (fh) circle (1.6pt);
+      \fill (inf) circle (1.6pt);
+      \fill (bayes) circle (1.6pt);
+      \node[above=1pt] at (fh) {\scriptsize $\risk(\fh_\Hspace)$};
+      \node[below=2pt] at (inf) {\scriptsize $\inf_{f\in\Hspace}\risk(f)$};
+      \node[right=2pt] at (bayes) {\scriptsize $\risk^*$};
+      \node[armred] at (-1.65,-0.2) {\scriptsize estimation};
+      \node[armblue] at (1.7,-0.35) {\scriptsize approximation};
+    \end{tikzpicture}
+    \column{0.53\textwidth}
+    \footnotesize
+    \begin{itemize}
+      \item \textbf{Estimation error}: we fit $\fh_\Hspace$ by ERM on \emph{finite} data, so we never quite reach the best $f \in \Hspace$ --- this is the \emph{variance} side.
+      \item \textbf{Approximation error}: $\Hspace$ usually doesn't even contain the Bayes-optimal $f^*$ --- this is the \emph{bias} side, fixed by the model class.
+      \item \textbf{Regularization} shrinks $\Hspace$: approximation error up a touch, estimation error down a lot.
     \end{itemize}
-    \column{0.45\textwidth}
-    \includegraphics[width=\textwidth]{figures/bv_anim_5.pdf}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Estimation variance shrinks under regularization}
-  \begin{columns}
-    \column{0.55\textwidth}
-    \begin{itemize}\small
-      \item Estimated model $\fh$ depends on the random training sample
-      \item \textbf{Estimation variance}: spread of $\fh$ across resampled training sets
-      \item Restricting to $\Hspace_R$ \emph{reduces} this spread
-      \item Tradeoff: higher bias (we're constrained), lower variance
-    \end{itemize}
-    \column{0.45\textwidth}
-    \includegraphics[width=\textwidth]{figures/bv_anim_3.pdf}\\[2mm]
-    \includegraphics[width=\textwidth]{figures/bv_anim_2.pdf}
   \end{columns}
 \end{frame}
 
 % ================================================================
 \section{Ridge Regression (\texorpdfstring{$L_2$}{L2} Penalty)}
 
-\begin{frame}{Ridge regression}
-  Measure complexity as deviation from the origin. Shrink coefficients toward 0:
-  \begin{align*}
-    \thetah_{\text{ridge}}
-    &= \argmin_{\thetav}\; \sumin (\yi - \thetav^\top \xv^{(i)})^2 \;+\; \lambda \sum_{j=1}^p \theta_j^2 \\
-    &= \argmin_{\thetav}\; \| \yv - \Xmat \thetav \|_2^2 + \lambda \|\thetav\|_2^2
-  \end{align*}
+\begin{frame}[plain]
   \vfill
-  Still has a \textbf{closed form}:
+  \begin{center}
+    {\Large\color{popblue}\textbf{Ridge regression ($L_2$)}}\\[0.9em]
+    \begin{minipage}{0.8\textwidth}\centering\small
+      We saw that \emph{big coefficients mean a complex model}. The first cure: penalize the
+      \textbf{squared} size of the weights --- smooth, closed-form, our workhorse.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Big coefficients $=$ a complex model}
+  \begin{center}
+    \includegraphics[width=0.42\textwidth]{fig/l03_coef_norms.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize Two \textbf{full} degree-20 fits, same data; weights on standardized powers $z_j$ ($\|\thetav\|_2 =$ \textcolor{armred}{$\approx 13{,}000$} vs \textcolor{armblue}{$\approx 19$}) --- \textbf{penalizing size} is what buys the smooth fit:}
+  {\scriptsize
+  \begin{align*}
+    \textcolor{armred}{\hat y_{\text{unres}}} &= 9.9 + 30 z_1 - 98 z_2 - 576 z_3 + 599 z_4 + 3839 z_5 - 239 z_6 \\
+    &\quad - 7790 z_7 - 2149 z_8 + 3180 z_9 + 1234 z_{10} + 4956 z_{11} + 2631 z_{12} - 698 z_{13} \\
+    &\quad + 359 z_{14} - 3878 z_{15} - 2446 z_{16} - 1779 z_{17} - 2340 z_{18} + 2762 z_{19} + 2462 z_{20} \\[2pt]
+    \textcolor{armblue}{\hat y_{\text{reg}}} &= 9.9 + 14 z_1 + 2.9 z_2 + 10.3 z_3 + 2.8 z_4 + 6.2 z_5 + 2.0 z_6 + 3.5 z_7 \\
+    &\quad + 1.3 z_8 + 1.9 z_9 + 0.8 z_{10} + 1.0 z_{11} + 0.4 z_{12} + 0.6 z_{13} + 0.2 z_{14} \\
+    &\quad + 0.5 z_{15} + 0.1 z_{16} + 0.6 z_{17} + 0.1 z_{18} + 0.8 z_{19} + 0.2 z_{20}
+  \end{align*}}
+\end{frame}
+
+\begin{frame}{Ridge regression ($L_2$): the idea}
+  \begin{itemize}
+    \item Without a penalty, a high-capacity model on finite data lets coefficients grow \textbf{huge} --- chasing noise, not signal (we just saw $\|\thetav\| \approx 13{,}000$).
+    \item The $L_2$ penalty $\lambda\|\thetav\|_2^2$ \textbf{resists} that: big coefficients pay a quadratic cost; small ones pay almost nothing.
+    \item Net effect: less variance (we stop chasing noise), a sliver of bias (we shrink the signal a touch too). Usually a win.
+  \end{itemize}
+  \vfill
+  Shrink coefficients toward $0$ by penalizing their squared $L_2$ norm:
+  \[
+    \thetah_{\text{ridge}}
+    = \argmin_{\thetav}\; \| \yv - \Xmat \thetav \|_2^2 + \lambda \|\thetav\|_2^2
+    = \argmin_{\thetav}\; \sumin (\yi - \thetav^\top \xv^{(i)})^2 + \lambda \sum_{j=1}^p \theta_j^2
+  \]
+\end{frame}
+
+\begin{frame}{Ridge regression ($L_2$): closed form}
+  Add $\lambda\id$ before inverting --- and a \textbf{closed form} survives:
   \[
     \boxed{\;\thetah_{\text{ridge}} = (\Xmat^\top \Xmat + \lambda \id)^{-1} \Xmat^\top \yv\;}
   \]
+  \begin{itemize}\small
+    \item We add positive entries along the diagonal ``ridge'' of $\Xmat^\top\Xmat$ (hence the name --- shown shortly).
+    \item This also \textbf{fixes a singular} $\Xmat^\top\Xmat$: $(\Xmat^\top\Xmat + \lambda\id)$ is invertible for any $\lambda>0$, so ridge works even with more features than samples, or perfectly collinear features.
+  \end{itemize}
   \vfill
-  Name comes from adding positive entries along the diagonal ``ridge'' of $\Xmat^\top \Xmat$. Bonus: solves the singular-$\Xmat^\top \Xmat$ problem (multicollinearity).
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.985\linewidth}{\small
+    \textbf{Bayesian view:} plain OLS is the \textbf{MLE} (no prior). Adding the penalty $=$ adding a \textbf{prior}, which turns it into a \textbf{MAP} estimate. Ridge's prior is \textbf{Gaussian} $\thetav \sim \mathcal{N}(0,\tau^2\id)$ --- ``weights small, centred at $0$''; larger $\lambda$ $=$ tighter prior. (Lasso uses a different prior --- compared later.)}}
+\end{frame}
+
+\begin{frame}{Ridge from the optimizer's view: weight decay}
+  Take one gradient-descent step (rate $\eta$) on the regularized risk, term by term:
+  \begin{align*}
+    \riskr(\thetav) &= \risket + \lambda\|\thetav\|_2^2
+      &&\text{\footnotesize regularized objective}\\[2pt]
+    \nabla \riskr(\thetav) &= \nabla\risket + 2\lambda\thetav
+      &&\text{\footnotesize gradient (penalty adds $2\lambda\thetav$)}\\[2pt]
+    \thetav &\leftarrow \thetav - \eta\,\nabla\riskr(\thetav)
+      &&\text{\footnotesize the GD update}\\[2pt]
+    &= \thetav - \eta\big(\nabla\risket + 2\lambda\thetav\big)
+      &&\text{\footnotesize substitute the gradient}\\[2pt]
+    &= \boxed{\;\underbrace{(1 - 2\eta\lambda)}_{\text{shrink}}\,\thetav \;-\; \underbrace{\eta\,\nabla\risket}_{\text{usual GD step}}\;}
+      &&\text{\footnotesize regroup the $\thetav$ terms}
+  \end{align*}
+  \vfill
+  \footnotesize \textbf{Shrink, then step}: each weight is pulled toward $0$ by the factor $(1-2\eta\lambda)<1$ \emph{before} the gradient update --- exactly the deep-learning \textbf{weight decay}. ($\lambda = 0 \Rightarrow$ factor $1 \Rightarrow$ plain GD.)
 \end{frame}
 
 \begin{frame}{Ridge as constrained optimization}
-  \begin{columns}
+  \begin{columns}[T]
     \column{0.5\textwidth}
     Equivalent constrained form (Lagrange duality):
     \[
@@ -144,17 +261,48 @@
     \]
     \vfill
     \begin{itemize}\small
-      \item Feasible region is an $L_2$ ball of radius $\sqrt{t}$
-      \item Bijection: large $\lambda$ $\Leftrightarrow$ small $t$
-      \item Solution lies on the \emph{boundary} of the ball (where it touches the smallest possible loss contour)
+      \item In the figure: the \textbf{ellipses} are contours of the least-squares loss (their centre is the OLS solution $\thetah$).
+      \item The \textbf{circle} is the constraint region $\|\thetav\|_2 \le \sqrt{t}$ --- the $L_2$ ball of radius $\sqrt{t}$.
+      \item The ridge solution is where the smallest ellipse first \textbf{touches} the circle (on its boundary).
+      \item Bijection: large $\lambda$ $\Leftrightarrow$ small $t$ (a tighter ball).
     \end{itemize}
     \column{0.5\textwidth}
     \includegraphics[width=\textwidth]{figures/ridge_perspectives_03.png}
   \end{columns}
 \end{frame}
 
+\begin{frame}{What is a ``ridge''? (Mount Khustup)}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \includegraphics[width=\textwidth]{fig/khustup_ridge.jpg}\\[2pt]
+    {\scriptsize Mount Khustup ($3206$\,m), Syunik, Armenia.}
+    \column{0.5\textwidth}
+    \small
+    A mountain \textbf{ridge} is a long \emph{crest} --- walk along it and your height barely changes.
+    \vskip 8pt
+    The least-squares loss for \textbf{correlated features} has the same shape: a long, near-flat direction where many different $\thetav$ give almost the same error.
+    \vskip 8pt
+    OLS wanders along that crest (\textbf{unstable}). Ridge regression adds a penalty that pins down \textbf{one} point on it.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Ridge tames the collinear valley}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_ridge_name.pdf}
+    \column{0.38\textwidth}
+    \small
+    With \textbf{correlated features} the least-squares loss is a long, flat \textbf{valley} (a ``ridge''): many very different $\thetav$ fit almost equally well, so OLS is \textbf{unstable} (here $\text{cond}(\Xmat^\top\Xmat) \approx 800$).
+    \vskip 4pt
+    Adding $\lambda$ to the diagonal \textbf{rounds} the valley into a bowl with a single, stable minimum.
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The name comes from Hoerl's \emph{ridge analysis} of response surfaces (1962): seek the optimum on spheres about the origin --- exactly the $\|\thetav\|_2 \le t$ constraint.}}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Ridge solution path}
-  \begin{columns}
+  \begin{columns}[T]
     \column{0.55\textwidth}
     \includegraphics[width=\textwidth]{figures/lin_model_regu_02.png}
     \column{0.45\textwidth}
@@ -167,22 +315,77 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{Why ridge helps: polynomial example}
-  \begin{columns}
+\begin{frame}{The U-curve: test error vs. $\lambda$}
+  \begin{columns}[T]
     \column{0.55\textwidth}
-    \includegraphics[width=\textwidth]{figures/poly_ridge_02.png}
+    \includegraphics[width=\textwidth]{fig/l03_mse_vs_lambda.pdf}
     \column{0.45\textwidth}
-    \begin{itemize}\small
-      \item True $f(x) = 5 + 2x + 10 x^2 - 2 x^3$ (red)
-      \item Fit a degree-10 polynomial — overfits at $\lambda = 0$
-      \item As $\lambda$ grows: coefficients shrink, model gets smoother, generalization improves
-      \item Lets us pick \emph{$d$ too large} on purpose and let $\lambda$ control complexity (continuous, not discrete)
+    \small
+    Now that we know what $\lambda$ does, sweep it. Same diagnostic as last week's \textbf{validation curve} (error vs. degree $d$) --- but for $\lambda$.
+    \vskip 6pt
+    \begin{itemize}
+      \item \textbf{Left} (small $\lambda$): high variance --- the overfit panel.
+      \item \textbf{Right} (large $\lambda$): high bias --- the underfit panel.
+      \item \textbf{Bottom of the U} ($\lambda \approx 0.84$): the sweet spot.
     \end{itemize}
+    \vskip 4pt
+    The U-shape \emph{is} the bias-variance tradeoff made visible.
   \end{columns}
+\end{frame}
+
+\begin{frame}{Predict first: scale your features before regularizing}
+  \textbf{Questions:}
+  \begin{itemize}\small
+    \item You fit \texttt{Ridge(alpha=1)} on house data. \texttt{bathrooms} $\in [1,4]$, \texttt{square\_meters} $\in [50,500]$. Both genuinely predict price. Which feature does Ridge \textbf{penalize harder}?
+    \item Same setup, but you \texttt{StandardScaler()} first. What changes?
+  \end{itemize}
+  \vskip 2pt
+  \textbf{Answers:}
+  \begin{itemize}\small
+    \item \emph{Unscaled:} \texttt{bathrooms} is hit harder. To matter for $y$ its coefficient must be $\sim$100$\times$ larger --- and the $L_2$ penalty punishes large coefficients quadratically. A genuinely useful feature gets shrunk on a \emph{technicality of units}.
+    \item \emph{Scaled:} both features have unit variance, so the penalty is \textbf{fair} --- Ridge chooses on signal strength, not on units.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.985\linewidth}{\small
+    \textbf{Rule:} always scale before Ridge/Lasso (\texttt{StandardScaler}). Fit the scaler on
+    \textbf{train only}, then \texttt{.transform()} the test set --- inside the CV loop.}}
+\end{frame}
+
+\begin{frame}{Using Ridge in \texttt{sklearn}}
+  \texttt{\small from sklearn.linear\_model import Ridge}\\
+  \texttt{\small Ridge(alpha=, fit\_intercept=, solver=, max\_iter=, tol=, random\_state=)}
+  \vskip 6pt
+  {\footnotesize
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{l p{4.3cm} l p{3.2cm}}
+    \textbf{arg} & \textbf{what it does} & \textbf{default} & \textbf{when to change} \\
+    \hline
+    \texttt{alpha} & penalty strength $\lambda$ (bigger $=$ more shrinkage) & \texttt{1.0} & \textbf{tune by CV} --- the knob that matters \\
+    \texttt{fit\_intercept} & fits an intercept and does \emph{not} penalize it & \texttt{True} & leave \texttt{True} (don't shrink the baseline) \\
+    \texttt{solver} & numerical method & \texttt{'auto'} & \texttt{'sparse\_cg'}/\texttt{'lsqr'} for big sparse $\Xmat$ \\
+    \texttt{max\_iter}, \texttt{tol} & budget/stopping tol for iterative solvers & \texttt{None}, \texttt{1e-3} & bump if it warns about convergence \\
+    \texttt{random\_state} & seed for stochastic solvers (\texttt{sag}, \texttt{saga}) & \texttt{None} & set for reproducibility \\
+  \end{tabular}}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\small
+    Ridge shrinks every coefficient but zeros \emph{none}. Sometimes you want a model that
+    throws features away entirely --- that is the next penalty.}}
 \end{frame}
 
 % ================================================================
 \section{Lasso Regression (\texorpdfstring{$L_1$}{L1} Penalty)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Lasso regression ($L_1$)}}\\[0.9em]
+    \begin{minipage}{0.8\textwidth}\centering\small
+      Ridge shrinks every weight but \textbf{zeros none}. What if we want the model to
+      \emph{drop features entirely}? Switching the penalty to the $L_1$ norm does exactly that.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
 
 \begin{frame}{Lasso regression}
   Penalize the $L_1$ norm of the coefficients instead:
@@ -196,12 +399,12 @@
     \item ``Least Absolute Shrinkage and Selection Operator''
     \item Still convex, but \textbf{not differentiable} at $\theta_j = 0$ $\Rightarrow$ no closed form
     \item Solve via coordinate descent, LARS, or proximal methods
-    \item Key property: \textbf{sparsity} — many coefficients become \emph{exactly} 0
+    \item Key property: \textbf{sparsity} --- many coefficients become \emph{exactly} $0$
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Lasso solution path}
-  \begin{columns}
+  \begin{columns}[T]
     \column{0.55\textwidth}
     \includegraphics[width=\textwidth]{figures/lin_model_regu_01.png}
     \column{0.45\textwidth}
@@ -215,36 +418,66 @@
 \end{frame}
 
 \begin{frame}{Lasso vs ridge: geometric intuition}
-  \begin{columns}
-    \column{0.6\textwidth}
-    \includegraphics[width=\textwidth]{figures/lasso_contour_cases.png}
-    \column{0.4\textwidth}
-    \begin{itemize}\small
-      \item Ridge constraint: $L_2$ ball (smooth)
-      \item Lasso constraint: $L_1$ \textbf{diamond} with kinks on the axes
-      \item Loss contours hit the diamond's \textbf{corners} first — corners lie on coordinate axes — so some $\theta_j$ become exactly 0
-      \item Ridge's round ball is tangent to contours \emph{between} the axes, so no sparsity
-    \end{itemize}
-  \end{columns}
+  \begin{center}
+    \includegraphics[width=0.85\textwidth]{fig/l03_l1_l2_geometry.pdf}
+  \end{center}
+  \vskip 2pt
+  \begin{itemize}\footnotesize
+    \item Loss contours (centred at the OLS solution) grow until they \textbf{touch} the constraint region.
+    \item \textbf{Ridge} ($L_2$ ball): the round boundary is touched \emph{between} the axes --- both $\theta_j \neq 0$.
+    \item \textbf{Lasso} ($L_1$ diamond): contours hit a \textbf{corner} on an axis first --- so $\theta_1 = 0$ (sparsity for free).
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Soft thresholding (orthonormal $\Xmat$)}
   In the special case $\Xmat^\top \Xmat = \id$, closed forms exist:
-  \vfill
-  \begin{itemize}
-    \item \textbf{Lasso}: $\thetah_{\text{lasso}} = \text{sign}(\thetah_{\text{OLS}}) \cdot (|\thetah_{\text{OLS}}| - \lambda)_+$
-      \begin{itemize}
-        \item ``Soft thresholding'': small coefficients $\to$ 0, large ones shrunk by $\lambda$
-      \end{itemize}
-    \item \textbf{Ridge}: $\thetah_{\text{ridge}} = \thetah_{\text{OLS}} / (1 + \lambda)$
-      \begin{itemize}
-        \item Uniform downscaling, no sparsity
-      \end{itemize}
-  \end{itemize}
-  \vfill
-  \begin{center}
-    \includegraphics[width=0.45\textwidth]{figures/soft_thresholding.png}
-  \end{center}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{itemize}\small
+      \item \textbf{Lasso}: $\thetah_{\text{lasso}} = \text{sign}(\thetah_{\text{OLS}}) \cdot (|\thetah_{\text{OLS}}| - \lambda)_+$
+        \begin{itemize}\item ``Soft thresholding'': small coefs $\to 0$, large ones shrunk by $\lambda$ \end{itemize}
+      \item \textbf{Ridge}: $\thetah_{\text{ridge}} = \thetah_{\text{OLS}} / (1 + \lambda)$
+        \begin{itemize}\item Uniform downscaling, no sparsity \end{itemize}
+    \end{itemize}
+    \column{0.48\textwidth}
+    \includegraphics[width=\textwidth]{figures/soft_thresholding.png}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A probabilistic view: penalties are priors}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_priors.pdf}
+    \column{0.44\textwidth}
+    \small
+    Penalizing $\|\thetav\|$ $=$ assuming a \textbf{prior} on the weights (MAP estimation):
+    \begin{itemize}
+      \item \textcolor{armblue}{\textbf{Ridge}} $\leftrightarrow$ \textbf{Normal} prior: smooth, rounded at $0$ --- shrinks but rarely zeroes.
+      \item \textcolor{armred}{\textbf{Lasso}} $\leftrightarrow$ \textbf{Laplace} prior: a \textbf{sharp peak} at $0$ puts real probability mass on exactly-zero weights $\Rightarrow$ \textbf{sparsity}.
+    \end{itemize}
+    \vskip 4pt
+    Two lenses, one story: geometry (diamond vs ball) and probability (Laplace vs Normal) explain sparsity the \emph{same} way.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Using Lasso in \texttt{sklearn}}
+  \texttt{\small from sklearn.linear\_model import Lasso}\\
+  \texttt{\small Lasso(alpha=, fit\_intercept=, max\_iter=, tol=, selection=, warm\_start=)}
+  \vskip 6pt
+  {\footnotesize
+  \renewcommand{\arraystretch}{1.12}
+  \begin{tabular}{l p{4.5cm} l p{3.1cm}}
+    \textbf{arg} & \textbf{what it does} & \textbf{default} & \textbf{when to change} \\
+    \hline
+    \texttt{alpha} & penalty strength $\lambda$ for the $L_1$ term & \texttt{1.0} & \textbf{tune by CV}; larger $\to$ more zeros \\
+    \texttt{fit\_intercept} & fits an unpenalized intercept & \texttt{True} & leave \texttt{True} \\
+    \texttt{max\_iter} & coordinate-descent iterations & \texttt{1000} & bump on a ``did not converge'' warning (common!) \\
+    \texttt{tol} & stopping tolerance & \texttt{1e-4} & loosen/tighten alongside \texttt{max\_iter} \\
+    \texttt{selection} & coordinate order: \texttt{'cyclic'}/\texttt{'random'} & \texttt{'cyclic'} & \texttt{'random'} $\to$ faster on wide data \\
+    \texttt{warm\_start} & reuse previous solution & \texttt{False} & \texttt{True} when sweeping a path of $\alpha$s \\
+  \end{tabular}}
+  \vskip 6pt
+  \footnotesize Same rule as Ridge: \textbf{scale first}. Lasso warns about convergence far more often --- reach for \texttt{max\_iter} before you panic.
 \end{frame}
 
 % ================================================================
@@ -252,56 +485,123 @@
 
 \begin{frame}{Solution paths side-by-side}
   \begin{center}
-    \includegraphics[width=0.85\textwidth]{figures/solution_paths_01.png}
+    \includegraphics[width=0.82\textwidth]{figures/solution_paths_01.png}
   \end{center}
   \vfill
-  \begin{itemize}
+  \begin{itemize}\small
     \item \textbf{Ridge}: smooth, non-sparse path; all features stay in the model
-    \item \textbf{Lasso}: piecewise-linear path; coefficients hit 0 one by one as $\lambda$ grows
+    \item \textbf{Lasso}: piecewise-linear path; coefficients hit $0$ one by one as $\lambda$ grows
   \end{itemize}
 \end{frame}
 
 \begin{frame}{When to use which}
-  \textbf{Ridge ($L_2$)}:
-  \begin{itemize}
-    \item Many small-to-moderate effects expected
-    \item Multicollinearity present (helps numerically)
-    \item Closed-form fit is desirable (cheap)
-    \item You don't need exact zeros
-  \end{itemize}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Ridge ($L_2$)}:
+    \begin{itemize}\small
+      \item Many small-to-moderate effects expected
+      \item Multicollinearity present (helps numerically)
+      \item Closed-form fit is desirable (cheap)
+      \item You don't need exact zeros
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Lasso ($L_1$)}:
+    \begin{itemize}\small
+      \item You suspect only a few features matter (sparse truth)
+      \item You want automatic feature selection
+      \item Interpretability matters
+    \end{itemize}
+  \end{columns}
   \vfill
-  \textbf{Lasso ($L_1$)}:
-  \begin{itemize}
-    \item You suspect only a few features matter (sparse truth)
-    \item You want automatic feature selection
-    \item Interpretability matters
-  \end{itemize}
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.985\linewidth}{\small
+    \textbf{Elastic Net} $= \lambda\big(\alpha \|\thetav\|_1 + (1-\alpha)\|\thetav\|_2^2\big)$: blends both ---
+    sparse like lasso, stable like ridge. A good default when in doubt.}}
+\end{frame}
+
+% ================================================================
+\section{Beyond \texorpdfstring{$L_1/L_2$}{L1/L2}}
+
+\begin{frame}[plain]
   \vfill
-  \textbf{Elastic Net} = $\alpha \|\thetav\|_1 + (1-\alpha) \|\thetav\|_2^2$: blends both. Good default when in doubt.
+  \begin{center}
+    {\Large\color{popblue}\textbf{Beyond $L_1$ and $L_2$}}\\[0.9em]
+    \begin{minipage}{0.8\textwidth}\centering\small
+      Penalties on linear weights are just one family. Every model has its own knobs ---
+      and some regularization needs \emph{no penalty term at all}.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Different models, different regularizers}
+  $L_1/L_2$ are the linear-model knobs. Every family has its own way to ``stay simple'':
+  \vskip 4pt
+  {\small
+  \renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{l l}
+    \textbf{Model family} & \textbf{Typical regularization} \\
+    \hline
+    Linear / logistic & $L_1$, $L_2$, elastic net \\
+    Decision trees & \texttt{max\_depth}, \texttt{min\_samples\_leaf}, cost-complexity pruning \\
+    Random forests / GBMs & tree depth, number of trees, learning rate, subsampling \\
+    Neural networks & weight decay ($L_2$), dropout, early stopping, data augmentation \\
+    $k$-NN & the number of neighbours $k$ \\
+    SVM & the soft-margin penalty $C$ \\
+  \end{tabular}}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\small
+    Same idea everywhere: \textbf{trade a little fit for a lot of stability}. The knob's name changes; the bias-variance logic does not.}}
+\end{frame}
+
+\begin{frame}{Early stopping: regularization for free}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\textwidth]{fig/l03_early_stopping.pdf}
+    \column{0.42\textwidth}
+    \small
+    Train with gradient descent and watch a \textbf{validation} set:
+    \begin{itemize}
+      \item Train error keeps falling; validation error falls, bottoms out, then \textbf{rises} (overfitting).
+      \item \textbf{Stop at the validation minimum} ($\approx$ iter $730$, val MSE $\approx 560$ --- near the noise floor).
+      \item Run to convergence and it overfits (val MSE $\to 1800$).
+    \end{itemize}
+    \vskip 4pt
+    Fewer GD steps keeps the weights small --- like $L_2$, but with \textbf{no penalty term} (implicit regularization).
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Wrap-up}
-  \begin{enumerate}
-    \item Regularization adds an inductive bias toward ``simple'' models
-    \item Common pattern: $\riskr(\thetav) = \risket + \lambda J(\thetav)$
-    \item Ridge ($L_2$): smooth shrinkage, closed-form, no sparsity
-    \item Lasso ($L_1$): kinked, sparse — does feature selection for free
-    \item $\lambda$ controls the bias-variance tradeoff; pick it via CV (L05)
+  \begin{enumerate}\small
+    \item Big coefficients $=$ complex model. Regularization penalizes size: $\riskr(\thetav) = \risket + \lambda J(\thetav)$.
+    \item $\lambda$ is a \textbf{continuous knob} on the bias-variance tradeoff --- the U-curve has a sweet spot (pick it by CV).
+    \item \textbf{Ridge} ($L_2$): smooth shrinkage, closed-form, Gaussian prior, $\equiv$ weight decay. No sparsity.
+    \item \textbf{Lasso} ($L_1$): kinked, Laplace prior, sparse --- feature selection for free.
+    \item Other knobs: tree depth, dropout, \textbf{early stopping}. And always \textbf{scale features first}.
   \end{enumerate}
   \vfill
-  Next: L04 — how do we even \emph{measure} ``test error'' vs ``training error''? When is a model overfitting? How do we evaluate regression metrics honestly?
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\small
+    We said ``tune $\lambda$ by CV'' --- \textbf{next} we make that practical: \textbf{hyperparameter tuning}
+    (grid / random / Optuna), then a closer look at \textbf{which loss} we even minimize (MSE / MAE / Huber / quantile).}}
 \end{frame}
 
 \end{document}
 
 % =============================================================
-% Provenance (Phase 1 port from 2026-05-26):
-%   - _reference/lecture_sl/slides/regularization/slides-regu-intro.tex
-%   - _reference/lecture_sl/slides/regularization/slides-regu-l2.tex
-%   - _reference/lecture_sl/slides/regularization/slides-regu-l1.tex
-%   - _reference/lecture_sl/slides/regularization/slides-regu-bias-variance.tex
-% Notes:
-%   - Dropped lasso support recovery / irrepresentable condition (advanced)
-%   - Combined geometric L1 vs L2 frames into one
-%   - Added Elastic Net mention (not in upstream, common knowledge)
+% Provenance:
+%   Phase 1 port (2026-05-26) from _reference/lecture_sl/slides/regularization/.
+%   2026-06-20 rebuild to L06/L09 house style (per L03_OUTLINE.md): cold open,
+%     Bayes-risk frame, U-curve, mechanism bullets, scale-first + sklearn frames.
+%   2026-06-20 revision pass (user feedback):
+%     - slide "what is regularization": dropped parameter sharing; rewrote
+%       structured reg without the (uncovered) group-lasso example
+%     - Bayes-risk figure: removed the +-sigma band
+%     - replaced the two complex Munich model-space figures (bv_anim_*) with one
+%       simple TikZ approximation/estimation diagram
+%     - moved the U-curve after ridge is defined (was too early)
+%     - added: coef-norm demo (big coefs = complex), ridge split into idea +
+%       closed form, weight-decay (GD) frame, "why called ridge" frame (valley),
+%       Gaussian/Laplace prior frame, "different models" frame, early-stopping frame
+%   New figures: py_src/extra_figures.py (coef norms, priors, early stopping,
+%     ridge name) + cold_open_ridge_demo.py + bayes_risk_illustration.py.
+%     Run with ./ma/Scripts/python.exe. "ridge" etymology: Hoerl ridge analysis (1962).
 % =============================================================

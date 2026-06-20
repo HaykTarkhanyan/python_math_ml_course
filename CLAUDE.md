@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## LaTeX / Beamer Slides
 
-- **pdflatex** via TeX Live 2025; compile with `pdflatex -interaction=nonstopmode FILE.tex`
+- **pdflatex** via TeX Live 2025; compile with `pdflatex -interaction=nonstopmode FILE.tex` — run it **twice** so `\tableofcontents` (the Outline frame) and cross-references resolve. A single pass after deleting the `.toc` leaves the Outline blank.
 - Two slide collections: `math/Lectures/stat/` (16 decks, 541 frames) and `math/Lectures/optim/` (6 decks)
 - Also: `misc/claude_code/slides/` (5 decks on Claude Code topics)
 - Shared conventions: Beamer `default` theme, `dove` color scheme, 16:9 aspect ratio
@@ -50,6 +50,16 @@ This also applies to ordered lists, blockquotes (`>`), code fences, and tables. 
 - Difficulty: `{data-difficulty="1"}` → 🧀, `"2"` → 🧀🧀, `"3"` → 🧀🧀🧀
 - Bonus: `.bonus-problem` class → 🎁
 - Solutions use Quarto profiles: `{.content-visible when-profile="solution"}`
+
+## Python Environment
+
+- **Use the project-local venv `ma/`** (at the repo root) for ALL Python in this repo — it already has the data-science stack (numpy, scikit-learn, matplotlib, pandas). Do NOT spin up ephemeral `uv run --with ...` envs; they re-download packages on a cold cache and waste time.
+- Run scripts by calling the venv interpreter directly (it's a plain venv, no activation needed):
+  - Git Bash: `./ma/Scripts/python.exe path/to/script.py`
+  - PowerShell: `.\ma\Scripts\python.exe path\to\script.py`
+- conda is installed (`base` + several envs under `~/.conda/envs/`) but is NOT on the Git Bash/PowerShell PATH. `ma` is a venv, not a conda env.
+- To add a package, install into `ma` with uv (per the global "use uv" rule): `uv pip install --python ./ma/Scripts/python.exe <pkg>`
+- Figure-generation scripts (e.g. `ml_new/**/py_src/*.py`) write PDFs to a sibling `fig/` and logs to `logs/`; run them with the `ma` interpreter.
 
 ## Testing
 
