@@ -1,49 +1,668 @@
 \documentclass[aspectratio=169]{beamer}
 \input{../preamble}
 
-\title{Lecture 06: Classification and Logistic Regression}
-\subtitle{From regression to classification $\cdot$ log-odds $\cdot$ Bernoulli loss}
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{L06: Classification \& Logistic Regression}
+\subtitle{From predicting numbers to predicting categories}
 \date{}
 
 \begin{document}
 
-\begin{frame}\titlepage\end{frame}
+% ================================================================
+% HOOK
+\begin{frame}{From regression to classification}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    Until now you predicted a \textbf{number} (apartment rent). Now the target is a
+    \textbf{category}:
+    \vskip 4pt
+    \emph{Is this cheese batch bad?}
+    \vskip 6pt
+    \textbf{Running example (the whole chapter):} a factory makes 1000 cheese wheels a
+    day; about \textbf{3\% are bad} (contaminated / spoiled). Missing a bad batch is
+    expensive.
+    \vskip 6pt
+    The same shape of problem is everywhere:
+    \begin{itemize}\small
+      \item spam vs not-spam (email text)
+      \item default vs repay (credit)
+      \item churn vs stay (customers)
+      \item sick vs healthy (screening)
+    \end{itemize}
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \fill[armblue!18, draw=armblue, thick, rounded corners=2pt] (0,0) rectangle (3.6,0.9);
+        \node[armblue] at (1.8,0.45) {\small good batch \;(\textbf{0})};
+        \fill[armred!18, draw=armred, thick, rounded corners=2pt] (0,-1.2) rectangle (3.6,-0.3);
+        \node[armred] at (1.8,-0.75) {\small bad batch \;(\textbf{1})};
+        \node[gray, font=\scriptsize] at (1.8,-1.6) {target $y \in \{0,1\}$, not a number};
+      \end{tikzpicture}
+    \end{center}
+    \vskip 6pt
+    \footnotesize The label is the rare ``bad'' class (positive, $\sim 3\%$).
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: just fit a line to the 0/1 labels?}
+  We know linear regression. Why not fit a straight line to labels that are $0$ or $1$,
+  and read off the value?
+  \vskip -2pt
+  \begin{center}
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=10cm, height=4.4cm,
+        xlabel={feature (e.g.\ aging temperature)}, ylabel={label / prediction},
+        xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+        xmin=0, xmax=16, ymin=-0.5, ymax=1.5,
+        ytick={0,0.5,1}, xtick=\empty, axis line style={gray!60},
+        clip=false,
+      ]
+        \addplot[only marks, mark=*, mark size=1.6pt, armblue] coordinates {
+          (2,0)(3,0)(4,0)(5,0)(6,0)(7,0)};
+        \addplot[only marks, mark=*, mark size=1.6pt, armred] coordinates {
+          (9,1)(10,1)(11,1)(12,1)(13,1)(14,1)};
+        \addplot[armorange, very thick, domain=0:16] {0.0833*x - 0.166};
+        \draw[dashed, gray] (axis cs:0,0) -- (axis cs:16,0);
+        \draw[dashed, gray] (axis cs:0,1) -- (axis cs:16,1);
+        \node[armred, font=\scriptsize, anchor=west] at (axis cs:14.2,1.3) {$> 1$ ?!};
+        \node[armred, font=\scriptsize, anchor=east] at (axis cs:1.8,-0.33) {$< 0$ ?!};
+      \end{axis}
+    \end{tikzpicture}
+  \end{center}
+  \vskip -2pt
+  \pause
+  \footnotesize It breaks: predictions go \textbf{below 0 and above 1} (not
+  probabilities), one far point \textbf{tilts the whole line}, and the implied
+  threshold drifts. \emph{We need a model whose output is squeezed into $[0,1]$ --
+  that is logistic regression.}
+\end{frame}
 
 \begin{frame}{Outline}
   \tableofcontents
 \end{frame}
 
-\section{Classification Tasks}
-\begin{frame}{Classification Tasks}
-  % TODO: port from _reference/lecture_i2ml/slides/supervised-classification/slides-classification-tasks.tex
+% ================================================================
+\section{Classification basics}
+
+\begin{frame}{Binary and multiclass}
+  Classification = assign each observation to one of a \textbf{finite set of unordered
+  classes}. The target is categorical, not numeric.
+  \vfill
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{Binary} (2 classes)
+    \begin{itemize}\small
+      \item cheese: good / \textbf{bad}
+      \item email: ham / spam
+      \item loan: repay / default
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Multiclass} ($> 2$)
+    \begin{itemize}\small
+      \item digit: 0--9
+      \item iris: setosa / versicolor / virginica
+      \item sentiment: neg / neutral / pos
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{This deck = binary classification with logistic regression.} More than two
+    classes (one-vs-rest, softmax) is \textbf{L08}.}}
 \end{frame}
 
-\section{Basic Definitions}
-\begin{frame}{Decision Boundaries, Scoring vs Probabilistic}
-  % TODO: port from _reference/lecture_i2ml/slides/supervised-classification/slides-classification-basicdefs.tex
+\begin{frame}{Probabilistic classifiers and the threshold}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A good classifier outputs a \textbf{score} $\hat p(\xv) \in [0,1]$, not just a label.
+    Threshold it into a decision:
+    \[
+      \hat y = \begin{cases} 1 \ (\text{bad}) & \hat p \ge c \\ 0 \ (\text{good}) & \text{else} \end{cases}
+    \]
+    Default $c = 0.5$, but $c$ is a \textbf{choice}. Missing a bad batch hurts more than
+    a re-check, so for cheese you may slide $c$ \emph{left} (catch more bad). How to
+    pick it: \textbf{L07}.
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \draw[->, gray] (0,0) -- (5.3,0);
+        \foreach \x in {0,2.5,5} \draw[gray] (\x,0.06) -- (\x,-0.06);
+        \node[font=\scriptsize] at (0,-0.32){0};
+        \node[font=\scriptsize] at (2.5,-0.32){0.5};
+        \node[font=\scriptsize] at (5,-0.32){1};
+        \node[font=\scriptsize, gray] at (2.7,-0.7){predicted score $\hat p$};
+        \foreach \x in {0.4,0.7,1.0,1.3,1.7,2.1,2.9} \fill[armblue] (\x,0.4) circle (1.7pt);
+        \foreach \x in {2.3,3.1,3.6,4.0,4.4,4.7} \fill[armred] (\x,0.4) circle (1.7pt);
+        \draw[armorange, very thick] (2.5,-0.2) -- (2.5,1.0);
+        \node[armorange!80!black, font=\scriptsize] at (2.5,1.2){threshold $c$};
+        \node[font=\tiny, armblue] at (1.1,0.72){good batches};
+        \node[font=\tiny, armred] at (3.9,0.72){bad batches};
+        \draw[->, armorange, thick] (2.4,0.55) -- (1.8,0.55);
+      \end{tikzpicture}\\[3pt]
+      \scriptsize Right of $c$ $\Rightarrow$ predict bad. Sliding $c$ left catches more
+      bad (with more false alarms).
+    \end{center}
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Score vs probability.} The number is a \emph{score} that behaves like a
+    probability; whether it is a \emph{trustworthy} probability is a separate question
+    (\emph{calibration}). For now we use it to rank and threshold.}}
 \end{frame}
 
-\section{Linear Classifiers}
-\begin{frame}{Linear Classifiers}
-  % TODO: port from _reference/lecture_i2ml/slides/supervised-classification/slides-classification-linear.tex
+% ================================================================
+\section{From odds to the sigmoid}
+
+\begin{frame}{Odds}
+  \textbf{Odds} $= \dfrac{p}{1-p}$ \quad($p$ = probability of the positive class).
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.3}
+      \begin{tabular}{c c c}
+        prob.\ $p$ & odds & read as \\
+        \hline
+        $0.5$ & $1$ & 1 : 1 (even) \\
+        $0.75$ & $3$ & 3 : 1 \\
+        $0.9$ & $9$ & 9 : 1 \\
+        $0.1$ & $1/9$ & 1 : 9 \\
+        \hline
+      \end{tabular}
+    \end{center}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+          xlabel={$p$}, ylabel={odds $= p/(1-p)$},
+          xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+          xmin=0, xmax=1, ymin=0, ymax=10, xtick={0,0.5,1}, ytick={0,5,10},
+          axis line style={gray!60}]
+          \addplot[armblue, very thick, domain=0:0.91, samples=60] {x/(1-x)};
+          \draw[dashed, gray] (axis cs:0.5,0) -- (axis cs:0.5,1);
+        \end{axis}
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \textbf{This is betting odds.} Bookmakers think in odds, not
+  probabilities -- ``3 to 1'' is the same $p/(1-p)$ (they quote odds \emph{against},
+  $(1-p)/p$, shaded so the house wins). Probabilities live in $[0,1]$; odds in
+  $(0,\infty)$ -- they \emph{explode} as $p\to 1$. Not yet a free real number.
 \end{frame}
 
-\section{Logistic Regression}
-\begin{frame}{Logistic Regression: log-odds and sigmoid}
-  % TODO: port from _reference/lecture_i2ml/slides/supervised-classification/slides-classification-logistic.tex
+\begin{frame}{Log-odds (the logit)}
+  Take the log of the odds:
+  \[
+    \mathrm{logit}(p) = \log\!\frac{p}{1-p} \ \in \ (-\infty, +\infty).
+  \]
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Now the value is a \textbf{free real number} -- exactly what a linear model
+    outputs.
+    \vskip 4pt
+    \textbf{Why log?} Effects \emph{add} on the log-odds scale. ``Twice the odds'' is
+    always the same step $+\log 2$, whether you start near $0$ or near $1$. That
+    additivity is what makes the coefficients interpretable later.
+    \vskip 4pt
+    \footnotesize\emph{Symmetry:} $\mathrm{logit}(p)$ and $\mathrm{logit}(1-p)$ are
+    negatives of each other -- $p=0.5$ sits at $0$.
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[
+          width=\textwidth, height=4.2cm,
+          xlabel={$p$}, ylabel={$\mathrm{logit}(p)$},
+          xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+          xmin=0, xmax=1, ymin=-4.5, ymax=4.5,
+          xtick={0,0.5,1}, ytick={-4,0,4}, axis line style={gray!60},
+        ]
+          \addplot[armblue, very thick, domain=0.02:0.98, samples=80] {ln(x/(1-x))};
+          \draw[dashed, gray] (axis cs:0.5,-4.5) -- (axis cs:0.5,4.5);
+        \end{axis}
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
 \end{frame}
 
-\section{Bernoulli / Log Loss}
-\begin{frame}{Bernoulli / Log Loss}
-  % TODO: derive from log-odds; pair with logistic slide above
+\begin{frame}{Model the log-odds with a line}
+  The whole idea of logistic regression in one line: assume the \textbf{log-odds is
+  linear} in the features.
+  \[
+    \log\!\frac{p(\xv)}{1-p(\xv)} \;=\; z \;=\; \theta_0 + \theta_1 x_1 + \dots + \theta_p x_p \;=\; \thx .
+  \]
+  \vfill
+  We reuse everything from linear regression (a linear score $\thx$), but apply it to
+  the log-odds instead of to $y$ directly.
+  \vfill
+  \textbf{Predict-first:} if the log-odds is a straight line in $x$, what shape does the
+  \emph{probability} $p(x)$ take?
+  \pause
+  \vskip 4pt
+  An \textbf{S-curve} -- it has to bend to stay inside $[0,1]$. Let us derive it.
+\end{frame}
+
+\begin{frame}{Invert: the sigmoid}
+  Start from the log-odds, \textbf{exponentiate} both sides, then solve for $p$:
+  \begin{align*}
+    \log\tfrac{p}{1-p} = z
+      &\;\Rightarrow\; \tfrac{p}{1-p} = e^{z}
+      \;\Rightarrow\; p = (1-p)\,e^{z} \\
+      &\;\Rightarrow\; p\,(1+e^{z}) = e^{z}
+      \;\Rightarrow\; p = \tfrac{e^z}{1+e^z} = \tfrac{1}{1+e^{-z}} =: \sigma(z).
+  \end{align*}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    The \textbf{sigmoid} $\sigma$ squashes any real score $z = \thx$ into a probability
+    in $(0,1)$:
+    \begin{itemize}\small
+      \item $z \to +\infty \Rightarrow p \to 1$
+      \item $z = 0 \Rightarrow p = 0.5$
+      \item $z \to -\infty \Rightarrow p \to 0$
+    \end{itemize}
+    This is logistic regression's hypothesis: $\;\hat p(\xv) = \sigma(\thx)$.
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[
+          width=\textwidth, height=4.2cm,
+          xlabel={aging temperature ($^\circ$C)}, ylabel={$\hat p(\text{bad})$},
+          xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+          xmin=0, xmax=16, ymin=-0.05, ymax=1.05,
+          ytick={0,0.5,1}, xtick={4,8,12}, axis line style={gray!60},
+        ]
+          \addplot[only marks, mark=*, mark size=1.2pt, armblue] coordinates {
+            (2,0)(3,0)(4,0)(5,0)(6,0)(7,0)};
+          \addplot[only marks, mark=*, mark size=1.2pt, armred] coordinates {
+            (9,1)(10,1)(11,1)(12,1)(13,1)(14,1)};
+          \addplot[armorange, very thick, domain=0:16, samples=80] {1/(1+exp(-(0.5*(x-8))))};
+          \draw[dashed, gray] (axis cs:8,0) -- (axis cs:8,0.5);
+        \end{axis}
+      \end{tikzpicture}\\[-2pt]
+      \scriptsize Illustrative (balanced for clarity; real data is $3\%$ bad).
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \emph{Same curve, ``logistic growth'':} cumulative COVID cases in a wave
+  trace a sigmoid -- slow start, explosive middle, then a plateau as susceptibles run out.
+\end{frame}
+
+% ================================================================
+\section{Logistic regression as a model}
+
+\begin{frame}{Logistic regression is a linear classifier}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Prediction: $\hat p(\xv) = \sigma(\thx)$. Decide ``bad'' when $\hat p \ge 0.5$,
+    i.e.\ when $\thx \ge 0$.
+    \vskip 4pt
+    So the \textbf{decision boundary} $\thx = 0$ is a straight line (a hyperplane). The
+    sigmoid only bends the \emph{probability}, not the boundary.
+    \vfill
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\scriptsize
+      \textbf{Why is it called ``regression''?} It \emph{regresses} a continuous
+      quantity -- the log-odds -- on the features. The \emph{fit} is regression-like;
+      the \emph{task} is classification.}}
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.9]
+        \fill[armblue!10] (0,0) -- (4,0) -- (0,4) -- cycle;
+        \fill[armred!10] (4,0) -- (4,4) -- (0,4) -- cycle;
+        \draw[armorange, very thick] (0,4) -- (4,0);
+        \foreach \x/\y in {0.6/0.5, 1.1/0.7, 0.7/1.2, 1.5/0.6, 0.9/0.9, 1.3/1.1, 0.5/1.5} {
+          \fill[armblue] (\x,\y) circle (1.6pt);}
+        \foreach \x/\y in {3.2/3.0, 2.8/3.4, 3.4/2.6, 3.0/3.2, 2.6/3.0, 3.5/3.3} {
+          \fill[armred] (\x,\y) circle (1.6pt);}
+        \node[font=\scriptsize] at (2,-0.4) {aging temp $\rightarrow$};
+        \node[font=\scriptsize, rotate=90] at (-0.4,2) {moisture $\rightarrow$};
+        \node[armorange!80!black, font=\scriptsize] at (3.4,1.0) {$\thx=0$};
+      \end{tikzpicture}\\[-2pt]
+      \scriptsize Linear boundary; ``bad'' to the upper-right.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What the parameters do}
+  \begin{itemize}
+    \item \textbf{Intercept} $\theta_0$ shifts the S-curve left/right (sets the baseline level).
+    \item \textbf{Weight} $\theta_j$: its \emph{magnitude} sets how steep the curve is in
+      feature $j$; its \emph{sign} sets the direction (raises or lowers $p$).
+    \item Decision boundary: $\sigma(\thx) = 0.5 \iff \thx = 0$.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{$0.5$ is the \emph{default} threshold, not a law.} It is just where
+    $\thx = 0$. With asymmetric costs (missing bad cheese!) you will move it --
+    \textbf{L07} shows how. The \emph{model} gives the score; \emph{you} pick the cutoff.}}
+\end{frame}
+
+\begin{frame}{Worked numbers (one batch, by hand)}
+  Fitted $\theta_0 = -4,\ \theta_1 = 0.5$ (one feature, aging temp $x$); take a batch at
+  $x = 10^\circ$C:
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{align*}
+      z &= -4 + 0.5 \cdot 10 = \mathbf{1} \\[2pt]
+      \hat p &= \sigma(1) = \tfrac{1}{1+e^{-1}} = \mathbf{0.73} \\[2pt]
+      \text{odds} &= \tfrac{0.73}{0.27} = e^{1} = \mathbf{2.7}
+    \end{align*}
+    \vskip 2pt
+    Slope as an \textbf{odds ratio}: $e^{\theta_1} = e^{0.5} \approx \mathbf{1.65}$ --
+    each $+1^\circ$C multiplies the odds of ``bad'' by $1.65$ ($+65\%$).
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4cm,
+          xlabel={$z = \thx$}, ylabel={$\hat p = \sigma(z)$},
+          xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+          xmin=-6, xmax=6, ymin=-0.05, ymax=1.05, xtick={-4,0,4}, ytick={0,0.5,1},
+          axis line style={gray!60}]
+          \addplot[armorange, very thick, domain=-6:6, samples=80] {1/(1+exp(-x))};
+          \draw[dashed, armred] (axis cs:1,0) -- (axis cs:1,0.731) -- (axis cs:-6,0.731);
+          \fill[armred] (axis cs:1,0.731) circle (2pt);
+          \node[armred, font=\scriptsize, anchor=north west] at (axis cs:1.2,0.72) {$(1,\,0.73)$};
+        \end{axis}
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize One $z$, one $\hat p$, one odds, one odds ratio -- the whole mechanics in
+  four numbers. \emph{(Raw, unscaled features, so $\theta_1$ reads ``per $^\circ$C''.)}
+\end{frame}
+
+% ================================================================
+\section{The loss: how we fit it}
+
+\begin{frame}{Predict-first: why not squared loss?}
+  We have a model $\hat p = \sigma(\thx)$. Could we just fit it by minimizing
+  $\sum_i (y^{(i)} - \hat p^{(i)})^2$, like linear regression?
+  \vfill
+  \pause
+  Two problems:
+  \begin{itemize}
+    \item \textbf{Non-convex.} Squared loss composed with the sigmoid is not convex in
+      $\thetav$ -- gradient descent can get stuck in local minima.
+    \item \textbf{Weak penalty.} If the truth is $y=1$ and the model says $\hat p =
+      0.01$ (confidently wrong), squared loss is only $\approx 0.98$. We want a loss
+      that punishes \emph{confident mistakes} hard.
+  \end{itemize}
+  \vfill
+  We need a different loss -- one built for probabilities.
+\end{frame}
+
+\begin{frame}{Log-loss (cross-entropy)}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Penalize by how much probability you gave the \emph{true} label:
+    \begin{itemize}\small
+      \item true label $y=1$: penalty $= -\log \hat p$
+      \item true label $y=0$: penalty $= -\log(1-\hat p)$
+    \end{itemize}
+    Both blow up to $\infty$ as you become confidently wrong, and go to $0$ when you are
+    confidently right.
+    \vskip 4pt
+    One formula, where $y$ picks the branch:
+    \[
+      L(y,\hat p) = -\big[\, y \log \hat p + (1-y)\log(1-\hat p)\,\big].
+    \]
+    \footnotesize This is \textbf{cross-entropy} / Bernoulli loss -- the same loss
+    reappears in neural nets and boosting (L11).
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[
+          width=\textwidth, height=4.4cm,
+          xlabel={$\hat p$ (predicted prob.\ of $y{=}1$)}, ylabel={penalty},
+          xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+          xmin=0, xmax=1, ymin=0, ymax=4.5,
+          xtick={0,0.5,1}, ytick=\empty, axis line style={gray!60},
+          legend style={font=\scriptsize, at={(0.5,0.97)}, anchor=north}, legend cell align=left,
+        ]
+          \addplot[armred, very thick, domain=0.02:1, samples=80] {-ln(x)};
+          \addlegendentry{$-\log \hat p$ (true $y{=}1$)}
+          \addplot[armblue, very thick, domain=0:0.98, samples=80] {-ln(1-x)};
+          \addlegendentry{$-\log(1-\hat p)$ (true $y{=}0$)}
+        \end{axis}
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Where log-loss comes from}
+  Two independent routes land on the \emph{same} formula.
+  \vskip 2pt
+  \fcolorbox{gray}{gray!6}{\parbox{0.97\linewidth}{\small
+  \textbf{1. Maximum likelihood (statistics).} The likelihood is the probability the
+  model gives the labels we actually saw.
+  \begin{enumerate}\footnotesize
+    \item One row: $P(\text{observed label}) = \hat p_i^{\,y_i}(1-\hat p_i)^{1-y_i}$
+      ($\hat p_i$ if $y_i{=}1$, else $1-\hat p_i$ -- the exponent switches a term on).
+    \item All rows (independent): multiply, $\;\prod_i \hat p_i^{\,y_i}(1-\hat p_i)^{1-y_i}$.
+    \item $\log$ $+$ negate: $\;-\sum_i[\,y_i\log\hat p_i + (1-y_i)\log(1-\hat p_i)\,]$ $=$ log-loss.
+  \end{enumerate}
+  So fitting logistic regression $=$ \textbf{maximum likelihood}.}}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+  \textbf{2. Information theory.} The very same quantity is the \textbf{cross-entropy}
+  between the true labels and the model's predicted distribution -- the average extra
+  \emph{bits} to encode the truth using the model's probabilities. Minimizing it pushes
+  the predictions toward reality. (Hence the name ``cross-entropy loss''.)}}
+\end{frame}
+
+\begin{frame}{Fitting logistic regression}
+  We minimize the empirical risk (average log-loss):
+  \[
+    \thetah = \argmin_{\thetav} \; \frac1n \sumin -\big[\,\yi \log \sigma(\thx^{(i)}) + (1-\yi)\log(1-\sigma(\thx^{(i)}))\,\big].
+  \]
+  \begin{itemize}
+    \item \textbf{Convex} in $\thetav$ -- no bad local minima.
+    \item But \textbf{no closed-form} solution (unlike OLS) -- fit \textbf{numerically}
+      with an iterative optimizer (next slide). Convex $\Rightarrow$ it reaches the
+      global optimum.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Separable-data trap.} If a line perfectly splits the classes, the weights
+    grow without bound (push $\hat p \to 0/1$ for more reward). The fix is the same as
+    in regression: \textbf{regularization} (Ridge/Lasso, L03) -- in sklearn this is the
+    \texttt{C} parameter.}}
+\end{frame}
+
+\begin{frame}{How is it actually optimized?}
+  The log-loss is \textbf{convex and smooth} -- we get a gradient \emph{and} curvature
+  to exploit.
+  \begin{itemize}\small
+    \item Plain \textbf{gradient descent} works (Chapter 1), but needs many steps.
+    \item sklearn's default is \textbf{L-BFGS} -- a \emph{quasi-Newton} method: it uses
+      curvature via an \emph{approximate} inverse Hessian built from recent gradients
+      (never the full $p\times p$ matrix), so it converges in far fewer iterations and
+      stays memory-light. Convex $+$ smooth is exactly where Newton-type methods shine.
+  \end{itemize}
+  \vfill
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{l l}
+      \textbf{solver} & \textbf{when to use} \\
+      \hline
+      \texttt{lbfgs} (default) & medium, dense data; L2 \\
+      \texttt{liblinear} & small data; supports L1 \\
+      \texttt{saga} & large / sparse; L1 / elastic-net \\
+      \texttt{newton-cholesky} & $n \gg$ \#features (exact Hessian) \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \footnotesize \emph{Why not plain GD?} On a convex, smooth loss, curvature
+  (second-order) info reaches the optimum in a handful of iterations, not hundreds.
+\end{frame}
+
+% ================================================================
+\section{In practice}
+
+\begin{frame}[fragile]{Logistic regression in sklearn}
+\begin{lstlisting}
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+clf = make_pipeline(
+    StandardScaler(),                      # scale features (L01c)
+    LogisticRegression(C=1.0, class_weight="balanced"),
+)
+clf.fit(X_train, y_train)
+proba = clf.predict_proba(X_test)[:, 1]    # P(bad), bad=1
+\end{lstlisting}
+  \vskip 2pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{l p{0.62\linewidth}}
+      \textbf{argument} & \textbf{what it controls} \\
+      \hline
+      \texttt{C} & inverse regularization strength (small \texttt{C} = stronger penalty) \\
+      \texttt{penalty} & \texttt{"l2"} (default), \texttt{"l1"} (sparse) \\
+      \texttt{class\_weight="balanced"} & up-weights the rare class -- cheese is $3\%$ bad \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \footnotesize \emph{Scaling makes \texttt{coef\_} per \emph{standard deviation}; for per-unit odds ratios (next slides), fit on raw features.}
+\end{frame}
+
+\begin{frame}{Reading the coefficients}
+  \begin{columns}[T]
+    \column{0.45\textwidth}
+    Still \textbf{very interpretable} -- though less \emph{directly} than linear
+    regression:
+    \begin{itemize}\small
+      \item $\theta_j$ $=$ effect on the \textbf{log-odds} per $+1$ unit of feature $j$.
+      \item $e^{\theta_j}$ $=$ the \textbf{odds ratio}: multiply the odds by this.
+    \end{itemize}
+    \vskip 4pt
+    \begin{itemize}\footnotesize
+      \item aging temp: $e^{0.5}=1.65$ ($+1^\circ$C $\Rightarrow$ odds $\times 1.65$).
+      \item moisture: $1.35$ -- wetter $\Rightarrow$ more likely bad.
+      \item pasteurized: $0.41$ -- cuts the odds by $\sim 60\%$.
+    \end{itemize}
+    \column{0.52\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \begin{axis}[xbar, width=\textwidth, height=4.2cm,
+          y=0.78cm, enlarge y limits=0.3,
+          symbolic y coords={pasteurized, moisture, {aging temp}}, ytick=data,
+          nodes near coords, nodes near coords style={font=\scriptsize, /pgf/number format/.cd, fixed, fixed zerofill, precision=2},
+          xmin=0, xmax=2, xtick={0,2}, xlabel={odds ratio $e^{\theta_j}$},
+          xlabel style={font=\scriptsize}, tick label style={font=\scriptsize},
+          axis line style={gray!60},
+          extra x ticks={1}, extra x tick style={grid=major,
+            grid style={armorange, dashed, thick}, tick label style={armorange!80!black, font=\scriptsize}}]
+          \addplot[fill=armblue!55, draw=armblue] coordinates {
+            (0.41,pasteurized) (1.35,moisture) (1.65,{aging temp})};
+        \end{axis}
+      \end{tikzpicture}\\[-2pt]
+      \scriptsize Orange line $=1$ (no effect): bars right raise the odds, left lower them.
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \emph{Mind the scale:} in linear regression $\theta_j$ is the change in
+  $y$ itself; here it changes the \textbf{log-odds}, and the effect on the probability is
+  non-linear (largest near $p=0.5$). Read it as an odds ratio, not a direct effect.
+  (Raw units; with \texttt{StandardScaler}, \texttt{coef\_} is per standard deviation.)
+\end{frame}
+
+\begin{frame}{Strengths, limits, and what's next}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Strengths}
+    \begin{itemize}\small
+      \item Interpretable (odds ratios).
+      \item Outputs a probability/score.
+      \item Fast; convex; great \emph{baseline}.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Limits}
+    \begin{itemize}\small
+      \item \textbf{Linear} decision boundary only.
+      \item Assumes log-odds linear in features.
+      \item Needs feature engineering (e.g.\ polynomial terms) for curved boundaries.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Two things to address next:} how to \emph{evaluate} a classifier honestly
+    (next slide, then \textbf{L07}); and how to handle \emph{more than two classes}
+    (\textbf{L08 multiclass}).}}
+\end{frame}
+
+\begin{frame}{Wait -- how do we know it's any good?}
+  We can \emph{build} a classifier now. But how do we \textbf{score} it?
+  \vfill
+  \textbf{Predict-first:} cheese is $3\%$ bad. A lazy model that calls \emph{every} batch
+  ``good'' scores\dots
+  \pause
+  \;\textbf{97\% accuracy} -- while catching \textbf{zero} bad batches.
+  \vfill
+  Accuracy is \textbf{misleading} on imbalanced data, and it ignores the asymmetric cost
+  (a missed bad batch $\gg$ a needless re-check). Classification needs metrics that
+  separate \emph{``catches the bad ones''} from \emph{``doesn't cry wolf''}: precision,
+  recall, F1, ROC-AUC, PR-AUC -- and the threshold $c$ itself.
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    That is the whole next lecture -- \textbf{L07: classification metrics}, on the same
+    cheese factory.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Classification} predicts a category; a good classifier outputs a
+      \textbf{score} in $[0,1]$, then you \textbf{threshold}.
+    \item \textbf{Odds} $=p/(1-p)$; \textbf{log-odds} maps $(0,1)\to\mathbb{R}$.
+    \item \textbf{Logistic regression} = a linear model on the log-odds, squashed to a
+      probability by the \textbf{sigmoid} $\sigma(\thx)$. Linear boundary.
+    \item Fit by minimizing \textbf{log-loss} (cross-entropy) with gradient descent;
+      regularize via \texttt{C}.
+    \item Coefficients read as \textbf{odds ratios} ($e^{\theta_j}$).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Workflow:} scale features $\to$ fit logistic regression as your baseline
+    $\to$ read the odds ratios $\to$ evaluate with the right metric (L07) $\to$ tune the
+    threshold for your costs.}}
 \end{frame}
 
 \end{document}
 
 % =============================================================
-% Provenance (Phase 2 porting):
-%   - _reference/lecture_i2ml/slides/supervised-classification/slides-classification-tasks.tex
-%   - _reference/lecture_i2ml/slides/supervised-classification/slides-classification-basicdefs.tex
-%   - _reference/lecture_i2ml/slides/supervised-classification/slides-classification-linear.tex
-%   - _reference/lecture_i2ml/slides/supervised-classification/slides-classification-logistic.tex
+% Provenance:
+%   - Topic: classification basics + logistic regression (binary).
+%   - Source: ml_old/Chapter 2 Classification/C2 01 (LMU i2ml classification +
+%     the instructor's odds/log-odds/sigmoid derivation).
+%   - House style per 04_overfitting_cross_validation.tex (L01d) and the built
+%     L07_classification_metrics.tex (cheese running example, ~3% positive).
+%   - Pedagogy (outline v2): intuition-first odds->log-odds->sigmoid; log-loss
+%     intuition-first (penalty curves) with the likelihood derivation boxed/optional;
+%     worked-numbers frame; Newton-Raphson cut; "0.5 is default not law" + "score vs
+%     calibrated probability" + "why regression" misconception pre-empts; HW =
+%     modeling/interpretation (evaluation deferred to L07).
+%   - Callbacks: ch1 (linear regression/GD), L03 (regularization), L01c (scaling);
+%     forward to L07 (metrics, same cheese) and L08 (multiclass).
 % =============================================================

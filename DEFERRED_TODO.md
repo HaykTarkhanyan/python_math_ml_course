@@ -8,13 +8,13 @@ Last updated: 2026-06-19
 
 ## From bias-variance deck (`ml_new/upcoming_lectures/L01d2_bias_variance.tex`)
 
-The full deck got cut — only these 3 concepts are worth pulling forward into the regression chapter:
+The full deck got cut. Status of the 3 surviving concepts (as of 2026-06-19):
 
-1. **Double descent.** The modern-ML wrinkle on the U-shape: as model capacity keeps growing past interpolation, test error drops AGAIN. Frames already drafted in `L01d2_bias_variance.tex` under `\section{Modern wrinkle: double descent}`.
-2. **Irreducible error / Bayes risk.** The noise floor. `MSE = Bias^2 + Var + sigma^2` — that `sigma^2` term. Sets up the "no model beats this" intuition.
-3. **Approximation vs Estimation error.** Decomposition of excess risk: how close the BEST model in your class can get (approximation) vs how close your fitted model gets to that best (estimation). The cleaner conceptual cousin of bias/variance.
+1. **Irreducible error / Bayes risk** — adopted into L03 regularization (see `L03_OUTLINE.md`). Becomes the "noise floor" frame in the "Why regularize?" section. ✅
+2. **Approximation vs Estimation error** — adopted into L03 regularization. Replaces the existing "model bias / estimation bias" frames using the canonical names. ✅
+3. **Double descent** — **DEFERRED FURTHER.** Originally planned for L03, but user wants it pushed back. Natural home: the neural networks chapter, where over-parameterization is the rule and double descent stops feeling like a wrinkle and starts feeling like the regime. Frames stay drafted in `L01d2_bias_variance.tex` under `\section{Modern wrinkle: double descent}` — lift them when ch5 is built.
 
-**Action:** when planning the eventual regularization or model-selection lecture, lift these 3 frames out of `L01d2_bias_variance.tex` and weave them in. Then archive the rest of L01d2.
+**Action:** after L03 lifts concepts 1 and 2, archive the rest of `L01d2_bias_variance.tex` — only the double descent section needs to survive for later.
 
 ---
 
