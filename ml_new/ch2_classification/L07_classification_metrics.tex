@@ -20,11 +20,25 @@
   xrightmargin=4pt,
 }
 
-\title{L07: Classification Metrics}
+\title{Classification Metrics}
 \subtitle{Accuracy is not enough - and what to use instead}
 \date{}
 
 \begin{document}
+
+% ================================================================
+% HOOK -- bridge from L06's cliffhanger
+\begin{frame}{Picking up last lecture's cliffhanger}
+  Our logistic-regression cheese detector reports \textbf{97\% accuracy}. Ship it?
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    It predicts ``good'' for \emph{every} batch. Cheese is $3\%$ bad, so being right
+    $97\%$ of the time means catching \textbf{zero} bad batches. \textbf{Accuracy looked
+    great and was useless.}}}
+  \vfill
+  This deck: the metrics that actually tell you whether a classifier is any good --- and
+  how to turn its \emph{scores} into \emph{decisions}.
+\end{frame}
 
 \begin{frame}{Outline}
   \tableofcontents
@@ -75,14 +89,12 @@ accuracy_score(y_true, y_pred)
 \begin{frame}{Predict-first: where accuracy breaks}
   Your cheese factory has 1000 daily batches. 970 are clean, 30 are contaminated. You ship a model that predicts ``clean'' for \emph{every single batch} (no actual model - just the constant).
   \vfill
-  \pause
   \textbf{Predict:}
   \begin{itemize}
     \item What's the accuracy of this ``model''?
     \item What's its recall on contaminated batches?
     \item Would you ship it?
   \end{itemize}
-  \pause
   \vfill
   \begin{itemize}
     \item \textbf{Accuracy: $970 / 1000 = 97\%$.} Looks excellent.
@@ -97,6 +109,18 @@ accuracy_score(y_true, y_pred)
 
 % ================================================================
 \section{Precision, recall, F1}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Precision, recall, F1}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Accuracy weights every error equally, so the rare $3\%$ that matters vanishes.
+      Fix: stop counting all correctness and \textbf{focus on the positive class}.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
 
 \begin{frame}{The confusion matrix}
   All classification metrics derive from four counts. Lay them on a $2 \times 2$:
@@ -226,6 +250,18 @@ fbeta_score(y_true, y_pred, beta=2)   # recall-leaning
 % ================================================================
 \section{Threshold dependence and the ROC fix}
 
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Thresholds and the ROC curve}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Precision, recall and F1 all shift as you move the cutoff $c$. Fix: summarize a
+      model across \emph{every} threshold at once.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
 \begin{frame}[fragile]{Where precision and recall come from: thresholds}
   \emph{Remember the precision-recall tension from the previous frame?} ``Flag more $\to$ recall up, precision down.'' \textbf{That tension IS the threshold knob.}
   \vfill
@@ -251,13 +287,11 @@ y_pred = (scores > 0.5).astype(int)       # default threshold
 \begin{frame}{Predict-first: P and R at extreme thresholds}
   Your model outputs scores. Consider two extreme threshold choices.
   \vfill
-  \pause
   \textbf{Predict:} for each threshold, what are P and R?
   \begin{itemize}
     \item $c = 0.0$: predict positive for \emph{every batch}.
     \item $c = 1.0$: predict negative for \emph{every batch}.
   \end{itemize}
-  \pause
   \vfill
   Reveal:
   \begin{itemize}\small
@@ -327,22 +361,7 @@ y_pred = (scores > 0.5).astype(int)       # default threshold
     \textbf{Threshold-free.} You compare models on AUC \emph{without picking a threshold}. The metric summarizes the score's ranking quality.
     \column{0.5\textwidth}
     \begin{center}
-      \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=4.2cm,
-                     xlabel={FPR}, ylabel={TPR},
-                     xmin=0, xmax=1, ymin=0, ymax=1,
-                     xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
-                     xticklabel style={font=\tiny}, yticklabel style={font=\tiny},
-                     axis line style={gray!60}]
-          \addplot[name path=curve, armred, very thick, smooth]
-            coordinates {(0,0) (0.05,0.4) (0.15,0.7) (0.3,0.85) (0.5,0.93) (0.75,0.98) (1.0,1.0)};
-          \addplot[name path=axis, draw=none] coordinates {(0,0) (1.0,0)};
-          \addplot[fill=armred!20, opacity=0.6] fill between[of=curve and axis];
-          \draw[gray!50, dashed] (axis cs:0,0) -- (axis cs:1,1);
-          \node[font=\small, armred] at (axis cs:0.5, 0.5) {AUC};
-        \end{axis}
-      \end{tikzpicture}\\
-      \scriptsize Shaded area $=$ AUC. Higher $=$ better.
+      \includegraphics[width=\textwidth,height=3.7cm,keepaspectratio]{fig/cm_roc.pdf}
     \end{center}
   \end{columns}
   \vfill
@@ -352,11 +371,23 @@ from sklearn.metrics import roc_auc_score
 roc_auc_score(y_true, y_scores)    # NOT y_pred - pass scores/probabilities!
 \end{lstlisting}}
   \vfill
-  \footnotesize \textbf{Common footgun:} passing predicted labels instead of probabilities collapses AUC to look like accuracy. Pass \texttt{model.predict\_proba(X)[:, 1]}.
+  \footnotesize \textbf{Footgun:} pass scores --- \texttt{predict\_proba(X)[:,1]} --- not labels; labels make AUC look like accuracy.
 \end{frame}
 
 % ================================================================
 \section{When ROC fails: PR and lift}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{When ROC lies: PR and lift}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      On rare-positive data the huge negative class hides real differences in ROC.
+      Fix: measure precision directly --- the PR curve.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
 
 \begin{frame}{Predict-first: ROC's blind spot on imbalanced data}
   Two models on the same imbalanced cheese data: 100 bad batches, 10{,}000 clean batches.
@@ -369,7 +400,6 @@ roc_auc_score(y_true, y_scores)    # NOT y_pred - pass scores/probabilities!
     \end{tabular}
   \end{center}
   \vfill
-  \pause
   \textbf{Predict:} for each model, compute
   \begin{itemize}\small
     \item Recall (TPR)?
@@ -377,7 +407,6 @@ roc_auc_score(y_true, y_scores)    # NOT y_pred - pass scores/probabilities!
     \item Precision (PPV)?
     \item Which model would you ship?
   \end{itemize}
-  \pause
   \vfill
   \begin{center}\small
     \begin{tabular}{lccc}
@@ -408,23 +437,11 @@ roc_auc_score(y_true, y_scores)    # NOT y_pred - pass scores/probabilities!
     \vskip 6pt
     \textbf{Doesn't depend on TN.} The TN count never enters precision or recall. \emph{This is exactly what makes PR informative on imbalanced data.}
     \vskip 4pt
-    \textbf{Real PR curves zig-zag} (precision can rise as recall increases). The smooth curve here is a sketch; sklearn's \texttt{average\_precision\_score} handles the steps via a discrete sum.
+    \textbf{Real PR curves zig-zag} (precision can rise as recall increases) --- visible above; sklearn's \texttt{average\_precision\_score} sums those steps into the AP.
     \column{0.5\textwidth}
     \begin{center}
-      \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=4.2cm,
-                     xlabel={Recall}, ylabel={Precision},
-                     xmin=0, xmax=1, ymin=0, ymax=1,
-                     xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
-                     xticklabel style={font=\tiny}, yticklabel style={font=\tiny},
-                     axis line style={gray!60}, grid=major, grid style={dashed,gray!30}]
-          \addplot[armred, very thick, smooth, mark=*, mark size=1pt]
-            coordinates {(0,1.0) (0.1,0.95) (0.25,0.92) (0.5,0.85) (0.7,0.75) (0.85,0.6) (0.95,0.4) (1.0,0.05)};
-          \draw[gray!50, dashed] (axis cs:0,0.05) -- (axis cs:1,0.05);
-          \node[font=\tiny, gray] at (axis cs:0.5, 0.10) {base rate};
-        \end{axis}
-      \end{tikzpicture}\\
-      \scriptsize PR curve. Top-right $=$ best. Baseline near the bottom $=$ class imbalance.
+      \includegraphics[width=\textwidth]{fig/cm_pr.pdf}\\[-2pt]
+      \scriptsize Real PR curve (note the zig-zag); dashed baseline $=$ base rate.
     \end{center}
   \end{columns}
 \end{frame}
@@ -468,67 +485,24 @@ average_precision_score(y_true, y_scores)
     \textbf{Why this matters.} ROC and PR AUC summarize the whole curve; lift answers the question that production actually asks: \emph{given my fixed budget, how much better than random?}
     \column{0.45\textwidth}
     \begin{center}
-      \begin{tikzpicture}
-        \begin{axis}[width=\textwidth, height=4cm,
-                     xlabel={fraction of batches inspected}, ylabel={\% bad caught},
-                     xmin=0, xmax=1, ymin=0, ymax=1.05,
-                     xlabel style={font=\tiny}, ylabel style={font=\tiny},
-                     xticklabel style={font=\tiny}, yticklabel style={font=\tiny},
-                     axis line style={gray!60},
-                     legend pos=south east, legend style={font=\tiny}]
-          \addplot[gray!60, dashed] coordinates {(0,0) (1,1)};
-          \addlegendentry{random}
-          \addplot[paramgreen, very thick] coordinates {(0,0) (0.03,1.0) (1,1)};
-          \addlegendentry{perfect}
-          \addplot[armred, very thick] coordinates {(0,0) (0.05,0.4) (0.1,0.65) (0.2,0.85) (0.3,0.93) (0.5,0.98) (1,1)};
-          \addlegendentry{our model}
-          \draw[armorange, very thick, dashed] (axis cs:0.2, 0) -- (axis cs:0.2, 0.85);
-          \node[font=\tiny, armorange] at (axis cs:0.25, 0.4) {top 20\%};
-        \end{axis}
-      \end{tikzpicture}\\
-      \scriptsize At top 20\% (orange line) we catch $\sim 85\%$ of bad batches. Lift $\approx 85/20 = 4.25$.
+      \includegraphics[width=\textwidth]{fig/cm_lift.pdf}\\[-2pt]
+      \scriptsize Real cheese model; the annotation reads off the lift at the top 20\%.
     \end{center}
   \end{columns}
 \end{frame}
 
 \begin{frame}{ROC vs.\ PR side-by-side on imbalanced data}
   Same imbalanced dataset (1\% positive rate), same two models. Two views:
-  \vfill
   \begin{center}
-    \begin{tikzpicture}
-      \begin{groupplot}[
-        group style={group size=2 by 1, horizontal sep=18pt},
-        width=0.42\textwidth, height=4cm,
-        xmin=0, xmax=1, ymin=0, ymax=1,
-        xtick={0,0.5,1}, ytick={0,0.5,1},
-        xticklabel style={font=\tiny}, yticklabel style={font=\tiny},
-        xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
-        axis line style={gray!60}, grid=major, grid style={dashed,gray!30},
-        title style={font=\footnotesize}, legend style={font=\tiny},
-      ]
-        \nextgroupplot[title={ROC: ``both look great''}, xlabel={FPR}, ylabel={TPR}, legend pos=south east]
-          \draw[gray!50, dashed] (axis cs:0,0) -- (axis cs:1,1);
-          \addplot[armblue, very thick] coordinates {(0,0) (0.001,0.5) (0.005,0.85) (0.02,0.93) (0.1,0.98) (1,1)};
-          \addlegendentry{Model A}
-          \addplot[armred, very thick] coordinates {(0,0) (0.005,0.5) (0.02,0.85) (0.08,0.93) (0.2,0.98) (1,1)};
-          \addlegendentry{Model B}
-        \nextgroupplot[title={PR: ``actually broken''}, xlabel={Recall}, ylabel={Precision}, legend pos=south west]
-          \addplot[armblue, very thick] coordinates {(0,1.0) (0.2,0.95) (0.5,0.85) (0.8,0.7) (0.95,0.4) (1.0,0.01)};
-          \addlegendentry{Model A}
-          \addplot[armred, very thick] coordinates {(0,1.0) (0.2,0.5) (0.5,0.3) (0.8,0.15) (0.95,0.05) (1.0,0.01)};
-          \addlegendentry{Model B}
-          \draw[gray!50, dashed] (axis cs:0,0.01) -- (axis cs:1,0.01);
-      \end{groupplot}
-    \end{tikzpicture}
+    \includegraphics[width=0.8\textwidth]{fig/cm_roc_vs_pr.pdf}
   \end{center}
-  \vfill
-  \fcolorbox{armred}{armred!8}{\parbox{0.96\textwidth}{\small
-    \textbf{Same models, two stories.} ROC: both close to top-left, AUCs $\approx 0.99$. PR: model A holds precision; model B collapses to near-baseline. On imbalanced data, \emph{ROC overstates and PR clarifies}. Reach for PR (or report both) whenever the positive class is rare.
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Same models, two stories.} ROC: both near top-left (AUC $0.96$--$0.98$). PR: A holds precision (AP $0.72$), B collapses toward baseline (AP $0.35$). On imbalanced data, \emph{ROC overstates and PR clarifies} --- reach for PR when the positive class is rare.
   }}
 \end{frame}
 
 % ================================================================
-\section{Practical: choosing, multi-class, tuning}
+\section{Practical: choosing the metric}
 
 \begin{frame}{Which metric for which problem?}
   \begin{center}\small
@@ -571,26 +545,74 @@ print(classification_report(y_true, y_pred))   # all three + per-class
   \scriptsize \emph{Macro caveat:} when some classes have few samples (say $< 30$), per-class F1 is noisy and macro F1 inherits that noise. Always report \texttt{support} (number of samples per class) alongside.
 \end{frame}
 
-\begin{frame}[fragile]{Threshold tuning: the threshold is its own decision}
-  Default threshold ($c = 0.5$) is just a starting point. The \emph{optimal} threshold depends on the cost asymmetry.
+% ================================================================
+\section{Threshold tuning}
 
-  \textbf{Cost-sensitive procedure.} Let $C_\text{FN}$ $=$ cost of missing a bad batch, $C_\text{FP}$ $=$ cost of inspecting a clean one. Then:
-  \[
-    c^* = \argmin_c \; C_\text{FN} \cdot FN(c) + C_\text{FP} \cdot FP(c)
-  \]
-{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Picking the operating point}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      AUC and PR rank models \emph{without} a threshold. To actually deploy, you must
+      choose one cutoff $c$ --- and on imbalanced, asymmetric-cost problems $0.5$ is
+      almost never it.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Every metric is a function of the threshold}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    The model outputs scores; the \textbf{cutoff $c$} turns them into decisions. Sweep it:
+    \begin{itemize}\small
+      \item low $c$ $\Rightarrow$ flag more $\Rightarrow$ recall up, precision down;
+      \item high $c$ $\Rightarrow$ flag fewer $\Rightarrow$ precision up, recall down.
+    \end{itemize}
+    \vskip 4pt
+    The \textbf{default $0.5$ is just one point}. Here the F1-best cutoff is $\approx 0.08$
+    --- the $3\%$ imbalance pushes it far left of $0.5$.
+    \column{0.54\textwidth}
+    \includegraphics[width=\textwidth]{fig/cm_threshold_metrics.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cost-sensitive thresholding}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Choose $c$ to minimize \emph{expected cost}, not a symmetric metric:
+    \[ c^* = \argmin_c \; C_{FN}\,FN(c) + C_{FP}\,FP(c). \]
+    With a miss $10\times$ a false alarm, $c^* \approx 0.08$ here --- far below $0.5$ (real
+    cheese ratios are larger, pushing it lower still).
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Tune on a validation set}, never on the test set you report --- otherwise
+      the chosen threshold is optimistically biased too.}}
+    \column{0.5\textwidth}
+    \includegraphics[width=\textwidth]{fig/cm_cost_curve.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tuning the threshold in \texttt{sklearn}}
+  \texttt{TunedThresholdClassifierCV} (sklearn $\ge 1.5$) post-tunes the cutoff by
+  cross-validation --- here to minimize our business cost:
+  \vskip 4pt
+{\lstset{basicstyle=\ttfamily\footnotesize}
 \begin{lstlisting}
-from sklearn.metrics import precision_recall_curve, confusion_matrix
-p, r, thresholds = precision_recall_curve(y_val, scores_val)
-C_fn, C_fp = 1000, 10           # $1000 per miss, $10 per inspection
-costs = []
-for t in thresholds:
-    pred = (scores_val > t).astype(int)
-    tn, fp, fn, tp = confusion_matrix(y_val, pred).ravel()
-    costs.append(C_fn * fn + C_fp * fp)
-best_t = thresholds[np.argmin(costs)]
+from sklearn.model_selection import TunedThresholdClassifierCV
+from sklearn.metrics import make_scorer, confusion_matrix
+
+def neg_cost(y, y_pred):              # negate so "higher = better"
+    tn, fp, fn, tp = confusion_matrix(y, y_pred).ravel()
+    return -(100 * fn + 10 * fp)
+
+tuned = TunedThresholdClassifierCV(clf, scoring=make_scorer(neg_cost), cv=5)
+tuned.fit(X_train, y_train)           # picks c* by cross-validation
+tuned.predict(X_test)                 # applies the tuned threshold
 \end{lstlisting}}
-  \scriptsize \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\textbf{Tune on a held-out set}, not the data you measured the metric on -- otherwise the threshold is optimistically biased too.}}
+  \vskip 2pt
+  \footnotesize Default \texttt{scoring} maximizes balanced accuracy; pass any scorer (or a
+  business cost) to match your problem. \emph{Fit it on train/validation, never on test.}
 \end{frame}
 
 % ================================================================
@@ -648,20 +670,6 @@ best_t = thresholds[np.argmin(costs)]
   \end{itemize}
   \vskip 4pt
   \footnotesize \textbf{One-line takeaway:} report multiple metrics, always include one that matches your data's imbalance and your problem's cost structure.
-\end{frame}
-
-\begin{frame}{HW01 - cheese inspector practice}
-  \scriptsize Estimated time: 90-120 minutes. Tasks 1-4 graded; bonuses optional.
-  \begin{enumerate}\scriptsize
-    \item Generate a synthetic cheese-batch dataset: $n = 1000$, 3\% contaminated (\texttt{make\_classification}, \texttt{weights=[0.97, 0.03]}). Stratified train/test split.
-    \item Fit logistic regression. Compute accuracy, precision, recall, F1, ROC AUC, average precision (PR AUC) on test. Discuss which metrics agree and which disagree.
-    \item Plot confusion matrix at threshold $0.5$, ROC curve, PR curve. Identify the operating point that maximizes F1.
-    \item Plot cumulative gain and lift charts. At what top-$k$\% does the model catch 80\% of bad batches? Compute lift at top 20\%. \emph{Hint:} \texttt{np.searchsorted(cum\_gain, 0.80)}.
-    \item \emph{Bonus 1:} change class balance to $1\%$ positives. Re-run all metrics. Which changed most? Tie back to frame 13.
-    \item \emph{Bonus 2 (most instructive):} compare ROC AUC vs.\ PR AUC as imbalance sweeps from $50\%$ down to $0.5\%$. Plot both; show the gap grows.
-    \item \emph{Bonus 3:} cost-sensitive threshold tuning. $C_\text{FN} = 1000$, $C_\text{FP} = 10$. Find $c^*$ minimizing total cost. Compare to F1-optimal threshold.
-    \item \emph{Bonus 4:} multi-class (3 cheese types: good, off-flavor, contaminated). Compute macro/micro/weighted F1 and discuss which best reflects the factory's priorities.
-  \end{enumerate}
 \end{frame}
 
 \end{document}
