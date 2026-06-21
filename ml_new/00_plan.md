@@ -39,15 +39,17 @@ Alt if we want continuity: reuse `data/House_Rent_Dataset.csv` (already used in 
 
 Videos [11], [12], [13]:
 
-- **[11] Logistic regression**
-- **[12] Classification losses**
-- **[13] Multiclass** — softmax, one-vs-rest, one-vs-one
+- **[11] Logistic regression** — incl. multiclass (softmax / one-vs-rest) and log-loss (built: `L11_classification_logreg`)
+- **[12] Classification metrics** — accuracy → precision/recall/F1 → ROC AUC → PR AUC → lift, plus threshold tuning (cost-sensitive, `TunedThresholdClassifierCV`) (built: `L12_classification_metrics`)
+- **[13] Calibration** — reliability diagrams, Brier score, ECE, Platt / isotonic, `CalibratedClassifierCV` (building: `L13_calibration`)
 
-## Imbalanced + thresholds + calibration — next lecture (Tue 2026-06-30, tentative)
+> Note (2026-06-21): the planned [12] "classification losses" and [13] "multiclass" were folded into [11]; metrics + threshold tuning became [12]; calibration is its own [13]. Threshold tuning moved out of [14].
+
+## Imbalanced learning — next lecture (Tue 2026-06-30, tentative)
 
 Video [14]:
 
-- **[14] Threshold tuning + imbalanced learning + calibration** — class weights, resampling, precision/recall tradeoff, reliability diagrams, Brier, Platt / isotonic, `CalibratedClassifierCV`
+- **[14] Imbalanced learning** — class weights, resampling (over/under-sampling, SMOTE), the precision/recall tradeoff when the positive class is rare
 
 ## Next lectures (sequence, dates TBD)
 

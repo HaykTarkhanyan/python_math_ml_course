@@ -1,0 +1,282 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{[13] Calibration}
+\subtitle{Are the predicted probabilities trustworthy?}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK -- bridge from L12 (we measured ranking; now the probability itself)
+\begin{frame}{When the model says 0.9, is it bad 90\% of the time?}
+  Last lecture measured how well our cheese detector \emph{ranks} batches (ROC, PR). But it
+  also outputs a \textbf{number} --- $\hat p = 0.9$. If we tell the factory ``$90\%$ chance
+  this batch is bad,'' is that \emph{true}?
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    A model can \textbf{rank} perfectly (high AUC) and still output probabilities that are
+    systematically wrong --- saying $0.9$ when only $70\%$ of such batches are actually bad.
+    That gap is \textbf{(mis)calibration}.}}
+  \vfill
+  This deck: what calibration is, how to measure it, and how to fix it.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What calibration is}
+
+\begin{frame}{What ``calibrated'' means}
+  A classifier is \textbf{calibrated} if its probabilities match reality:
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Among all batches it scores $\hat p \approx 0.8$, about \textbf{80\%} are actually bad.}}
+  \vfill
+  \begin{itemize}
+    \item A \textbf{score} ranks; a \textbf{calibrated probability} can be read as a real chance.
+    \item Calibration is about the \emph{value} of $\hat p$, not the \emph{order} --- a separate
+      property from accuracy or AUC.
+    \item We check it by bucketing predictions and comparing predicted vs.\ observed frequency.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The reliability diagram}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Bin predictions by $\hat p$; plot \textbf{predicted} ($x$) vs.\ \textbf{observed
+    frequency} ($y$).
+    \begin{itemize}\small
+      \item On the diagonal $=$ perfectly calibrated.
+      \item \textbf{Below} the line $=$ \textbf{over-confident} (predicts higher than reality).
+      \item Above $=$ under-confident.
+    \end{itemize}
+    \vskip 4pt
+    Logistic regression tracks the diagonal; naive Bayes is over-confident --- its redundant
+    features double-count evidence and push $\hat p$ to the extremes (ECE $0.06$ vs.\ $0.02$).
+    \column{0.52\textwidth}
+    \includegraphics[width=\textwidth]{fig/cal_reliability.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Over-confidence, seen another way}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Same two models, histogram of their predicted probabilities.
+    \begin{itemize}\small
+      \item \textbf{Over-confident} models pile scores near $0$ and $1$ --- they rarely say ``maybe''.
+      \item Calibrated models spread mass across $[0,1]$, matching real uncertainty.
+    \end{itemize}
+    \vskip 4pt
+    Piling at the extremes is the fingerprint of miscalibration --- and exactly what breaks any
+    decision that reads $\hat p$ as a chance.
+    \column{0.52\textwidth}
+    \includegraphics[width=\textwidth]{fig/cal_hist.pdf}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Why it matters}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Calibration $\neq$ ranking}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A model can order batches perfectly yet report wrong probabilities. AUC won't catch it
+      --- and any cost decision that uses $\hat p$ will be off.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Calibration is separate from discrimination}
+  \begin{itemize}
+    \item \textbf{Discrimination} (ROC AUC): does the score \emph{order} positives above
+      negatives? Cares only about ranking.
+    \item \textbf{Calibration}: are the score \emph{values} true frequencies?
+  \end{itemize}
+  \vfill
+  A model can have \textbf{AUC $=1$} (perfect ranking) and still be badly miscalibrated ---
+  halve every probability and the order is unchanged but the numbers are wrong.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Why it matters.} The cost-optimal threshold $c^* = \frac{C_{FP}}{C_{FN}+C_{FP}}$
+    and \emph{any} expected-value decision assume $\hat p$ is a true probability. Reporting
+    ``$90\%$ risk'' to the factory (or a doctor) only means something if it is calibrated.}}
+\end{frame}
+
+\begin{frame}{Who is miscalibrated?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Usually fine}
+    \begin{itemize}\small
+      \item \textbf{Logistic regression} --- it minimizes log-loss, a proper scoring rule.
+    \end{itemize}
+    \vskip 2pt
+    \textbf{Over-confident} (scores too extreme)
+    \begin{itemize}\small
+      \item Naive Bayes (independence assumption)
+      \item Boosted trees, deep neural nets
+      \item SVMs (margins, not probabilities)
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Under-confident} (scores too timid)
+    \begin{itemize}\small
+      \item Random forests (averaging pulls toward $0.5$)
+    \end{itemize}
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{Watch out:} \texttt{class\_weight} and resampling (for imbalance) also distort
+      probabilities --- they change the base rate the model trains on, so re-calibrate
+      afterwards.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Measuring calibration}
+  \begin{itemize}
+    \item \textbf{Reliability diagram} --- the picture (qualitative).
+    \item \textbf{ECE} (expected calibration error): bin predictions, average
+      $|\text{observed} - \text{predicted}|$ weighted by bin size. The headline number; $0$ is
+      perfect. \emph{Caveat: depends on the binning.}
+    \item \textbf{Brier score} $=\tfrac1n\sum(\hat p_i - y_i)^2$ --- a proper scoring rule, but
+      it \emph{mixes} calibration and ranking, so a sharp model can score well while miscalibrated.
+    \item \textbf{Log-loss} --- also proper; punishes confident mistakes hardest.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    For a \emph{pure} calibration number use \textbf{ECE} (or read the reliability diagram);
+    Brier and log-loss are good overall scores but conflate calibration with discrimination.}}
+\end{frame}
+
+% ================================================================
+\section{Fixing it}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Fixing calibration}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Don't retrain --- learn a small post-hoc map from the model's raw scores to true
+      probabilities, fit on held-out data.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Post-hoc calibration: Platt and isotonic}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Learn a map from raw scores to true probabilities, on \textbf{held-out} data:
+    \begin{itemize}\small
+      \item \textbf{Platt scaling}: fit a sigmoid $\sigma(a\,s + b)$. Two parameters --- good
+        for \emph{small} data; assumes an S-shaped distortion.
+      \item \textbf{Isotonic regression}: a free \emph{monotonic} step function. More
+        flexible --- needs \emph{more} data (overfits when small).
+    \end{itemize}
+    \vskip 4pt
+    Isotonic snaps naive Bayes onto the diagonal: ECE $0.06 \to 0.01$.
+    \column{0.52\textwidth}
+    \includegraphics[width=\textwidth]{fig/cal_before_after.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Calibration in \texttt{sklearn}}
+\begin{lstlisting}
+from sklearn.calibration import CalibratedClassifierCV
+
+# wrap any classifier; calibrate by cross-validation on the training data
+cal = CalibratedClassifierCV(
+    GaussianNB(),
+    method="isotonic",     # or "sigmoid" (Platt) for small data
+    cv=5,
+)
+cal.fit(X_train, y_train)
+cal.predict_proba(X_test)[:, 1]    # now-calibrated probabilities
+\end{lstlisting}
+  \vskip 2pt
+  \begin{itemize}\small
+    \item \texttt{method="sigmoid"} (Platt) for small data; \texttt{"isotonic"} for larger
+      ($\gtrsim$ a few thousand).
+    \item Calibrate on data the base model did \textbf{not} train on --- \texttt{cv} handles this.
+    \item \texttt{CalibrationDisplay.from\_estimator(...)} draws the reliability diagram.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{In practice}
+
+\begin{frame}{When does calibration matter?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Calibrate when\dots}
+    \begin{itemize}\small
+      \item you \emph{report} probabilities (risk to a doctor / factory);
+      \item you make \textbf{cost / expected-value} decisions or tune a threshold by cost;
+      \item you \textbf{average or ensemble} probabilities from several models.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Don't bother when\dots}
+    \begin{itemize}\small
+      \item you only need a \textbf{ranking} (ROC AUC, top-$k$\% / lift);
+      \item the threshold is tuned directly on the metric you care about.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Golden rule:} fit calibration on data the base model never saw, and don't re-tune
+    the threshold on that same split --- both bias the result optimistically.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Calibration} $=$ predicted probabilities match observed frequencies (read it
+      off the \textbf{reliability diagram}).
+    \item It is \textbf{separate from ranking}: high AUC does not imply good probabilities.
+    \item Measure with \textbf{ECE} (pure calibration) or Brier / log-loss (overall, proper scores).
+    \item Logistic regression is usually calibrated; naive Bayes, boosted trees and nets are
+      over-confident; random forests under-confident; imbalance fixes distort probabilities.
+    \item Fix post-hoc with \textbf{Platt} (sigmoid, small data) or \textbf{isotonic} (flexible,
+      more data) via \texttt{CalibratedClassifierCV} --- always on held-out data.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} imbalanced learning --- class weights and resampling when the positive class
+    is rare (and why they then need re-calibration).}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - [13] Calibration; chapter 2 classification, after L12 metrics.
+%   - Figures: py_src/calibration_demo.py (run with ./ma/Scripts/python.exe):
+%     cal_reliability (LR vs NB, ECE), cal_hist (score histograms),
+%     cal_before_after (NB before/after isotonic).
+%   - Running example: cheese factory (continuity with L11/L12).
+%   - Facts verified: ECE/Brier distinction; CalibratedClassifierCV sigmoid/isotonic.
+%   - Forward: [14] imbalanced learning.
+% =============================================================
