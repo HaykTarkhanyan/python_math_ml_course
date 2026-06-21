@@ -71,6 +71,28 @@ A **single worked example threaded across L01d / L01d2 / L01e / L01f / L01h** (r
 
 ---
 
+## Planned: Diagnostic plots section (for `[12]` metrics, or a standalone)
+
+A "what to actually plot when debugging a classifier" section. Some plots already live in L12
+(ROC, PR, lift, threshold-metric curves, confusion matrices) and calibration is in `[13]`; this
+section would consolidate the visual toolkit and add the missing pieces. Proposed frames (each a
+real figure via a `py_src/diagnostics_demo.py` on the cheese model):
+
+1. **Score distribution by class** — histogram/KDE of predicted scores split by true label.
+   Shows class separation/overlap and whether any threshold cuts cleanly. *(new figure)*
+2. **Confusion-matrix heatmaps** — binary + the `K×K` `cm_multiclass.pdf` (already built). *(reuse)*
+3. **Per-class metrics bar chart** — precision/recall/F1 per class with support; surfaces the
+   weak class. *(new figure)*
+4. **Error analysis** — the most confident *wrong* predictions / hardest examples (small table or
+   annotated scatter): "look at what it gets wrong." *(new figure/table)*
+5. **Learning curve** — train vs validation score vs training-set size → over/underfitting
+   diagnosis (more data vs more model). *(new figure)*
+6. Cross-reference the curves already in the deck (ROC / PR / lift / threshold) and reliability in `[13]`.
+
+Scope ~5 frames + a transition. Decide whether it lives at the end of `[12]` or as its own short deck.
+
+---
+
 ## How to use this file
 
 - Top-level of repo means it appears in every `ls` and every `git status`. Visible by design.

@@ -25,8 +25,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import make_classification
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (average_precision_score, precision_recall_curve,
-                             roc_auc_score, roc_curve)
+from sklearn.metrics import (average_precision_score, confusion_matrix,
+                             precision_recall_curve, roc_auc_score, roc_curve)
 from sklearn.model_selection import train_test_split
 
 SEED = 509
@@ -254,6 +254,36 @@ def fig_cost_curve(yte, s, logger):
     _finish(ax, "cm_cost_curve.pdf", logger)
 
 
+def fig_multiclass_confusion(logger):
+    """3-class cheese (good / moldy / dry) confusion-matrix heatmap."""
+    X, y = make_classification(
+        n_samples=3000, n_features=10, n_informative=6, n_redundant=2,
+        n_classes=3, n_clusters_per_class=1, class_sep=1.1, random_state=SEED)
+    Xtr, Xte, ytr, yte = train_test_split(
+        X, y, test_size=0.4, random_state=SEED, stratify=y)
+    clf = LogisticRegression(max_iter=2000).fit(Xtr, ytr)
+    cm = confusion_matrix(yte, clf.predict(Xte))
+    labels = ["good", "moldy", "dry"]
+
+    fig, ax = plt.subplots(figsize=(4.8, 4.3))
+    im = ax.imshow(cm, cmap="Blues")
+    ax.set_xticks(range(3), labels)
+    ax.set_yticks(range(3), labels)
+    ax.set_xlabel("predicted")
+    ax.set_ylabel("actual")
+    ax.set_title("3-class confusion matrix")
+    thresh = cm.max() / 2
+    for i in range(3):
+        for j in range(3):
+            ax.text(j, i, cm[i, j], ha="center", va="center", fontsize=13,
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+    fig.savefig(FIG_DIR / "cm_multiclass.pdf", bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"multiclass confusion (rows=actual good/moldy/dry):\n{cm}")
+    logger.info("wrote cm_multiclass.pdf")
+
+
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
@@ -266,6 +296,7 @@ def main():
     fig_roc_vs_pr(logger)
     fig_threshold_metrics(yte, s, logger)
     fig_cost_curve(yte, s, logger)
+    fig_multiclass_confusion(logger)
     logger.info("done.")
 
 
