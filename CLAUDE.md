@@ -13,12 +13,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## LaTeX / Beamer Slides
 
 - **pdflatex** via TeX Live 2025; compile with `pdflatex -interaction=nonstopmode FILE.tex` — run it **twice** so `\tableofcontents` (the Outline frame) and cross-references resolve. A single pass after deleting the `.toc` leaves the Outline blank.
+- **After the PDF is ready, clean the build junk:** run `./ma/Scripts/python.exe clean_latex.py` (repo-wide) or `... clean_latex.py PATH` (one dir/`.tex`). It deletes `.aux/.log/.nav/.toc/.snm/.vrb/...` next to every `.tex` only (never the `.pdf`, never Python `logs/`), plus stray `texput.*`. Run it before committing so aux files never get staged.
 - Two slide collections: `math/Lectures/stat/` (16 decks, 541 frames) and `math/Lectures/optim/` (6 decks)
 - Also: `misc/claude_code/slides/` (5 decks on Claude Code topics)
 - Shared conventions: Beamer `default` theme, `dove` color scheme, 16:9 aspect ratio
 - Color palette: `popblue` (theory), `sampred` (data), `paramgreen` (parameters), `warnred` (warnings), `orange1`, `violet1`
 - All diagrams are TikZ/pgfplots code — no external images
 - Use `/beamer-overflow-check <pdf_path>` skill after compiling to visually detect clipped content
+
+### `ml_new/` deck authoring conventions (instructor preferences)
+
+- **Transition slides:** the instructor likes **section-transition slides** — a `[plain]` frame with a `popblue` bold title + one short motivation line — before each major section. Add them by default.
+- **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml_new/ch2_classification/py_src/*.py` → `ml_new/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). Real generated figures are preferred over hand-drawn TikZ where it adds credibility.
+- **Open a compiled deck in the browser for review** with PowerShell `Start-Process`, one at a time with a short gap (a rapid `cmd /c start msedge` loop drops windows):
+
+```powershell
+Start-Process "msedge.exe" -ArgumentList '"C:\...\deck.pdf"'   # repeat per file, ~0.5s apart
+```
 
 ## Quarto Configuration
 
