@@ -23,6 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### `ml_new/` deck authoring conventions (instructor preferences)
 
+> **Full style guide: `ml_new/SLIDE_STYLE.md` — the single source of truth.** The `slide-style` skill auto-loads it when you build or edit a deck. Read it before creating or editing a deck. Key points below are a summary.
+
+- **New deck workflow:** interview the instructor on content first, then draft an outline for approval, then build.
 - **Transition slides:** the instructor likes **section-transition slides** — a `[plain]` frame with a `popblue` bold title + one short motivation line — before each major section. Add them by default.
 - **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml_new/ch2_classification/py_src/*.py` → `ml_new/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). Real generated figures are preferred over hand-drawn TikZ where it adds credibility.
 - **Open a compiled deck in the browser for review** with PowerShell `Start-Process`, one at a time with a short gap (a rapid `cmd /c start msedge` loop drops windows):
