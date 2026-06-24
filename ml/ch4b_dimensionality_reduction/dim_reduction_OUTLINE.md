@@ -1,6 +1,6 @@
 # Dimensionality Reduction — Deck Outline (v6, 2026-06-23)
 
-House style per `ml_new/SLIDE_STYLE.md`. `slide-style` workflow: interview (4 rounds) +
+House style per `ml/SLIDE_STYLE.md`. `slide-style` workflow: interview (4 rounds) +
 two independent reviews -> outline -> build after approval. v5 folded in the clustering-build
 lessons; v6 applies a second independent review.
 

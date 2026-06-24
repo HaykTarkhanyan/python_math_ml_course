@@ -29,15 +29,15 @@ Last updated: 2026-06-19
 
 ### Chapter folders — `NN_short_descriptor/`
 
-- Under `ml_new/`. Number prefix gives global course order.
-- Example: `ml_new/01_regression_intro/`, `ml_new/02_main_concepts_continued/`.
+- Under `ml/`. Number prefix gives global course order.
+- Example: `ml/01_regression_intro/`, `ml/02_main_concepts/`.
 
 ### Chapter QMD — `NN_chapter_topic.qmd`
 
 - Lives inside the chapter folder. Number matches the chapter folder number.
 - Example: `01_regression_intro/01_regression_intro.qmd`.
 
-### Random images — `ml_new/00_random_image/NN_descriptive.jpg`
+### Random images — `ml/00_random_image/NN_descriptive.jpg`
 
 - One per chapter, used in the QMD's Random section.
 - Numbered to match the chapter that references it.
@@ -122,8 +122,8 @@ gform/                     # Apps Script + question CSVs for the Google Form
 
 ## Other holding areas
 
-- **`ml_new/upcoming_lectures/`** — orphan / not-yet-delivered slide decks live here. Don't bury them in chapter folders until they're actually part of a delivered lecture.
-- **`ml_new/deferred/`** — pre-built decks parked for "later in the course" (currently: GLMs, causal inference, regression inference). See `DEFERRED_TODO.md`.
+- **`ml/upcoming_lectures/`** — orphan / not-yet-delivered slide decks live here. Don't bury them in chapter folders until they're actually part of a delivered lecture.
+- **`ml/deferred/`** — pre-built decks parked for "later in the course" (currently: GLMs, causal inference, regression inference). See `DEFERRED_TODO.md`.
 
 ---
 

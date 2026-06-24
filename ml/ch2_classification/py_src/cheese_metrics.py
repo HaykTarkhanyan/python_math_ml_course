@@ -1,6 +1,6 @@
 """Real metrics figures for the L07 Classification Metrics deck.
 
-Generates 4 PDFs into ml_new/ch2_classification/fig/ from a synthetic but
+Generates 4 PDFs into ml/ch2_classification/fig/ from a synthetic but
 realistic imbalanced "cheese factory" dataset (positive = bad batch). Every
 curve is a real sweep over a fitted model's scores -- no invented coordinates.
 
@@ -10,7 +10,7 @@ curve is a real sweep over a fitted model's scores -- no invented coordinates.
   cm_roc_vs_pr.pdf  -- two models: ROC (both look great) vs PR (one collapses).
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml_new/ch2_classification/py_src/cheese_metrics.py
+    ./ma/Scripts/python.exe ml/ch2_classification/py_src/cheese_metrics.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.
@@ -35,7 +35,7 @@ ARM_RED = "#D90012"
 ARM_ORANGE = "#F2A800"
 
 HERE = Path(__file__).resolve()
-CH_DIR = HERE.parents[1]              # ml_new/ch2_classification
+CH_DIR = HERE.parents[1]              # ml/ch2_classification
 REPO_ROOT = HERE.parents[3]
 FIG_DIR = CH_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"

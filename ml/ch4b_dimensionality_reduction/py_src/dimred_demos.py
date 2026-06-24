@@ -2,7 +2,7 @@
 """Figures for the dimensionality-reduction deck (PCA / t-SNE / UMAP).
 
 Outputs PDFs to the sibling ``fig/``. Run with the ma venv:
-    ./ma/Scripts/python.exe ml_new/ch4b_dimensionality_reduction/py_src/dimred_demos.py
+    ./ma/Scripts/python.exe ml/ch4b_dimensionality_reduction/py_src/dimred_demos.py
 (Requires umap-learn in the ma venv.)
 """
 import logging

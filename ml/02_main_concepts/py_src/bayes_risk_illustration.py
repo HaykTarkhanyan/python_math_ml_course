@@ -1,6 +1,6 @@
 """Generate the Bayes-risk / noise-floor figure for the L03 Regularization deck.
 
-Produces one PDF into ``ml_new/upcoming_lectures/fig/`` using the SAME DGP as
+Produces one PDF into ``ml/upcoming_lectures/fig/`` using the SAME DGP as
 the cold-open (noisy cubic, sigma=20) for visual continuity:
 
   l03_bayes_risk.pdf -- the true cubic drawn through the data with a +-sigma
@@ -10,7 +10,7 @@ Point of the frame: even an oracle that knows the true f cannot beat MSE = sigma
 Regularization closes the gap ABOVE this floor, never below it.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml_new/upcoming_lectures/py_src/bayes_risk_illustration.py
+    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/bayes_risk_illustration.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

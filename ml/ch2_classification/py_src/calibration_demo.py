@@ -1,6 +1,6 @@
 """Real calibration figures for the L13 Calibration deck.
 
-Generates 3 PDFs into ml_new/ch2_classification/fig/ from a binary dataset:
+Generates 3 PDFs into ml/ch2_classification/fig/ from a binary dataset:
   cal_reliability.pdf    -- reliability diagram: well-calibrated logistic vs
                             over-confident naive Bayes (+ Brier scores).
   cal_hist.pdf           -- histograms of predicted probabilities: over-confident
@@ -9,7 +9,7 @@ Generates 3 PDFs into ml_new/ch2_classification/fig/ from a binary dataset:
                             the curve snaps onto the diagonal.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml_new/ch2_classification/py_src/calibration_demo.py
+    ./ma/Scripts/python.exe ml/ch2_classification/py_src/calibration_demo.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

@@ -44,7 +44,7 @@ Per `course-completion-status.md` memory:
 
 ## Cross-reference to ML course
 
-The 30-week ML syllabus (`ml_new/syllabus.csv`) implicitly assumes much of this math. Direct dependencies:
+The 30-week ML syllabus (`ml/syllabus.csv`) implicitly assumes much of this math. Direct dependencies:
 
 | ML lecture / topic | Math prerequisite |
 |---|---|

@@ -1,6 +1,6 @@
 """Generate the real-data figures for the L10 Random Forests deck.
 
-Produces three PDFs into ``ml_new/ch3_trees/fig/`` from the Titanic dataset:
+Produces three PDFs into ``ml/ch3_trees/fig/`` from the Titanic dataset:
   1. rf_instability.pdf   -- % of test predictions that change when a single
                              (unrestricted) tree is refit on bootstrap resamples.
                              Motivates the whole deck: one tree is high-variance.
@@ -10,7 +10,7 @@ Produces three PDFs into ``ml_new/ch3_trees/fig/`` from the Titanic dataset:
                              value labels on the bars (per repo CLAUDE.md).
 
 Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
-    ./ma/Scripts/python.exe ml_new/ch3_trees/py_src/make_rf_figures.py
+    ./ma/Scripts/python.exe ml/ch3_trees/py_src/make_rf_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours for multi-line plots, value labels on bars, n_jobs=1 to
@@ -38,7 +38,7 @@ ARM_RED = "#D90012"
 ARM_ORANGE = "#F2A800"
 
 HERE = Path(__file__).resolve()
-CH_DIR = HERE.parents[1]               # ml_new/ch3_trees
+CH_DIR = HERE.parents[1]               # ml/ch3_trees
 REPO_ROOT = HERE.parents[3]            # repo root
 FIG_DIR = CH_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"

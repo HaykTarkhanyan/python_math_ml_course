@@ -15,13 +15,13 @@ samples in the (iter-count, lambda) plane:
   * Random  -> a uniform scatter
   * Optuna  -> adaptive; coloured by trial order to show it concentrating
 
-Produces one figure into ``ml_new/upcoming_lectures/fig/``:
+Produces one figure into ``ml/upcoming_lectures/fig/``:
 
   l01e_hp_search_patterns.pdf -- 3 panels (grid / random / Optuna).
 
 Single-threaded everywhere (n_jobs=1) so the laptop stays cool and Optuna's
 sequential nature is reflected honestly. Run with the project venv:
-    ./ma/Scripts/python.exe ml_new/upcoming_lectures/py_src/hp_search_benchmark.py
+    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/hp_search_benchmark.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.
@@ -71,7 +71,7 @@ ARM_ORANGE = "#F2A800"
 METHOD_COLOR = {"Grid": ARM_BLUE, "Random": ARM_RED, "Optuna (TPE)": ARM_ORANGE}
 
 HERE = Path(__file__).resolve()
-UPCOMING_DIR = HERE.parents[1]         # ml_new/upcoming_lectures
+UPCOMING_DIR = HERE.parents[1]         # ml/upcoming_lectures
 REPO_ROOT = HERE.parents[3]            # repo root
 FIG_DIR = UPCOMING_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"

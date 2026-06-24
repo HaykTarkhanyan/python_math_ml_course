@@ -3,7 +3,7 @@
 Interview-driven rebuild (2026-06-23). Supersedes the prior AI-authored v3 draft:
 the instructor chose a fresh build. Headline requirement: **step-by-step animations**
 of the gradient-boosting process. House style of
-`ml_new/02_main_concepts_continued/04_overfitting_cross_validation.tex` (L01d).
+`ml/02_main_concepts/04_overfitting_cross_validation.tex` (L01d).
 
 > Lecture-numbering note: "L01c" = `03_data_preprocessing.tex`,
 > "L01d" = `04_overfitting_cross_validation.tex`. Follows **L09 Decision Trees** (built)

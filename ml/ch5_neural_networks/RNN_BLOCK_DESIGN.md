@@ -2,11 +2,11 @@
 
 **Date:** 2026-06-16
 **Status:** Reviewed and revised; awaiting final approval before implementation plan
-**Location of work:** `ml_new/ch5_neural_networks/`
+**Location of work:** `ml/ch5_neural_networks/`
 
 ## Problem
 
-`ml_new/ch5_neural_networks/L17_rnns_lstm.tex` is a skeleton — 7 frames, every content frame a `% TODO: port from lecture_i2dl/rnn` comment, with 5 sections (sequential data + vanilla RNN, BPTT, LSTM/GRU, attention, applications) crammed into one deck and no hands-on path or homework.
+`ml/ch5_neural_networks/L17_rnns_lstm.tex` is a skeleton — 7 frames, every content frame a `% TODO: port from lecture_i2dl/rnn` comment, with 5 sections (sequential data + vanilla RNN, BPTT, LSTM/GRU, attention, applications) crammed into one deck and no hands-on path or homework.
 
 The instructor wants RNNs taught as a **deep, practical, 2-lecture block** with a coding component, following the course's per-topic delivery pattern: **slide deck + practical homework + solution codebase**. This mirrors the CNN block (`CNN_BLOCK_DESIGN.md`) that precedes it in the same chapter.
 
@@ -42,14 +42,14 @@ Assumes students arrive (from L14/L15) knowing the MLP, backprop, and a **basic 
 
 ### In scope
 
-Two lecture units in `ml_new/ch5_neural_networks/`:
+Two lecture units in `ml/ch5_neural_networks/`:
 
 - **L17a — Sequential Data & Vanilla RNNs**
 - **L17b — Gated RNNs & Generating Sequences** (attention as a bridge)
 
 Plus the practical homeworks (in the NN-chapter `.qmd`) and two `HW{n}_solution.ipynb` notebooks. Delete `L17_rnns_lstm.tex` once L17a/b compile and land.
 
-**Homework `.qmd`:** CNN and RNN homeworks share the NN-chapter `.qmd` at `ml_new/ch5_neural_networks/05_neural_networks__concepts.qmd` (created by whichever block lands first), following course conventions: `{data-difficulty="1|2|3"}` 🧀 levels and `{.content-visible when-profile="solution"}`.
+**Homework `.qmd`:** CNN and RNN homeworks share the NN-chapter `.qmd` at `ml/ch5_neural_networks/05_neural_networks__concepts.qmd` (created by whichever block lands first), following course conventions: `{data-difficulty="1|2|3"}` 🧀 levels and `{.content-visible when-profile="solution"}`.
 
 ### Out of scope (YAGNI)
 

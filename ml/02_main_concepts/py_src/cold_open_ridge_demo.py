@@ -1,6 +1,6 @@
 """Generate the cold-open + U-curve figures for the L03 Regularization deck.
 
-Produces 4 PDFs into ``ml_new/upcoming_lectures/fig/`` from a degree-20
+Produces 4 PDFs into ``ml/upcoming_lectures/fig/`` from a degree-20
 polynomial Ridge fit on a noisy cubic (DGP adapted from the old Ch.1 notebook
 ``02_Regression_Main_Concepts.ipynb`` cell 218):
 
@@ -15,7 +15,7 @@ the L2 penalty is applied unfairly across columns -- which is exactly the lesson
 of the deck's "scale before regularizing" frame, so we practice what we preach.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml_new/upcoming_lectures/py_src/cold_open_ridge_demo.py
+    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/cold_open_ridge_demo.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.
@@ -48,7 +48,7 @@ ARM_RED = "#D90012"
 ARM_ORANGE = "#F2A800"
 
 HERE = Path(__file__).resolve()
-UPCOMING_DIR = HERE.parents[1]         # ml_new/upcoming_lectures
+UPCOMING_DIR = HERE.parents[1]         # ml/upcoming_lectures
 REPO_ROOT = HERE.parents[3]            # repo root
 FIG_DIR = UPCOMING_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"

@@ -1,6 +1,6 @@
 """Generate the real-data figures for the L09 Decision Trees deck.
 
-Produces three PDFs into ``ml_new/ch3_trees/fig/`` from the Titanic dataset:
+Produces three PDFs into ``ml/ch3_trees/fig/`` from the Titanic dataset:
   1. titanic_tree.pdf     -- a shallow (depth-3) decision tree, plot_tree.
   2. titanic_overfit.pdf  -- train vs CV-test accuracy across tree depth
                              (shows a single unrestricted tree overfits).
@@ -8,7 +8,7 @@ Produces three PDFs into ``ml_new/ch3_trees/fig/`` from the Titanic dataset:
 
 Run from anywhere, e.g. (no persistent venv needed):
     uv run --with scikit-learn --with pandas --with matplotlib \
-        ml_new/ch3_trees/py_src/make_figures.py
+        ml/ch3_trees/py_src/make_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours for multi-line plots.
@@ -33,7 +33,7 @@ ARM_RED = "#D90012"
 ARM_ORANGE = "#F2A800"
 
 HERE = Path(__file__).resolve()
-CH_DIR = HERE.parents[1]               # ml_new/ch3_trees
+CH_DIR = HERE.parents[1]               # ml/ch3_trees
 REPO_ROOT = HERE.parents[3]            # repo root
 FIG_DIR = CH_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"

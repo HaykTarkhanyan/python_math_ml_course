@@ -1,6 +1,6 @@
 # L13 Clustering — Deck Outline (FINAL v4, post-review 2026-06-23)
 
-House style per `ml_new/SLIDE_STYLE.md`. `slide-style` skill workflow: interview (4 rounds)
+House style per `ml/SLIDE_STYLE.md`. `slide-style` skill workflow: interview (4 rounds)
 + sklearn-docs research + independent review -> this outline -> build after approval.
 
 ## Confirmed decisions

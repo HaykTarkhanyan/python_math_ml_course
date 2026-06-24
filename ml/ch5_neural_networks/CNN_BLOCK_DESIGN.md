@@ -2,11 +2,11 @@
 
 **Date:** 2026-06-16
 **Status:** Reviewed and revised; awaiting final approval before implementation plan
-**Location of work:** `ml_new/ch5_neural_networks/`
+**Location of work:** `ml/ch5_neural_networks/`
 
 ## Problem
 
-The neural-networks chapter (`ml_new/ch5_neural_networks/`) is all skeleton. CNNs in particular are a single overloaded deck, `L16_cnns.tex` — 11 frames, every content frame just a `% TODO: port from lecture_i2dl/cnn1+cnn2` comment, cramming 9 section headers (convolution basics, properties, components, pooling, classic architectures, modern architectures, conv variants, applications) into one "lecture." That is realistically 2-3 lectures of material with no hands-on path, no pedagogy, and no homework.
+The neural-networks chapter (`ml/ch5_neural_networks/`) is all skeleton. CNNs in particular are a single overloaded deck, `L16_cnns.tex` — 11 frames, every content frame just a `% TODO: port from lecture_i2dl/cnn1+cnn2` comment, cramming 9 section headers (convolution basics, properties, components, pooling, classic architectures, modern architectures, conv variants, applications) into one "lecture." That is realistically 2-3 lectures of material with no hands-on path, no pedagogy, and no homework.
 
 The instructor wants CNNs taught as a **deep, practical, 3-lecture block** with a coding component, following the course's established per-topic delivery pattern: **slide deck + practical homework + solution codebase**.
 
@@ -49,7 +49,7 @@ If L14/L15 have not been delivered when L16a runs, L16a must include a 1-2 frame
 
 ### In scope
 
-Three lecture units in `ml_new/ch5_neural_networks/`:
+Three lecture units in `ml/ch5_neural_networks/`:
 
 - **L16a — CNN Foundations** (convolution, pooling, first CNN)
 - **L16b — CNN Architectures** (the ImageNet story: LeNet → ResNet)
@@ -57,7 +57,7 @@ Three lecture units in `ml_new/ch5_neural_networks/`:
 
 Plus: the practical homeworks (in a chapter `.qmd`, see below) and three `HW{n}_solution.ipynb` solution notebooks. Delete `L16_cnns.tex` once L16a/b/c compile and land.
 
-**Homework `.qmd`:** this spec creates `ml_new/ch5_neural_networks/05_neural_networks__concepts.qmd` (or appends the CNN problems to the NN-chapter `.qmd` if one is created first), following the course homework conventions: `{data-difficulty="1|2|3"}` 🧀 levels and `{.content-visible when-profile="solution"}` for solution visibility.
+**Homework `.qmd`:** this spec creates `ml/ch5_neural_networks/05_neural_networks__concepts.qmd` (or appends the CNN problems to the NN-chapter `.qmd` if one is created first), following the course homework conventions: `{data-difficulty="1|2|3"}` 🧀 levels and `{.content-visible when-profile="solution"}` for solution visibility.
 
 ### Out of scope (YAGNI)
 

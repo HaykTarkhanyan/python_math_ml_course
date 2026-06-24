@@ -5,7 +5,7 @@ Real figures from one synthetic make_classification dataset (seed 509), fit once
   - 12_xgb_earlystop.pdf       : train/val logloss vs rounds, early-stop point
   - 12_xgb_importance.pdf      : gain-based feature importance bar chart
 
-Run with the ma venv:  ./ma/Scripts/python.exe ml_new/ch3_trees/py_src/make_xgb_figures.py
+Run with the ma venv:  ./ma/Scripts/python.exe ml/ch3_trees/py_src/make_xgb_figures.py
 """
 import logging
 from pathlib import Path

@@ -1,6 +1,6 @@
 """Generate the figures for the L11 Boosting deck (incl. the headline animation).
 
-Outputs into ``ml_new/ch3_trees/fig/``:
+Outputs into ``ml/ch3_trees/fig/``:
   1. boost_anim_1..6.pdf  -- the 6-round gradient-boosting ANIMATION (Beamer overlays).
                              2-panel per round: LEFT = data + cumulative ensemble fit F_k
                              (+ the previous fit, faint, so the new stump's effect shows);
@@ -14,7 +14,7 @@ Also LOGS round-1 details (F_0 = mean(y), the first stump's split threshold + th
 values + eta) so the deck's by-hand frame uses REAL numbers that MATCH animation round 1.
 
 Run with the project venv (repo CLAUDE.md):
-    ./ma/Scripts/python.exe ml_new/ch3_trees/py_src/make_boost_figures.py
+    ./ma/Scripts/python.exe ml/ch3_trees/py_src/make_boost_figures.py
 
 Conventions: logging to console + logs/, seed 509, f-strings, Armenian-flag palette.
 """

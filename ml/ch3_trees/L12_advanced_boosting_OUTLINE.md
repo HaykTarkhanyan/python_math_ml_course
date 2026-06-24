@@ -1,6 +1,6 @@
 # Advanced Boosting (L12) - Deck Outline (v2, 2026-06-23)
 
-House style per `ml_new/SLIDE_STYLE.md`. This is the "deep library session" that
+House style per `ml/SLIDE_STYLE.md`. This is the "deep library session" that
 `L11_boosting.tex` explicitly promised ("Bridge: the deep library session (L12)").
 
 ## Scope (from two interview rounds)
@@ -155,7 +155,7 @@ All real figures use one **synthetic** `make_classification` dataset (seed 509),
   frame-24 snippet runs (one-shot), plus the side-by-side code.
 
 ## Build notes
-- File: `ml_new/ch3_trees/L12_advanced_boosting.tex`. Match `L11_boosting.tex` boilerplate
+- File: `ml/ch3_trees/L12_advanced_boosting.tex`. Match `L11_boosting.tex` boilerplate
   (`\input{../preamble}`, `\sectiontransition` macro, `listings` setup, `% Provenance:` footer).
 - Title: **Advanced Boosting**; subtitle: *XGBoost - LightGBM - CatBoost*.
 - Compile twice, `clean_latex.py`, eyeball overflow-prone frames as PNG: math (5-7), tables

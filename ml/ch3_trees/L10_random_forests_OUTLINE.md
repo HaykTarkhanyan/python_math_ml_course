@@ -3,7 +3,7 @@
 Interview-driven rebuild (2026-06-23). Supersedes the prior AI-authored v3 draft:
 the instructor chose a fresh build, so this outline is shaped by a 3-round interview,
 then two review passes (self-review + one independent adversarial review). House style
-of `ml_new/02_main_concepts_continued/04_overfitting_cross_validation.tex` (the
+of `ml/02_main_concepts/04_overfitting_cross_validation.tex` (the
 validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > Lecture-numbering note: "L01c" = `03_data_preprocessing.tex`,
@@ -93,7 +93,7 @@ formula flagged stated-not-derived; hook figure = flip-count bar.
   frames, `% Provenance` block at the bottom. Preamble via `\input{../preamble}`,
   code via the `listings` `\lstset` from L01d.
 - **Verification debt:** library defaults verified at BUILD time (Context7).
-- **File:** write to `ml_new/ch3_trees/L10_random_forests.tex`, overwriting the
+- **File:** write to `ml/ch3_trees/L10_random_forests.tex`, overwriting the
   skeleton. Compile from inside `ch3_trees/`.
 
 ## Callbacks / cross-references to thread in

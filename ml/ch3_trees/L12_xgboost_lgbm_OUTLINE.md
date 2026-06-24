@@ -1,7 +1,7 @@
 # L12 XGBoost / LightGBM / CatBoost — Deck Outline / Design (DRAFT v3)
 
 Planning doc for the **gradient-boosting libraries** deck, house style of
-`ml_new/02_main_concepts_continued/04_overfitting_cross_validation.tex` (the
+`ml/02_main_concepts/04_overfitting_cross_validation.tex` (the
 validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > STATUS: DRAFT v3 (pedagogical review folded in). Spine stable; pending go-ahead.

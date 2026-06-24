@@ -10,13 +10,13 @@ Planning doc for the first chunk of the ML course. Two halves:
 1. Review of `ml/Chapter 1 Regression Main Concepts/PDF/L01 Linear Regression.pdf` (the deck you actually like) with concrete improvement suggestions.
 2. Outline for L02–L05b, including what each lecture has to land before the next can begin.
 
-Source of truth for the full 30-week arc lives in `ml_new/syllabus.csv`. This file is the zoomed-in view of the first six weeks.
+Source of truth for the full 30-week arc lives in `ml/syllabus.csv`. This file is the zoomed-in view of the first six weeks.
 
 ---
 
 ## L01 — Intro + Linear Regression
 
-Status: **approved as the first lecture**. Keep delivering from the existing PDF for now. Improvements below apply to the next revision (porting into `ml_new/ch1_regression/L01_linear_regression.tex`, which is already mostly there).
+Status: **approved as the first lecture**. Keep delivering from the existing PDF for now. Improvements below apply to the next revision (porting into `ml/ch1_regression/L01_linear_regression.tex`, which is already mostly there).
 
 ### What works (don't break these)
 
@@ -94,7 +94,7 @@ These are cheap, high-leverage, and don't require restructuring the deck.
 
 ## L02 — Regression Losses + Gradient Descent
 
-Status: **skeleton in `ml_new/`, needs porting**.
+Status: **skeleton in `ml/`, needs porting**.
 
 ### Learning goals
 
@@ -137,7 +137,7 @@ Extend the L01 GD code to support intercept + multiple learning rates; derive th
 
 ## L03 — Regularization (Ridge & Lasso)
 
-Status: **skeleton in `ml_new/`, needs porting**.
+Status: **skeleton in `ml/`, needs porting**.
 
 ### Learning goals
 
@@ -180,7 +180,7 @@ Implement Ridge from scratch via `(X^T X + lambda * I)^{-1} X^T y`. Reproduce `s
 
 ## L04 — Regression Evaluation Metrics
 
-Status: **skeleton in `ml_new/`, needs porting**.
+Status: **skeleton in `ml/`, needs porting**.
 
 ### Why this is here, not earlier
 
@@ -204,7 +204,7 @@ Per syllabus notes, this lecture is intuitive (🧀). Students who survived L02/
 
 ## L05 + L05b — Cross-Validation, Tuning, Nested Resampling
 
-Status: L05b **already ported** (in `ml_new/ch1_regression/L05b_nested_resampling.tex` — that's the deck I built from the i2ml provenance).
+Status: L05b **already ported** (in `ml/ch1_regression/L05b_nested_resampling.tex` — that's the deck I built from the i2ml provenance).
 
 ### L05 outline (planned, not yet ported)
 
@@ -229,7 +229,7 @@ Per global CLAUDE.md, this laptop is 16 GB / Intel Iris Xe. Students may run gri
 
 ## Open questions / decisions to make
 
-1. **Cutover plan.** Do you teach from the existing `ml/.../PDF/*.pdf` decks this semester and from `ml_new/*.tex` next semester? Or run a parallel pilot? I'd say keep delivering from the PDFs you trust, port to `ml_new` between sessions, switch at a chapter boundary (next semester).
+1. **Cutover plan.** Do you teach from the existing `ml/.../PDF/*.pdf` decks this semester and from `ml/*.tex` next semester? Or run a parallel pilot? I'd say keep delivering from the PDFs you trust, port to `ml_new` between sessions, switch at a chapter boundary (next semester).
 
 2. **Probability prerequisites.** Several improvements above (MLE rationale for L2, i.i.d. framing) point to a "probability foundations" mini-lecture that doesn't yet exist. Either (a) defer all probabilistic interpretation to a math-chapter lecture later, or (b) bolt a 20-minute "ML probability glossary" onto L01. Recommend (a) so L01 stays tight.
 
@@ -241,7 +241,7 @@ Per global CLAUDE.md, this laptop is 16 GB / Intel Iris Xe. Students may run gri
 
 ---
 
-## Migration status (regression block → `ml_new/`)
+## Migration status (regression block → `ml/`)
 
 | Lecture | PDF (delivery) | `ml_new` tex (port) | Notes |
 |---|---|---|---|

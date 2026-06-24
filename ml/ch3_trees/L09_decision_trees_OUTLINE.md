@@ -1,7 +1,7 @@
 # L09 Decision Trees — Deck Outline / Design
 
 Design doc for rebuilding the **Decision Trees** lecture from scratch, in the
-house style of `ml_new/02_main_concepts_continued/04_overfitting_cross_validation.tex`
+house style of `ml/02_main_concepts/04_overfitting_cross_validation.tex`
 (the validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > Revision history: v1 = first outline. v2 = self-review fixes + LightGBM
@@ -59,7 +59,7 @@ house style of `ml_new/02_main_concepts_continued/04_overfitting_cross_validatio
     features into histograms -> a single LightGBM tree is NOT byte-identical to
     sklearn CART. Use `learning_rate=1.0` with `n_estimators=1` so the single
     tree's output isn't shrunk by 0.1.
-- **File:** write the deck to `ml_new/ch3_trees/L09_decision_trees.tex`, overwriting
+- **File:** write the deck to `ml/ch3_trees/L09_decision_trees.tex`, overwriting
   the empty skeleton (ignored per instruction). Compile from inside `ch3_trees/`.
 
 ## Callbacks / cross-references to thread in

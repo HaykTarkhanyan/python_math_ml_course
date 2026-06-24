@@ -1,6 +1,6 @@
 """Extra figures for the L03 Regularization deck (2026-06-20 revision pass).
 
-Produces 3 PDFs into ``ml_new/upcoming_lectures/fig/``:
+Produces 3 PDFs into ``ml/upcoming_lectures/fig/``:
 
   1. l03_coef_norms.pdf    -- two fits on the SAME data: an unrestricted model
                               (huge ||theta||, wiggly) vs a regularized one
@@ -12,7 +12,7 @@ Produces 3 PDFs into ``ml_new/upcoming_lectures/fig/``:
                               early-stopping point (val minimum) marked.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml_new/upcoming_lectures/py_src/extra_figures.py
+    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/extra_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

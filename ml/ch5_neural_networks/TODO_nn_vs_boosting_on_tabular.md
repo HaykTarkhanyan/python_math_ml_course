@@ -16,7 +16,7 @@ students walk away thinking "neural nets are always the upgrade."
 - A small benchmark bar chart: XGBoost / LightGBM vs an MLP (optionally a tabular-DL model such as
   FT-Transformer or TabNet) on a few tabular datasets - boosting on top or tied, at a fraction of
   the cost. Could reuse the synthetic `make_classification` setup from
-  `ml_new/ch3_trees/py_src/make_xgb_figures.py`, or a couple of OpenML datasets.
+  `ml/ch3_trees/py_src/make_xgb_figures.py`, or a couple of OpenML datasets.
 - Pair it with the "why": trees handle irregular / non-smooth target functions and uninformative
   features better; MLPs are biased toward smooth functions and need more care on raw tabular input.
 

@@ -1,4 +1,4 @@
-# Slide style guide — `ml_new` Beamer decks
+# Slide style guide — `ml` Beamer decks
 
 Single source of truth for how the instructor wants slide decks built in this repo.
 The `slide-style` skill points here. **Read this before creating or editing a deck.**
@@ -30,14 +30,14 @@ calibration) and the regression decks (05 regularization, 06 hyperparameter tuni
 
 ## Boilerplate
 
-- `\documentclass[aspectratio=169]{beamer}` then `\input{../preamble}` (decks sit one level under `ml_new/`).
+- `\documentclass[aspectratio=169]{beamer}` then `\input{../preamble}` (decks sit one level under `ml/`).
 - End each `.tex` with a `% Provenance:` comment block — source material, which figures, key pedagogical decisions, and the forward pointer to the next deck. (Matches every existing deck.)
 
 ---
 
 ## Palette & callouts
 
-Defined in `ml_new/preamble.tex`:
+Defined in `ml/preamble.tex`:
 
 | Color | RGB | Use for |
 |---|---|---|

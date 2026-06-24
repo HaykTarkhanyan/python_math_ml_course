@@ -2,10 +2,10 @@
 name: slide-style
 description: >
   Use when creating, building, drafting, editing, or reviewing a Beamer / LaTeX
-  slide deck (.tex) in this repo, especially under ml_new/. Loads the instructor's
+  slide deck (.tex) in this repo, especially under ml/. Loads the instructor's
   slide-design conventions - deck structure, color palette, figures, tone,
   math/code depth, and the new-deck workflow - so every deck comes out consistent.
-  The full guide is ml_new/SLIDE_STYLE.md (single source of truth).
+  The full guide is ml/SLIDE_STYLE.md (single source of truth).
 allowed-tools:
   - Read
   - Bash
@@ -16,9 +16,9 @@ allowed-tools:
 user-invocable: true
 ---
 
-# Slide style (ml_new Beamer decks)
+# Slide style (ml Beamer decks)
 
-**First action: read `ml_new/SLIDE_STYLE.md` and follow it.** That file is the single
+**First action: read `ml/SLIDE_STYLE.md` and follow it.** That file is the single
 source of truth; this skill is just the trigger. The essentials:
 
 ## New-deck workflow (do in this order)

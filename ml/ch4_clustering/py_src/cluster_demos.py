@@ -2,7 +2,7 @@
 """Figures for the L13 Clustering deck (toy 2D blobs, matplotlib).
 
 Outputs PDFs to the sibling ``fig/``. Run with the ma venv:
-    ./ma/Scripts/python.exe ml_new/ch4_clustering/py_src/cluster_demos.py
+    ./ma/Scripts/python.exe ml/ch4_clustering/py_src/cluster_demos.py
 """
 import logging
 from pathlib import Path

@@ -1,7 +1,7 @@
 # Python Index — Reference Map for Older Materials
 
 Generated: 2026-05-29
-Purpose: When the ML course needs to reference, link back to, or build on Python material already covered in `python/` or `python_libs/`, look here first. Companion to `ml_new/math_index/`.
+Purpose: When the ML course needs to reference, link back to, or build on Python material already covered in `python/` or `python_libs/`, look here first. Companion to `ml/math_index/`.
 
 ## How to use this
 

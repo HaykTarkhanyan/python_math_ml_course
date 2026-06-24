@@ -6,7 +6,7 @@ Last updated: 2026-06-19
 
 ---
 
-## From bias-variance deck (`ml_new/upcoming_lectures/L01d2_bias_variance.tex`)
+## From bias-variance deck (`ml/upcoming_lectures/L01d2_bias_variance.tex`)
 
 The full deck got cut. Status of the 3 surviving concepts (as of 2026-06-19):
 
@@ -18,7 +18,7 @@ The full deck got cut. Status of the 3 surviving concepts (as of 2026-06-19):
 
 ---
 
-## From `ml_new/deferred/` folder
+## From `ml/deferred/` folder
 
 Pre-built decks parked because they need more statistics background than the current cohort has. Each is mostly compile-ready.
 

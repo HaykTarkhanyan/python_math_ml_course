@@ -21,13 +21,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - All diagrams are TikZ/pgfplots code — no external images
 - Use `/beamer-overflow-check <pdf_path>` skill after compiling to visually detect clipped content
 
-### `ml_new/` deck authoring conventions (instructor preferences)
+### `ml/` deck authoring conventions (instructor preferences)
 
-> **Full style guide: `ml_new/SLIDE_STYLE.md` — the single source of truth.** The `slide-style` skill auto-loads it when you build or edit a deck. Read it before creating or editing a deck. Key points below are a summary.
+> **Full style guide: `ml/SLIDE_STYLE.md` — the single source of truth.** The `slide-style` skill auto-loads it when you build or edit a deck. Read it before creating or editing a deck. Key points below are a summary.
 
 - **New deck workflow:** interview the instructor on content first, then draft an outline for approval, then build.
 - **Transition slides:** the instructor likes **section-transition slides** — a `[plain]` frame with a `popblue` bold title + one short motivation line — before each major section. Add them by default.
-- **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml_new/ch2_classification/py_src/*.py` → `ml_new/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). Real generated figures are preferred over hand-drawn TikZ where it adds credibility.
+- **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml/ch2_classification/py_src/*.py` → `ml/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). Real generated figures are preferred over hand-drawn TikZ where it adds credibility.
 - **Open a compiled deck in the browser for review** with PowerShell `Start-Process`, one at a time with a short gap (a rapid `cmd /c start msedge` loop drops windows):
 
 ```powershell
@@ -73,7 +73,7 @@ This also applies to ordered lists, blockquotes (`>`), code fences, and tables. 
   - PowerShell: `.\ma\Scripts\python.exe path\to\script.py`
 - conda is installed (`base` + several envs under `~/.conda/envs/`) but is NOT on the Git Bash/PowerShell PATH. `ma` is a venv, not a conda env.
 - To add a package, install into `ma` with uv (per the global "use uv" rule): `uv pip install --python ./ma/Scripts/python.exe <pkg>`
-- Figure-generation scripts (e.g. `ml_new/**/py_src/*.py`) write PDFs to a sibling `fig/` and logs to `logs/`; run them with the `ma` interpreter.
+- Figure-generation scripts (e.g. `ml/**/py_src/*.py`) write PDFs to a sibling `fig/` and logs to `logs/`; run them with the `ma` interpreter.
 
 ## Testing
 
@@ -86,6 +86,6 @@ This also applies to ordered lists, blockquotes (`>`), code fences, and tables. 
 - **python/** — 18 Jupyter notebooks: Python fundamentals → OOP → capstone
 - **python_libs/** — 18 Jupyter notebooks: data science stack (NumPy, Pandas, etc.)
 - **math/** — 26 `.qmd` homework modules + `Lectures/` (Beamer slide decks)
-- **ml/** — skeleton only (6 empty chapter dirs), not started
+- **ml/** — active ML course (formerly `ml_new/`): chapter folders `01_regression_intro`, `02_main_concepts`, `03_classification`, `04_trees`, plus clustering, dimensionality-reduction, trees, neural-network, and genai decks. Quarto pages registered in `_quarto.yml`; Beamer decks live under each chapter.
 - **misc/** — supplementary materials: Google Colab guide, dl4nlp lectures, Claude Code slides
 - Course is bilingual: Armenian (Հայերեն) + English throughout all materials

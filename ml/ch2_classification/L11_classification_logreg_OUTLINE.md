@@ -2,12 +2,12 @@
 
 Design doc for building the **Classification + Logistic Regression** deck from
 scratch, house style of
-`ml_new/02_main_concepts_continued/04_overfitting_cross_validation.tex` (the
+`ml/02_main_concepts/04_overfitting_cross_validation.tex` (the
 validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > v2 = independent pedagogical review folded in (see changelog). The companion deck
 > **L07 classification metrics is ALREADY BUILT**
-> (`ml_new/ch2_classification/L07_classification_metrics.tex`, 23 frames) — second
+> (`ml/ch2_classification/L07_classification_metrics.tex`, 23 frames) — second
 > house-style reference + source of the chapter running example + handoff target.
 
 ## Locked decisions
@@ -30,13 +30,13 @@ validation/CV deck, formerly `L01d_validation_and_cv.tex`).
     / a balanced view and **label the plot "illustrative, balanced for clarity — real
     factory data is 3% positive (L07)."** Do not let it imply 0.5 is the natural
     operating point. Align exact feature names with L07 at build time.
-- **File:** write to `ml_new/ch2_classification/L06_classification_logreg.tex`,
+- **File:** write to `ml/ch2_classification/L06_classification_logreg.tex`,
   overwriting the skeleton (7 frames / 5 TODOs). Compile from `ch2_classification/`.
 
 ## Sources
 - **ml_old**: `Chapter 2 Classification/PDFs/C2 01 Classification + Logistic
   Regression.pdf` (32 pp).
-- **Built reference**: `ml_new/ch2_classification/L07_classification_metrics.tex`.
+- **Built reference**: `ml/ch2_classification/L07_classification_metrics.tex`.
 - **Upstream (raw)**: `ml_old/slides-i2ml-1-300.pdf` (classification chapter).
 - VERIFY at build: sklearn `LogisticRegression` defaults (`penalty="l2"`, `C=1.0`,
   `solver="lbfgs"`, `max_iter`), `predict_proba`, `class_weight="balanced"`.

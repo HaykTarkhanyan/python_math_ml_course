@@ -2,7 +2,7 @@
 
 A breadth-not-depth **survey deck**: classic supervised methods the course will NOT
 cover in depth, but that students should recognize. House style of
-`ml_new/02_main_concepts_continued/04_overfitting_cross_validation.tex`.
+`ml/02_main_concepts/04_overfitting_cross_validation.tex`.
 
 > STATUS: DRAFT v3. v2 covered KNN/NB/SVM; v3 adds **LDA/QDA** and **Gaussian
 > Processes** (each a proper 3-frame mini-section, not a one-liner) and restructures
