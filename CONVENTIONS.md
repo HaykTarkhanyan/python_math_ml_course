@@ -30,12 +30,12 @@ Last updated: 2026-06-19
 ### Chapter folders — `NN_short_descriptor/`
 
 - Under `ml_new/`. Number prefix gives global course order.
-- Example: `ml_new/01_regression__main_concepts/`, `ml_new/02_main_concepts_continued/`.
+- Example: `ml_new/01_regression_intro/`, `ml_new/02_main_concepts_continued/`.
 
 ### Chapter QMD — `NN_chapter_topic.qmd`
 
 - Lives inside the chapter folder. Number matches the chapter folder number.
-- Example: `01_regression__main_concepts/01_linear_regression__concepts.qmd`.
+- Example: `01_regression_intro/01_regression_intro.qmd`.
 
 ### Random images — `ml_new/00_random_image/NN_descriptive.jpg`
 
@@ -57,7 +57,7 @@ Last updated: 2026-06-19
 
 ## QMD structure
 
-Each chapter's QMD follows this template (see `01_regression__main_concepts/01_linear_regression__concepts.qmd` for the canonical example):
+Each chapter's QMD follows this template (see `01_regression_intro/01_regression_intro.qmd` for the canonical example):
 
 ```markdown
 ---

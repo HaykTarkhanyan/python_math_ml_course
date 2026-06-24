@@ -1,0 +1,196 @@
+"""Generate the real-data figures for the L10 Random Forests deck.
+
+Produces three PDFs into ``ml_new/ch3_trees/fig/`` from the Titanic dataset:
+  1. rf_instability.pdf   -- % of test predictions that change when a single
+                             (unrestricted) tree is refit on bootstrap resamples.
+                             Motivates the whole deck: one tree is high-variance.
+  2. rf_n_estimators.pdf  -- test accuracy + OOB score vs n_estimators -> the
+                             "more trees plateau, they do NOT overfit" curve.
+  3. rf_importance.pdf    -- default impurity-based RF feature_importances_, with
+                             value labels on the bars (per repo CLAUDE.md).
+
+Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
+    ./ma/Scripts/python.exe ml_new/ch3_trees/py_src/make_rf_figures.py
+
+Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
+Armenian-flag colours for multi-line plots, value labels on bars, n_jobs=1 to
+avoid pegging all cores on this machine.
+"""
+
+import logging
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
+from sklearn.datasets import fetch_openml
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+
+SEED = 509
+
+# Armenian flag palette (per CLAUDE.md) -- blue, red, orange.
+ARM_BLUE = "#0033A0"
+ARM_RED = "#D90012"
+ARM_ORANGE = "#F2A800"
+
+HERE = Path(__file__).resolve()
+CH_DIR = HERE.parents[1]               # ml_new/ch3_trees
+REPO_ROOT = HERE.parents[3]            # repo root
+FIG_DIR = CH_DIR / "fig"
+LOGS_DIR = REPO_ROOT / "logs"
+
+
+def setup_logging() -> logging.Logger:
+    LOGS_DIR.mkdir(exist_ok=True)
+    logger = logging.getLogger("l10_figures")
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    fh = logging.FileHandler(LOGS_DIR / "make_rf_figures.log")
+    fh.setFormatter(fmt)
+    logger.addHandler(sh)
+    logger.addHandler(fh)
+    return logger
+
+
+def load_titanic(logger: logging.Logger):
+    """Return (X, y, feature_names) -- same tiny preprocessing as the L09 script."""
+    df = fetch_openml("titanic", version=1, as_frame=True).frame
+    features = ["pclass", "sex", "age", "sibsp", "parch", "fare"]
+    df = df[features + ["survived"]].copy()
+    df["sex"] = (df["sex"] == "female").astype(int)        # female=1, male=0
+    df["pclass"] = df["pclass"].astype(float)
+    df["age"] = df["age"].fillna(df["age"].median())        # impute (median)
+    df["fare"] = df["fare"].fillna(df["fare"].median())
+    X = df[features].astype(float).to_numpy()
+    y = df["survived"].astype(int).to_numpy()
+    logger.info(f"Titanic: {X.shape[0]} rows, {X.shape[1]} features, "
+                f"survived rate = {y.mean():.3f}")
+    return X, y, features
+
+
+def fig_instability(X, y, feature_names, logger, n_resamples=15):
+    """How twitchy is one tree? Refit an unrestricted tree on bootstrap resamples
+    of the training set and count the fraction of TEST predictions that flip vs the
+    tree trained on the original sample."""
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X, y, test_size=0.3, random_state=SEED, stratify=y)
+    base = DecisionTreeClassifier(random_state=SEED).fit(X_tr, y_tr)
+    base_pred = base.predict(X_te)
+
+    rng = np.random.default_rng(SEED)
+    flips = []
+    for _ in range(n_resamples):
+        idx = rng.choice(len(X_tr), len(X_tr), replace=True)   # bootstrap
+        t = DecisionTreeClassifier(random_state=SEED).fit(X_tr[idx], y_tr[idx])
+        flips.append(np.mean(t.predict(X_te) != base_pred) * 100.0)
+    flips = np.array(flips)
+    logger.info(f"instability: single-tree flip rate mean={flips.mean():.1f}% "
+                f"(min {flips.min():.1f}, max {flips.max():.1f}) over "
+                f"{n_resamples} resamples")
+
+    fig, ax = plt.subplots(figsize=(6.6, 3.6))
+    ax.bar(np.arange(1, n_resamples + 1), flips, color=ARM_BLUE, alpha=0.85)
+    ax.axhline(flips.mean(), color=ARM_RED, ls="--", lw=1.8,
+               label=f"mean {flips.mean():.0f}% of predictions flip")
+    ax.set_xlabel("refit on a different bootstrap resample")
+    ax.set_ylabel("% of test predictions\nthat changed")
+    ax.set_xticks(np.arange(1, n_resamples + 1))
+    ax.tick_params(labelsize=8)
+    ax.legend(loc="upper right", fontsize=9, frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "rf_instability.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+    return dict(mean_flip=float(flips.mean()))
+
+
+def fig_n_estimators(X, y, feature_names, logger):
+    """Test accuracy + OOB score vs number of trees -> rises then plateaus."""
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X, y, test_size=0.3, random_state=SEED, stratify=y)
+    ns = [1, 2, 3, 5, 8, 12, 20, 30, 50, 75, 100, 150, 200, 300]
+    test_acc, oob = [], []
+    for n in ns:
+        rf = RandomForestClassifier(n_estimators=n, oob_score=True,
+                                    bootstrap=True, random_state=SEED, n_jobs=1)
+        rf.fit(X_tr, y_tr)
+        test_acc.append(rf.score(X_te, y_te))
+        # oob_score_ is ill-defined / warns for very few trees -> NaN below ~10
+        oob.append(rf.oob_score_ if n >= 10 else np.nan)
+    test_acc = np.array(test_acc)
+    logger.info(f"n_estimators: test acc 1-tree={test_acc[0]:.3f}, "
+                f"300-tree={test_acc[-1]:.3f}, max={test_acc.max():.3f}")
+
+    fig, ax = plt.subplots(figsize=(6.6, 4.0))
+    ax.plot(ns, test_acc, "-o", color=ARM_RED, lw=2, ms=3.5, label="test accuracy")
+    ax.plot(ns, oob, "-s", color=ARM_BLUE, lw=2, ms=3.5, label="OOB score")
+    ax.axvspan(100, 300, color=ARM_ORANGE, alpha=0.12)
+    ax.annotate("plateau: more trees\ndon't overfit", xy=(180, test_acc[-1]),
+                xytext=(120, test_acc.min() + 0.25 * (test_acc.max() - test_acc.min())),
+                color=ARM_ORANGE, fontsize=9,
+                arrowprops=dict(arrowstyle="->", color=ARM_ORANGE))
+    ax.set_xscale("log")
+    ax.set_xlabel("number of trees (n_estimators, log scale)")
+    ax.set_ylabel("accuracy")
+    ax.set_xticks([1, 3, 10, 30, 100, 300])
+    ax.get_xaxis().set_major_formatter(mticker.ScalarFormatter())
+    ax.legend(loc="lower right", fontsize=9, frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "rf_n_estimators.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+    return dict(acc_1=float(test_acc[0]), acc_max=float(test_acc.max()))
+
+
+def fig_importance(X, y, feature_names, logger):
+    """Default impurity-based RF feature importances, sorted, with value labels."""
+    rf = RandomForestClassifier(n_estimators=300, random_state=SEED,
+                                n_jobs=1).fit(X, y)
+    imp = rf.feature_importances_
+    order = np.argsort(imp)                       # ascending -> barh bottom-up
+    names = [feature_names[i] for i in order]
+    vals = imp[order]
+    logger.info("importance: " + ", ".join(
+        f"{feature_names[i]}={imp[i]:.3f}" for i in np.argsort(imp)[::-1]))
+
+    fig, ax = plt.subplots(figsize=(6.2, 3.8))
+    bars = ax.barh(names, vals, color=ARM_BLUE, alpha=0.85, edgecolor=ARM_BLUE)
+    ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=9)
+    ax.set_xlabel("impurity-based importance")
+    ax.set_xlim(0, max(vals) * 1.18)              # right padding for labels
+    ax.tick_params(labelsize=9)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "rf_importance.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def main():
+    logger = setup_logging()
+    FIG_DIR.mkdir(exist_ok=True)
+    np.random.seed(SEED)
+    X, y, feats = load_titanic(logger)
+    inst = fig_instability(X, y, feats, logger)
+    ne = fig_n_estimators(X, y, feats, logger)
+    fig_importance(X, y, feats, logger)
+    logger.info("=== SUMMARY for the slides ===")
+    logger.info(f"single-tree flip rate ~ {inst['mean_flip']:.0f}% of test predictions")
+    logger.info(f"RF acc: 1 tree={ne['acc_1']:.2f} -> plateau ~{ne['acc_max']:.2f}")
+    logger.info("done.")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,773 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true,
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[0.9em]
+      \begin{minipage}{0.82\textwidth}\centering\small #2 \end{minipage}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{Clustering}
+\subtitle{Finding structure without labels}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Unsupervised learning: no labels, just structure}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Until now every task had a target $y$ (rent, ``bad cheese'', a digit). Now we get
+    \textbf{only the features} $\xv$ --- no labels --- and ask:
+    \vskip 4pt
+    \emph{Are there natural groups in this data?}
+    \vskip 6pt
+    \begin{itemize}\small
+      \item customer segments (marketing)
+      \item topics in a pile of documents
+      \item colors in an image
+      \item cell types in gene-expression data
+    \end{itemize}
+    \column{0.44\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_hook_unlabeled.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \footnotesize \textbf{Clustering:} partition the data into groups so points in a group are
+  similar, and points in different groups are not.
+\end{frame}
+
+\begin{frame}{Where clustering sits}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Supervised} (had $y$)
+    \begin{itemize}\small
+      \item regression, classification
+      \item learn a map $\xv \to y$
+    \end{itemize}
+    \vskip 4pt
+    \textbf{Unsupervised} (no $y$)
+    \begin{itemize}\small
+      \item \textbf{clustering} --- group the \emph{rows} (samples)
+      \item dimensionality reduction --- compress the \emph{columns} (features) [next deck]
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{You can have labels and still cluster:}
+      \begin{itemize}\scriptsize
+        \item find \emph{sub-structure} inside a labeled class;
+        \item QA the labels / spot mislabeled points;
+        \item build cluster-id \emph{features} for a supervised model;
+        \item semi-supervised setups.
+      \end{itemize}
+      (That is also when the \emph{external} metrics later apply.)}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{K-means}
+\sectiontransition{K-means}{The workhorse: pick $k$, alternate ``assign then update'' until the
+centers stop moving.}
+
+\begin{frame}{First: how do we measure ``similar''?}
+  Clustering needs a \textbf{distance}. The choice shapes the clusters.
+  \begin{itemize}\small
+    \item \textbf{Euclidean} $\|\xv-\xv'\|_2$ --- the default (k-means uses it).
+    \item \textbf{Manhattan} $\|\xv-\xv'\|_1$ --- robust to large single-feature gaps.
+    \item \textbf{Cosine} --- angle, not magnitude (text / embeddings).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Trap --- scale first.} Distances are dominated by large-range features. A feature in
+    ``salary'' (10{,}000s) crushes one in ``years'' (single digits). \textbf{Standardize} before
+    any distance-based clustering, unless features already share units.}}
+\end{frame}
+
+\begin{frame}{K-means: the objective}
+  Choose $k$. Represent each cluster by a \textbf{centroid} $\bm{\mu}_j$. Minimize the
+  \textbf{within-cluster sum of squares} (inertia):
+  \[
+    \text{WCSS} \;=\; \sum_{j=1}^{k}\ \sum_{\xv \in C_j} \|\xv - \bm{\mu}_j\|^2 .
+  \]
+  \begin{itemize}\small
+    \item Each point joins its nearest centroid; the centroid is the cluster's mean.
+    \item You must \textbf{pick $k$} in advance (more on that soon).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Inertia is not normalized.} It falls as $k$ grows and scales with the data, so its
+    absolute value means nothing --- only useful for \emph{relative} comparison (e.g. the elbow).}}
+\end{frame}
+
+\begin{frame}{Lloyd's algorithm: assign, update, repeat}
+  Two steps, each of which can only \emph{lower} the WCSS (this is coordinate descent):
+  \textbf{assign} each point to its nearest centroid, then \textbf{update} each centroid to its
+  cluster's mean. Watch it converge:
+  \begin{center}
+    \only<1>{\includegraphics[width=0.6\textwidth]{fig/clu_km_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.6\textwidth]{fig/clu_km_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.6\textwidth]{fig/clu_km_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.6\textwidth]{fig/clu_km_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.6\textwidth]{fig/clu_km_anim_5.pdf}}%
+    \only<6>{\includegraphics[width=0.6\textwidth]{fig/clu_km_anim_6.pdf}}%
+  \end{center}
+  \vskip -2pt
+  \footnotesize Converges --- but only to a \textbf{local} optimum (the same alternating idea as EM, later).
+\end{frame}
+
+\begin{frame}{Worked iteration (by hand), $k=2$}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \footnotesize
+    Points $P_1(1,1),P_2(2,1),P_3(4,3),P_4(5,4),P_5(2,2)$; init centroids (placed freely, \emph{not}
+    on data points) $\bm{\mu}_1=(1.5,1),\ \bm{\mu}_2=(4,4)$.
+    \vskip 3pt
+    \textbf{Assign} (nearest centroid):
+    $P_1,P_2,P_5 \to \mu_1$;\quad $P_3,P_4 \to \mu_2$.
+    \vskip 3pt
+    \textbf{Update} (cluster means):
+    \[ \bm{\mu}_1 = \tfrac{(1,1)+(2,1)+(2,2)}{3} = (1.67,1.33) \]
+    \[ \bm{\mu}_2 = \tfrac{(4,3)+(5,4)}{2} = (4.5,3.5) \]
+    Then repeat until nothing moves.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_worked.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: does initialization matter?}
+  Run k-means twice from two \emph{different} random starts. Same answer?
+  \pause
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{No.} It only finds a \emph{local} optimum --- a bad start gives a worse clustering
+    (higher inertia).
+    \vskip 4pt
+    \textbf{Fix: k-means++} seeds centroids spread far apart, then run several times
+    (\texttt{n\_init}) and keep the lowest-inertia result.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_kmeans_init.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Choosing $k$: the elbow}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Plot inertia vs $k$. It always decreases; look for the \textbf{elbow} where extra clusters
+    stop paying off.
+    \begin{itemize}\small
+      \item Below the elbow: real structure being captured.
+      \item Past it: diminishing returns (splitting real clusters).
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize The elbow is a heuristic --- often fuzzy. The \textbf{silhouette}
+    (evaluation section) gives a more principled choice.
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_elbow.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Assumptions $=$ failure modes}
+  \begin{center}
+    \includegraphics[width=0.72\textwidth,height=0.5\textheight,keepaspectratio]{fig/clu_kmeans_fail.pdf}
+  \end{center}
+  \footnotesize K-means assumes \textbf{round, similarly-sized, convex} clusters --- it breaks on
+  elongated shapes and on clusters of very different size/variance.
+  \vskip 2pt
+  \textbf{Reach for k-means when:} large $n$, round/equal clusters, you can pick $k$, fast baseline.
+\end{frame}
+
+\begin{frame}{Mini-batch k-means: scaling up}
+  For very large $n$, update centroids from small random \textbf{mini-batches} instead of the full
+  data each step.
+  \begin{itemize}\small
+    \item Much faster, far less memory; streaming-friendly.
+    \item Slightly worse clusters than full k-means --- usually a fine trade.
+  \end{itemize}
+  \vfill
+  \footnotesize \emph{When:} same problem as k-means, but $n$ is huge.
+\end{frame}
+
+% ================================================================
+\section{From hard to soft: GMM \& EM}
+\sectiontransition{From hard to soft}{K-means says ``you ARE in cluster A''. A Gaussian mixture
+says ``70\% A, 30\% B'' --- and allows elliptical clusters.}
+
+\begin{frame}{Gaussian mixtures: soft, elliptical clusters}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Model each cluster as a \textbf{Gaussian} with its own mean \emph{and} covariance, so clusters
+    can be \textbf{elliptical} and different sizes. Each point gets a \textbf{soft} membership
+    (responsibility) in every cluster.
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{K-means is the special case} of a GMM with \emph{spherical, equal-variance}
+      covariances and \emph{hard} (winner-take-all) assignments.}}
+    \vskip 4pt
+    \footnotesize \emph{When:} overlapping / elliptical clusters, soft memberships, or density estimation.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_gmm_vs_kmeans.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{EM, step 1: the E-step (responsibilities)}
+  Chicken-and-egg: we need assignments to fit the Gaussians, but the Gaussians to assign points.
+  EM breaks it by \textbf{alternating}. Start from random Gaussians, then:
+  \vfill
+  \textbf{E-step --- soft-assign every point.} For point $i$ and cluster $k$, the
+  \textbf{responsibility} is the posterior probability it belongs to $k$:
+  \[
+    \gamma_{ik} \;=\; \frac{\pi_k\,\mathcal{N}(\xv_i \mid \bm{\mu}_k, \bm{\Sigma}_k)}
+                          {\sum_{j=1}^{K}\pi_j\,\mathcal{N}(\xv_i \mid \bm{\mu}_j, \bm{\Sigma}_j)} .
+  \]
+  \begin{itemize}\small
+    \item $\pi_k$ is the cluster's weight (its prior size); $\mathcal{N}$ is the Gaussian density.
+    \item $\gamma_{ik}\in[0,1]$ and $\sum_k \gamma_{ik}=1$ --- a soft membership, not a hard label.
+  \end{itemize}
+  \vfill
+  \footnotesize Compare k-means: its ``assign'' step is the \emph{hard} version --- $\gamma_{ik}\in\{0,1\}$.
+\end{frame}
+
+\begin{frame}{EM, step 2: the M-step, and convergence}
+  \textbf{M-step --- refit each Gaussian}, weighting every point by its responsibility. With
+  $N_k=\sum_i \gamma_{ik}$ (the soft count in cluster $k$):
+  \[
+    \bm{\mu}_k = \tfrac{1}{N_k}\sum_i \gamma_{ik}\,\xv_i, \quad
+    \bm{\Sigma}_k = \tfrac{1}{N_k}\sum_i \gamma_{ik}(\xv_i-\bm{\mu}_k)(\xv_i-\bm{\mu}_k)^\top, \quad
+    \pi_k = \tfrac{N_k}{n}.
+  \]
+  Each is the ordinary mean / covariance / proportion, just \emph{responsibility-weighted}.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Repeat} E $\to$ M until the log-likelihood stops rising. Each round increases it
+      $\Rightarrow$ convergence to a \textbf{local} optimum (so, like k-means, run several inits).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Pick the number of components with \textbf{BIC / AIC} --- likelihood criteria (they need a
+    probabilistic model, so they work for GMM, \emph{not} for plain k-means). EM recurs across ML
+    wherever there are latent variables.}}
+\end{frame}
+
+% ================================================================
+\section{Other algorithms}
+\sectiontransition{Beyond k-means}{Density, hierarchy, and robust centers --- for clusters that
+are not round blobs.}
+
+\begin{frame}{K-medoids (PAM)}
+  Like k-means, but the center is an \textbf{actual data point} --- a \textbf{medoid} --- chosen to
+  minimize the total distance to its cluster (it never \emph{averages} points).
+  \begin{itemize}\small
+    \item \textbf{Any distance / dissimilarity} works (cosine, Gower for mixed types, edit
+      distance\dots) --- because it never has to compute a mean.
+    \item \textbf{Robust to outliers} --- a real central point, not a mean dragged by extremes.
+    \item \textbf{Interpretable center} --- ``this customer is typical of the segment''.
+  \end{itemize}
+  \vfill
+  \footnotesize The real difference from k-means is the \emph{medoid} and the \emph{free choice of
+  metric} --- not the exact objective. \emph{When:} non-Euclidean data, outliers, interpretable
+  centers. \emph{Not in core sklearn} --- \texttt{sklearn\_extra.cluster.KMedoids}.
+\end{frame}
+
+\begin{frame}{DBSCAN: the three kinds of point}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Clusters are \textbf{dense regions} separated by sparse ones. Two knobs: radius \texttt{eps}
+    ($\epsilon$) and \texttt{min\_samples}.
+    \begin{itemize}\small
+      \item \textbf{core}: $\ge$ \texttt{min\_samples} points within $\epsilon$;
+      \item \textbf{border}: within $\epsilon$ of a core, but not dense itself;
+      \item \textbf{noise}: neither --- an outlier.
+    \end{itemize}
+    \vskip 3pt
+    Finds \textbf{arbitrary shapes}, needs \textbf{no $k$}, and \textbf{flags outliers}.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_dbscan_circles.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \textbf{Predict-first:} what can DBSCAN do that k-means/GMM cannot?
+  \emph{Non-convex shapes, and automatic noise/outlier flagging.}
+\end{frame}
+
+\begin{frame}{DBSCAN, step by step}
+  A core point ``grows'' a cluster by absorbing everything density-reachable from it:
+  \begin{center}
+    \only<1>{\includegraphics[width=0.56\textwidth]{fig/clu_db_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.56\textwidth]{fig/clu_db_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.56\textwidth]{fig/clu_db_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.56\textwidth]{fig/clu_db_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.56\textwidth]{fig/clu_db_anim_5.pdf}}%
+    \only<6>{\includegraphics[width=0.56\textwidth]{fig/clu_db_anim_6.pdf}}%
+  \end{center}
+  \vskip -2pt
+  \footnotesize Core points chain together into a cluster; border points attach; whatever is left
+  in sparse regions is \textbf{noise} ($-1$).
+\end{frame}
+
+\begin{frame}{DBSCAN: choosing \texttt{eps} and \texttt{min\_samples}}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{\texttt{min\_samples}:} rule of thumb $\approx 2\times$ the number of features
+    ($\ge D{+}1$, and at least $3$); raise it for large or noisy data.
+    \vskip 4pt
+    \textbf{\texttt{eps}:} make a \textbf{$k$-distance plot} --- sort every point's distance to its
+    $k$-th neighbor ($k=$\texttt{min\_samples}) and look for the \textbf{knee}. The distance there
+    is a good \texttt{eps}.
+    \vskip 4pt
+    \footnotesize The two are coupled: change one and you usually re-tune the other.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_kdistance.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \scriptsize \emph{Limits:} one global \texttt{eps} can't fit clusters of very different density;
+  the naive algorithm is $O(n^2)$. \hfill
+  Heuristics: Sander et al.; see the routine in \texttt{stats.stackexchange.com/q/88872}.
+\end{frame}
+
+\begin{frame}{HDBSCAN: density handled automatically}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    DBSCAN needs one \texttt{eps}, and a \emph{single} \texttt{eps} cannot fit clusters of
+    \textbf{different density} --- left, the sparse top group is lost to noise.
+    \vskip 4pt
+    \textbf{HDBSCAN} fixes this --- and crucially \textbf{you do not hand it a density or a range}:
+    \begin{itemize}\small
+      \item it \emph{scans all density levels itself} and keeps the clusters that \textbf{persist}
+        (are most stable);
+      \item \textbf{no \texttt{eps}} --- you set only \texttt{min\_cluster\_size} (smallest group
+        worth calling a cluster);
+      \item so each cluster can be dense at \textbf{its own scale}.
+    \end{itemize}
+    \footnotesize Core sklearn since 1.3 (\texttt{sklearn.cluster.HDBSCAN}).
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_hdbscan.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{HDBSCAN: how it works (sketch)}
+  \begin{enumerate}\small
+    \item \textbf{Core distance} of a point $=$ distance to its \texttt{min\_samples}-th neighbor
+      (how dense it is locally).
+    \item \textbf{Mutual reachability distance} between two points $=$ the max of their two core
+      distances and their actual distance --- this pushes sparse points apart.
+    \item Build the \textbf{minimum spanning tree} of that distance, then sweep a threshold from
+      low to high to get a \textbf{hierarchy} (a tree) of clusters.
+    \item \textbf{Condense} the tree and keep the clusters that \textbf{persist} over the widest
+      range of densities (most ``stable'') --- those are the output; the rest is noise.
+  \end{enumerate}
+  \vfill
+  \footnotesize The payoff: clusters chosen by \emph{stability}, not by one hand-picked radius.
+\end{frame}
+
+\begin{frame}{Hierarchical (agglomerative) clustering}
+  \textbf{Bottom-up} --- build clusters by repeated merging:
+  \begin{enumerate}\small
+    \item Start: every point is its own cluster ($n$ of them).
+    \item Find the \textbf{two closest} clusters (``closest'' $=$ the \emph{linkage}, defined shortly).
+    \item \textbf{Merge} them into one.
+    \item Repeat until a single cluster remains, recording each merge and its distance.
+  \end{enumerate}
+  \vskip 4pt
+  \begin{itemize}\small
+    \item No need to fix $k$ up front --- the merge history is a tree you \emph{cut} afterwards.
+    \item Gives \textbf{nested} structure (taxonomies).
+  \end{itemize}
+  \vfill
+  \footnotesize \emph{When:} nested structure / a dendrogram, exploring \#clusters, connectivity
+  constraints; smaller $n$.
+\end{frame}
+
+\begin{frame}{Agglomerative, step by step}
+  Merge the two clusters whose \textbf{midpoints} ($\times$) are closest. \emph{Left:} points and
+  cluster midpoints, dashed line $=$ the current merge. \emph{Right:} the dendrogram builds up, one
+  bar per merge (latest in red):
+  \begin{center}
+    \only<1>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_5.pdf}}%
+    \only<6>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_6.pdf}}%
+    \only<7>{\includegraphics[width=0.82\textwidth]{fig/clu_agglo_anim_7.pdf}}%
+  \end{center}
+  \vskip -3pt
+  \footnotesize Each merge distance $d$ (between midpoints, here \emph{centroid} linkage) becomes that
+  bar's height in the dendrogram.
+\end{frame}
+
+\begin{frame}{The dendrogram: cut the tree}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Every merge is a bar at its \textbf{merge distance}. \textbf{Cut} the tree at a height to read off
+    clusters:
+    \begin{itemize}\small
+      \item low cut $=$ many small clusters; high cut $=$ few big ones;
+      \item the largest vertical gap is a natural place to cut.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_dendrogram.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Linkage: what is the distance between two clusters?}
+  ``Merge the two closest clusters'' --- but \emph{closest} can mean different things. Linkage is
+  that definition:
+  \begin{itemize}\small
+    \item \textbf{Single} --- distance between the \emph{nearest} pair of points (one in each).
+      Chains along shapes; can ``snake''.
+    \item \textbf{Complete} --- distance between the \emph{farthest} pair. Makes compact, equal blobs.
+    \item \textbf{Average} --- mean over all cross-cluster pairs. A compromise.
+    \item \textbf{Ward} --- merge the pair that increases total within-cluster variance the least.
+      The common default; behaves like k-means.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Linkage: same data, different answers}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{fig/clu_linkage.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize Two moons, $k=2$: \textbf{single} linkage follows the crescents; \textbf{complete /
+  average / Ward} cut them into compact halves. The linkage choice changes everything.
+\end{frame}
+
+% ================================================================
+\section{Cluster evaluation}
+\sectiontransition{How good is a clustering?}{The hard part: there is usually \emph{no ground
+truth}. Internal metrics judge the shape; external ones need labels.}
+
+\begin{frame}{Two regimes: internal vs external}
+  \begin{itemize}
+    \item \textbf{Internal} (no labels --- the usual case): judge cohesion + separation from the
+      data alone. Silhouette, Davies--Bouldin, Calinski--Harabasz, inertia/elbow.
+    \item \textbf{External} (labels exist --- the ``labels but still cluster'' cases): compare the
+      clustering to known labels. ARI, AMI, V-measure.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    There is no single ``accuracy'' for clustering --- the cluster numbers are arbitrary, and
+    usually there is nothing to be right \emph{about}.}}
+\end{frame}
+
+\begin{frame}{Silhouette: the idea ($a$ vs $b$)}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    For one point: $a=$ mean distance to its \emph{own} cluster; $b=$ mean distance to the
+    \emph{nearest other} cluster.
+    \[ s = \frac{b-a}{\max(a,b)} \in [-1,1] \]
+    \begin{itemize}\scriptsize
+      \item $s\approx 1$: snug in its cluster, far from others (ideal).
+      \item $s\approx 0$: on a boundary; \quad $s<0$: probably misassigned.
+    \end{itemize}
+    \footnotesize \textbf{Ideal:} small, tight clusters that sit far apart $\Rightarrow$ small $a$,
+    large $b$.
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.9, font=\scriptsize]
+        % own cluster (red) around x
+        \foreach \p in {(0.5,0.4),(-0.4,0.5),(0.3,-0.5),(-0.3,-0.3)}
+          \fill[armred!45] \p circle (1.6pt);
+        \fill[armred] (0,0) circle (2.4pt) node[below=2pt]{$x$};
+        \draw[armred, ->] (0,0) -- (0.5,0.4);
+        \draw[armred, ->] (0,0) -- (-0.4,0.5);
+        \node[armred] at (-1.2,0.1) {$a$ (small)};
+        % other cluster (blue) far right
+        \foreach \p in {(3.2,0.4),(3.5,0.0),(3.0,-0.4),(3.6,-0.2)}
+          \fill[armblue!55] \p circle (1.6pt);
+        \draw[armblue, <->] (0.1,-0.05) -- (3.0,-0.4);
+        \node[armblue] at (1.7,-0.7) {$b$ (large)};
+        \node[armred!70!black] at (0,1.0) {own cluster};
+        \node[armblue!70!black] at (3.3,1.0) {nearest other};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Silhouette: reading the plot}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Each bar is one point's $s$, \textbf{grouped by cluster} and sorted; the dashed line is the
+    \textbf{mean} silhouette.
+    \begin{itemize}\small
+      \item Wide, tall, mostly-right bars $=$ a good cluster.
+      \item A cluster dipping below $0$ $=$ likely merged/over-split.
+    \end{itemize}
+    \footnotesize Pick the $k$ with the highest mean silhouette. (Also: Davies--Bouldin, lower
+    better; Calinski--Harabasz, higher better.)
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_silhouette.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{External metrics: when you do have labels}
+  Compare the clustering to a known labeling (which cluster $=$ which label does \emph{not} matter):
+  \begin{itemize}\small
+    \item \textbf{ARI} (adjusted Rand index) and \textbf{AMI} (adjusted mutual information):
+      \textbf{chance-adjusted} --- $0$ means ``no better than random'', $1$ perfect.
+    \item \textbf{V-measure} (homogeneity + completeness); also Fowlkes--Mallows.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Prefer the \textbf{adjusted} versions (ARI, AMI). Raw mutual information / NMI is not corrected
+    for chance, so it rewards simply using more clusters. Plain accuracy fails --- the labels are a
+    \emph{permutation} of the clusters.}}
+\end{frame}
+
+\begin{frame}{The data behind the Rand index}
+  Eleven points, each with a true \textbf{class} (color) and a \textbf{cluster} (the dashed groups).
+  The next slide just \emph{counts} these into a table:
+  \begin{center}
+    \includegraphics[width=0.6\textwidth]{fig/clu_ari_points.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize Cluster $C_1$: 5 class-A $+$ 1 class-B; \quad cluster $C_2$: 2 class-A $+$ 3 class-B.
+\end{frame}
+
+\begin{frame}{Worked example: Rand index and ARI}
+  11 points, each with a known \textbf{class} (A/B) and a \textbf{clustering} (C$_1$/C$_2$). The
+  \textbf{contingency table} counts every combination --- e.g.\ the \textbf{5} means five points are
+  \emph{both} class A \emph{and} in cluster~C$_1$:
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.25}
+      \begin{tabular}{c|cc|c}
+        & $C_1$ & $C_2$ & $\sum$ \\ \hline
+        $A$ & 5 & 2 & 7 \\
+        $B$ & 1 & 3 & 4 \\ \hline
+        $\sum$ & 6 & 5 & 11 \\
+      \end{tabular}
+    \end{center}
+    \column{0.68\textwidth}
+    \scriptsize
+    Rand counts \textbf{pairs} of points the two labelings \emph{agree} on, out of all
+    $\binom{11}{2}=55$ pairs:
+    \begin{itemize}\scriptsize
+      \item same class \& same cluster $=\binom52{+}\binom22{+}\binom12{+}\binom32 = 10{+}1{+}0{+}3 = 14$
+      \item same class $=\binom72{+}\binom42=27$; \ \ same cluster $=\binom62{+}\binom52=25$
+      \item different in both $=55-27-25+14=17$
+    \end{itemize}
+    \textbf{Rand} $=\dfrac{\text{agree}}{\text{all}}=\dfrac{14+17}{55}=\mathbf{0.56}$.
+  \end{columns}
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.985\linewidth}{\scriptsize
+    \textbf{Adjust for chance:} expected ``same-both'' under random labels
+    $=\frac{27\cdot 25}{55}=12.3$; \ max $=\frac{27+25}{2}=26$. So
+    $\ \text{ARI}=\dfrac{14-12.3}{26-12.3}=\mathbf{0.13}$. Rand looks okay ($0.56$), but ARI shows
+    the clustering is \emph{barely} above chance --- which is why we prefer the \textbf{adjusted} index.}}
+\end{frame}
+
+\begin{frame}{Evaluation in practice}
+  \begin{itemize}\small
+    \item \textbf{Track more than one metric.} No single number captures a clustering --- report,
+      say, silhouette \emph{and} Davies--Bouldin (and ARI/AMI if labels exist); trust the result
+      only when they agree.
+    \item Pick $k$ by the \textbf{silhouette} (or the elbow), not by eye alone.
+    \item Check \textbf{stability}: do clusters survive a re-run / a resample / a different seed?
+    \item \textbf{Scale first} --- every internal metric is distance-based too.
+    \item Sanity-check by \emph{looking} at the clusters.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{In practice and beyond}
+\sectiontransition{Choosing, and a wider view}{Many more algorithms exist --- here is how they all
+behave, and the traps to avoid.}
+
+\begin{frame}{The wider zoo}
+  \begin{center}
+    \includegraphics[width=0.98\textwidth,height=0.78\textheight,keepaspectratio]{fig/clu_sklearn_gallery.png}
+  \end{center}
+  \vskip 1pt
+  \hfill {\scriptsize Source: scikit-learn (BSD-3), clustering-algorithm comparison.}
+\end{frame}
+
+\begin{frame}{Comparison: which algorithm when?}
+  \begin{center}\scriptsize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{l c c c c}
+      \textbf{Algorithm} & \textbf{Needs $k$?} & \textbf{Cluster shape} & \textbf{Noise?} & \textbf{Scales?} \\
+      \hline
+      k-means / MiniBatch & yes & round, equal & no & very well \\
+      k-medoids & yes & any metric & somewhat & poorly \\
+      GMM (EM) & yes ($+$BIC) & elliptical & no & medium \\
+      DBSCAN & no & arbitrary & \textbf{yes} & medium \\
+      HDBSCAN & no & arbitrary, varying density & \textbf{yes} & medium \\
+      Hierarchical & no (cut tree) & flexible (linkage) & no & poorly \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize \textbf{Use when:} fast round blobs $\to$ k-means; odd shapes $+$ outliers $\to$
+  DBSCAN/HDBSCAN; soft/elliptical $\to$ GMM; nested structure $\to$ hierarchical;
+  robust/any-metric centers $\to$ k-medoids.
+\end{frame}
+
+\begin{frame}{Bonus use: anomaly detection}
+  Clustering doubles as outlier detection:
+  \begin{itemize}\small
+    \item \textbf{DBSCAN / HDBSCAN} label low-density points as \textbf{noise} ($-1$) --- those are
+      your anomalies, for free.
+    \item \textbf{GMM} gives each point a \textbf{likelihood}; flag the lowest-probability points.
+  \end{itemize}
+  \vfill
+  \footnotesize Useful when ``normal'' has structure but ``weird'' does not --- fraud, faults, intrusions.
+\end{frame}
+
+\begin{frame}{The curse of dimensionality}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    As dimensions grow, points spread out and \textbf{pairwise distances concentrate} --- the
+    nearest and farthest neighbors become almost equally far.
+    \vskip 4pt
+    Distance-\emph{based} clustering (all of today's methods) degrades: ``near'' stops meaning much.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Fix: \textbf{reduce dimensions first} (PCA), then cluster in the low-dimensional space.}}
+    \column{0.44\textwidth}
+    \begin{center}\small
+      \begin{tikzpicture}
+        \begin{axis}[width=\textwidth, height=4.2cm,
+          xlabel={dimension}, ylabel={(max$-$min)/min distance},
+          xlabel style={font=\scriptsize}, ylabel style={font=\scriptsize},
+          xmin=0, xmax=100, ymin=0, ymax=4, xtick={2,20,50,100},
+          ytick={0,2,4}, axis line style={gray!60}]
+          \addplot[armred, very thick, domain=2:100, samples=60] {3.2/sqrt(x)};
+        \end{axis}
+      \end{tikzpicture}\\[-2pt]
+      \scriptsize Contrast between nearest and farthest collapses toward $0$.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cluster after PCA}
+  A standard pipeline for high-dimensional data:
+  \[ \text{standardize} \;\to\; \text{PCA (e.g. to 95\% variance)} \;\to\; \text{cluster} . \]
+  \begin{itemize}\small
+    \item Distances behave better; clustering is faster and often cleaner.
+    \item You can finally \emph{plot} the result in 2D.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Dimensionality reduction (PCA, t-SNE, UMAP) is the \textbf{next deck} --- it pairs naturally with
+    clustering.}}
+\end{frame}
+
+\begin{frame}[fragile]{All of it in \texttt{sklearn}}
+\begin{lstlisting}
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+
+X = StandardScaler().fit_transform(X_raw)      # scale first!
+
+labels = KMeans(n_clusters=4, n_init=10, random_state=509).fit_predict(X)
+labels = DBSCAN(eps=0.3, min_samples=5).fit_predict(X)        # -1 = noise
+labels = AgglomerativeClustering(n_clusters=4).fit_predict(X)
+\end{lstlisting}
+  \vskip 2pt
+  \footnotesize Same \texttt{fit\_predict} pattern for every algorithm. Set \texttt{random\_state}
+  for reproducibility; evaluate with \texttt{silhouette\_score} / \texttt{adjusted\_rand\_score}.
+\end{frame}
+
+\begin{frame}{Easy to get wrong --- watch out}
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \begin{itemize}\small
+      \item Results depend on \textbf{scaling, $k$, the metric, and the algorithm} --- change any
+        one and the clusters change.
+      \item There is \textbf{no ground truth} to check against.
+      \item It is easy to \textbf{see groups that are not real} --- k-means will happily split pure
+        noise into $k$ tidy ``clusters''.
+    \end{itemize}}}
+  \vfill
+  \footnotesize Always validate (silhouette, stability, a hard look) before trusting a clustering.
+\end{frame}
+
+\begin{frame}{Next time: shrinking image files with k-means}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \textbf{Color quantization.} An image has up to $\sim$16 million colors. Run k-means on the
+    \emph{pixels} (in RGB space); repaint each pixel with its centroid color.
+    \vskip 4pt
+    Result: only \textbf{$k$ colors} --- a much smaller palette / file, for a tiny quality cost. We
+    build this end-to-end in the \textbf{practical}.
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/clu_image_quantization.pdf}\\[1pt]
+      {\scriptsize Martiros Saryan, \emph{Mountains} (1923).}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Clustering} groups unlabeled data; you choose the distance and (often) $k$.
+    \item \textbf{k-means} --- fast, round, equal clusters; Lloyd's alternation, k-means++,
+      pick $k$ by elbow/silhouette. \textbf{GMM} generalizes it (soft, elliptical) via EM.
+    \item \textbf{DBSCAN / HDBSCAN} --- density-based: arbitrary shapes, no $k$, free outliers.
+      \textbf{Hierarchical} --- a dendrogram you cut. \textbf{k-medoids} --- robust, any metric.
+    \item \textbf{Evaluation} has no ground truth: silhouette (internal); ARI/AMI (external);
+      track more than one metric, always scale, check stability.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} dimensionality reduction (PCA, t-SNE, UMAP) --- compress the features, visualize
+    the data, and cluster better in high dimensions.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Clustering, chapter 4. Built via the slide-style skill workflow
+%     (interview -> outline -> independent review -> build -> revision pass).
+%   - Outline: ch4_clustering/L13_clustering_OUTLINE.md (v4).
+%   - Real figures: py_src/cluster_demos.py (toy blobs, run with ./ma/Scripts/python.exe);
+%     k-means + DBSCAN animations (clu_km_anim_*, clu_db_anim_*), k-distance plot, worked example,
+%     silhouette a/b TikZ, ARI worked table. Image-quantization uses Saryan, Mountains (1923).
+%   - clu_sklearn_gallery.png downloaded from scikit-learn (BSD-3) cluster comparison.
+%   - DBSCAN eps/min_samples heuristics: Sander et al.; stats.stackexchange.com/q/88872.
+%   - Forward: dimensionality reduction deck (ch4b).
+% =============================================================

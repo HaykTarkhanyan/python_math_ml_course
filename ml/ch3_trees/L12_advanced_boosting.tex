@@ -1,0 +1,669 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+\usepackage{amssymb} % \heartsuit
+\usepackage{booktabs} % \toprule \midrule \bottomrule (in case preamble lacks it)
+
+% transition-slide helper (same as L11): a [plain] frame, popblue title + one motivation line
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[10pt]
+      {\normalsize #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{L12: Advanced Boosting}
+\subtitle{XGBoost $\cdot$ LightGBM $\cdot$ CatBoost $\cdot$ Stacking}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{From hand-rolled boosting to the libraries that win}
+  In \textbf{L11} you built gradient boosting yourself: fit each tree to the \emph{negative
+  gradient} of the loss, shrink, repeat. The algorithm is finished.
+  \vskip 6pt
+  What is left is \textbf{engineering} - the libraries that dominate tabular ML:
+  \begin{itemize}
+    \item \textbf{XGBoost} - a regularized objective $+$ a fast, careful implementation;
+    \item \textbf{LightGBM} - leaf-wise growth, smart sampling, blazing speed;
+    \item \textbf{CatBoost} - categorical features done right.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Same gradient descent in function space - made \textbf{fast}, \textbf{regularized}, and
+    \textbf{production-ready}.}}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{XGBoost: the regularized objective and the structure score}
+\sectiontransition{XGBoost}{A regularized objective, and a closed-form score for how good a tree is.}
+
+\begin{frame}{XGBoost: extreme gradient boosting}
+  A scalable tree-boosting system (Chen \& Guestrin, 2016):
+  \begin{itemize}
+    \item a \textbf{regularized objective} - penalties baked into the loss;
+    \item \textbf{approximate / histogram} split finding for large data;
+    \item row $+$ column \textbf{subsampling}; \textbf{sparsity-aware} splits;
+    \item parallel split search and \textbf{GPU} support.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Often the top performer on tabular benchmarks - \textbf{if properly tuned}. Many knobs, and
+    the defaults are rarely optimal.}}
+\end{frame}
+
+\begin{frame}{The plan, in plain words}
+  Before any algebra, here is the whole idea:
+  \begin{enumerate}
+    \item \textbf{Score} how good a tree is by how much it would cut the loss - call it the
+      \emph{structure score}.
+    \item To get that score, \textbf{approximate the loss as a parabola} at the current prediction
+      (a Newton step: use the slope \emph{and} the curvature).
+    \item \textbf{Solve} that parabola for the best value in each leaf.
+    \item \textbf{Grow greedily}: keep a split only if it raises the score by more than the cost of
+      adding a leaf.
+  \end{enumerate}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    The next slides just make each step precise. Hold on to this picture:
+    \textbf{score a tree, then split to improve the score}.}}
+\end{frame}
+
+\begin{frame}{A regularized objective}
+  At step $m$ we add one tree $b$ with leaf values $c_1,\dots,c_T$. XGBoost minimizes the loss
+  \emph{plus} complexity penalties:
+  \[
+    \mathrm{obj} = \sum_{i=1}^{n} L\big(y_i,\, f^{[m-1]}(x_i) + b(x_i)\big)
+      \;+\; \underbrace{\gamma\,T}_{\#\,\text{leaves}}
+      \;+\; \underbrace{\tfrac12 \lambda \|c\|_2^2}_{L_2}
+      \;+\; \underbrace{\alpha \|c\|_1}_{L_1}.
+  \]
+  \begin{itemize}\small
+    \item $\gamma$ penalizes the \textbf{number of leaves} (tree size);
+    \item $\lambda$ ($L_2$) and $\alpha$ ($L_1$) shrink the \textbf{leaf values}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Contrast L11: plain gradient boosting put \emph{no} penalty inside the objective. Here
+    regularization is part of what every tree optimizes. (Software: \texttt{gamma},
+    \texttt{lambda}, \texttt{alpha}.)}}
+\end{frame}
+
+\begin{frame}{Second-order Taylor of the loss}
+  Expand the loss around the current prediction $f^{[m-1]}$, to \textbf{second order}:
+  \[
+    L\big(y,\, f^{[m-1]} + b\big) \;\approx\;
+    L\big(y,\, f^{[m-1]}\big) + g\, b + \tfrac12 h\, b^2,
+  \]
+  with gradient and Hessian
+  \[
+    g = \frac{\partial L}{\partial f^{[m-1]}}, \qquad
+    h = \frac{\partial^2 L}{\partial (f^{[m-1]})^2}.
+  \]
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    $g$ is exactly the \textbf{negative pseudo-residual} from L11. XGBoost's one real addition is
+    the \textbf{curvature} $h$. \emph{Intuition:} picture a parabola hugging the loss - slope $g$
+    points downhill, bend $h$ says how big a step to trust (a Newton step).}}
+\end{frame}
+
+\begin{frame}{Group the objective by leaf}
+  Drop the constant $L(y,f^{[m-1]})$ and use that every point in leaf $t$ shares one value $c_t$:
+  \[
+    \mathrm{obj} \approx \sum_{t=1}^{T}\Big[\, G_t\, c_t + \tfrac12 (H_t + \lambda)\, c_t^2 \,\Big] + \gamma\,T,
+  \]
+  \[
+    G_t = \!\!\sum_{i \in \text{leaf } t}\!\! g_i, \qquad H_t = \!\!\sum_{i \in \text{leaf } t}\!\! h_i .
+  \]
+  \vfill
+  \emph{Intuition:} every point in a leaf gets the \textbf{same} correction $c_t$, so a leaf is
+  just \textbf{one number to choose} - and the objective is now a simple quadratic in it.
+\end{frame}
+
+\begin{frame}{Optimal leaf value $=$ the ``structure score''}
+  Minimizing each quadratic $G_t c_t + \tfrac12(H_t+\lambda)c_t^2$ gives the best leaf value
+  \[
+    c_t^{*} = -\,\frac{G_t}{H_t + \lambda}.
+  \]
+  Plugging back, the best objective for a \emph{fixed tree shape} is the \textbf{structure score}
+  \[
+    \mathrm{obj}^{*} = -\tfrac12 \sum_{t=1}^{T} \frac{G_t^2}{H_t + \lambda} + \gamma\,T .
+  \]
+  {\footnotesize \emph{Intuition:} a leaf's best step $=$ total error to fix $(G_t)$ per unit of
+  confidence $(H_t{+}\lambda)$; the score adds up each leaf's payoff - \textbf{lower is a better tree}.}
+  \vskip 3pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Numbers:} $G_t={-3},\ H_t=4,\ \lambda=1 \;\Rightarrow\; c_t^{*} = -({-3})/(4{+}1) = 0.6$.}}
+\end{frame}
+
+\begin{frame}{The split-gain criterion}
+  \begin{columns}[T]
+    \column{0.57\textwidth}
+    How good is a split? By how much it \textbf{improves the structure score}:
+    \[
+      \mathrm{gain} = \tfrac12\!\left[ \frac{G_L^2}{H_L+\lambda} + \frac{G_R^2}{H_R+\lambda}
+        - \frac{G^2}{H+\lambda} \right] - \gamma .
+    \]
+    \begin{itemize}\small
+      \item \emph{Intuition:} do the two children together score better than the parent, by more
+        than the cost $\gamma$ of a new leaf?
+      \item Take the split only if $\mathrm{gain} > 0$; $\gamma$ is the \textbf{minimum gain to keep it}.
+      \item This - not Gini/variance - is what XGBoost maximizes at each node.
+    \end{itemize}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\scriptsize
+      \textbf{Numbers:} parent $(G{=}{-3},H{=}4)$, $\lambda{=}1$, split into $L({-}3,2)$, $R(0,2)$:
+      $\mathrm{gain} = \tfrac12[\tfrac{9}{3}+\tfrac{0}{3}-\tfrac{9}{5}] - \gamma = 0.6-\gamma$
+      (keep only if $\gamma < 0.6$); then $c_L^{*}{=}1.0,\ c_R^{*}{=}0$.}}
+    \column{0.43\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.9, every node/.style={font=\small}]
+        \node[draw, rounded corners, fill=popblue!15] (t) at (0,2.2) {$t:\ G,\,H$};
+        \node[draw, rounded corners, fill=armblue!15] (l) at (-1.35,0.5) {$L:\ G_L,H_L$};
+        \node[draw, rounded corners, fill=armred!15] (r) at (1.35,0.5) {$R:\ G_R,H_R$};
+        \draw[->,thick] (t) -- (l);
+        \draw[->,thick] (t) -- (r);
+        \node[font=\scriptsize] at (0,-0.35) {$G=G_L+G_R,\ \ H=H_L+H_R$};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Engineering: why it is fast}
+\sectiontransition{Why it is fast}{The same gradient boosting, engineered for speed and scale.}
+
+\begin{frame}{Tree growing and pruning}
+  \begin{itemize}
+    \item Grow each tree \textbf{level by level}, up to \texttt{max\_depth}.
+    \item A split is kept only if its \textbf{gain} (previous slide) is positive.
+    \item After growing, \textbf{prune} back any split with $\mathrm{gain} < 0$ - the $\gamma$ threshold.
+  \end{itemize}
+  \vfill
+  \footnotesize Depth-limited growth $+$ post-pruning by gain keeps trees shallow and regularized.
+\end{frame}
+
+\begin{frame}{Approximate (histogram) split finding}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Testing every possible split is slow. Instead, bucket each feature into ${\sim}\,\ell$
+    \textbf{percentile bins} and evaluate only the \textbf{bin edges}.
+    \begin{itemize}\small
+      \item \textbf{Global}: propose the bins once per tree.
+      \item \textbf{Local}: re-propose at every node (more accurate, more work).
+    \end{itemize}
+    \footnotesize ``Histogram-based gradient boosting'' - XGBoost \texttt{tree\_method="hist"};
+    the default in LightGBM and sklearn \texttt{HistGradientBoosting}.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/12_xgb_histogram_split.pdf}\\[1pt]
+      {\scriptsize Candidates sit at percentile edges (denser where data is dense).
+      Source: Chen \& Guestrin (2016).}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Sparsity-aware splits}
+  Real data is full of \textbf{missing values} and \textbf{zeros} (one-hot columns).
+  \vfill
+  XGBoost gives every split a learned \textbf{default direction}: rows missing (or zero) on the
+  split feature all go that way.
+  \begin{itemize}\small
+    \item Handles missing values \textbf{natively} - no imputation needed.
+    \item Skips the absent entries during split search, so sparse data is also \textbf{faster}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Subsampling, parallelism, GPU}
+  \begin{itemize}
+    \item \textbf{Row subsampling} (\texttt{subsample}) - stochastic gradient boosting.
+    \item \textbf{Column subsampling} (\texttt{colsample\_bytree/bylevel/bynode}) - like a random
+      forest's \texttt{mtry}; faster and more diverse trees.
+    \item Boosting is \textbf{sequential}, but the \textbf{split search inside one tree} parallelizes
+      over sorted feature blocks - and moves well to \textbf{GPU}.
+  \end{itemize}
+  \vfill
+  \footnotesize Subsampling is both a speed-up and a regularizer.
+\end{frame}
+
+\begin{frame}{DART: dropout for trees}
+  Borrow \textbf{dropout} from deep learning. When adding a new tree, compute the update against a
+  \textbf{random subset} of the existing trees (drop the rest), then rescale so the ensemble does
+  not overshoot.
+  \vfill
+  \begin{itemize}\small
+    \item $p_{\text{drop}} = 0$: ordinary gradient boosting.
+    \item $p_{\text{drop}} = 1$: trees trained independently, equally weighted $\approx$ a random forest.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    $p_{\text{drop}}$ is a smooth dial from \textbf{boosting} to \textbf{random forest}
+    (XGBoost \texttt{booster="dart"}).}}
+\end{frame}
+
+% ================================================================
+\section{The modern trio: LightGBM and CatBoost}
+\sectiontransition{The modern trio}{XGBoost is the baseline. LightGBM (the favorite) and CatBoost push it further.}
+
+\begin{frame}{LightGBM: my favorite}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    For everyday tabular work, this is what I reach for first:
+    \begin{itemize}
+      \item \textbf{very fast} and \textbf{low memory} (histogram $+$ leaf-wise);
+      \item excellent \textbf{out-of-the-box defaults};
+      \item \textbf{native categorical} support;
+      \item scales smoothly to \textbf{large} data.
+    \end{itemize}
+    \column{0.4\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Instructor's pick} \textcolor{armred}{$\heartsuit$} \\ My default first model on
+      tabular data - the next frames are why.}}
+  \end{columns}
+  \vfill
+  \hfill {\scriptsize Ke et al.\ (2017), \emph{LightGBM}.}
+\end{frame}
+
+\begin{frame}{Me and LightGBM~\textcolor{armred}{$\heartsuit$}}
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{fig/12_me_and_lightgbm.png}\\[5pt]
+    {\scriptsize \url{https://youtu.be/UqmqClOZRwg}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Leaf-wise (best-first) growth}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    XGBoost grows \textbf{level-wise by default} (a whole depth level at a time). LightGBM instead
+    splits the \textbf{single leaf with the largest gain}, anywhere in the tree.
+    \begin{itemize}\small
+      \item Unbalanced, deeper trees; \textbf{converges in fewer rounds}.
+      \item Can \textbf{overfit} - so the main complexity knob is \texttt{num\_leaves}
+        (keep it $< 2^{\texttt{max\_depth}}$), plus \texttt{min\_data\_in\_leaf}.
+    \end{itemize}
+    {\footnotesize \emph{Intuition:} spend each split where it helps most, instead of splitting
+    every leaf just because it is at the same depth.}
+    \vskip 2pt
+    \hfill {\scriptsize Source: LightGBM docs.}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.6,
+          lf/.style={circle,draw,fill=paramgreen!35,minimum size=3.6mm,inner sep=0},
+          nd/.style={circle,draw,fill=popblue!18,minimum size=3.6mm,inner sep=0},
+          hl/.style={circle,draw,fill=armred!45,minimum size=3.6mm,inner sep=0}]
+        \node[nd] (r) at (0,1.6){};
+        \node[nd] (a) at (-0.8,0.8){}; \node[nd] (b) at (0.8,0.8){};
+        \node[lf] (a1) at (-1.2,0){}; \node[lf] (a2) at (-0.4,0){};
+        \node[lf] (b1) at (0.4,0){}; \node[lf] (b2) at (1.2,0){};
+        \draw (r)--(a) (r)--(b) (a)--(a1) (a)--(a2) (b)--(b1) (b)--(b2);
+        \node[font=\scriptsize] at (0,-0.55){level-wise (XGBoost)};
+      \end{tikzpicture}\\[8pt]
+      \begin{tikzpicture}[scale=0.6,
+          lf/.style={circle,draw,fill=paramgreen!35,minimum size=3.6mm,inner sep=0},
+          nd/.style={circle,draw,fill=popblue!18,minimum size=3.6mm,inner sep=0},
+          hl/.style={circle,draw,fill=armred!45,minimum size=3.6mm,inner sep=0}]
+        \node[nd] (r) at (0,1.6){};
+        \node[lf] (a) at (-0.8,0.8){}; \node[nd] (b) at (0.8,0.8){};
+        \node[lf] (b1) at (0.3,0){}; \node[nd] (b2) at (1.3,0){};
+        \node[lf] (c1) at (0.9,-0.8){}; \node[hl] (c2) at (1.7,-0.8){};
+        \draw (r)--(a) (r)--(b) (b)--(b1) (b)--(b2) (b2)--(c1) (b2)--(c2);
+        \node[font=\scriptsize] at (0.45,-1.4){leaf-wise (LightGBM)};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{GOSS: gradient-based one-side sampling}
+  Random subsampling wastes the \textbf{informative} rows. GOSS samples smarter, by gradient:
+  \begin{itemize}\small
+    \item keep the top $a\!\cdot\!n$ rows with the \textbf{largest $|$gradient$|$} (still-hard cases);
+    \item randomly sample $b\!\cdot\!n$ of the rest;
+    \item \textbf{up-weight} those sampled rows by $\tfrac{1-a}{b}$ so the gain estimate stays unbiased.
+  \end{itemize}
+  \vfill
+  {\footnotesize \emph{Intuition:} rows the model already gets right (tiny gradient) teach it
+  little - spend the budget on the hard rows, but reweight the easy sample so the data still looks
+  unbiased. Defaults $a=0.2,\ b=0.1$: each split sees ${\sim}\,30\%$ of the rows.}
+  \hfill {\scriptsize Ke et al.\ (2017).}
+\end{frame}
+
+\begin{frame}{EFB: exclusive feature bundling}
+  In sparse, high-dimensional data many features are \textbf{mutually exclusive} - never nonzero
+  at the same time (think one-hot columns).
+  \vfill
+  \textbf{Bundle} such features into one feature and build a \textbf{single histogram} for the
+  bundle - nearly lossless.
+  \begin{itemize}\small
+    \item Histogram building drops from $\mathcal{O}(n\,p)$ to $\mathcal{O}(n \cdot \#\text{bundles})$.
+    \item Optimal bundling is NP-hard; a \textbf{greedy} grouping works well in practice.
+  \end{itemize}
+  {\footnotesize \emph{Intuition:} one-hot columns are mostly zeros and rarely fire together - pack
+  them into one column and you lose almost nothing while doing far less work.}
+  \hfill {\scriptsize Ke et al.\ (2017).}
+\end{frame}
+
+\begin{frame}{CatBoost: the categorical specialist}
+  Built around \textbf{categorical} features:
+  \begin{itemize}\small
+    \item \textbf{Ordered target statistics} - encode a category by its target mean computed on
+      \emph{past} rows only, so there is \textbf{no target leakage};
+    \item \textbf{Ordered boosting} - a permutation trick that removes the
+      \textbf{prediction-shift} bias of ordinary boosting;
+    \item \textbf{Symmetric (oblivious) trees} - the same split across a whole level: fast to
+      evaluate, naturally regularized.
+  \end{itemize}
+  {\footnotesize \emph{Intuition:} encoding a category with the \emph{whole} dataset's average
+  target peeks at the answer (leakage); using only earlier rows is an honest running average -
+  that is what ``ordered'' means.}
+  \hfill {\scriptsize Prokhorenkova et al.\ (2018).}
+\end{frame}
+
+\begin{frame}{Which one, when?}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l c c c}
+      \toprule
+                          & \textbf{XGBoost}   & \textbf{LightGBM}    & \textbf{CatBoost} \\
+      \midrule
+      Tree growth         & level-wise         & leaf-wise            & symmetric \\
+      Row sampling        & random             & GOSS (by gradient)   & random \\
+      Native categoricals & no$^{*}$           & yes                  & yes (best) \\
+      Speed on large $n$  & good               & \textbf{fastest}     & good \\
+      Reach for it when   & solid baseline     & default for tabular  & many categoricals \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize $^{*}$ XGBoost can also grow leaf-wise and gradient-subsample, and has experimental
+  categorical support; the table shows \emph{defaults}. \textbf{All three are the same gradient
+  boosting} - the differences are engineering and categorical handling.
+\end{frame}
+
+% ================================================================
+\section{Using them well}
+\sectiontransition{Using them well}{Tuning order, domain constraints, and reading the model.}
+
+\begin{frame}{Hyperparameters that matter}
+  \begin{center}\scriptsize
+    \renewcommand{\arraystretch}{1.35}
+    \begin{tabular}{l p{4.0cm} p{4.4cm}}
+      \toprule
+      \textbf{Group} & \textbf{XGBoost} & \textbf{LightGBM} \\
+      \midrule
+      Learning    & \texttt{eta}, \texttt{n\_estimators} ($+$ early stop) & \texttt{learning\_rate}, \texttt{n\_estimators} \\
+      Complexity  & \texttt{max\_depth}, \texttt{min\_child\_weight}      & \texttt{num\_leaves}, \texttt{min\_data\_in\_leaf} \\
+      Regularize  & \texttt{gamma}, \texttt{lambda}, \texttt{alpha}       & \texttt{min\_gain\_to\_split}, \texttt{lambda\_l1/l2} \\
+      Randomness  & \texttt{subsample}, \texttt{colsample\_by*}           & \texttt{bagging\_fraction}, \texttt{feature\_fraction} \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{The knob differs:} XGBoost sets tree size with \texttt{max\_depth}; LightGBM with
+    \texttt{num\_leaves} (default 31). Defaults: XGB \texttt{eta} 0.3 / depth 6; LGBM lr 0.1.}}
+\end{frame}
+
+\begin{frame}{The tuning order that matters}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{enumerate}\small
+      \item Set \texttt{n\_estimators} \emph{large} and use \textbf{early stopping}.
+      \item Trade \textbf{learning rate} against the number of trees.
+      \item \textbf{Tree complexity}: \texttt{max\_depth} (XGB) / \texttt{num\_leaves} (LGBM).
+      \item \textbf{Regularization}: \texttt{gamma}, \texttt{lambda}, \texttt{alpha}.
+      \item \textbf{Subsampling}: rows $+$ columns.
+    \end{enumerate}
+    \footnotesize Search with random or Bayesian optimization (see the hyperparameter-tuning deck).
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/12_xgb_earlystop.pdf}\\[1pt]
+      {\scriptsize Early stopping takes the round before validation stalls - step 1.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Inject domain knowledge: constraints}
+  Sometimes you \emph{know} something the data should obey:
+  \begin{itemize}
+    \item \textbf{Monotonic constraints} (\texttt{monotone\_constraints}): force a feature's effect to
+      be non-decreasing (or non-increasing) - e.g.\ ``higher dose $\Rightarrow$ no lower response''.
+    \item \textbf{Interaction constraints}: restrict which features may appear together on a path.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Constraints add \textbf{trust} and act as \textbf{free regularization} - use them when the
+    direction or structure is known a priori.}}
+\end{frame}
+
+\begin{frame}{Are they black boxes? Feature importance}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Boosted models are \textbf{not} opaque:
+    \begin{itemize}\small
+      \item built-in importances: \textbf{gain} (loss reduction), cover, frequency;
+      \item but \textbf{split-count importance is biased} toward high-cardinality features -
+        prefer \textbf{permutation importance}.
+    \end{itemize}
+    \footnotesize For per-prediction attribution there is \textbf{SHAP} (fast \emph{TreeSHAP} for
+    trees) - we will cover it in its own session.
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/12_xgb_importance.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{In code: LightGBM and XGBoost, side by side}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}{\scriptsize LightGBM (the favorite)}\end{center}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+from lightgbm import LGBMClassifier
+from lightgbm import early_stopping
+m = LGBMClassifier(
+    n_estimators=2000,
+    learning_rate=0.05,
+    num_leaves=31)
+m.fit(X_tr, y_tr,
+  eval_set=[(X_val, y_val)],
+  callbacks=[early_stopping(50)])
+\end{lstlisting}
+    \column{0.5\textwidth}
+    \begin{center}{\scriptsize XGBoost (near-identical API)}\end{center}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+from xgboost import XGBClassifier
+m = XGBClassifier(
+    n_estimators=2000,
+    learning_rate=0.05,
+    max_depth=6,
+    early_stopping_rounds=50)
+m.fit(X_tr, y_tr,
+  eval_set=[(X_val, y_val)])
+\end{lstlisting}
+  \end{columns}
+  \vskip 4pt
+  \footnotesize No install? \texttt{sklearn.ensemble.HistGradientBoostingClassifier} mirrors both.
+\end{frame}
+
+\begin{frame}{Beyond binary classification}
+  The same $g, h$ machinery powers many tasks - just change the \textbf{objective}:
+  \begin{itemize}\small
+    \item \textbf{Regression} (\texttt{reg:squarederror}), \textbf{multiclass} (softmax),
+      \textbf{ranking} (\texttt{rank:*} / LambdaMART), Poisson, quantile - even \textbf{custom}
+      losses (supply your own $g$ and $h$).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Imbalanced classes?} Reweight the rare class with \texttt{scale\_pos\_weight} (XGBoost)
+    or \texttt{is\_unbalance} / \texttt{class\_weight} (LightGBM), and judge with \textbf{AUC / PR},
+    not accuracy.}}
+\end{frame}
+
+\begin{frame}{When boosting struggles}
+  Powerful, but not magic:
+  \begin{itemize}\small
+    \item \textbf{No extrapolation} - a tree predicts a constant outside the training range; it
+      cannot trend beyond what it has seen.
+    \item \textbf{Needs tuning} - strong defaults exist, but top results need real HP search
+      (a random forest is more forgiving).
+    \item \textbf{Sequential} - trees are built one after another; less parallel than bagging.
+    \item \textbf{Not for raw unstructured data} - images, audio, long text $\to$ neural nets; very
+      sparse high-dimensional signals can favor linear models.
+  \end{itemize}
+  \vfill
+  \footnotesize \emph{Rule of thumb:} reach for boosting on \textbf{tabular} data; reach elsewhere
+  when the data is not tabular.
+\end{frame}
+
+% ================================================================
+\section{Stacking: combining different models}
+\sectiontransition{Stacking}{The third ensemble idea: let a meta-learner blend different model types - and close the chapter.}
+
+\begin{frame}{Stacking: a meta-learner over base models}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Bagging and boosting combine \emph{one} kind of model. \textbf{Stacking} combines
+    \textbf{different} ones:
+    \begin{itemize}\small
+      \item train several diverse \textbf{base learners} (level 0) - e.g.\ LightGBM, a random
+        forest, a linear model;
+      \item feed their predictions to a \textbf{meta-learner} (level 1) that learns how best to
+        \emph{combine} them.
+    \end{itemize}
+    {\footnotesize \emph{Intuition:} different models make different mistakes; the meta-learner
+    learns whom to trust, and when.}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.8, font=\scriptsize,
+          bx/.style={draw,rounded corners,minimum width=11mm,minimum height=5.5mm,inner sep=2pt}]
+        \node[bx,fill=popblue!12] (x) at (0,3) {data $X$};
+        \node[bx,fill=armblue!12] (m1) at (-1.7,1.7) {LGBM};
+        \node[bx,fill=armblue!12] (m2) at (0,1.7) {RF};
+        \node[bx,fill=armblue!12] (m3) at (1.7,1.7) {lin.};
+        \node[bx,fill=paramgreen!15,minimum width=22mm] (meta) at (0,0.5) {meta-learner};
+        \node[bx,fill=armorange!20] (out) at (0,-0.7) {prediction};
+        \draw[->] (x)--(m1); \draw[->] (x)--(m2); \draw[->] (x)--(m3);
+        \draw[->] (m1)--(meta); \draw[->] (m2)--(meta); \draw[->] (m3)--(meta);
+        \draw[->] (meta)--(out);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Stacking done right: out-of-fold predictions}
+  \textbf{The trap:} if the meta-learner trains on base predictions of the \emph{same} rows the
+  base models were fit on, it sees \textbf{leaked}, over-optimistic inputs.
+  \vskip 3pt
+  \textbf{The fix:} feed it \textbf{out-of-fold} (cross-validated) predictions - each row's base
+  prediction comes from a model that did \emph{not} train on it. \texttt{StackingClassifier} does
+  this for you via \texttt{cv}.
+  \vskip 4pt
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression
+
+base = [("lgbm", LGBMClassifier()), ("rf", RandomForestClassifier())]
+clf = StackingClassifier(estimators=base,
+                         final_estimator=LogisticRegression(), cv=5)
+clf.fit(X_tr, y_tr)   # cv=5 -> honest out-of-fold base predictions
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Simpler cousins: voting and blending}
+  \begin{itemize}
+    \item \textbf{Voting} - no meta-learner, just combine base predictions directly: \textbf{hard}
+      (majority class) or \textbf{soft} (average predicted probabilities, usually better).
+      \texttt{VotingClassifier}.
+    \item \textbf{Blending} - like stacking, but the meta-learner trains on a single \textbf{holdout}
+      set instead of full cross-validation. Simpler and faster; uses a bit less data.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Stacking usually wins but costs the most (every base model $+$ the meta-learner, with CV).
+    Start with one strong model; stack only to chase the last bit of accuracy.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{The ensemble landscape}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l c c c}
+      \toprule
+                   & \textbf{Bagging} & \textbf{Boosting} & \textbf{Stacking} \\
+                   & {\scriptsize (random forest)} & {\scriptsize (GB / XGB / LGBM)} & \\
+      \midrule
+      Base models  & same type, parallel & same type, sequential & different types \\
+      Combine by   & averaging & weighted additive sum & a meta-learner \\
+      Mainly cuts  & variance & bias & both \\
+      Trains       & in parallel & sequentially & bases parallel, then meta \\
+      Use when     & low-tuning baseline & top tabular accuracy & squeeze diverse models \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize Three ways to turn many so-so models into one strong one.
+\end{frame}
+
+\begin{frame}{Recap: the trees and ensembles chapter}
+  \begin{itemize}\small
+    \item \textbf{One tree} (L10) - interpretable, but unstable.
+    \item \textbf{Bagging $\to$ random forests} (L10) - average many parallel trees, cut variance.
+    \item \textbf{Boosting} (L11) - add trees sequentially to fix errors, cut bias; gradient
+      descent in function space.
+    \item \textbf{The libraries} (L12) - XGBoost (regularized objective $+$ structure score),
+      \textbf{LightGBM} \textcolor{armred}{$\heartsuit$} (leaf-wise $+$ GOSS $+$ EFB), CatBoost
+      (categoricals); tune in order, add constraints, read importance.
+    \item \textbf{Stacking} - a meta-learner over diverse models, to squeeze out the last gains.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Trees $+$ ensembles dominate tabular data.} Next: models for data where trees
+    struggle - images, text, sequences.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Advanced Boosting (L12), chapter 3 (trees). The "deep library session" promised by L11's
+%     closing bridge frame. Built via the slide-style workflow: interview (3 rounds) -> outline
+%     (L12_advanced_boosting_OUTLINE.md, v2) -> review -> build -> intuition pass.
+%   - Scope: XGBoost full derivation (regularized objective -> 2nd-order Taylor -> structure score
+%     -> split gain, with a "plan in plain words" primer + per-concept intuition lines + a numeric
+%     anchor) + engineering (histogram/sparsity/subsampling/DART); LightGBM spotlight (favorite,
+%     leaf-wise, GOSS, EFB) + a personal "Me and LightGBM" frame; CatBoost; decision table;
+%     HP/tuning; constraints; feature importance (SHAP deferred); LightGBM+XGBoost code.
+%     Stacking + ensemble-landscape wrap-up close the chapter. No homework frame.
+%   - Sources: LMU lecture_sl (slides-boosting-xgboost, -xgboost-deepdive, -lgm-ctbm, CC BY 4.0);
+%     Chen & Guestrin (2016); Ke et al. (2017); Prokhorenkova et al. (2018); LightGBM docs.
+%   - Real figures: py_src/make_xgb_figures.py (synthetic make_classification, seed 509) ->
+%     12_xgb_histogram_split, 12_xgb_earlystop, 12_xgb_importance. Image 12_me_and_lightgbm.png.
+%   - Style: plain hyphens (no em-dashes), per SLIDE_STYLE.md / global rules.
+%   - Stacking included as the chapter closer (section 5: concept, out-of-fold, voting/blending,
+%     ensemble-landscape recap). Deferred: SHAP (own session).
+% =============================================================

@@ -1,0 +1,549 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+% shared tree-node styles (from L09)
+\tikzset{
+  qnode/.style={draw=armblue, thick, rounded corners=2pt, fill=armblue!10, font=\scriptsize, align=center, inner sep=3pt},
+  leafY/.style={draw=paramgreen, thick, rounded corners=2pt, fill=paramgreen!14, font=\scriptsize, align=center, inner sep=3pt},
+  leafN/.style={draw=armred, thick, rounded corners=2pt, fill=armred!14, font=\scriptsize, align=center, inner sep=3pt},
+  cell/.style={draw, minimum size=12pt, inner sep=1pt, font=\scriptsize},
+}
+
+% transition-slide helper: a [plain] frame, popblue title + one motivation line
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[10pt]
+      {\normalsize #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{L10: Random Forests}
+\subtitle{Killing a tree's variance by averaging many of them}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{One tree is twitchy}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    A single decision tree (L09) is \textbf{high variance}: refit it on a slightly
+    different sample of the same data and it can change a lot.
+    \vskip 6pt
+    \textbf{Predict-first:} retrain an unrestricted Titanic tree on 15 bootstrap
+    resamples. What fraction of the \emph{test} predictions change?
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      About \textbf{15\%} flip -- roughly one passenger in seven gets a different verdict
+      just from resampling the training rows. Same method, same data size, different
+      answers.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/rf_instability.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \footnotesize The plan: \textbf{average many trees} so the noise cancels. That is
+  \emph{bagging}, then \emph{random forests}.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Bagging: averaging many trees}
+\sectiontransition{Bagging: averaging many trees}{Train many trees on resampled data, then average the noise away.}
+
+\begin{frame}{Bagging = Bootstrap AGGregating}
+  One recipe to turn a high-variance model into a stable one:
+  \begin{enumerate}\small
+    \item \textbf{Bootstrap}: draw many resampled training sets.
+    \item Train one model on each.
+    \item \textbf{Aggregate}: combine their predictions (average / vote).
+  \end{enumerate}
+  \vfill
+  Bagging is \textbf{general} -- it works for any model -- but it helps most for
+  \textbf{unstable, high-variance} learners, so \textbf{deep trees} are the perfect
+  ingredient.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    A \textbf{Random Forest} is bagging \emph{specialized to trees} with one extra twist
+    (Section 2). For now: just average many trees.}}
+\end{frame}
+
+\begin{frame}{Bootstrap: resample the rows, with replacement}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Reminder.} A \textbf{bootstrap sample} draws rows \textbf{with replacement}
+      (recall it from resampling / L01d).}}
+    \vskip 5pt
+    In general, draw $m$ rows from your $n$ training rows; the classic bootstrap takes
+    $m = n$. Each sample comes out \emph{slightly different}:
+    \begin{itemize}\small
+      \item some rows appear \textbf{twice or more}, others are \textbf{left out};
+      \item the \textbf{row mix changes} $\Rightarrow$ different counts $\Rightarrow$
+        different splits $\Rightarrow$ a different tree.
+    \end{itemize}
+    \vskip 2pt
+    \footnotesize You can also resample \textbf{columns} (features), not just rows -- that
+    idea returns as Random Forest's per-split feature subset (Section 2).
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize]
+        \node at (0,2.35) {original};
+        \foreach \i in {1,...,6} {\node[cell, fill=armblue!10] at (0, 2.0-0.34*\i) {\i};}
+        \node at (1.5,2.35) {$S_1$};
+        \foreach \v/\i in {1/1,1/2,3/3,4/4,4/5,6/6} {\node[cell, fill=paramgreen!14] at (1.5, 2.0-0.34*\i) {\v};}
+        \node at (3.0,2.35) {$S_2$};
+        \foreach \v/\i in {2/1,3/2,3/3,5/4,6/5,6/6} {\node[cell, fill=armorange!20] at (3.0, 2.0-0.34*\i) {\v};}
+      \end{tikzpicture}\\[-1pt]
+      \scriptsize Two bootstrap samples: repeats and gaps.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Aggregate: vote or average}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Classification} (Titanic): each tree votes survived / died; take the
+    \textbf{majority} -- or average the predicted probabilities (``soft vote'').
+    \column{0.5\textwidth}
+    \textbf{Regression} (Yerevan rent): each tree predicts a number; take the
+    \textbf{mean} across trees.
+  \end{columns}
+  \vfill
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize]
+      \foreach \i in {0,1,2,3,4} {\draw[armblue, fill=armblue!10] (\i*0.85,0) -- (\i*0.85+0.3,0.55) -- (\i*0.85+0.6,0) -- cycle;}
+      \node at (1.7,-0.35) {many trees};
+      \draw[-{Latex}, gray] (3.9,0.25) -- (4.6,0.25);
+      \node[draw, rounded corners, fill=paramgreen!12] at (6.0,0.25) {majority vote / mean};
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Many noisy-but-roughly-right trees, averaged, give a steadier prediction than any
+    single one of them.}}
+\end{frame}
+
+\begin{frame}{By hand: three bootstrap samples, then aggregate}
+  Six training rows, IDs 1--6. Draw \textbf{three} bootstrap samples (with replacement);
+  each trains one tree. The rows left out are \textbf{out-of-bag (OOB)}:
+  \vskip 3pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{l l l}
+      sample & in-bag (rows drawn) & OOB (left out) \\
+      \hline
+      $S_1$ & 2, 2, 3, 5, 5, 6 & \textcolor{armred}{1, 4} \\
+      $S_2$ & 1, 1, 3, 4, 4, 6 & \textcolor{armred}{2, 5} \\
+      $S_3$ & 2, 3, 3, 5, 6, 6 & \textcolor{armred}{1, 4} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  Each sample leaves a couple of rows out -- we use that next. Now \textbf{aggregate} the
+  three trees on a new passenger (their predictions are \emph{given}, not fit by hand):
+  \[
+    \{\text{survived},\ \text{died},\ \text{survived}\}\;\Rightarrow\;\textbf{majority} = \text{survived}.
+  \]
+  \footnotesize (Regression: if they said 240, 300, 270 kAMD $\to$ mean $= 270$.) With only
+  6 rows the out-fraction jumps around; the stable $\sim$37\% is a large-$n$ limit (we use it for OOB shortly).
+\end{frame}
+
+\begin{frame}{Why averaging helps -- and why trees}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Averaging cancels \textbf{independent} errors but not \textbf{shared} ones.
+    \begin{itemize}\small
+      \item Trees that err in \emph{different} directions $\to$ errors cancel.
+      \item Trees that make the \emph{same} mistake $\to$ averaging keeps it.
+    \end{itemize}
+    \vskip 4pt
+    \textbf{The naive hope} (callback L01d): if the trees were \emph{independent}, $M$ of
+    them would cut variance by $1/M$ -- like CV's $1/k$. They are \textbf{not}
+    independent; the next frame quantifies how much that hurts.
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\tiny, scale=0.92]
+        \draw[gray!60, dashed] (1.7,0.4) -- (1.7,2.9);
+        \node[gray] at (1.7,3.05) {truth};
+        \node[anchor=east] at (0.25,2.4) {indep.};
+        \foreach \x in {0.8,1.3,1.6,2.0,2.3,2.6} {\fill[armblue] (\x,2.4) circle (1.5pt);}
+        \fill[paramgreen] (1.7,2.4) circle (2.3pt);
+        \node[paramgreen, above] at (1.7,2.5) {avg};
+        \node[anchor=east] at (0.25,1.0) {corr.};
+        \foreach \x in {2.1,2.3,2.45,2.55,2.7,2.9} {\fill[armred] (\x,1.0) circle (1.5pt);}
+        \fill[paramgreen] (2.5,1.0) circle (2.3pt);
+        \node[paramgreen, above] at (2.5,1.1) {avg};
+      \end{tikzpicture}\\[-1pt]
+      \scriptsize Independent: avg lands on truth. \\ Correlated: avg stays off.
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Why trees?} Bagging only helps \textbf{high-variance} learners. Bagging a
+    stable model (e.g.\ linear regression) barely moves it -- little variance to average
+    away. That is why we bag \textbf{deep} (high-variance) trees.}}
+\end{frame}
+
+\begin{frame}{Predict-first: can averaging fix a biased model?}
+  Suppose every tree \textbf{underfits} in the same way -- all too shallow, all leaning
+  toward the same wrong answer. Will averaging many of them fix it?
+  \pause
+  \vfill
+  \textbf{No.} Averaging copies of a biased model returns the same biased answer.
+  Averaging attacks \textbf{variance} (the scatter), not \textbf{bias} (the systematic
+  offset).
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Bagging lowers \textbf{variance} and leaves \textbf{bias} about unchanged -- which is
+    why the formula on the next frame has \emph{no bias term}, and why we bag
+    \emph{low-bias, high-variance} deep trees.}}
+\end{frame}
+
+\begin{frame}{Briefly: why averaging hits a floor}
+  We will not dwell on the algebra. Averaging $M$ trees, each with variance $\sigma^2$ and
+  \textbf{average pairwise correlation} $\rho$, gives (ESL):
+  \[
+    \mathrm{Var}\!\left(\bar f\right)
+    = \underbrace{\rho\,\sigma^2}_{\textcolor{armred}{\text{the floor}}}
+    \;+\; \underbrace{\frac{1-\rho}{M}\,\sigma^2}_{\textcolor{paramgreen}{\text{averaging kills this}}} .
+  \]
+  \begin{itemize}\small
+    \item More trees ($M\uparrow$) kill the second term -- but not the first.
+    \item The \textbf{floor} $\rho\sigma^2$ is set by how \emph{correlated} the trees are.
+  \end{itemize}
+  \vskip 2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The point (not the formula):} more trees help up to a point; to go further we
+    must make the trees \textbf{less alike} -- the next section.}}
+\end{frame}
+
+\begin{frame}{Out-of-bag (OOB) error: free validation}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Each bootstrap leaves about \textbf{37\%} of rows out ($(1-\tfrac1n)^n\to\tfrac1e$). A
+    row is \textbf{out-of-bag} for the trees that never saw it -- so score it using
+    \textbf{only those trees}.
+    \begin{itemize}\small
+      \item Repeat for every row $\to$ an honest held-out estimate,
+      \item \textbf{no separate train/test split needed},
+      \item just set \texttt{oob\_score=True}.
+    \end{itemize}
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\tiny]
+        \foreach \i in {1,...,5} {\draw[armblue, fill=armblue!10] (\i,1.4) -- (\i+0.28,2.0) -- (\i+0.56,1.4) -- cycle;}
+        \node[draw, fill=armorange!20, rounded corners] (row) at (3.3,0.2) {row $i$};
+        \draw[-{Latex}, paramgreen, thick] (row) -- (2.28,1.35);
+        \draw[-{Latex}, paramgreen, thick] (row) -- (3.28,1.35);
+        \draw[-{Latex}, paramgreen, thick] (row) -- (5.28,1.35);
+        \draw[-{Latex}, gray!50, dashed] (row) -- (1.28,1.35);
+        \draw[-{Latex}, gray!50, dashed] (row) -- (4.28,1.35);
+        \node[paramgreen] at (6.7,1.75) {poll (OOB)};
+        \node[gray] at (6.7,0.95) {skip (in-bag)};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    OOB error is \textbf{comparable to a held-out / CV estimate}, usually slightly
+    \emph{pessimistic} (each row is judged by only $\sim$37\% of the trees). It is a
+    property of \textbf{bagging}, not unique to RF.}}
+\end{frame}
+
+% ================================================================
+\section{From bagging to Random Forest}
+\sectiontransition{From Bagging to Random Forest}{Bagged trees are too alike -- force them to disagree.}
+
+\begin{frame}{The catch: bagged trees look alike}
+  Bootstrap changes the \emph{rows}, but every tree still sees \textbf{all the features}.
+  So the \textbf{same strong feature} (Titanic: \texttt{sex}) tends to win the top split
+  in nearly every tree.
+  \vfill
+  Similar top splits $\Rightarrow$ similar trees $\Rightarrow$ \textbf{high $\rho$}
+  $\Rightarrow$ the $\rho\sigma^2$ \textbf{floor stays high}. Averaging can only do so much.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    To push the floor down we must make the trees \textbf{disagree more} -- we must
+    \textbf{decorrelate} them.}}
+\end{frame}
+
+\begin{frame}{Random Forest: hide most features at each split}
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Random Forest (Breiman, 2001)} $=$ bagged trees where \textbf{each split} may
+    only choose from a \textbf{random subset of $F$ features}.}}
+  \vfill
+  \textbf{Predict-first:} forcing each split to ignore most features -- does that make the
+  individual trees \emph{better} or \emph{worse}?
+  \pause
+  \vfill
+  Each tree gets \textbf{slightly worse} ($\sigma^2$ up a bit). But the strong feature can
+  no longer dominate every tree, so the trees \textbf{disagree more} ($\rho$ down a lot).
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    The floor $\rho\sigma^2$ drops faster than $\sigma^2$ rises -- so the \textbf{average
+    wins}: trade a little per-tree accuracy for much less correlation.}}
+\end{frame}
+
+\begin{frame}{How many features per split?}
+  $F$ is the decorrelation knob (sklearn: \texttt{max\_features}). Rules of thumb:
+  \begin{itemize}\small
+    \item \textbf{Classification}: $F = \sqrt{P}$.
+    \item \textbf{Regression}: $F = P/3$.
+    \item smaller $F$ $\Rightarrow$ more decorrelation (lower $\rho$), but weaker trees.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{sklearn defaults, watch out:} \texttt{RandomForestClassifier} uses
+    \texttt{max\_features="sqrt"} -- it matches the rule. But
+    \texttt{RandomForestRegressor} defaults to \texttt{max\_features=1.0} (\textbf{all
+    features}, since v1.1) -- it does \emph{not} apply the $P/3$ rule for you. On
+    regression, lower it by hand.}}
+\end{frame}
+
+% ================================================================
+\section{Random Forest in practice}
+\sectiontransition{Random Forest in Practice}{How many trees, which knobs, and what it still cannot do.}
+
+\begin{frame}{Predict-first: do more trees eventually overfit?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    You can add hundreds of trees. Does test error eventually \textbf{rise} (overfit),
+    like a too-deep single tree?
+    \pause
+    \vskip 4pt
+    \textbf{No.} It \textbf{drops then plateaus}. More trees only shrink the
+    $(1-\rho)/M$ term -- they cannot overfit.
+    \vskip 4pt
+    \footnotesize Precise: the \emph{number of trees} does not overfit (the average just
+    converges). \emph{Deeper} trees / noisy features still can. Pick $M$ ``big enough,
+    then stop'' -- you do not tune it by CV.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/rf_n_estimators.pdf}\\[-2pt]
+      \scriptsize Titanic: rises, then flat past $\sim$100 trees.
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Contrast (foreshadow L11):} in \textbf{boosting}, more trees \emph{can}
+    overfit -- there, trees are added to correct each other, not averaged independently.}}
+\end{frame}
+
+\begin{frame}{Feature importance (the default version)}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    A forest sums, over all trees, how much each feature's splits \textbf{dropped
+    impurity}: \texttt{rf.feature\_importances\_}. A quick read of what drove the model.
+    \vskip 6pt
+    \footnotesize On this forest \texttt{fare} and \texttt{age} outrank \texttt{sex} --
+    the \emph{opposite} of L09's single tree, where \texttt{sex} dominated.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/rf_importance.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Read with care.} Impurity importance is \textbf{biased toward high-cardinality}
+    features -- continuous \texttt{fare} / \texttt{age} have many split points, so they
+    soak up importance. \textbf{Permutation importance} and \textbf{SHAP} (the trustworthy
+    versions) get their own lecture later.}}
+\end{frame}
+
+\begin{frame}[fragile]{Random forests in sklearn}
+\begin{lstlisting}
+from sklearn.ensemble import RandomForestClassifier
+
+rf = RandomForestClassifier(
+        n_estimators=300, max_features="sqrt",
+        oob_score=True, n_jobs=-1, random_state=509)
+rf.fit(X_train, y_train)     # Titanic
+print(rf.oob_score_)         # free validation estimate
+\end{lstlisting}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Like a single tree: \textbf{no scaling needed} (callback L01c), but sklearn still
+    needs \textbf{numeric input} -- encode categoricals yourself. Use
+    \texttt{RandomForestRegressor} for the Yerevan rent target.}}
+\end{frame}
+
+\begin{frame}{Key knobs}
+  \begin{center}\footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{l p{0.62\linewidth}}
+      hyperparameter & what it does \\
+      \hline
+      \texttt{n\_estimators} & more trees $=$ steadier, then plateaus; costs compute. ``Big enough, then stop.'' \\
+      \texttt{max\_features} & \textbf{the decorrelation knob} ($F$). Lower $=$ more diverse trees. \\
+      \texttt{max\_depth} / \texttt{min\_samples\_leaf} & per-tree complexity (usually leave the trees deep). \\
+      \texttt{oob\_score} & free held-out estimate (\texttt{=True}). \\
+      \texttt{n\_jobs} & trees are independent $\Rightarrow$ trivially parallel (\texttt{=-1} uses all cores). \\
+      \texttt{class\_weight} & \texttt{"balanced"} for class imbalance (callback L09). \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Extra Trees} (\texttt{ExtraTreesClassifier}): picks split thresholds at
+    \emph{random} and, by default, \textbf{does not bootstrap} -- even more randomization,
+    faster, sometimes lower variance.}}
+\end{frame}
+
+\begin{frame}{Strengths and weaknesses}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Strengths}
+    \begin{itemize}\small
+      \item Strong, low-tuning \textbf{default} model.
+      \item Robust; mixed feature types, no scaling.
+      \item \textbf{OOB} $=$ built-in validation.
+      \item Trees independent $\Rightarrow$ trivially \textbf{parallel}.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Weaknesses}
+    \begin{itemize}\small
+      \item Less \textbf{interpretable} than one tree.
+      \item Memory / inference cost (hundreds of trees).
+      \item \textbf{Inherited from trees}: still axis-aligned boxes (``averaging boxes
+        gives boxes''); extrapolates poorly.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Bonus -- proximities:} how often two rows land in the \emph{same leaf} across
+    the forest is a similarity measure $\to$ outlier detection, missing-value imputation.}}
+\end{frame}
+
+\begin{frame}{Bridge: two ways to combine trees}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Random Forest (this deck)}
+    \begin{itemize}\small
+      \item Trees grown \textbf{in parallel}, independently.
+      \item Each sees resampled rows $+$ a feature subset.
+      \item \textbf{Averaging} cuts \textbf{variance}.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Boosting (L11)}
+    \begin{itemize}\small
+      \item Trees grown \textbf{in sequence}.
+      \item Each fixes the previous ones' \textbf{mistakes}.
+      \item Sequential correction cuts \textbf{bias}.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \begin{center}
+    \begin{tikzpicture}[font=\tiny]
+      \node at (0.9,2.1) {parallel (RF)};
+      \foreach \i in {0,1,2} {
+        \draw[armblue, fill=armblue!10] (\i*0.8,1.2) -- (\i*0.8+0.3,1.8) -- (\i*0.8+0.6,1.2) -- cycle;
+        \draw[-{Latex}, gray!70] (\i*0.8+0.3,1.15) -- (0.9,0.65);
+      }
+      \node[draw, rounded corners, fill=paramgreen!12] at (0.9,0.4) {average};
+      \begin{scope}[xshift=4.6cm]
+        \node at (1.1,2.1) {sequential (boosting)};
+        \foreach \i in {0,1,2} {\draw[armred, fill=armred!10] (\i*1.1,1.2) -- (\i*1.1+0.3,1.8) -- (\i*1.1+0.6,1.2) -- cycle;}
+        \draw[-{Latex}, gray!70] (0.62,1.5) -- (1.08,1.5);
+        \draw[-{Latex}, gray!70] (1.72,1.5) -- (2.18,1.5);
+        \node at (1.1,0.7) {each fixes the last};
+      \end{scope}
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next (L11):} gradient boosting -- and why \emph{there}, unlike here, more
+    trees \emph{can} overfit.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item A single tree is \textbf{high variance}; \textbf{bagging} averages many trees on
+      bootstrap samples to cut variance (not bias).
+    \item Averaging cuts variance toward a \textbf{floor} set by how \emph{correlated} the
+      trees are; more trees alone cannot beat that floor.
+    \item \textbf{Random Forest} $=$ bagging $+$ a \textbf{random feature subset per split}
+      to lower $\rho$ and drop that floor.
+    \item \textbf{OOB} gives free validation; more trees \textbf{never overfit}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Workflow:} a Random Forest (\texttt{n\_estimators} $\approx$ 300--500,
+    \texttt{oob\_score=True}) as a strong baseline $\to$ tune \texttt{max\_features} (and
+    depth if needed) by CV $\to$ read importances with care $\to$ reach for \textbf{boosting}
+    (L11) when you need more.}}
+\end{frame}
+
+\begin{frame}{HW10 -- bag the tree}
+  \begin{enumerate}\small
+    \item \textbf{Titanic (chapter project):} fit a \texttt{RandomForestClassifier}; report
+      the \textbf{OOB score} and compare it to 5-fold \textbf{CV}; compare \textbf{accuracy}
+      to your L09 single tree (the chapter's running score), and also report \textbf{F1 /
+      ROC-AUC} (Titanic is imbalanced).
+    \item Sweep \texttt{n\_estimators} and plot the \textbf{plateau}; sweep
+      \texttt{max\_features} and watch it matter.
+    \item Read \texttt{feature\_importances\_}; note any high-cardinality bias.
+    \item \textbf{Regression:} \texttt{RandomForestRegressor} on the Yerevan rent toy; plot
+      error vs \texttt{n\_estimators}.
+  \end{enumerate}
+  \vskip 2pt
+  \textbf{Bonus:} swap in \texttt{ExtraTreesClassifier} and compare; argue from the variance
+  formula why averaging \emph{cannot} beat the $\rho\sigma^2$ floor.
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Topic: Random Forests -- bagging, OOB, feature subsampling, importance.
+%   - Built from L10_random_forests_OUTLINE.md (interview-driven rebuild,
+%     2026-06-23; self-review + one independent adversarial review folded in).
+%   - Datasets: Titanic (classification through-line) + synthetic Yerevan
+%     rent-vs-area (regression, mentioned/HW). Figures from py_src/make_rf_figures.py
+%     (ma venv, seed 509): rf_instability (single-tree ~15% prediction flips),
+%     rf_n_estimators (test acc 0.75 -> ~0.81 plateau, +OOB), rf_importance
+%     (fare 0.31 / sex 0.26 / age 0.26 / pclass 0.08 -- high-cardinality bias demo).
+%   - Pedagogy: variance formula Var = rho*sigma^2 + (1-rho)/M*sigma^2 (ESL 15.1) is
+%     the spine; floor rho*sigma^2 + the rho-down/sigma^2-up trade stated explicitly.
+%     4 predict-first frames (instability, bias-not-variance, fewer-features, more-trees).
+%     By-hand = 3 bootstrap samples + given-prediction aggregation (no fake hand-fits).
+%   - Key facts (verified at review vs sklearn docs): RF classifier max_features="sqrt",
+%     RF regressor max_features=1.0 since v1.1; ExtraTrees bootstrap=False + random
+%     thresholds; OOB ~ held-out, slightly pessimistic; (1-1/n)^n -> 1/e.
+%   - House style per 04_overfitting_cross_validation.tex (L01d) + L09. Section
+%     transition slides via \sectiontransition. Bridge diagram (parallel vs sequential)
+%     reused as L11's hook.
+%   - Callbacks: L01c (scaling/encoding), L01d (CV variance, complexity knob, OOB~CV),
+%     L09 (single-tree instability, importance, class_weight); forward to L11 (boosting).
+%   - Build-time TODO carried: keep "accuracy" as the L09-L12 running score for
+%     continuity, but HW also asks for F1/ROC-AUC given Titanic's ~38% imbalance.
+% =============================================================

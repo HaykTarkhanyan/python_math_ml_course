@@ -1,0 +1,438 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true,
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[0.9em]
+      \begin{minipage}{0.82\textwidth}\centering\small #2 \end{minipage}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{Dimensionality Reduction}
+\subtitle{PCA $\cdot$ t-SNE $\cdot$ UMAP}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{How do you \emph{look} at 64-dimensional data?}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    A handwritten digit is $8\times8 = \mathbf{64}$ numbers; gene expression $\sim$20{,}000;
+    a text embedding $\sim$768. You cannot plot that.
+    \vskip 6pt
+    \textbf{Dimensionality reduction:} replace many features with a \emph{few} new ones that keep
+    most of the structure.
+    \vskip 6pt
+    Bridge from clustering --- both are \textbf{unsupervised} (no $y$): clustering groups the
+    \textbf{rows} (samples), DR compresses the \textbf{columns} (features).
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_digit_samples.pdf}\\[3pt]
+      {\scriptsize \textbf{Running dataset:} sklearn's 1797 digits ($8\times8$ grayscale, labels
+      0--9). Each image $=$ 64 pixel values; we will squeeze those 64 down to 2 to \emph{see} the data.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why reduce dimensions?}
+  \begin{itemize}
+    \item \textbf{Visualization} --- see high-dimensional data in 2-D.
+    \item \textbf{Preprocessing / compression} --- faster models, less storage, fewer features
+      before clustering or a classifier.
+    \item \textbf{Denoising} --- drop tiny-variance directions that are \emph{often} just noise.
+  \end{itemize}
+  \vfill
+  \footnotesize And a deeper reason, next: in high dimensions, distance itself stops working.
+\end{frame}
+
+\begin{frame}{The curse of dimensionality}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Predict-first:} in 100 dimensions, how much closer is your \emph{nearest} point than
+    your \emph{farthest}?
+    \pause
+    \vskip 4pt
+    Almost the same. As dimension grows, \textbf{distances concentrate} --- near and far blur
+    together, so distance-based methods (k-means, kNN, DBSCAN\dots) degrade.
+    \vskip 4pt
+    \footnotesize Reduce first, and distances mean something again.
+    \vskip 3pt
+    {\scriptsize Full treatment in our homework: \texttt{math/30\_curse\_of\_dimensionality.qmd}.}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_curse_distances.pdf}\\[-1pt]
+      {\scriptsize Random points; relative contrast vanishes (Beyer et al.\ 1999).}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{PCA: the idea and the math}
+\sectiontransition{Principal Component Analysis}{The linear workhorse: new axes along the
+directions of greatest variance.}
+
+\begin{frame}{PCA: keep the directions of greatest spread}
+  Sweep a direction through the cloud and \textbf{project} the points onto it (red dots). The
+  \textbf{projected variance} $\bm{w}^\top\bm{\Sigma}\bm{w}$ --- how spread out those red dots are ---
+  rises and falls, peaking at the \textbf{principal axis}. Keep the top few such axes.
+  \begin{center}
+    \only<1>{\includegraphics[width=0.56\textwidth]{fig/dr_pca_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.56\textwidth]{fig/dr_pca_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.56\textwidth]{fig/dr_pca_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.56\textwidth]{fig/dr_pca_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.56\textwidth]{fig/dr_pca_anim_5.pdf}}%
+  \end{center}
+  \vskip -2pt
+  \footnotesize \textbf{PCA does not search or iterate} --- the eigenvectors (next frames) give these
+  axes directly; the sweep just shows what ``maximum variance'' means. Keep the \textbf{top-$k$}
+  (here 2-D$\to$1-D; for 64-D digits we keep 2).
+\end{frame}
+
+\begin{frame}{Refresher: eigenvectors and eigenvalues}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    An \textbf{eigenvector} $\bm{v}$ of a matrix $A$ keeps its \emph{direction} when $A$ acts on it;
+    it only gets scaled by the \textbf{eigenvalue} $\lambda$:
+    \[ A\bm{v} = \lambda \bm{v}. \]
+    \vskip 4pt
+    A \textbf{symmetric} matrix --- like a covariance --- has real eigenvalues and
+    \textbf{orthogonal} eigenvectors. \emph{That is why the principal axes come out perpendicular.}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.95, >=stealth]
+        \draw[->, gray] (-0.3,0) -- (3.4,0);
+        \draw[->, gray] (0,-0.3) -- (0,2.6);
+        \draw[->, armblue, very thick] (0,0) -- (1.4,0.9) node[above left]{$\bm{v}$};
+        \draw[->, armred, very thick] (0,0) -- (2.8,1.8) node[right]{$A\bm{v}=\lambda\bm{v}$};
+        \node[armred, font=\scriptsize] at (2.0,0.7) {same direction, $\times\lambda$};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Derivation (1): maximize variance}
+  \textbf{Step 0 --- center the data} (subtract each feature's mean). Without it, $X^\top X$ measures
+  spread about the \emph{origin}, not about the data.
+  \vfill
+  Variance of the data projected onto a unit direction $\bm{w}$ is $\bm{w}^\top \bm{\Sigma}\bm{w}$
+  ($\bm{\Sigma}=$ covariance of the centered data). Maximize it subject to $\|\bm{w}\|=1$; a
+  \textbf{Lagrange multiplier} gives:
+  \[
+    \max_{\bm{w}} \ \bm{w}^\top\bm{\Sigma}\bm{w} \ \text{ s.t. } \|\bm{w}\|=1
+    \;\;\Longrightarrow\;\; \bm{\Sigma}\bm{w} = \lambda\,\bm{w}.
+  \]
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The principal directions are the \textbf{eigenvectors of the covariance matrix}; each
+    eigenvalue $\lambda$ is the \textbf{variance captured} along that direction.}}
+\end{frame}
+
+\begin{frame}{Derivation (2): explained variance}
+  \begin{itemize}\small
+    \item Eigenvalues sorted \textbf{descending} $\Rightarrow$ principal components come out
+      \textbf{ordered by variance}; take the top $k$ eigenvectors.
+    \item \textbf{Explained-variance ratio} of component $i$ is $\lambda_i / \sum_j \lambda_j$
+      (e.g.\ first PC of the digits $\approx 12\%$; first two $\approx 22\%$).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Two views, one answer.} Maximizing variance \textbf{is} minimizing
+    \textbf{reconstruction error}: projecting onto the top-$k$ axes and lifting back loses the least.
+    That is the basis for compression and denoising later.}}
+\end{frame}
+
+\begin{frame}{The SVD connection}
+  In practice PCA is computed by the \textbf{singular value decomposition} of the centered data:
+  \[ X_{\text{centered}} = U S V^\top, \qquad \text{columns of } V = \text{principal components}. \]
+  \begin{itemize}\small
+    \item More numerically stable than forming the covariance matrix explicitly.
+    \item \textbf{TruncatedSVD} (a.k.a.\ \emph{LSA} for text) skips centering, so it works on
+      \textbf{sparse} data --- centering would destroy the sparsity.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{PCA by hand (2-D)}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \footnotesize
+    \begin{enumerate}
+      \item Center the points (subtract the mean, the \textbf{X}).
+      \item Form the $2\times2$ \textbf{covariance} matrix.
+      \item Its \textbf{eigenvectors} are the principal axes; \textbf{eigenvalues} $\lambda$ are the
+        variances (arrow length $\propto\sqrt{\lambda}$).
+    \end{enumerate}
+    \vskip 4pt
+    PC1 captures most of the spread; PC2 is perpendicular and small.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_byhand_pca.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{PCA in practice}
+\sectiontransition{PCA in practice}{Scaling, how many components to keep, what they mean, and where
+PCA bites.}
+
+\begin{frame}{Centering vs scaling}
+  \begin{itemize}
+    \item PCA \textbf{always centers} (scikit-learn does it for you) --- mandatory.
+    \item PCA does \textbf{not standardize} --- that is your choice.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Trap:} variance is scale-dependent, so an unscaled large-range feature (income in
+    10{,}000s) hijacks the first component. \textbf{Standardize} unless your features already share
+    units (like pixel intensities).}}
+\end{frame}
+
+\begin{frame}{How many components to keep?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Scree plot}: explained variance per component (it drops fast).
+    \vskip 4pt
+    \textbf{Cumulative} explained variance: keep enough components to reach, say, \textbf{95\%}.
+    \vskip 4pt
+    \footnotesize On the digits, $\sim$29 of 64 components already cover 95\% of the variance.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_scree.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reading a biplot}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A \textbf{biplot} shows two things on the same PC1--PC2 axes:
+    \begin{itemize}\small
+      \item \textbf{dots} $=$ the samples projected onto PC1/PC2 (colored by species here);
+      \item \textbf{arrows} $=$ the original features (their \emph{loadings}).
+    \end{itemize}
+    How to read an arrow:
+    \begin{itemize}\small
+      \item \textbf{direction} $=$ the way that feature increases;
+      \item \textbf{length} $=$ how strongly it drives these two PCs;
+      \item arrows pointing the \textbf{same way} $=$ correlated features.
+    \end{itemize}
+    \footnotesize So petal length \& width point together (correlated) and separate the species along
+    PC1; sepal width points elsewhere. \emph{Components are combinations --- only partly interpretable.}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_biplot.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reconstruction: compression and denoising}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \footnotesize
+    \textbf{Project} to $k$ scores, then \textbf{lift back} to the original space:
+    \[ \bm{z} = W_k^\top(\xv-\bar{\xv}), \qquad \hat{\xv} = \bar{\xv} + W_k\,\bm{z}. \]
+    ``Lift back'' $=$ the \textbf{mean plus a weighted sum of the kept axes}:
+    \[ \hat{\xv} = \bar{\xv} + \textstyle\sum_{i=1}^{k} z_i\,\bm{v}_i \]
+    ($\bm{v}_i$ the principal directions, $z_i$ the scores). Fewer $k$ $=$ more compression (blurrier).
+    \vskip 3pt
+    Noise lives in the small-variance directions you dropped, so the rebuild is also \textbf{denoised}.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_reconstruction.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{PCA pitfalls}
+  \begin{itemize}
+    \item \textbf{Not feature selection} --- components are \emph{combinations} of all features, not a
+      chosen subset.
+    \item \textbf{Linear only} --- it cannot unfold a curved manifold (next section).
+    \item \textbf{Sensitive} to outliers and to feature scale.
+    \item Components can be \textbf{hard to interpret}.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{Nonlinear DR for visualization: t-SNE \& UMAP}
+\sectiontransition{Nonlinear methods}{When the structure is a curved manifold, linear PCA is not
+enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
+
+\begin{frame}{Why nonlinear?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    PCA is \textbf{linear}: it can rotate and project, but it cannot \emph{unfold} a curved
+    manifold. On a ``swiss roll'', PCA keeps the layers folded together.
+    \vskip 4pt
+    Nonlinear methods instead preserve \textbf{local neighborhoods} --- who is near whom.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_swiss_roll.pdf}\\[-1pt]
+      {\scriptsize color $=$ position along the roll.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{t-SNE}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Turn distances into \textbf{similarity probabilities}, high-D and low-D, then match them.
+    \begin{itemize}\small
+      \item High-D: $p_{ij}=\tfrac{1}{2n}(p_{j|i}+p_{i|j})$ (Gaussian neighborhoods).
+      \item Low-D: $q_{ij}$ from a \textbf{Student-$t$} kernel (heavy tail $=$ fixes the
+        ``crowding'' problem).
+      \item Minimize $\mathrm{KL}(P\,\|\,Q)$ by gradient descent (iterative, \emph{stochastic}).
+    \end{itemize}
+    \textbf{Perplexity} $\approx$ effective \#neighbors (typ.\ 5--50).
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_tsne_digits.pdf}
+    \end{center}
+  \end{columns}
+  \vskip -2pt
+  \hfill {\scriptsize van der Maaten \& Hinton (2008).}
+\end{frame}
+
+\begin{frame}{UMAP}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Build a \textbf{fuzzy nearest-neighbor graph}, then find a low-D layout whose graph matches it
+    (minimize a graph \textbf{cross-entropy}).
+    \begin{itemize}\small
+      \item \texttt{n\_neighbors}: small $=$ local detail, large $=$ global shape.
+      \item \texttt{min\_dist}: how tightly points may pack.
+      \item \textbf{Faster} than t-SNE, scales better, keeps \emph{more} global structure.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_umap_digits.pdf}
+    \end{center}
+  \end{columns}
+  \vskip -2pt
+  \hfill {\scriptsize McInnes et al.\ (2018).}
+\end{frame}
+
+\begin{frame}{Caveats: t-SNE / UMAP can mislead}
+  \begin{center}
+    \includegraphics[width=0.96\textwidth]{fig/dr_tsne_perplexity.pdf}
+  \end{center}
+  \vskip -3pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.985\linewidth}{\scriptsize
+    Same data, different settings $\to$ different pictures. So: \textbf{cluster sizes and
+    between-cluster distances are not meaningful}; results are \textbf{stochastic}; they are
+    sensitive to perplexity / \texttt{n\_neighbors}; \textbf{do not feed the 2-D embedding to a
+    downstream model} --- it is for the eyes. {\normalfont (Wattenberg et al., distill.pub 2016.)}}}
+\end{frame}
+
+% ================================================================
+\section{Choosing a method}
+\sectiontransition{Which one?}{PCA, t-SNE, UMAP --- side by side, then a decision table.}
+
+\begin{frame}{PCA vs t-SNE vs UMAP on the digits}
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/dr_compare_digits.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize PCA (linear) overlaps the digits; t-SNE and UMAP separate them cleanly. PCA is for
+  preprocessing; t-SNE / UMAP are for \emph{looking}.
+\end{frame}
+
+\begin{frame}{Decision table}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l c c c l}
+      & \textbf{Linear?} & \textbf{Global?} & \textbf{Determin.?} & \textbf{Use it for} \\
+      \hline
+      \textbf{PCA} & yes & yes & yes & preprocessing, compression, denoising \\
+      \textbf{t-SNE} & no & no & no & visualizing local cluster structure \\
+      \textbf{UMAP} & no & some & no (seeded) & visualization, faster / larger data \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize \textbf{Rule of thumb:} reach for \textbf{PCA} first (fast, cheap, reversible); use
+  \textbf{t-SNE / UMAP} when you specifically want a 2-D \emph{picture} of the structure.
+\end{frame}
+
+% ================================================================
+\section{Connections and wrap-up}
+\sectiontransition{Connections}{Where DR meets the rest of the course.}
+
+\begin{frame}{A wider view (one line each)}
+  \begin{itemize}
+    \item \textbf{Kernel PCA} --- PCA in a kernel feature space: nonlinear components without leaving
+      the PCA framework.
+    \item \textbf{Autoencoders} --- a neural network that learns a low-D ``bottleneck'': nonlinear,
+      learned DR. \emph{(Neural-networks chapter.)}
+    \item \textbf{DR as preprocessing} --- standardize $\to$ PCA $\to$ then cluster or train; this is
+      the cluster-after-PCA pipeline from the previous deck, and it denoises too.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{When NOT to reduce}
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    DR throws information away --- so do not reduce reflexively:}}
+  \begin{itemize}\small
+    \item PCA is \textbf{unsupervised}: it ranks directions by variance \emph{with no knowledge of
+      $y$}. The direction that separates your labels can sit in a \textbf{low-variance} component PCA
+      discards (a thin signal axis vs.\ a fat nuisance axis).
+    \item \textbf{Tree models} (forests, boosting) usually do not need it.
+    \item Always try the model \emph{without} DR first; add it only if it helps.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Why:} visualize, compress, denoise --- and beat the curse of dimensionality.
+    \item \textbf{PCA} --- center, then take the top eigenvectors of the covariance (via SVD);
+      keep enough for $\sim$95\% variance; linear, fast, reversible. Great for preprocessing.
+    \item \textbf{t-SNE / UMAP} --- nonlinear, preserve local neighborhoods, excellent for 2-D
+      \emph{pictures} --- but sizes/distances are not meaningful and they are for the eyes only.
+    \item Reach for PCA first; don't reduce reflexively (it is unsupervised, and it loses information).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{That closes unsupervised learning} (clustering $+$ DR). Next chapter: a new family of
+    models.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Dimensionality reduction (PCA / t-SNE / UMAP), chapter 4b. Built via the slide-style skill
+%     workflow: interview (4 rounds) -> outline -> two independent reviews -> build.
+%   - Outline: ch4b_dimensionality_reduction/dim_reduction_OUTLINE.md (v6).
+%   - Real figures: py_src/dimred_demos.py (run with ./ma/Scripts/python.exe; needs umap-learn).
+%     PCA sweep animation (dr_pca_anim_*), curse-of-dim, by-hand PCA, scree, iris biplot,
+%     digit reconstruction/denoise, swiss-roll (PCA vs UMAP), t-SNE/UMAP digits,
+%     t-SNE perplexity sensitivity, PCA-vs-t-SNE-vs-UMAP comparison.
+%   - Citations: van der Maaten & Hinton (2008); McInnes et al. (2018); Beyer et al. (1999);
+%     Wattenberg et al., distill.pub (2016).
+%   - Supersedes the old L13b_pca_dim_reduction stub.
+% =============================================================

@@ -1,0 +1,460 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+% transition-slide helper (same as L10): a [plain] frame, popblue title + one motivation line
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[10pt]
+      {\normalsize #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{L11: Boosting}
+\subtitle{Trees that fix each other's mistakes}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK -- reuse the parallel-vs-sequential diagram from L10's bridge
+\begin{frame}{From averaging to fixing mistakes}
+  L10's random forest grew trees \textbf{in parallel} and averaged them to cut variance.
+  \textbf{What if each new tree instead fixes what the previous ones got wrong?}
+  \vfill
+  \begin{center}
+    \begin{tikzpicture}[font=\tiny]
+      \node at (0.9,2.1) {parallel (RF, L10)};
+      \foreach \i in {0,1,2} {
+        \draw[armblue, fill=armblue!10] (\i*0.8,1.2) -- (\i*0.8+0.3,1.8) -- (\i*0.8+0.6,1.2) -- cycle;
+        \draw[-{Latex}, gray!70] (\i*0.8+0.3,1.15) -- (0.9,0.65);
+      }
+      \node[draw, rounded corners, fill=paramgreen!12] at (0.9,0.4) {average};
+      \begin{scope}[xshift=4.6cm]
+        \node at (1.1,2.1) {\textbf{sequential (boosting, today)}};
+        \foreach \i in {0,1,2} {\draw[armred, fill=armred!10] (\i*1.1,1.2) -- (\i*1.1+0.3,1.8) -- (\i*1.1+0.6,1.2) -- cycle;}
+        \draw[-{Latex}, gray!70] (0.62,1.5) -- (1.08,1.5);
+        \draw[-{Latex}, gray!70] (1.72,1.5) -- (2.18,1.5);
+        \node at (1.1,0.7) {each fixes the last};
+      \end{scope}
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \footnotesize That sequential ``fix the leftover error'' idea is \textbf{boosting} -- the
+  method that ruled tabular ML for a decade.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The boosting idea}
+\sectiontransition{The boosting idea}{Combine many weak learners, each fixing what the others miss.}
+
+\begin{frame}{The boosting question}
+  \begin{quote}
+    Can many \textbf{weak} learners -- each barely better than a coin flip -- be combined
+    into one \textbf{strong} learner?
+  \end{quote}
+  \hfill {\footnotesize (Kearns \& Schapire, 1989.)}
+  \vfill
+  \textbf{Boosting's answer: yes} -- if each learner focuses on the examples the previous
+  ones got wrong, their combination can be arbitrarily accurate.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The base learner is a \textbf{shallow tree} (often a stump) -- the ``atom'' from L09.
+    We add many of them, one at a time.}}
+\end{frame}
+
+\begin{frame}{Bagging vs boosting}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l l l}
+      & \textbf{Bagging / RF (L10)} & \textbf{Boosting (today)} \\
+      \hline
+      trees built & in \textbf{parallel}, independent & in \textbf{sequence}, dependent \\
+      each tree sees & a bootstrap resample & the previous ones' \textbf{errors} \\
+      combine by & averaging / voting & adding (a weighted sum) \\
+      mainly cuts & \textcolor{armblue}{variance} & \textcolor{armred}{bias} \\
+      more trees & safe (plateaus) & \textbf{can overfit} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Mirror of L10.} RF bags \textbf{deep} (high-variance) trees and averages the
+    variance away. Boosting boosts \textbf{shallow} (high-bias) trees -- each only nudges
+    the fit, and the bias is removed \emph{across rounds}. Opposite ingredient, opposite
+    target.}}
+\end{frame}
+
+\begin{frame}{AdaBoost, in one picture}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    The original boosting algorithm (1995):
+    \begin{enumerate}\small
+      \item Fit a stump on equally-weighted points.
+      \item \textbf{Up-weight} the points it got wrong, down-weight the rest.
+      \item Refit on the new weights; repeat.
+      \item Final prediction = \textbf{vote weighted} by each stump's accuracy.
+    \end{enumerate}
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\tiny]
+        % round 1: equal points, a boundary, two misclassified (bigger)
+        \node at (1.1,1.95) {round 1};
+        \draw[gray!50] (0,0.3) rectangle (2.2,1.7);
+        \draw[armblue, thick] (1.1,0.3) -- (1.1,1.7);
+        \foreach \x/\y in {0.4/0.7,0.6/1.3,0.9/0.9} {\fill[armblue] (\x,\y) circle (1.3pt);}
+        \foreach \x/\y in {1.5/1.2,1.8/0.6} {\fill[armred] (\x,\y) circle (1.3pt);}
+        \fill[armred] (0.8,1.45) circle (2.6pt); % misclassified, big
+        \fill[armred] (1.35,0.5) circle (2.6pt);
+      \end{tikzpicture}\\[2pt]
+      \scriptsize Misclassified points grow; next stump must attend to them.
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{AdaBoost = boosting with the exponential loss.} Gradient boosting (next)
+    generalizes it to \emph{any} loss -- both are the same ``forward stagewise additive
+    model'' (AdaBoost just predates the gradient view). The stump-weight arithmetic
+    $\alpha = \tfrac12\ln\frac{1-\text{err}}{\text{err}}$ is in the HW.}}
+\end{frame}
+
+% ================================================================
+\section{Gradient boosting}
+\sectiontransition{Gradient boosting}{Fit the leftover error, add a slice, repeat -- and watch it work.}
+
+\begin{frame}{The idea: fit the residuals}
+  Predict apartment rent from area. The recipe:
+  \begin{enumerate}\small
+    \item Start simple: $F_0 = \text{mean}(y)$.
+    \item Compute \textbf{residuals} $r = y - F_0$ -- what is still wrong.
+    \item Fit a \textbf{small tree} to the residuals.
+    \item Add it, shrunk by a \textbf{learning rate} $\eta$: $F_1 = F_0 + \eta\,(\text{tree})$.
+    \item Recompute residuals; repeat.
+  \end{enumerate}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Each tree learns the \emph{previous} ensemble's mistakes. The fit creeps toward the
+    data one correction at a time.}}
+\end{frame}
+
+\begin{frame}{By hand: round 1 (Yerevan rent vs area)}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \small
+    \textbf{Init:} $F_0 = \text{mean}(y) = \mathbf{304}$ kAMD (a flat line).
+    \vskip 3pt
+    \textbf{Residuals:} $r_i = y_i - 304$.
+    \vskip 3pt
+    \textbf{First stump} asks ``area $\le 100$?'' and predicts each side's
+    \emph{residual mean}:
+    \[
+      \text{left} = -17,\qquad \text{right} = +78 .
+    \]
+    \textbf{Update} with $\eta = 0.4$:
+    \[
+      F_1 = 304 + 0.4 \times
+      \begin{cases} -17 & \text{area} \le 100 \\ +78 & \text{area} > 100 \end{cases}
+    \]
+    \[
+      \Rightarrow\; F_1 = \begin{cases} \mathbf{297} \\ \mathbf{336} \end{cases}
+    \]
+    \column{0.46\textwidth}
+    \vskip 12pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      One stump nudges the flat line into \textbf{two steps}. The big positive residuals
+      at large area shrink first -- the model fixes its worst errors first.}}
+    \vskip 6pt
+    \footnotesize These are the real numbers behind round 1 of the next slide.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Watch it fit: gradient boosting, round by round}
+  \begin{center}
+    \only<1>{\includegraphics[width=0.96\linewidth]{fig/boost_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.96\linewidth]{fig/boost_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.96\linewidth]{fig/boost_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.96\linewidth]{fig/boost_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.96\linewidth]{fig/boost_anim_5.pdf}}%
+    \only<6>{\includegraphics[width=0.96\linewidth]{fig/boost_anim_6.pdf}}%
+  \end{center}
+  \vskip -2pt
+  \footnotesize \textbf{Left:} data + the cumulative fit $F_k$ (faint = $F_{k-1}$, so you
+  see the stump just added). \textbf{Right:} the residuals $r_k = y - F_k$ collapsing
+  toward zero. \emph{(Step through rounds 1--6.)}
+\end{frame}
+
+\begin{frame}{Predict-first: does boosting overfit with more trees?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    L10 said \emph{more trees never hurt} a random forest. Same for boosting?
+    \pause
+    \vskip 4pt
+    \textbf{No -- the opposite.} Training error drives toward \textbf{0} (it can memorize);
+    test error drops, then \textbf{U-turns} and rises.
+    \vskip 4pt
+    \footnotesize Boosting keeps fitting the \emph{previous} errors, eventually fitting
+    noise. Controlled by a small $\eta$ + \textbf{early stopping}.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/boost_overfit.pdf}\\[-2pt]
+      \scriptsize A high-capacity config (depth-3 trees, 250 rounds) on a noisy toy --
+      cranked up to \emph{show} the failure mode.
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Contrast with L10:} RF averages \emph{independent} trees -> more is safe.
+    Boosting adds \emph{dependent} trees that chase residuals -> more can overfit.}}
+\end{frame}
+
+\begin{frame}{The reframe: you were doing gradient descent}
+  Why is fitting residuals a good idea? Look at the squared loss
+  $L = \tfrac12 (y - F)^2$:
+  \[
+    \frac{\partial L}{\partial F} = -(y - F)
+    \quad\Longrightarrow\quad
+    -\frac{\partial L}{\partial F} = y - F = \textbf{the residual}.
+  \]
+  (The $\tfrac12$ is the convention that makes this come out with no stray factor of 2.)
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    So the residual you have been fitting \textbf{is the negative gradient} of the loss.
+    Each tree takes one step \textbf{downhill} -- you were doing gradient descent all
+    along, just in \emph{function space} (adding functions) instead of parameter space.}}
+\end{frame}
+
+\begin{frame}{Function-space gradient descent (the general algorithm)}
+  \fcolorbox{armblue}{armblue!6}{\parbox{0.96\linewidth}{\small
+  For $m = 1, 2, \dots, M$:
+  \begin{enumerate}\small
+    \item \textbf{Pseudo-residuals} (the negative gradient at the current model):
+      \[
+        r_{im} = -\left[\frac{\partial L(y_i, F(\xv_i))}{\partial F(\xv_i)}\right]_{F = F_{m-1}}
+      \]
+    \item Fit a base learner $h_m$ to the pseudo-residuals $r_{im}$.
+    \item \textbf{Line search} for the best step: $\gamma_m = \argmin_\gamma \sumin L(y_i, F_{m-1}(\xv_i) + \gamma\, h_m(\xv_i))$.
+    \item Update: $F_m = F_{m-1} + \eta\,\gamma_m\, h_m$.
+  \end{enumerate}}}
+  \vskip 4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{What sklearn actually does} (a refinement): it fits the tree, then sets
+    \emph{each leaf} to its own optimal step (a per-leaf line search), and shrinks all
+    leaves by $\eta$. For squared loss that per-leaf step is just the leaf's
+    \textbf{residual mean} -- exactly the by-hand round you did two slides ago.}}
+\end{frame}
+
+\begin{frame}{Any loss you like}
+  Swap the loss $\Rightarrow$ swap the pseudo-residual. The whole machinery is unchanged;
+  only ``what each tree chases'' changes.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Squared loss} $\to$ pseudo-residual $= y - F$ (the plain residual).
+    \item \textbf{Absolute / Huber loss} $\to$ pseudo-residual $=$ the \emph{sign} or a
+      \emph{clipped} residual $\to$ \textbf{robust to outliers} (one bad point can't drag
+      the fit far).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    This is boosting's superpower over AdaBoost: pick the loss that matches your problem
+    (regression, classification, ranking, robust, quantile) -- the algorithm does not change.}}
+\end{frame}
+
+\begin{frame}{Gradient boosting for classification}
+  Same machinery, different loss. For a yes/no target with \textbf{log-loss}:
+  \begin{itemize}\small
+    \item the model $F$ accumulates in \textbf{log-odds} space (not probability);
+    \item the pseudo-residual is simply $\,\textbf{$y - p$}\,$, where $p = \text{sigmoid}(F)$
+      is the current predicted probability;
+    \item trees are added in log-odds; the \textbf{sigmoid is applied once, at the end},
+      to read off a probability.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Regression chases $y - F$; classification chases $y - p$. Same gradient-descent idea --
+    this is what the Titanic homework runs.}}
+\end{frame}
+
+% ================================================================
+\section{Regularization}
+\sectiontransition{Regularization}{More power than you want -- three knobs hold it back.}
+
+\begin{frame}{Three knobs}
+  \begin{center}\footnotesize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{l p{0.62\linewidth}}
+      knob & what it controls \\
+      \hline
+      \texttt{n\_estimators} ($M$) & number of trees / rounds. More $=$ lower bias, but
+        eventually overfits $\Rightarrow$ use \textbf{early stopping}. \\
+      \texttt{max\_depth} & per-tree depth $=$ \textbf{interaction order} (depth 1 $=$ main
+        effects only; deeper $=$ feature interactions). Boosting likes \emph{shallow}. \\
+      \texttt{learning\_rate} ($\eta$) & \textbf{shrinkage}: how big a step each tree takes.
+        Smaller $=$ steadier, generalizes better. \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    The big one is the pair $(\eta, M)$ -- they trade off against each other (next slide).}}
+\end{frame}
+
+\begin{frame}{Predict-first: halve the learning rate -- then what?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    If you \textbf{halve} $\eta$, what happens to the number of trees you need?
+    \pause
+    \vskip 4pt
+    Roughly \textbf{double} (a rule of thumb in the small-$\eta$ regime, not exact).
+    \vskip 4pt
+    \footnotesize Small $\eta$ = slow, smooth, generalizes; large $\eta$ = fast, jagged,
+    overfits sooner. The standard recipe: \textbf{small $\eta$ + many trees + early stop}.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/boost_learning_rate.pdf}\\[-2pt]
+      \scriptsize Smaller $\eta$ needs more trees -- and here reaches a \emph{lower} test
+      error. (General trend; not the exact 2x.)
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Stochastic gradient boosting}
+  Add a dash of \textbf{bagging}: each round, fit the tree on a random \textbf{subsample}
+  of the rows (and optionally columns), not all of them.
+  \begin{itemize}\small
+    \item Faster (smaller fits) and a \textbf{regularizer} (the randomness decorrelates
+      the trees, callback L10).
+    \item A bagging $+$ boosting hybrid (Friedman, 2002).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Heads-up:} this is NOT on by default -- XGBoost's \texttt{subsample} and
+    LightGBM's \texttt{bagging\_fraction} both default to 1.0 (no subsampling). The
+    libraries make it easy; \textbf{how they use it is L12}.}}
+\end{frame}
+
+% ================================================================
+\section{Practice and bridge}
+\sectiontransition{Practice and the bridge ahead}{Just enough to run it -- the libraries get their own lecture.}
+
+\begin{frame}[fragile]{Gradient boosting in sklearn (the essentials)}
+\begin{lstlisting}
+from sklearn.ensemble import HistGradientBoostingClassifier
+
+gb = HistGradientBoostingClassifier(
+        learning_rate=0.1, max_depth=3,
+        early_stopping=True,          # stop when validation stops improving
+        validation_fraction=0.1, n_iter_no_change=10,
+        random_state=509)
+gb.fit(X_train, y_train)              # Titanic
+\end{lstlisting}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Early stopping} picks $M$ for you (callback L01d's validation idea). Recall the
+    single-tree LightGBM from L09 -- now it is \texttt{n\_estimators=100} with a small
+    $\eta$. \textbf{Tuning recipes and the XGBoost/LightGBM/CatBoost APIs are L12} -- this
+    just gets gradient boosting running.}}
+\end{frame}
+
+\begin{frame}{Bridge: the deep library session (L12)}
+  Everything so far is the \textbf{algorithm}. Next lecture is the \textbf{engineering}:
+  \begin{itemize}\small
+    \item \textbf{XGBoost / LightGBM / CatBoost} -- the libraries that win on tabular data:
+      speed (histogram + leaf-wise growth), regularization baked into the objective,
+      native categorical handling.
+    \item How to \textbf{tune} them (the knob order that matters) and a real bake-off.
+    \item \textbf{Stacking} -- combining different model types -- to close the chapter.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next (L12):} same gradient boosting you just learned -- made fast, regularized,
+    and production-ready.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Boosting} adds shallow trees \textbf{in sequence}, each fitting the
+      previous ensemble's leftover error; it cuts \textbf{bias}.
+    \item That ``leftover error'' is the \textbf{negative gradient} of the loss -- boosting
+      is gradient descent in function space (any loss: $y - F$ regression, $y - p$
+      classification).
+    \item More trees \textbf{can overfit} (unlike RF) -- control with small $\eta$,
+      shallow trees, and \textbf{early stopping}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Workflow:} small $\eta$ + many trees + early stopping; keep trees shallow; add
+    row/column subsampling if it helps. For the production versions, see \textbf{L12}.}}
+\end{frame}
+
+\begin{frame}{HW11 -- boost the tree}
+  \begin{enumerate}\small
+    \item \textbf{By hand} (Yerevan rent toy): do \textbf{3 rounds} of gradient boosting --
+      init $= \text{mean}(y)$, compute residuals, fit a stump, update with $\eta$. Show the
+      residuals shrinking.
+    \item \textbf{sklearn} (Titanic, chapter project): fit a
+      \texttt{GradientBoostingClassifier} / \texttt{HistGradientBoostingClassifier} with
+      early stopping; compare to your \textbf{L10 random forest} on the same score
+      (accuracy + F1 / ROC-AUC).
+    \item Tune \texttt{learning\_rate} (with early stopping picking \texttt{n\_estimators}).
+  \end{enumerate}
+  \vskip 2pt
+  \textbf{Bonus:} the AdaBoost $\alpha = \tfrac12\ln\frac{1-\text{err}}{\text{err}}$
+  arithmetic for one round; force overfitting (train $\to 0$, test U) then early-stop; try
+  \texttt{subsample} $< 1$.
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Topic: Boosting -- AdaBoost (1 frame) + gradient boosting (the core).
+%   - Built from L11_boosting_OUTLINE.md (interview-driven rebuild, 2026-06-23;
+%     3 interview rounds + one independent adversarial review folded in).
+%   - HEADLINE: 6-round gradient-boosting ANIMATION (boost_anim_1..6, Beamer \only
+%     overlays) on a synthetic Yerevan rent-vs-area toy. Figures from
+%     py_src/make_boost_figures.py (ma venv, seed 509): boost_anim (depth-1 stumps,
+%     eta=0.4, staged_predict; F_0=304, round-1 split at area~100, leaves -17/+78 ->
+%     by-hand frame uses these), boost_overfit (depth-3, 250 rounds, train->0 + test U),
+%     boost_learning_rate (eta 0.5 vs 0.1).
+%   - Math (per instructor: do it in full): residual = -gradient with the 1/2 factor shown;
+%     full function-space GD with the line-search step gamma_m; armorange box reconciling
+%     with sklearn's per-leaf optimal step (= residual mean for L2 = the by-hand frame).
+%     Classification GB: log-odds, pseudo-residual y - p, sigmoid once at the end.
+%   - L11/L12 BOUNDARY (instructor flagged L12 is the deep library session): L11 = the
+%     algorithm + math + animation + general regularization + just-enough sklearn;
+%     libraries named only in the bridge. Stochastic GB is a concept frame, with the
+%     correct fact that subsampling is NOT on by default (XGBoost subsample / LightGBM
+%     bagging_fraction = 1.0).
+%   - House style per 04_overfitting_cross_validation.tex (L01d) + L09/L10. Hook reuses
+%     L10's parallel-vs-sequential diagram. Section transitions via \sectiontransition.
+%   - Callbacks: L09 (tree as the atom, shallow base learner), L10 (parallel-vs-sequential,
+%     deep-vs-shallow mirror, more-trees-safe vs can-overfit, subsampling decorrelates),
+%     L01d (early stopping / validation). Forward -> L12 (libraries, tuning, stacking).
+% =============================================================
