@@ -2,7 +2,7 @@
 
 A breadth-not-depth **survey deck**: classic supervised methods the course will NOT
 cover in depth, but that students should recognize. House style of
-`ml/02_main_concepts/04_overfitting_cross_validation.tex`.
+`ml/02_main_concepts/06_overfitting_cross_validation.tex`.
 
 > STATUS: DRAFT v3. v2 covered KNN/NB/SVM; v3 adds **LDA/QDA** and **Gaussian
 > Processes** (each a proper 3-frame mini-section, not a one-liner) and restructures
@@ -61,7 +61,7 @@ Two payoff adjacencies: **LDA/QDA = "Naive Bayes that allows feature correlation
 
 ## Callbacks / cross-references
 - **L01c** (`03_data_preprocessing.tex`): KNN + SVM need scaling; KNN imputation.
-- **L01d** (`04_overfitting_cross_validation.tex`): KNN's k, SVM's C, LDA-vs-QDA are
+- **L01d** (`06_overfitting_cross_validation.tex`): KNN's k, SVM's C, LDA-vs-QDA are
   bias-variance knobs; choose by CV.
 - **L06** (logistic regression): generative (NB, LDA/QDA) vs discriminative (logreg);
   "score vs calibrated probability" (NB/SVM uncalibrated; GP gives real uncertainty).

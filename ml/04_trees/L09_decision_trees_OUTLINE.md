@@ -1,14 +1,14 @@
 # L09 Decision Trees — Deck Outline / Design
 
 Design doc for rebuilding the **Decision Trees** lecture from scratch, in the
-house style of `ml/02_main_concepts/04_overfitting_cross_validation.tex`
+house style of `ml/02_main_concepts/06_overfitting_cross_validation.tex`
 (the validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > Revision history: v1 = first outline. v2 = self-review fixes + LightGBM
 > forward-hook. v3 = pedagogical-review pass — KEPT the LightGBM single-tree frame
 > (per instruction) and ACCEPTED L09 running long (no forced cuts). See changelogs.
 >
-> Lecture-numbering note: "L01d" callbacks = `04_overfitting_cross_validation.tex`;
+> Lecture-numbering note: "L01d" callbacks = `06_overfitting_cross_validation.tex`;
 > "L01c" = `03_data_preprocessing.tex`. The folder is migrating to numeric prefixes;
 > short L01c/L01d labels kept below until the scheme is final.
 
@@ -67,7 +67,7 @@ house style of `ml/02_main_concepts/04_overfitting_cross_validation.tex`
 - **L01c** (data preprocessing, `03_data_preprocessing.tex`): trees need no scaling
   (scale-invariant); but in **sklearn** categoricals still need encoding (sklearn
   trees are NOT auto-categorical).
-- **L01d** (validation & CV, `04_overfitting_cross_validation.tex`): `max_depth` is the "complexity knob" (its table
+- **L01d** (validation & CV, `06_overfitting_cross_validation.tex`): `max_depth` is the "complexity knob" (its table
   literally lists "Decision trees -> maximum depth"); the depth train/test U-curve
   is the overfitting fingerprint; pick depth / `ccp_alpha` by cross-validation.
 - **Forward ref -> L10/L11/L12**: single trees are unstable (high variance);
@@ -217,6 +217,6 @@ house style of `ml/02_main_concepts/04_overfitting_cross_validation.tex`
 3. Frame 2: define "decision stump" deliberately (reused in L11).
 4. Frame 12: regression trees upgraded with a predict-first (flat-step vs smooth) to
    pre-empt the smoothness misconception and seed L11's residual example.
-5. File references updated: L01d -> 04_overfitting_cross_validation.tex,
+5. File references updated: L01d -> 06_overfitting_cross_validation.tex,
    L01c -> 03_data_preprocessing.tex.
 6. HW stays consistent with the chapter running-project (single tree stage on Titanic).

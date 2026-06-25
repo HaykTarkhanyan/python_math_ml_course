@@ -13,7 +13,7 @@ Last updated: 2026-06-19
 ### Lecture slides — `NN_topic_name.{tex,pdf}`
 
 - `NN` is a two-digit ordinal matching the YouTube playlist position (e.g. `01`, `02`, `04`).
-- Topic name in lowercase with underscores: `01_intro_linear_regression.tex`, `04_overfitting_cross_validation.tex`.
+- Topic name in lowercase with underscores: `01_intro_linear_regression.tex`, `06_overfitting_cross_validation.tex`.
 - No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out as decks are reviewed.
 
 ### Notes PDFs — `NN_topic_name_notes.pdf`

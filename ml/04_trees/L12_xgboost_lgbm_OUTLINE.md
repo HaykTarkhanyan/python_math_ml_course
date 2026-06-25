@@ -1,11 +1,11 @@
 # L12 XGBoost / LightGBM / CatBoost — Deck Outline / Design (DRAFT v3)
 
 Planning doc for the **gradient-boosting libraries** deck, house style of
-`ml/02_main_concepts/04_overfitting_cross_validation.tex` (the
+`ml/02_main_concepts/06_overfitting_cross_validation.tex` (the
 validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > STATUS: DRAFT v3 (pedagogical review folded in). Spine stable; pending go-ahead.
-> Lecture-numbering note: "L01d" = `04_overfitting_cross_validation.tex`;
+> Lecture-numbering note: "L01d" = `06_overfitting_cross_validation.tex`;
 > "L01c" = `03_data_preprocessing.tex`.
 
 ## Chapter-level conventions (shared across L09-L12, recorded in each file)

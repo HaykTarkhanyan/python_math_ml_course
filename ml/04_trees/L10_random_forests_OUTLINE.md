@@ -3,11 +3,11 @@
 Interview-driven rebuild (2026-06-23). Supersedes the prior AI-authored v3 draft:
 the instructor chose a fresh build, so this outline is shaped by a 3-round interview,
 then two review passes (self-review + one independent adversarial review). House style
-of `ml/02_main_concepts/04_overfitting_cross_validation.tex` (the
+of `ml/02_main_concepts/06_overfitting_cross_validation.tex` (the
 validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > Lecture-numbering note: "L01c" = `03_data_preprocessing.tex`,
-> "L01d" = `04_overfitting_cross_validation.tex`. Short labels kept until the
+> "L01d" = `06_overfitting_cross_validation.tex`. Short labels kept until the
 > numeric-prefix migration is final. Follows **L09 Decision Trees** (built).
 
 ## Interview decisions (2026-06-23)
@@ -103,7 +103,7 @@ formula flagged stated-not-derived; hook figure = flip-count bar.
   (axis-aligned boxes, poor extrapolation) are INHERITED here, not new.
 - **L01c** (`03_data_preprocessing.tex`): RF needs no scaling (scale-invariant); but
   in sklearn categoricals still need encoding.
-- **L01d** (`04_overfitting_cross_validation.tex`): CV variance reduction by ~1/k is
+- **L01d** (`06_overfitting_cross_validation.tex`): CV variance reduction by ~1/k is
   the NAIVE-HOPE anchor for "why averaging helps" (corrected by `rho`); OOB ~ a
   built-in held-out set; pick knobs by CV.
 - **Forward -> L11/L12:** boosting cuts BIAS by sequential correction (vs RF cutting

@@ -2,7 +2,7 @@
 
 Design doc for building the **Classification + Logistic Regression** deck from
 scratch, house style of
-`ml/02_main_concepts/04_overfitting_cross_validation.tex` (the
+`ml/02_main_concepts/06_overfitting_cross_validation.tex` (the
 validation/CV deck, formerly `L01d_validation_and_cv.tex`).
 
 > v2 = independent pedagogical review folded in (see changelog). The companion deck
