@@ -80,15 +80,20 @@ def get_data():
 def fig_reliability(probs, yte, logger):
     fig, ax = plt.subplots(figsize=(5.4, 4.4))
     ax.plot([0, 1], [0, 1], "--", color="0.5", lw=1.3, label="perfectly calibrated")
+    # Uniform-width bins (not quantile): the over-confident model piles scores near
+    # 0 and 1, so equal-width bins at the extremes expose the bow that equal-count
+    # (quantile) bins average away.
     for name, p, c in [("logistic regression", probs["lr"], ARM_BLUE),
                        ("naive Bayes", probs["nb"], ARM_RED)]:
-        frac, mean = calibration_curve(yte, p, n_bins=10, strategy="quantile")
+        frac, mean = calibration_curve(yte, p, n_bins=10, strategy="uniform")
         e = ece(yte, p)
+        if name == "naive Bayes":   # shade the gap to the diagonal
+            ax.fill_between(mean, frac, mean, color=ARM_RED, alpha=0.15)
         ax.plot(mean, frac, "-o", color=c, lw=2, ms=4,
                 label=f"{name}  (ECE {e:.3f})")
         logger.info(f"reliability: {name} ECE={e:.4f}, Brier={brier_score_loss(yte, p):.4f}")
-    ax.annotate("below the line\n= over-confident", xy=(0.78, 0.62),
-                xytext=(0.42, 0.78), fontsize=9, color=ARM_RED,
+    ax.annotate("below the line\n= over-confident", xy=(0.83, 0.66),
+                xytext=(0.40, 0.80), fontsize=9, color=ARM_RED,
                 arrowprops=dict(arrowstyle="->", color=ARM_RED))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
@@ -130,7 +135,7 @@ def fig_before_after(Xtr, Xte, ytr, yte, logger):
     ax.plot([0, 1], [0, 1], "--", color="0.5", lw=1.3, label="perfectly calibrated")
     for name, p, c in [(f"before  (ECE {e_raw:.3f})", raw, ARM_RED),
                        (f"after isotonic  (ECE {e_cal:.3f})", cal_p, ARM_BLUE)]:
-        frac, mean = calibration_curve(yte, p, n_bins=10, strategy="quantile")
+        frac, mean = calibration_curve(yte, p, n_bins=10, strategy="uniform")
         ax.plot(mean, frac, "-o", color=c, lw=2, ms=4, label=name)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)

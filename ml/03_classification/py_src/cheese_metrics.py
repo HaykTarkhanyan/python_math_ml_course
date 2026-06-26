@@ -4,10 +4,13 @@ Generates 4 PDFs into ml/ch2_classification/fig/ from a synthetic but
 realistic imbalanced "cheese factory" dataset (positive = bad batch). Every
 curve is a real sweep over a fitted model's scores -- no invented coordinates.
 
-  cm_roc.pdf        -- ROC curve, shaded AUC, with the AUC value.
-  cm_pr.pdf         -- precision-recall curve, base-rate line, with AP.
-  cm_lift.pdf       -- cumulative gain curve + lift at top 20%.
-  cm_roc_vs_pr.pdf  -- two models: ROC (both look great) vs PR (one collapses).
+  cm_roc.pdf         -- ROC curve, shaded AUC, with the AUC value.
+  cm_pr.pdf          -- precision-recall curve, base-rate line, with AP.
+  cm_lift.pdf        -- cumulative gain curve + lift at top 20%.
+  cm_roc_vs_pr.pdf   -- two models: ROC (both look great) vs PR (one collapses).
+  cm_score_dist.pdf  -- the two score distributions + a sliding cutoff -> TP/FP/FN/TN.
+  cm_f1_heatmap.pdf  -- F1 vs arithmetic mean over (precision, recall).
+  (also: cm_threshold_metrics, cm_cost_curve, cm_youden, cm_recall_floor, cm_multiclass.)
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
     ./ma/Scripts/python.exe ml/ch2_classification/py_src/cheese_metrics.py
@@ -23,6 +26,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import gaussian_kde
 from sklearn.datasets import make_classification
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (average_precision_score, confusion_matrix,
@@ -254,6 +258,152 @@ def fig_cost_curve(yte, s, logger):
     _finish(ax, "cm_cost_curve.pdf", logger)
 
 
+def fig_youden(yte, s, logger):
+    """ROC-based threshold: the point maximizing J = TPR - FPR (cost-free)."""
+    fpr, tpr, thr = roc_curve(yte, s)
+    J = tpr - fpr
+    k = int(np.argmax(J))
+
+    fig, ax = plt.subplots(figsize=(5.2, 4.2))
+    ax.plot([0, 1], [0, 1], "--", color="0.6", lw=1.2, label="random")
+    ax.plot(fpr, tpr, color=ARM_BLUE, lw=2.2)
+    # J is the vertical gap from the chosen ROC point down to the diagonal
+    ax.plot([fpr[k], fpr[k]], [fpr[k], tpr[k]], color=ARM_ORANGE, lw=2.6)
+    ax.plot(fpr[k], tpr[k], "o", color=ARM_ORANGE, ms=8)
+    ax.annotate(f"max $J$ = {J[k]:.2f}\n($c$ = {thr[k]:.2f})",
+                xy=(fpr[k], tpr[k]), xytext=(fpr[k] + 0.16, tpr[k] - 0.22),
+                fontsize=9, color=ARM_ORANGE,
+                arrowprops=dict(arrowstyle="->", color=ARM_ORANGE))
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1.02)
+    ax.set_xlabel("FPR (false-alarm rate)")
+    ax.set_ylabel("TPR (recall)")
+    ax.set_title("Youden's J: farthest point above the diagonal")
+    ax.legend(loc="lower right", fontsize=9, frameon=False)
+    logger.info(f"youden: J={J[k]:.3f} at c={thr[k]:.3f}, TPR={tpr[k]:.3f}, FPR={fpr[k]:.3f}")
+    _finish(ax, "cm_youden.pdf", logger)
+
+
+def fig_recall_floor(yte, s, logger, floor=0.80):
+    """Constraint-based threshold: highest c that still meets recall >= floor."""
+    ts = np.linspace(0.001, 0.999, 400)
+    P, R = [], []
+    for t in ts:
+        prec, rec, _, _, _ = _pr_f1_at(yte, s, t)
+        P.append(prec); R.append(rec)
+    P, R = np.array(P), np.array(R)
+    ok = np.where(R >= floor)[0]          # recall decreases with c -> low-c indices
+    k = int(ok[-1])                        # highest threshold still meeting the floor
+    c = ts[k]
+
+    fig, ax = plt.subplots(figsize=(5.6, 4.0))
+    ax.plot(ts, R, color=ARM_RED, lw=2.2, label="recall")
+    ax.plot(ts, P, color=ARM_BLUE, lw=2.2, label="precision")
+    ax.axhline(floor, color="0.5", ls=":", lw=1.4)
+    ax.text(0.985, floor + 0.02, f"recall floor {floor:.2f}", fontsize=8,
+            color="0.4", ha="right")
+    ax.axvline(c, color=ARM_ORANGE, lw=2.2, ls="--")
+    ax.plot(c, P[k], "o", color=ARM_ORANGE, ms=7)
+    ax.annotate(f"highest $c$ with recall $\\geq$ {floor:.2f}\n"
+                f"$c$ = {c:.2f}, precision = {P[k]:.2f}",
+                xy=(c, P[k]), xytext=(c + 0.10, P[k] + 0.28),
+                fontsize=8.5, color=ARM_ORANGE,
+                arrowprops=dict(arrowstyle="->", color=ARM_ORANGE))
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("threshold $c$")
+    ax.set_ylabel("metric value")
+    ax.set_title("Recall floor: meet it, then maximize precision")
+    ax.legend(loc="center right", fontsize=9, frameon=False)
+    logger.info(f"recall-floor {floor}: c={c:.3f}, recall={R[k]:.3f}, precision={P[k]:.3f}")
+    _finish(ax, "cm_recall_floor.pdf", logger)
+
+
+def fig_score_dist(logger, c=0.5):
+    """Two score distributions and a movable cutoff -> the TP/FP/FN/TN regions.
+
+    The master picture behind the whole metrics lecture: the confusion cells,
+    the precision/recall tradeoff and ROC all fall out of two overlapping score
+    distributions and where you put the cut. Balanced and illustrative so both
+    distributions span [0,1] and overlap legibly -- the imbalance lives in the
+    other figures. Scores are drawn in logit space (a logistic model's natural
+    output) with a tuned signal/overlap.
+    """
+    rng = np.random.RandomState(SEED)
+    n = 2500
+    s_good = 1.0 / (1.0 + np.exp(-rng.normal(-1.4, 1.25, n)))  # centred ~0.20
+    s_bad = 1.0 / (1.0 + np.exp(-rng.normal(1.4, 1.25, n)))    # centred ~0.80
+
+    grid = np.linspace(0, 1, 500)
+    d_good = gaussian_kde(s_good)(grid)
+    d_bad = gaussian_kde(s_bad)(grid)
+    ymax = max(d_good.max(), d_bad.max())
+    left, right = grid <= c, grid >= c
+
+    fig, ax = plt.subplots(figsize=(5.8, 4.0))
+    ax.plot(grid, d_good, color=ARM_BLUE, lw=2)
+    ax.plot(grid, d_bad, color=ARM_RED, lw=2)
+    ax.fill_between(grid, d_good, color=ARM_BLUE, alpha=0.12)
+    ax.fill_between(grid, d_bad, color=ARM_RED, alpha=0.12)
+    # the two errors at this cutoff:
+    ax.fill_between(grid[left], d_bad[left], color=ARM_RED, alpha=0.45)     # bad, scored low = FN
+    ax.fill_between(grid[right], d_good[right], color=ARM_BLUE, alpha=0.40)  # good, scored high = FP
+    ax.axvline(c, color=ARM_ORANGE, lw=2.4, ls="--")
+
+    ax.text(c + 0.01, ymax * 1.12, "cutoff $c$", color=ARM_ORANGE, fontsize=9, ha="left")
+    ax.text(0.04, ymax * 1.02, "predict good", color="0.45", fontsize=8)
+    ax.text(0.96, ymax * 1.02, "predict bad", color="0.45", fontsize=8, ha="right")
+    ax.text(0.20, ymax * 0.45, "TN", color=ARM_BLUE, fontsize=9, ha="center")
+    ax.text(0.80, ymax * 0.45, "TP", color=ARM_RED, fontsize=9, ha="center")
+    ax.annotate("FN\n(bad, missed)", xy=(c - 0.11, ymax * 0.10),
+                color=ARM_RED, fontsize=8, ha="center")
+    ax.annotate("FP\n(false alarm)", xy=(c + 0.12, ymax * 0.10),
+                color=ARM_BLUE, fontsize=8, ha="center")
+
+    ax.set_ylim(0, ymax * 1.26)
+    ax.set_xlim(0, 1)
+    ax.set_yticks([])
+    ax.set_xlabel("predicted score  $\\hat p$(bad)")
+    ax.set_ylabel("density (each class normalised)")
+    ax.set_title("Two score distributions and a cutoff")
+    ax.legend([plt.Line2D([], [], color=ARM_BLUE, lw=2),
+               plt.Line2D([], [], color=ARM_RED, lw=2)],
+              ["good batches", "bad batches"], loc="center",
+              bbox_to_anchor=(0.5, 0.66), fontsize=8, frameon=False)
+    logger.info(f"score-dist (illustrative balanced): good median={np.median(s_good):.3f}, "
+                f"bad median={np.median(s_bad):.3f}, cutoff c={c}")
+    _finish(ax, "cm_score_dist.pdf", logger)
+
+
+def fig_f1_heatmap(logger):
+    """F1 (harmonic) vs arithmetic mean over the (precision, recall) square."""
+    g = np.linspace(0.001, 1, 250)
+    PP, RR = np.meshgrid(g, g)
+    f1 = 2 * PP * RR / (PP + RR)
+    arith = (PP + RR) / 2
+    levels = np.linspace(0, 1, 11)
+
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(8.6, 3.9), sharey=True)
+    for ax, Z, title in [(a1, f1, "F1 = harmonic mean"),
+                         (a2, arith, "arithmetic mean")]:
+        cf = ax.contourf(PP, RR, Z, levels=levels, cmap="viridis")
+        ax.contour(PP, RR, Z, levels=levels, colors="white", linewidths=0.4, alpha=0.5)
+        ax.set_xlabel("precision")
+        ax.set_title(title, fontsize=11)
+        ax.set_aspect("equal")
+    a1.set_ylabel("recall")
+    # the deck's four table rows, marked on the F1 panel
+    pts = [(1.0, 0.0), (0.8, 0.8), (0.5, 0.9), (0.9, 0.5)]
+    a1.scatter([p for p, _ in pts], [r for _, r in pts], color=ARM_RED, s=34,
+               edgecolors="white", linewidths=0.7, zorder=5)
+    cb = fig.colorbar(cf, ax=(a1, a2), fraction=0.046, pad=0.03)
+    cb.set_label("score")
+    logger.info("f1-heatmap: F1 contours bow into the corners; arithmetic stay straight")
+    fig.savefig(FIG_DIR / "cm_f1_heatmap.pdf", bbox_inches="tight")
+    plt.close(fig)
+    logger.info("wrote cm_f1_heatmap.pdf")
+
+
 def fig_multiclass_confusion(logger):
     """3-class cheese (good / moldy / dry) confusion-matrix heatmap."""
     X, y = make_classification(
@@ -296,6 +446,10 @@ def main():
     fig_roc_vs_pr(logger)
     fig_threshold_metrics(yte, s, logger)
     fig_cost_curve(yte, s, logger)
+    fig_youden(yte, s, logger)
+    fig_recall_floor(yte, s, logger)
+    fig_score_dist(logger)
+    fig_f1_heatmap(logger)
     fig_multiclass_confusion(logger)
     logger.info("done.")
 

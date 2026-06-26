@@ -62,7 +62,8 @@ Callout boxes via `fcolorbox{COLOR}{COLOR!8}{\parbox...}`:
 - **Outline** frame (`\tableofcontents`).
 - One `\section` per major topic, each preceded by a **`[plain]` transition slide**: `popblue` bold title + one short motivation line.
 - **Recap** frame at the end + a `paramgreen` **"Next:"** box pointing to the next lecture.
-- **No fixed deck length.** One idea per frame; split a dense frame into two.
+- **No HW frame in the deck.** Homework lives on the chapter `.qmd` page, not in the slides.
+- **Long decks are fine — no fixed length, and don't split or trim a deck just because it's long.** One idea per frame; split only a single *dense* frame into two. A single deck may cover several subtopics in one file (e.g. binary + multiclass logistic regression).
 
 ---
 
