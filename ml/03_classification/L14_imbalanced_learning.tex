@@ -1,0 +1,444 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+\usepackage{multirow}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{[14] Imbalanced Learning}
+\subtitle{Fix the operating point first; reshape the data only when you must}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK -- bridge from L13
+\begin{frame}{From measuring imbalance to fixing it}
+  You can now \textbf{score} a classifier on imbalanced data (L12: PR-AUC, recall, MCC) and
+  \textbf{trust} its probabilities (L13: calibration). But the cheese detector still \emph{misses
+  most of the 3\% bad batches}.
+  \vfill
+  Can we do better by changing the \textbf{data} or the \textbf{training} itself --- not just the
+  metric we report? This deck: the honest answer.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Two families of fixes: \textbf{tilt the training} (class weights / costs) and \textbf{reshape
+    the data} (over/under-sampling, SMOTE). Both help \emph{sometimes} --- and both have traps.}}
+\end{frame}
+
+\begin{frame}{Predict-first: just rebalance the classes?}
+  Take the cheese data ($3\%$ bad) and \textbf{duplicate the bad batches until the classes are
+  50/50}, then refit. Predict three things:
+  \vfill
+  \textbf{(a)} recall at the default threshold $0.5$? \quad \textbf{(b)} the ranking (ROC/PR-AUC)?
+  \quad \textbf{(c)} the predicted probabilities?
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{(a) Recall jumps} --- the decision boundary shifts toward the minority.
+    \item \textbf{(b) Ranking barely moves} (if anything, a touch worse) --- copies add no new information.
+    \item \textbf{(c) Probabilities inflate} --- the model now thinks ``bad'' is common; they
+      \textbf{decalibrate}. (And if you duplicated \emph{before} the train/test split, you leaked.)
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    The recall gain in (a) is real --- but you could have gotten it for free by \textbf{lowering
+    the threshold} (L12). That tension is the whole lecture.}}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What you already have}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Start with what you already have}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Before reshaping data, remember: two tools from L12--L13 handle most imbalance already.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Why imbalance hurts --- and your two existing tools}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Why it hurts:} training minimizes \emph{average} loss, which is dominated by the
+    majority --- so the model can score well by mostly ignoring the rare class (L12: $97\%$
+    accuracy, $0$ recall).
+    \column{0.5\textwidth}
+    \textbf{You already have two fixes (L12--L13):}
+    \begin{itemize}\small
+      \item the \textbf{right metric} --- PR-AUC, recall, MCC, balanced accuracy;
+      \item the \textbf{cost-tuned threshold} --- move $c$ off $0.5$ toward the minority.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Reach for data tricks only after these.} Often the metric + threshold are enough ---
+    they cost nothing and keep your probabilities honest.}}
+\end{frame}
+
+\begin{frame}{A map of the approaches}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l l l}
+      \textbf{Family} & \textbf{Idea} & \textbf{Where} \\
+      \hline
+      Algorithm-level & reweight errors / cost matrix in training & \textbf{this deck} \\
+      Data-level & resample to rebalance the classes & \textbf{this deck} (in depth) \\
+      Cost-sensitive \emph{thresholding} & move the cutoff by cost & \textbf{done in L12/L13} \\
+      Ensemble & imbalance-aware bagging/boosting & \textbf{ch.\,4 (trees)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize This deck covers the first two; the threshold is already yours; imbalance-specific
+  ensembles (BalancedRF, RUSBoost, EasyEnsemble) come with trees in chapter~4.
+\end{frame}
+
+% ================================================================
+\section{Tilt the training: weights \& costs}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Tilt the training: weights \& costs}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Tell the learner that minority mistakes hurt more --- without touching the data.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Class weights in the loss}
+  Weight each example's loss by its class, so minority errors count more:
+  \[
+    \thetah = \argmin_{\thetav} \ \frac1n \sumin w_{\yi}\, L\big(\yi, f(\xv^{(i)})\big),
+    \qquad w_k \propto \frac{n}{K\, n_k}.
+  \]
+  \begin{itemize}\small
+    \item \texttt{class\_weight="balanced"} sets exactly $w_k = n/(K\,n_k)$ --- the rare class is
+      up-weighted automatically.
+    \item It is just \textbf{weighted ERM} --- works for any loss-based learner (callback Ch.\,1).
+  \end{itemize}
+  \vfill
+  \footnotesize Same machinery as logistic regression (L11), only the per-example weights change.
+\end{frame}
+
+\begin{frame}{The catch: it's roughly a threshold move --- and it decalibrates}
+  \begin{itemize}\small
+    \item For a \emph{well-specified} model, reweighting is \textbf{approximately} a shift of the
+      prior / decision threshold (Elkan, 2001) --- not a brand-new model.
+    \item With \textbf{regularization} the fitted coefficients genuinely change, so it is not an
+      \emph{exact} threshold move --- but close.
+    \item Crucially, it \textbf{decalibrates}: the model trains as if the minority were common, so
+      its probabilities \textbf{inflate} (callback L13).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    In the bank-marketing project, \texttt{class\_weight="balanced"} blew ECE from $0.01$ to
+    $0.30$. For a probabilistic model it mostly \emph{duplicates threshold tuning at the cost of
+    calibration} --- if you use it and report probabilities, \textbf{recalibrate}.}}
+  \vskip 3pt
+  \footnotesize It \emph{does} change the fit meaningfully for tree split / SVM margin criteria --- more on ``when it helps'' later.
+\end{frame}
+
+\begin{frame}{Cost-sensitive learning --- just the idea}
+  L12/L13 put costs at the \textbf{decision threshold}. You can instead bake a \textbf{cost matrix}
+  into \textbf{training}, so the model itself minimizes expected cost:
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{cc|cc}
+      & & \multicolumn{2}{c}{\textbf{true}} \\
+      & & bad ($y{=}1$) & good ($y{=}0$) \\
+      \hline
+      \multirow{2}{*}{\textbf{pred.}} & bad & $0$ & $C_{FP}$ \\
+      & good & $C_{FN}$ & $0$ \\
+    \end{tabular}
+  \end{center}
+  \begin{itemize}\small
+    \item For a rare, costly positive: $C_{FN} \gg C_{FP}$ (a missed bad batch $\gg$ a re-check).
+    \item \textbf{Class weights are the simple special case} --- one cost per class.
+  \end{itemize}
+  \vfill
+  \footnotesize Full methods (MetaCost, instance-specific costs) exist but are beyond this course --- the \emph{idea} is what to remember.
+\end{frame}
+
+% ================================================================
+\section{Reshape the data: resampling}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reshape the data: resampling}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Rebalance the training set itself --- classifier-independent, flexible, and the most
+      widely used family. We go deep here; keep the ``threshold first'' ordering in mind.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Under-, over-, and hybrid sampling}
+  \begin{columns}[T]
+    \column{0.4\textwidth}
+    Three ways to rebalance \textbf{the training data}:
+    \begin{itemize}\small
+      \item \textbf{Undersampling} --- drop majority examples.
+      \item \textbf{Oversampling} --- add/synthesize minority examples.
+      \item \textbf{Hybrid} --- both.
+    \end{itemize}
+    \vskip 4pt
+    Independent of the classifier $\Rightarrow$ flexible. See what each does to one blob:
+    \column{0.6\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/imb_resampling_2d.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Undersampling: random, then smarter}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Random undersampling (RUS)} --- drop majority points at random. Fast, but may
+    \textbf{throw away informative examples}.
+    \vskip 6pt
+    \textbf{Tomek links} (smarter) --- a pair of \emph{opposite-class nearest neighbours}. They sit
+    on the boundary, so drop the \textbf{majority} one to clean it up.
+    \vskip 6pt
+    \footnotesize Other cleaning rules exist (edited-NN / NCL, CNN, one-sided selection) --- same
+    spirit: remove majority points near the border.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/imb_tomek.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Oversampling: random replication (ROS)}
+  \textbf{Random oversampling (ROS)} --- duplicate minority examples until balanced.
+  \vfill
+  \begin{itemize}
+    \item Cheap, classifier-independent, loses no data.
+    \item \textbf{But: exact copies} $\Rightarrow$ the model can \textbf{overfit} those few points
+      (it sees the same example many times, not new evidence).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Can we add minority examples that are \emph{plausible but new}, instead of copies? That is the
+    idea behind \textbf{SMOTE}.}}
+\end{frame}
+
+\begin{frame}{SMOTE: synthesize, don't copy}
+  \textbf{SMOTE} (Synthetic Minority Over-sampling) makes \emph{new} minority points by
+  \textbf{interpolating between neighbours}: for a minority point $\xv^{(i)}$ and one of its
+  minority neighbours $\xv^{(j)}$,
+  \[ \xv_{\text{new}} = \xv^{(i)} + \lambda\,\big(\xv^{(j)} - \xv^{(i)}\big), \qquad \lambda \in [0,1]. \]
+  \vfill
+  \textbf{By hand:} take $\xv^{(i)}=(1,2)$, neighbour $\xv^{(j)}=(3,1)$, and $\lambda=0.25$:
+  \[ \xv_{\text{new}} = (1,2) + 0.25\,(3-1,\ 1-2) = (1,2) + 0.25\,(2,-1) = \mathbf{(1.5,\ 1.75)}. \]
+  \vfill
+  \footnotesize A point a quarter of the way from $\xv^{(i)}$ toward its neighbour --- plausible,
+  and \emph{new} (not a copy). The next slide builds these step by step.
+\end{frame}
+
+\begin{frame}{SMOTE: building the points (step through)}
+  \begin{center}
+    \foreach \n in {1,...,12}{%
+      \includegraphics<\n>[width=0.74\linewidth]{fig/smote_viz_\n.pdf}%
+    }
+  \end{center}
+  \vskip 1pt
+  \footnotesize Pick a minority point, find its $k$ nearest minority neighbours, drop a synthetic
+  point on a random connecting segment; repeat. Steps build $K{=}2$, last step $K{=}3$.
+  \hfill \scriptsize Source: LMU AML (CC BY 4.0).
+\end{frame}
+
+\begin{frame}{SMOTE in practice}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textcolor{paramgreen}{\textbf{Pros}}
+    \begin{itemize}\small
+      \item Generalizes the minority \emph{region} instead of memorizing a few points (vs ROS).
+      \item The basis for $90{+}$ variants (Borderline-SMOTE, ADASYN, \dots).
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textcolor{armred}{\textbf{Cons}}
+    \begin{itemize}\small
+      \item Ignores the majority $\Rightarrow$ synthetic points can \textbf{bleed across the
+        boundary} into majority territory.
+      \item \textbf{Numeric-only} (it interpolates).
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  \footnotesize \textbf{Hybrid:} pair SMOTE with a cleaning step --- \textbf{SMOTETomek} (SMOTE
+  then Tomek) or \textbf{SMOTEENN} (SMOTE then edited-NN): oversample, then tidy the border.
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Categoricals?} Plain SMOTE can't interpolate ``job = student''. Use \textbf{SMOTENC}
+    for mixed numeric/categorical data --- e.g.\ the bank-marketing project, with its $9$
+    categorical columns.}}
+\end{frame}
+
+\begin{frame}[fragile]{Resampling in code --- on the training fold only}
+\begin{lstlisting}
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline          # NOTE: imblearn's Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+
+pipe = Pipeline([
+    ("scale", StandardScaler()),
+    ("smote", SMOTE(random_state=509)),          # resamples TRAIN folds only
+    ("clf",   LogisticRegression(max_iter=2000)),
+])
+cross_val_score(pipe, X, y, scoring="average_precision", cv=5)
+# class weights instead of resampling:
+LogisticRegression(class_weight="balanced")
+\end{lstlisting}
+  \vskip 2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Use \texttt{imblearn}'s \texttt{Pipeline} so the sampler runs \textbf{inside each CV fold} ---
+    never resample before splitting (next section: why).}}
+\end{frame}
+
+% ================================================================
+\section{Does it actually help?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Does it actually help?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      When resampling genuinely beats a tuned threshold --- and the two traps that bite if you're
+      careless.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{When it genuinely beats thresholding}
+  Reweighting / resampling helps when imbalance corrupts the \textbf{fit itself}, not just the
+  operating point:
+  \begin{itemize}\small
+    \item the minority region is \textbf{too sparse for the model to carve a boundary} there;
+    \item \textbf{regularization} shrinks the weak minority signal away;
+    \item a \textbf{tree's split criterion} picks different splits once the minority is up-weighted.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Rule of thumb:} if moving the threshold fixes it, you didn't need the data trick. If
+    the model never \emph{learned} the minority region, resampling/weights might actually help.}}
+\end{frame}
+
+\begin{frame}{Two traps: leakage and decalibration}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{1. Leakage.} Resample \textbf{only the training fold}, never before the split ---
+    otherwise synthetic/duplicated points leak across train/test and the score is fantasy. Use
+    \texttt{imblearn.Pipeline} (previous slide).
+    \vskip 4pt
+    \textbf{2. Decalibration.} Resampling changes the base rate the model sees $\Rightarrow$ its
+    probabilities inflate. \textbf{Recalibrate} on untouched data (L13), or report rankings only.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/imb_decalibration.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reality check --- on our own data}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Same imbalanced data, same logistic regression, four pre-processings. Compare \textbf{PR-AUC}
+    (ranking quality, threshold-free):
+    \vskip 4pt
+    \begin{itemize}\small
+      \item Resampling \textbf{barely moves} it --- here it even dips slightly.
+      \item It changes \emph{recall at a fixed threshold}, but that's a threshold move in disguise.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize The effect is \textbf{small and not even reliably positive} --- a tiny gain
+    sometimes (literature: Optdigits F1 $0.92 \to 0.95$), nothing or slightly worse other times
+    (here). Trees/boosting (ch.\,4) handle imbalance more natively.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/imb_benchmark.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Decision guide}
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+  \textbf{In order:}
+  \begin{enumerate}\small
+    \item \textbf{Right metric + cost-tuned threshold} (L12/L13) --- almost always start here.
+    \item \textbf{\texttt{class\_weight}} if your learner uses it --- then \textbf{recalibrate}.
+    \item \textbf{Resampling / SMOTE} only if the minority is truly tiny \textbf{and the fit (not
+      the threshold) is the bottleneck} --- \emph{inside} CV, then recalibrate.
+    \item \textbf{Get more minority data} / reframe the problem.
+    \item \textbf{Tabular?} reach for trees \& boosting (ch.\,4), which handle imbalance well.
+  \end{enumerate}}}
+  \vfill
+  \footnotesize Resampling is a tool, not a cure --- powerful when the fit is starved, wasteful when the threshold would have done the job.
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item Imbalance hurts because average loss is dominated by the majority --- but you already
+      fix most of it with the \textbf{right metric} + a \textbf{cost-tuned threshold} (L12/L13).
+    \item \textbf{Class weights / cost-sensitive learning} tilt the training; for a probabilistic
+      model they mostly mimic a threshold move and \textbf{decalibrate} $\Rightarrow$ recalibrate.
+    \item \textbf{Resampling}: RUS / Tomek (undersample), ROS (copies $\to$ overfit),
+      \textbf{SMOTE} (synthetic interpolation; SMOTENC for categoricals).
+    \item Two traps: \textbf{resample inside the fold} (leakage) and \textbf{recalibrate}
+      (decalibration). Real gains are usually \textbf{small}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} decision trees \& ensembles (ch.\,4) --- models that handle non-linearities and
+    imbalance more natively, and bring imbalance-aware ensembles (BalancedRF, RUSBoost).}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - [14] Imbalanced learning; chapter 3 classification, after L13 calibration.
+%   - Thesis: metric + threshold first (L12/L13); resampling/reweighting are secondary,
+%     decalibrate, and help mainly when the FIT (not the operating point) is the bottleneck.
+%   - Source: lecture_appml/slides/09_imbalancy_corr (LMU Advanced ML, CC BY 4.0) -- taxonomy
+%     (intro), sampling methods (ROS/RUS/Tomek, SMOTE). Cut as too advanced: cost curves,
+%     MetaCost, CSOVO, instance-specific costs, the performance-measures section (-> L12).
+%   - Reused figures (CC BY 4.0, credited on slide): smote_viz_1..12 (animation).
+%   - Generated figures (py_src/imbalanced_figs.py, ma venv): imb_resampling_2d, imb_tomek
+%     (house-style replacement for the third-party Herrera image), imb_decalibration,
+%     imb_benchmark (PR-AUC baseline vs ROS/RUS/SMOTE on our data).
+%   - Callbacks: L11 (class_weight, scaling), L12 (metrics, threshold, leakage), L13
+%     (calibration, recalibrate), bank-marketing project (class_weight ECE 0.01->0.30).
+%   - Design doc: L14_imbalanced_learning_OUTLINE.md (v4).
+% =============================================================
