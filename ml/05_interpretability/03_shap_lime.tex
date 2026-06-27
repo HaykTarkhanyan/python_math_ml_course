@@ -1,0 +1,342 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{SHAP \& LIME}
+\subtitle{Explaining a single prediction --- and the plots that make it readable}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Why this one prediction?}
+  Global importance (deck 2) says \texttt{temp} and \texttt{yr} matter \emph{overall}. But the
+  model predicts \textbf{this particular day} at \textbf{4311 rentals} (below the $\sim\!4500$
+  average) --- which features drove \emph{that}?
+  \vfill
+  Global tools can't answer per-prediction. \textbf{SHAP} can: it explains a \textbf{single
+  prediction}, and the same idea rolls up into global plots.
+  \vfill
+  \footnotesize Still the bike-sharing random forest from decks 1--2.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What SHAP is}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What SHAP is}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A fair split of the prediction among the features.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The idea: a fair payout}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Treat the prediction as a \textbf{payout to split fairly} among the features --- like a team
+    bonus among players who contributed differently.
+    \vskip 6pt
+    \textbf{SHAP} gives each feature its \textbf{fair share}: its contribution \emph{averaged over
+    all the orders} in which features could be added to the model.
+    \vskip 4pt
+    \footnotesize That averaging is the whole game-theory part --- we'll take it on trust and read
+    the results.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shapley_1.png}\\[-2pt]
+      \scriptsize Source: LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One prediction = base value + the SHAP values}
+  Every SHAP explanation is one simple sum:
+  \[
+    \underbrace{\hat f(\xv)}_{\text{this prediction}} \;=\;
+    \underbrace{\mathbb{E}[\hat f(X)]}_{\text{base value (avg.\ prediction)}}
+    \;+\; \sum_j \phi_j ,
+  \]
+  where $\phi_j$ is feature $j$'s SHAP value.
+  \begin{itemize}\small
+    \item $\phi_j > 0$ pushes this prediction \textbf{up}; $\phi_j < 0$ pushes it \textbf{down}.
+    \item \textbf{Every SHAP plot visualizes this sum} --- for one row, or aggregated over many.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{The SHAP plots (how to read them)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The SHAP plots --- how to read them}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One local plot, three global ones. Same SHAP values, different views.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Waterfall: one prediction, fully explained}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Start at the \textbf{base value} ($\sim\!4502$ rentals) and add each feature's SHAP value until
+    you reach \textbf{this day's prediction} ($4311$).
+    \vskip 4pt
+    \textbf{Read it:} \texttt{yr} ($+860$) and \texttt{temp} ($+771$) push it \textbf{up}, but a
+    very humid day (\texttt{hum} $-1590$) and poor \texttt{weathersit} ($-418$) push it
+    \textbf{down} --- landing just below average.
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_waterfall_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Bar: global importance (mean $|$SHAP$|$)}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Average the \textbf{magnitude} of each feature's SHAP over all rows:
+    \[ \text{importance}_j = \tfrac1n\sum_i |\phi_j^{(i)}| \]
+    \begin{itemize}\small
+      \item One bar per feature --- \textbf{reads like the PFI bar} from deck 2.
+      \item \texttt{yr}, \texttt{temp} dominate --- roughly agreeing with PFI.
+    \end{itemize}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_bar.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Beeswarm: the signature SHAP plot}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \textbf{One dot per row, per feature.} \quad $x$ = SHAP value; \textbf{colour = feature value}.
+    \vskip 4pt
+    \textbf{Read it:}
+    \begin{itemize}\small
+      \item \textbf{Spread} = how much the feature matters.
+      \item \textbf{Colour pattern} = direction: high \texttt{temp} (red) $\to$ positive SHAP
+        (more rentals); low (blue) $\to$ negative.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_beeswarm.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dependence: the effect shape (\& interactions)}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    SHAP value of a feature \textbf{vs.\ its value} --- one dot per row.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item Shows the \textbf{effect shape}: rentals rise with \texttt{temp}, then plateau ($\approx$ a PDP).
+      \item Colour by a second feature reveals \textbf{interactions}.
+      \item Per-instance --- \emph{like ICE did for PDP}, it shows the spread the average hides.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_dependence.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{SHAP in practice}
+
+\begin{frame}{TreeSHAP, and how SHAP unifies the chapter}
+  \begin{itemize}\small
+    \item \textbf{TreeSHAP} computes SHAP \textbf{exactly and fast} for trees/boosting $\Rightarrow$
+      SHAP is the \textbf{default} for tabular models. (KernelSHAP works for any model, but is slow.)
+    \item \textbf{SHAP unifies what we've seen:}
+      \begin{itemize}\small
+        \item the \textbf{bar} $\approx$ PFI (global importance),
+        \item the \textbf{dependence} plot $\approx$ PDP (effect shape),
+        \item \textbf{plus} a \emph{local} view (the waterfall) the others can't give --- with a
+          consistency guarantee (use a feature more $\Rightarrow$ its SHAP can't fall).
+      \end{itemize}
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{But like every method here, correlation muddies SHAP too} --- the credit split between
+    \texttt{temp} and \texttt{atemp} stays ambiguous. Still \textbf{model behaviour, not causation}
+    (deck 2's ice cream), and rich plots are \textbf{easy to over-read}.}}
+\end{frame}
+
+\begin{frame}[fragile]{SHAP in code}
+\begin{lstlisting}
+import shap
+explainer = shap.TreeExplainer(model)      # fast & exact for trees/boosting
+sv = explainer(X)                          # SHAP values for every row
+
+shap.plots.waterfall(sv[i])                # one prediction
+shap.plots.bar(sv)                         # global: mean |SHAP|
+shap.plots.beeswarm(sv)                    # global: dot per row, colour = value
+shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
+\end{lstlisting}
+  \vskip 2pt
+  \footnotesize \texttt{shap.Explainer(model, X)} auto-picks the right method (TreeSHAP here).
+\end{frame}
+
+% ================================================================
+\section{LIME}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{LIME: the lighter local cousin}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A simple, model-agnostic local explanation --- with sharper edges.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{LIME: fit a simple model, locally}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{LIME} explains one prediction with a \textbf{local surrogate}: jitter the inputs around
+    the instance, weight by \textbf{closeness}, and fit a \textbf{simple sparse linear model} ---
+    its weights say ``these few features pushed this prediction.'' Works on tabular, text, \& images.
+    \vskip 6pt
+    \textbf{Predict-first:} a husky-vs-wolf classifier is $\sim\!90\%$ accurate. What did LIME
+    reveal it actually keys on?
+    \vskip 2pt
+    \pause
+    \textbf{The \emph{snow} in the background} --- not the animal. A clever-Hans model, caught by a
+    local explanation.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/lime_husky.png}\\[-2pt]
+      \scriptsize Husky vs.\ wolf: LIME highlights snow pixels. LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LIME caveats, and SHAP vs.\ LIME}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Caveats}
+    \begin{itemize}\small
+      \item \textbf{Unstable}: re-run and the explanation can change.
+      \item The \textbf{neighbourhood} (how far to jitter, how to weight) is an \emph{arbitrary}
+        choice that moves the answer.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{SHAP vs.\ LIME:} SHAP has theory (consistency) + richer plots, but is slower; LIME is
+      simpler/faster but less stable. \textbf{SHAP is the modern default.}}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/lime_robustness.png}\\[-2pt]
+      \scriptsize Two runs, same point, different fits. LMU IML.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Same data, four rankings}
+  One bike dataset, (mostly) one model --- four ``importance'' methods, four different top-3s:
+  \vskip 4pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l l}
+      \textbf{Method} & \textbf{Top 3 features} \\
+      \hline
+      Linear coefficients (deck 1) & \texttt{yr}, \texttt{atemp}, \texttt{season} \\
+      Tree impurity (deck 1) & \texttt{temp}, \texttt{yr}, \texttt{atemp} \\
+      Permutation / PFI (deck 2) & \texttt{yr}, \texttt{atemp}, \texttt{temp} \\
+      SHAP (deck 3) & \texttt{yr}, \texttt{temp}, \texttt{hum} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \footnotesize They mostly agree on \texttt{yr}/temperature, but disagree on the rest
+  (\texttt{season}? \texttt{hum}? \texttt{temp} vs \texttt{atemp}?). \textbf{That} is what
+  ``importance is method-dependent'' means --- always say \emph{which} importance, on \emph{what} data.
+\end{frame}
+
+\begin{frame}{Which method when? (the whole chapter)}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.35}
+    \begin{tabular}{p{5.2cm} p{7.2cm}}
+      \textbf{You want\dots} & \textbf{Reach for\dots} \\
+      \hline
+      to read the model itself & a \textbf{glass-box model} --- coefficients / a tree (deck 1) \\
+      global ``which features matter'' & \textbf{PFI} or \textbf{SHAP bar} (decks 2--3) \\
+      ``how does a feature act'' & \textbf{PDP / ICE} or \textbf{SHAP dependence} (decks 2--3) \\
+      ``why this one prediction'' & \textbf{SHAP waterfall} or \textbf{LIME} (deck 3) \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize Whatever you pick: \textbf{(1)} correlated features mislead them all, \textbf{(2)}
+  different methods rank differently (previous slide), \textbf{(3)} none of it is \emph{causation}.
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{SHAP} fairly splits a prediction among features: $\hat f(\xv) = \text{base} + \sum_j \phi_j$.
+    \item Read the four plots: \textbf{waterfall} (one prediction), \textbf{bar} (global importance),
+      \textbf{beeswarm} (global, colour = value), \textbf{dependence} (effect shape + interaction).
+    \item \textbf{TreeSHAP} makes it the default for trees/boosting; SHAP \textbf{unifies} PFI \& PDP
+      and adds a local view.
+    \item \textbf{LIME} is the simpler local cousin --- handy but unstable.
+    \item Everything explains the \textbf{model}, not causation --- and plots are easy to over-read.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{That's interpretability:} read the model when you can, explain it when you can't ---
+    importance, effects, and per-prediction attributions, each answering a different question.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Interpretability chapter (ml/05_interpretability/), deck 3 of 3. SHAP (plots + how to read)
+%     + LIME (2 frames), intuition-first; cut: Shapley axioms/orderings math, KernelSHAP weighting,
+%     SAGE, counterfactuals.
+%   - Anchor: bike-sharing RF from decks 1-2.
+%   - Generated (py_src/interp_shap_figs.py, ma, shap lib): all 4 SHAP plots on the bike RF --
+%     shap_waterfall_bike (mixed instance 567, pred 4311 vs base 4502; hum down, yr/temp up),
+%     shap_bar (mean|SHAP|), shap_beeswarm, shap_dependence (temp 0-1, matches the chapter scale).
+%   - Reused (LMU IML, CC BY 4.0, credited): shapley_1 (fair-payout framing), lime_husky
+%     (husky/wolf -> snow), lime_robustness (instability).
+%   - Callbacks: deck 1 (glass-box), deck 2 (PFI ~ SHAP bar, PDP ~ SHAP dependence; ice-cream
+%     != causation), ch4 trees/boosting (TreeSHAP). Chapter decision guide in the wrap-up.
+%   - Design doc: 03_shap_lime_OUTLINE.md (v2). Interview-locked: hybrid figures (reuse LMU
+%     bar/beeswarm/dependence + animation, generate waterfall), bike RF, LIME = 2 frames.
+% =============================================================

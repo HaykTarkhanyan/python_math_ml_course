@@ -1,0 +1,303 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{Interpreting Linear Models \& Trees}
+\subtitle{Models you can read --- before any fancy method}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Two routes to interpretability}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    You built models that work --- but \emph{why} do they predict what they do?
+    \vskip 6pt
+    Two routes:
+    \begin{itemize}\small
+      \item \textbf{Use a glass-box model you can read} --- the model \emph{is} the explanation.
+        \textbf{(this deck)}
+      \item \textbf{Explain a black box afterwards} with model-agnostic tools. (decks 2--3)
+    \end{itemize}
+    \vskip 6pt
+    Today: the two transparent families you already know --- \textbf{linear models} and
+    \textbf{trees}.
+    \vskip 4pt
+    \footnotesize Why bother? To \textbf{trust} a model, \textbf{debug} it, and catch ones that
+    \emph{cheat} --- like deck 3's ``wolf'' detector that really keys on \emph{snow}.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=stealth]
+        \node[draw, rounded corners, fill=armblue!10, minimum width=2.7cm] (g) at (0,0)
+          {glass box: \emph{read it}};
+        \node[draw, rounded corners, fill=armred!10, minimum width=2.7cm] (b) at (0,-1.4)
+          {black box: \emph{explain it}};
+        \node[font=\tiny, armblue] at (0,-0.55) {linear, single tree};
+        \node[font=\tiny, armred] at (0,-1.95) {forest, boosting, NN};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: which one can you actually read?}
+  A linear model and a random forest reach the \textbf{same accuracy} on the bike-rental data.
+  Which can you \emph{read} --- and how?
+  \vfill
+  \pause
+  \begin{itemize}\small
+    \item \textbf{Linear model:} yes --- each feature has one coefficient.
+    \item \textbf{A single tree:} yes --- follow the splits from root to leaf (a rule).
+    \item \textbf{A random forest:} \textbf{no} --- hundreds of trees, no readable whole. But it
+      still hands you a built-in \emph{importance} number (which, we'll see, is biased).
+  \end{itemize}
+  \vfill
+  \footnotesize Running example: \textbf{bike sharing} --- predict daily rental count from weather
+  \& calendar features.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Reading a linear model}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reading a linear model}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The most transparent model: one number per feature.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Coefficients as importance}
+  A linear model $\hat y = \theta_0 + \sum_j \theta_j x_j$ tells you everything directly:
+  \begin{itemize}\small
+    \item \textbf{Sign} of $\theta_j$ = direction; \textbf{magnitude} = effect per $+1$ unit of $x_j$.
+    \item \textbf{Standardize first} to compare --- a raw coef of $5000$ on \texttt{temp} (range
+      $0$--$1$) vs $2$ on \texttt{hum} is \emph{not} ``$2500\times$ more important''; that's units
+      (L12). Standardized, $|\theta_j|$ is fair: on bike \texttt{yr} \& \texttt{atemp} top it.
+    \item Classification analog: $e^{\theta_j}$ = \textbf{odds ratio} (L11).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    No extra method needed: a (standardized) coefficient \emph{is} a built-in importance and
+    effect, in one number.}}
+\end{frame}
+
+\begin{frame}{Linear models: the caveats}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Only additive, linear effects}
+    \begin{itemize}\small
+      \item One straight-line effect per feature; no interactions or curves unless you engineer them.
+    \end{itemize}
+    \vskip 4pt
+    \textbf{Correlated features split the credit}
+    \begin{itemize}\small
+      \item \texttt{temp} and \texttt{atemp} (feels-like) are nearly the same; the model may give
+        each half the coefficient --- or unstable, even opposite, signs.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      A coefficient answers ``how does the prediction move with this feature, \emph{holding the
+      others fixed}'' --- which is exactly what breaks when features move \emph{together}.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Lasso: the model selects its own features}
+  \textbf{L1 (Lasso) regularization} shrinks coefficients toward zero --- and drives many to
+  \textbf{exactly zero} (callback: Ch.\,2 regularization).
+  \vfill
+  \begin{itemize}\small
+    \item Non-zero coefficients $=$ the features the model \emph{kept} --- a built-in,
+      sparsity-based \textbf{feature selection}.
+    \item Stronger penalty $\Rightarrow$ fewer survivors. \textbf{On bike (scaled):} the
+      CV-tuned Lasso keeps $10/11$; turn the penalty up and survivors drop $10 \to 4 \to 1$ ---
+      \textbf{sparsity is a knob you set}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Caveat:} among correlated features, Lasso keeps \emph{one} and zeros the rest
+    \emph{~arbitrarily} --- ``not selected'' does not mean ``unimportant.''}}
+\end{frame}
+
+% ================================================================
+\section{Reading trees}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reading trees}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One tree you can read; a forest you cannot --- but it still scores features.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{A single tree is a glass box}
+  \begin{columns}[T]
+    \column{0.4\textwidth}
+    Each \textbf{root-to-leaf path is a rule}:
+    \vskip 2pt
+    \emph{warm day (\texttt{temp}$>0.43$), year 2, good weather $\to$ predict $\sim 6726$ rentals.}
+    \vskip 6pt
+    \begin{itemize}\small
+      \item Fully transparent --- if it stays shallow.
+      \item Depth $\uparrow$ $\Rightarrow$ accuracy $\uparrow$ but readability $\downarrow$.
+    \end{itemize}
+    \column{0.6\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/tree_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How a split is chosen: reduce impurity}
+  A tree picks the split that most reduces \textbf{impurity}: \quad
+  reduction $=$ parent impurity $-$ \emph{weighted} child impurity. Two impurity measures:
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Classification: information gain} (entropy $H$) \\[2pt]
+    \footnotesize Toy: parent $5/5 \Rightarrow H=1.0$. A $4/1$ child:
+    $-\tfrac45\log_2\tfrac45-\tfrac15\log_2\tfrac15 = 0.72$.
+    \[ H_{\text{child}} = \tfrac12(0.72)+\tfrac12(0.72)=0.72,\ \ \text{gain}=1.0-0.72=\mathbf{0.28} \]
+    \column{0.5\textwidth}
+    \textbf{Regression: variance reduction} (bike root split) \\[2pt]
+    \footnotesize Split \texttt{temp} $\le 0.43$ ($n=731$):
+    \[ \mathrm{Var}_{\text{parent}} \approx 3.75\text{M} \]
+    \[ \mathrm{Var}_{\text{child}} = 0.40(2.24\text{M}) + 0.60(2.31\text{M}) = 2.28\text{M} \]
+    \[ \text{reduction} \approx \mathbf{1.46\text{M}}\ (\approx 39\%) \]
+  \end{columns}
+  \vskip 4pt
+  \footnotesize Same idea, two rulers --- the split with the biggest reduction wins.
+\end{frame}
+
+\begin{frame}{Forests: unreadable, but they score features}
+  A random forest is \textbf{hundreds of trees} --- no readable whole. Yet it gives a built-in
+  \textbf{feature importance}:
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Sum each feature's impurity reduction (info gain / variance reduction) over \emph{all} its
+    splits, averaged across the trees $\Rightarrow$ one importance per feature.}}
+  \vfill
+  \textbf{But it is biased:}
+  \begin{itemize}\small
+    \item Favors \textbf{high-cardinality / continuous} features (more places to split).
+    \item \textbf{Dilutes} across correlated features (credit shared between \texttt{temp},
+      \texttt{atemp}).
+    \item Computed on \textbf{training} data $\Rightarrow$ can reward overfitting.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Reading these in \texttt{sklearn}}
+\begin{lstlisting}
+# linear: standardized coefficients as importance
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression, LassoCV
+from sklearn.pipeline import make_pipeline
+Xs = StandardScaler().fit_transform(X)
+coef = LinearRegression().fit(Xs, y).coef_           # |coef| = importance
+sel  = make_pipeline(StandardScaler(), LassoCV())    # SCALE, then L1 (Lasso is scale-sensitive)
+kept = sel.fit(X, y)[-1].coef_ != 0                  # features Lasso keeps (alpha tuned by CV)
+
+# trees: built-in (impurity) importance + read one tree
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor, plot_tree
+RandomForestRegressor().fit(X, y).feature_importances_
+plot_tree(DecisionTreeRegressor(max_depth=3).fit(X, y))
+\end{lstlisting}
+\end{frame}
+
+% ================================================================
+\section{So which features matter?}
+
+\begin{frame}{Predict-first: do the two methods agree?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Same bike data, same goal. \textbf{Predict:} will the linear model and the random forest pick
+    the \emph{same} top features?
+    \vskip 4pt
+    \pause
+    \textbf{They don't:}
+    \begin{itemize}\small
+      \item Linear: \texttt{yr}, \texttt{atemp}, \texttt{season} on top.
+      \item Forest: \texttt{temp}, \texttt{yr}, \texttt{atemp} on top.
+    \end{itemize}
+    \vskip 4pt
+    Part of the gap is the \textbf{impurity bias} we just saw; the rest is that they genuinely
+    \textbf{measure different things} (a linear effect vs.\ impurity reduction), splitting the
+    \texttt{temp}/\texttt{atemp} correlation differently.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/imp_methods_disagree.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \textbf{Importance is method-dependent} --- always say \emph{which} importance you mean.
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Linear models} are read directly: (standardized) \textbf{coefficients} =
+      effect + importance; $e^{\theta_j}$ = odds ratio; \textbf{Lasso} selects features by zeroing them.
+    \item \textbf{A single tree} is a glass box (paths = rules); splits are chosen by
+      \textbf{impurity reduction} (information gain / variance reduction).
+    \item \textbf{Forests} are black boxes but emit a built-in \textbf{impurity importance} ---
+      fast, but \textbf{biased} (cardinality, correlation, train-based).
+    \item Different methods give \textbf{different rankings} --- importance is method-dependent,
+      and \emph{none of it is causation}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} model-agnostic interpretability --- \textbf{permutation importance} (fixes the
+    cardinality \& train-based biases --- though correlation still bites) and \textbf{feature
+    effects} (PDP / ICE), for \emph{any} model.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Interpretability chapter (ml/05_interpretability/), deck 1 of 3.
+%     Intrinsic interpretability: linear models (coef / odds ratios / Lasso) + trees
+%     (single-tree reading, info gain / variance reduction, forest impurity importance + biases).
+%   - Anchor dataset: UCI Bike Sharing (day.csv), regression on cnt. data/bike-day.csv.
+%   - Figures (py_src/interp_linear_trees_figs.py, ma venv): imp_methods_disagree (linear coef vs
+%     RF impurity, rankings differ), tree_bike (shallow regression tree). Worked numbers logged:
+%     bike root split temp<=0.43 variance 3.75M->2.28M (reduction ~1.46M, 39%); info-gain toy
+%     parent H=1.0 -> 0.72, gain 0.278.
+%   - Framing only from lecture_iml (CC BY 4.0) interpretable-models.
+%   - Callbacks: L11 (odds ratios), L12 (standardize coefficients), ch2 regularization (Lasso),
+%     ch4 trees (info gain / RF importance, assumed delivered). Forward: deck 2 (PFI, PDP/ICE).
+%   - Design doc: 01_linear_and_trees_OUTLINE.md (v3). Interview-locked: bike anchor, ch4 callback,
+%     Lasso added, worked split both criteria (info gain + variance reduction).
+% =============================================================

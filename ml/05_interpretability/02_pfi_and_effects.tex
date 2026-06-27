@@ -1,0 +1,310 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{PFI \& Feature Effects (PDP / ICE)}
+\subtitle{Model-agnostic: which features matter, and how}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Open the black box --- from any model}
+  Deck 1 read the model directly (coefficients, tree splits). But a random forest, a boosting
+  model, a neural net --- you \emph{can't} read those.
+  \vfill
+  \textbf{Model-agnostic} tools work on \emph{any} fitted model and answer two questions:
+  \begin{itemize}\small
+    \item \textbf{How much} does a feature matter? $\to$ \textbf{Permutation Feature Importance (PFI)}.
+    \item \textbf{How} does a feature act on the prediction? $\to$ \textbf{feature effects (PDP / ICE)}.
+  \end{itemize}
+  \vfill
+  \footnotesize Running example continues: a \textbf{bike-sharing} random forest (deck 1's data).
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Permutation feature importance}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{How much does a feature matter?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Make a feature useless and watch the error rise.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Permutation feature importance: the idea}
+  \textbf{Make feature $X_j$ useless} by \textbf{permuting} its column (shuffle its values across
+  rows): same marginal distribution, but its link to the target is broken. Then see how much the
+  error rises:
+  \[
+    \mathrm{PFI}_j \;=\; \underbrace{\mathbb{E}\big[L(\hat f(\text{$X_j$ permuted}), Y)\big]}_{\text{error after}}
+    \;-\; \underbrace{\mathbb{E}\big[L(\hat f(X), Y)\big]}_{\text{baseline error}}.
+  \]
+  \begin{itemize}\small
+    \item Big rise $\Rightarrow$ the model leaned on $X_j$. Near zero $\Rightarrow$ it didn't.
+    \item \textbf{Permute, don't drop} --- the model is already trained; we can't remove a feature
+      without refitting a \emph{different} model.
+    \item Repeat the shuffle several times and average (it's random).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Permutation importance, step by step}
+  \begin{center}
+    \only<1>{\includegraphics[page=2, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<2>{\includegraphics[page=3, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<3>{\includegraphics[page=4, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<4>{\includegraphics[page=5, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<5>{\includegraphics[page=6, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<6>{\includegraphics[page=7, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+  \end{center}
+  \vskip 2pt
+  \footnotesize \textbf{Perturb} (permute the feature) $\to$ \textbf{predict} on both versions $\to$
+  \textbf{aggregate} the change in loss, averaged over rows and repeats.
+  \hfill \scriptsize Source: LMU IML (CC BY 4.0).
+\end{frame}
+
+\begin{frame}{PFI on the bike model}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Permuting each feature on the \textbf{test set}, measured as the rise in MAE:
+    \begin{itemize}\small
+      \item \texttt{yr}, \texttt{atemp}/\texttt{temp} dominate. By hand: baseline MAE $\approx 455$;
+        shuffle \texttt{yr} $\to$ MAE $\approx 1225$; $\text{PFI}(\texttt{yr}) \approx \mathbf{770}$.
+      \item Calendar/weather minutiae barely matter.
+      \item Error bars = variation over repeated shuffles.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize Model-agnostic: same recipe would work on boosting, an SVM, a neural net.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pfi_bar.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Train or test? They answer different questions}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Predict-first:} an \texttt{xgboost} model overfits noise. Which features does PFI flag
+    --- on train vs.\ on test?
+    \vskip 4pt
+    \pause
+    \begin{itemize}\small
+      \item \textbf{Train PFI} highlights whatever the model \emph{overfit} to (spurious links).
+      \item \textbf{Test PFI} shows what actually \emph{generalizes} --- here, nothing.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      For ``which features help the model generalize?'', compute PFI on \textbf{test} data.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pfi_test_vs_train.pdf}\\[-2pt]
+      \scriptsize Source: LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The correlation trap}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Permuting a feature that is \textbf{correlated} with others creates \textbf{impossible rows}
+    (e.g.\ a hot \texttt{temp} with a freezing \texttt{atemp}).
+    \vskip 4pt
+    \begin{itemize}\small
+      \item The model is then scored on inputs it \emph{never sees} in reality (extrapolation).
+      \item $\Rightarrow$ PFI can \textbf{inflate} the importance of correlated features.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize \textbf{Note the flip:} correlation \emph{deflated} impurity importance (deck 1);
+    here it \emph{inflates} PFI. \quad \textbf{One fix:} conditional variants (CFI) permute a feature
+    \emph{within groups of similar rows}, so the joint distribution stays realistic.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/trap_temp_atemp.pdf}\\[-2pt]
+      \scriptsize Bike: \texttt{temp}/\texttt{atemp} corr.\ $0.99$; permuting \texttt{temp} makes impossible rows.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Important $\neq$ causal}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Summer heat drives both \textbf{ice-cream sales} and \textbf{drownings}. A model predicting
+    drownings from ice-cream sales finds ice cream \textbf{highly important}.
+    \vskip 6pt
+    \begin{itemize}\small
+      \item PFI is right: the \emph{model} relies on ice cream.
+      \item But \textbf{banning ice cream won't stop drownings} --- it isn't the cause.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      Importance tells you what the \textbf{model uses}, not what \emph{causes} the outcome.}}
+    \vskip 4pt
+    {\footnotesize \textbf{In our data:} \texttt{yr} is the \#1 feature, yet the year doesn't
+    \emph{cause} rides --- it proxies the service growing. \emph{(Confounding --- a different problem
+    from the trap's impossible inputs.)}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small, >=stealth, node distance=1.1cm,
+        v/.style={draw, ellipse, inner sep=2pt, minimum width=1.9cm}]
+        \node[v, dashed, fill=gray!10] (t) at (0,1.4) {temperature};
+        \node[v, fill=armblue!12] (ic) at (-1.9,0) {ice-cream};
+        \node[v, fill=armred!12] (d) at (1.9,0) {drownings $Y$};
+        \draw[->] (t) -- (ic); \draw[->] (t) -- (d);
+        \node[draw, rounded corners, fill=armorange!15] (yh) at (-1.9,-1.5) {$\hat Y$ (model)};
+        \draw[->, armorange!80!black, thick] (ic) -- (yh);
+        \node[gray, font=\scriptsize] at (0,2.05) {(the real cause)};
+      \end{tikzpicture}
+      \\[2pt]
+      \scriptsize Model uses the \emph{proxy} (ice cream), not the cause (temperature).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Feature effects: PDP \& ICE}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{From ``how much'' to ``how''}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Importance is one number; effects show the \emph{shape} of a feature's influence.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Partial dependence (PDP): the average effect}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Vary one feature across its range, average the model's prediction over all other rows, and plot
+    the result --- the \textbf{average effect} of that feature.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item \texttt{temp}: rentals climb with warmth, then plateau.
+      \item \texttt{hum}: high humidity suppresses rentals.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pdp_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{ICE: one curve per row --- and what PDP hides}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \textbf{ICE} draws one curve \emph{per observation}; the \textbf{PDP is their average}.
+    \vskip 4pt
+    \textbf{Predict-first:} the PDP (orange) is \textbf{flat} --- does the feature not matter?
+    \vskip 4pt
+    \pause
+    \textbf{No.} The ICE curves \textbf{fan out}: $x$'s effect \textbf{flips sign depending on
+    another feature} --- rising for half the rows, falling for the other half, so the opposing
+    effects \textbf{cancel in the average}. PDP hid that interaction; ICE exposes it --- exactly the
+    kind of interaction a \emph{linear} model couldn't represent (deck 1).
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/ice_interaction_toy.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{PDP shares PFI's correlation trap --- and ALE fixes it}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    To average over the other features, PDP also evaluates the model on \textbf{unrealistic
+    combinations} when features are correlated (same extrapolation as PFI, slide~7).
+    \vskip 6pt
+    \textbf{ALE} (Accumulated Local Effects) fixes this: it averages \emph{local} changes within
+    small windows of the feature, staying inside the real data $\Rightarrow$ a correlation-robust
+    effect curve.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/ale_vs_pdp_bike.pdf}\\[-2pt]
+      \scriptsize Bike \texttt{temp}: PDP overshoots at the extremes; ALE stays realistic.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{In \texttt{sklearn}}
+\begin{lstlisting}
+from sklearn.inspection import permutation_importance, PartialDependenceDisplay
+
+# PFI on the TEST set -- works for ANY fitted model
+r = permutation_importance(model, X_test, y_test, n_repeats=20,
+                           scoring="neg_mean_absolute_error")
+r.importances_mean         # rise in MAE per feature = importance
+
+# feature effects: PDP (average) + ICE (one line per row)
+PartialDependenceDisplay.from_estimator(model, X, ["temp", "hum"])      # PDP
+PartialDependenceDisplay.from_estimator(model, X, ["temp"], kind="both")  # PDP + ICE
+\end{lstlisting}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Model-agnostic} tools open any black box.
+    \item \textbf{PFI} (\emph{how much}): permute a feature, measure the error rise; compute it on
+      \textbf{test} data; watch the \textbf{correlation trap}; and remember \textbf{important
+      $\neq$ causal}.
+    \item \textbf{PDP} (\emph{how}): the average effect shape. \textbf{ICE}: one curve per row ---
+      \textbf{PDP is their average}, and ICE reveals interactions the PDP hides.
+    \item PDP shares PFI's extrapolation issue; \textbf{ALE} is the correlation-robust fix.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} \textbf{SHAP} --- one method that explains a \emph{single} prediction \emph{and}
+    rolls up to global importance \& effects, with a rich set of plots.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Interpretability chapter (ml/05_interpretability/), deck 2 of 3.
+%     Model-agnostic: PFI (how much) + feature effects PDP/ICE (how), + ALE one-liner.
+%   - Anchor: bike-sharing RF from deck 1 (data/bike-day.csv).
+%   - Generated (py_src/interp_pfi_effects_figs.py, ma): pfi_bar (PFI on test, MAE rise;
+%     top yr/atemp/temp), pdp_bike (temp/hum), ice_interaction_toy (PDP flat, ICE fans out),
+%     trap_temp_atemp (corr 0.99 -> impossible rows when permuted), ale_vs_pdp_bike (PDP overshoots
+%     at extremes, ALE realistic; manual 1D ALE). permutation_importance: importances_mean = MAE rise.
+%   - Reused (LMU IML, CC BY 4.0, credited): pfi_demo2 (pages 2-7 animation), pfi_test_vs_train
+%     (overfit train-vs-test).
+%   - "Important != causal": ice-cream/drownings confounding via temperature (TikZ DAG).
+%   - Callbacks: deck 1 (impurity importance was biased/train-based -> PFI fixes), L14 (permutation
+%     idea), L12 (loss, train-vs-test/leakage). Forward: deck 3 (SHAP).
+%   - Design doc: 02_pfi_and_effects_OUTLINE.md (v2). Interview-locked: bike anchor, hybrid figures,
+%     ALE one-liner+fig, ice-cream/drownings causation toy.
+% =============================================================
