@@ -1,0 +1,633 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true,
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+
+% inner product
+\newcommand{\scp}[2]{\left\langle #1, #2 \right\rangle}
+
+% section-transition helper: [plain] frame, popblue title + one motivation line
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[0.9em]
+      \begin{minipage}{0.82\textwidth}\centering\small #2 \end{minipage}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{Classic Methods: SVM \& the Kernel Trick}
+\subtitle{(with KNN, Naive Bayes, LDA/QDA, Gaussian processes)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Five classic ideas worth knowing}
+  Trees and boosting (L09--L12) win most tabular problems today. But five \textbf{classic}
+  methods still show up everywhere --- in interviews, in libraries, and as the \emph{ideas}
+  behind modern tools. Each has \textbf{one beautiful, transferable idea}.
+  \vfill
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{l l}
+      \textbf{Family} & \textbf{Method $\to$ the idea} \\
+      \hline
+      Learn by \textbf{similarity} & KNN $\to$ ``you are like your neighbors'' \\
+      Model how classes are \textbf{generated} & Naive Bayes, LDA/QDA $\to$ Bayes' rule \\
+      \textbf{Margins \& kernels} & \textbf{SVM} $\to$ widest street $+$ the \textbf{kernel trick} \\
+      & Gaussian processes $\to$ kernels, now with \emph{uncertainty} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{SVM is the focus} --- we derive it. The other four are ideas to \emph{recognize},
+    intuition-first.}}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Learn by similarity: KNN}
+\sectiontransition{Learn by similarity}{Predict a point the way its nearest neighbors voted ---
+no training, all the work at prediction time.}
+
+\begin{frame}{K-nearest neighbors: lazy learning}
+  \textbf{No training-time optimization at all.} To predict a new point:
+  \begin{enumerate}\small
+    \item find its \textbf{$k$ nearest} training points (by distance);
+    \item \textbf{vote} (classification) or \textbf{average} (regression).
+  \end{enumerate}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The cost is moved, not removed:} \emph{zero} training, but \emph{expensive}
+    prediction --- every query scans the data ($O(n\cdot p)$).}}
+\end{frame}
+
+\begin{frame}{$k$ is the bias-variance knob}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    The boundary is \textbf{local and jagged} (a Voronoi mosaic).
+    \begin{itemize}\small
+      \item $k=1$: zero training error, \textbf{overfits} noise.
+      \item large $k$: smoother, \textbf{more bias}.
+      \item choose $k$ by \textbf{CV} (callback: overfitting/CV lecture).
+    \end{itemize}
+    \vskip 4pt
+    \textbf{Predict-first:} what does $k=1$ do on noisy data? \emph{(Memorizes it --- islands
+    around single points.)}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_knn_boundary.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{KNN: three gotchas}
+  \begin{itemize}\small
+    \item \textbf{Scale first.} Distances are dominated by large-range features (callback: the
+      preprocessing lecture) --- standardize.
+    \item \textbf{Curse of dimensionality.} In high dimensions everything is far from
+      everything; ``nearest'' stops meaning much.
+    \item \textbf{Inference cost.} $O(n\cdot p)$ per query $\to$ speed it up with kd-/ball-trees,
+      or approximate nearest neighbors (ANN, FAISS) at scale.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{KNN: where the idea still wins}
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Transferable idea --- similarity search.} Nearest neighbors in an \textbf{embedding
+    space} is exactly \textbf{retrieval}: vector search, RAG, recommenders (``users like you
+    also\dots'').}}
+  \vfill
+  Also handy for: \textbf{KNN imputation}, \textbf{anomaly detection} (far from all neighbors),
+  and a \textbf{quick baseline} that surprisingly often competes.
+\end{frame}
+
+% ================================================================
+\section{Generative classifiers: Naive Bayes, LDA/QDA}
+\sectiontransition{Model how each class is generated}{Learn what each class \emph{looks like},
+then let Bayes' rule turn that into a decision.}
+
+\begin{frame}{Naive Bayes: from words to a decision}
+  \textbf{Is this SMS spam?} We want $P(\text{spam}\mid \text{words})$. Bayes' rule:
+  \[
+    \underbrace{P(y \mid \xv)}_{\text{posterior}} \;\propto\;
+    \underbrace{P(\xv \mid y)}_{\text{likelihood}}\;\underbrace{P(y)}_{\text{prior}},
+    \qquad \text{predict } \argmax_y P(y \mid \xv).
+  \]
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Generative:} instead of drawing a boundary, model how each class \emph{produces} its
+    features, then compare.}}
+\end{frame}
+
+\begin{frame}{The ``naive'' assumption (and its variants)}
+  Estimating the full $P(\xv \mid y)$ is hard. \textbf{Naive} shortcut: features are
+  \textbf{conditionally independent given the class}, so
+  \[
+    P(\xv \mid y) = \prod_{j=1}^{p} P(x_j \mid y).
+  \]
+  Obviously false (``free'' and ``money'' co-occur in spam) --- but cheap.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Variants by feature type: \textbf{Gaussian}NB (continuous), \textbf{Multinomial}/\textbf{Bernoulli}NB
+    (word counts / presence). \textbf{Laplace smoothing} avoids a single unseen word zeroing the
+    whole product.}}
+\end{frame}
+
+\begin{frame}{Why it works despite a false assumption}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Predict-first:} the independence assumption is wrong --- shouldn't the classifier fail?
+    \pause
+    \vskip 4pt
+    \textbf{No.} We only need the \textbf{argmax} to be right, not the probabilities --- the
+    estimated numbers are often badly off, but the \emph{ranking} of classes survives.
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Multiplying $p$ simple 1-D estimates \textbf{dodges the curse of dimensionality}, needs
+      \textbf{little data}, and is \textbf{very fast}.}}
+    \column{0.5\textwidth}
+    \footnotesize \textbf{By hand:} message \texttt{"free money"}, toy training counts:
+    \vskip 3pt
+    \renewcommand{\arraystretch}{1.15}
+    \centering
+    \begin{tabular}{l c c}
+       & \textbf{spam} & \textbf{ham} \\
+      \hline
+      prior & 0.4 & 0.6 \\
+      \texttt{free} & 0.4 & 0.02 \\
+      \texttt{money} & 0.3 & 0.05 \\
+      \hline
+    \end{tabular}
+    \vskip 4pt
+    \raggedright score $\propto$ prior $\times$ likelihoods:\\[2pt]
+    spam: $0.4\cdot0.4\cdot0.3 = \mathbf{0.048}$\\
+    ham:\ \ $0.6\cdot0.02\cdot0.05 = 0.0006$\\[2pt]
+    $\Rightarrow$ \textbf{spam} wins $\sim\!80{:}1$ --- argmax right, even though \texttt{free} \&
+    \texttt{money} truly co-occur.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Generative vs discriminative}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Generative} (NB, LDA/QDA)
+    \begin{itemize}\small
+      \item models $P(\xv \mid y)$ --- ``how each class looks'';
+      \item Bayes' rule $\to$ boundary.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Discriminative} (logreg, SVM)
+    \begin{itemize}\small
+      \item models the boundary / $P(y\mid\xv)$ directly;
+      \item no model of the features.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Naive Bayes gives a \textbf{score, not a calibrated probability} (callback: the calibration
+    lecture) --- its confident-looking numbers are usually miscalibrated.}}
+\end{frame}
+
+\begin{frame}{LDA / QDA: Gaussian blobs, then Bayes}
+  Model each class as a \textbf{Gaussian blob} in feature space; Bayes' rule turns the blobs into
+  a boundary. This is Naive Bayes' \textbf{richer cousin} --- it \emph{allows feature
+  correlations} (a full covariance matrix) instead of assuming independence.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Same Bayes formula as NB --- \textbf{only the covariance assumption changes}.}}
+\end{frame}
+
+\begin{frame}{LDA vs QDA: one knob, the covariance}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \begin{itemize}\small
+      \item \textbf{LDA:} \emph{shared} covariance across classes $\Rightarrow$ a \textbf{linear}
+        boundary (fewer parameters, more bias).
+      \item \textbf{QDA:} \emph{per-class} covariance $\Rightarrow$ a \textbf{quadratic}, curved
+        boundary (more parameters, more variance).
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{Unification:} Gaussian NB $=$ the \emph{diagonal}-covariance special case; LDA/QDA
+      are the full-covariance versions. Another bias-variance dial.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_lda_qda.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LDA is also supervised dimensionality reduction}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    Beyond classifying, \textbf{LDA} finds the axes that best \textbf{separate the classes} ---
+    project onto $\le (\#\text{classes}-1)$ dimensions.
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{PCA vs LDA:} PCA is \emph{unsupervised} --- it keeps the directions of most
+      \textbf{variance}. LDA is \emph{supervised} --- it keeps the directions of most
+      \textbf{class separation} (callback: the PCA lecture).}}
+    \column{0.44\textwidth}
+    \textbf{Predict-first:} on a 2-class blob stretched diagonally, which axis would each pick?
+    \pause
+    \vskip 2pt
+    \footnotesize PCA $\to$ the long (high-variance) axis; LDA $\to$ the axis that
+    \emph{separates the two colors}, even if it is the short one.
+  \end{columns}
+  \vfill
+  \footnotesize Strong low-data baseline; assumes roughly Gaussian features.
+\end{frame}
+
+% ================================================================
+\section{Margins \& kernels: Support Vector Machines}
+\sectiontransition{Margins \& kernels}{The centerpiece: the widest street, and a trick that bends
+it around any shape --- derived, not asserted.}
+
+\begin{frame}{Maximum margin: the widest street}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Many lines separate these classes. SVM picks the one with the \textbf{widest margin} --- the
+    largest ``safety street'' around the boundary, so new points are least likely to cross.
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Support vectors} $=$ the few points touching the margin edge. \emph{Only they}
+      determine the boundary --- move any other point and nothing changes.}}
+    \vskip 4pt
+    \textbf{Predict-first:} of several separating lines, which generalizes best?
+    \pause \emph{(The widest-margin one.)}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_svm_margin.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{From ``widest street'' to a quadratic program}
+  Decision function $f(\xv) = \thetav^\top \xv + \theta_0$, predict $\text{sign}(f)$. The signed
+  distance of a point is $\,d(f,\xv^{(i)}) = \yi\, f(\xv^{(i)}) / \|\thetav\|$.
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \small Maximize the smallest distance $\gamma$:
+    \begin{align*}
+      \max_{\thetav,\theta_0}\ \gamma \quad \text{s.t.}\quad
+      \frac{\yi(\thetav^\top\xv^{(i)}+\theta_0)}{\|\thetav\|} \ge \gamma.
+    \end{align*}
+    The hyperplane is scale-free, so fix the \textbf{reference} $\|\thetav\| = 1/\gamma$. The
+    constraint becomes $\yi(\thetav^\top\xv^{(i)}+\theta_0)\ge 1$, and $\gamma = 1/\|\thetav\|$:
+    \column{0.46\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{
+      \[
+        \min_{\thetav,\theta_0}\ \tfrac12\|\thetav\|^2
+      \]
+      \[
+        \text{s.t. } \yi(\thetav^\top\xv^{(i)}+\theta_0)\ge 1\ \forall i.
+      \]}}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Maximizing $1/\|\thetav\|$ $=$ minimizing $\tfrac12\|\thetav\|^2$. A \textbf{convex quadratic
+    program} (the \emph{primal}); margin width $= 2/\|\thetav\|$.}}
+\end{frame}
+
+\begin{frame}{Support vectors: sparse in the data}
+  The points with $\yi f(\xv^{(i)}) = 1$ sit \emph{exactly} on the margin edge --- these are the
+  \textbf{support vectors}.
+  \begin{itemize}\small
+    \item Delete a \emph{non}-support-vector $\to$ the solution is \textbf{unchanged}.
+    \item Delete a support vector $\to$ the boundary \textbf{moves}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    That is why it is a \emph{Support Vector} Machine: the model is \textbf{sparse in the data} ---
+    it depends only on a handful of points. (We will see this fall out of the dual, algebraically.)}}
+\end{frame}
+
+\begin{frame}{Soft margin: real data isn't cleanly separable}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    On non-separable data the hard-margin constraints are \textbf{contradictory} (empty feasible
+    region). Allow \textbf{slack} $\xi_i \ge 0$ --- points may sit inside/across the margin:
+    \[
+      \min_{\thetav,\theta_0,\bm{\xi}}\ \tfrac12\|\thetav\|^2 + C\sumin \xi_i
+    \]
+    \[
+      \text{s.t. } \yi(\thetav^\top\xv^{(i)}+\theta_0)\ge 1-\xi_i.
+    \]
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_svm_soft_margin.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{$C$ is a regularization knob} (bias-variance): large $C$ = punish violations, narrow
+    margin (overfit); small $C$ = wider margin, more bias. $C\to\infty$ recovers the hard margin.}}
+\end{frame}
+
+\begin{frame}{SVM \emph{is} regularized ERM with the hinge loss}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    At the optimum, $\xi_i = \max(0,\, 1-\yi f_i)$, so the soft-margin SVM is just
+    \[
+      \min_{\thetav,\theta_0}\ \tfrac12\|\thetav\|^2 + C\sumin \max(0,\,1-\yi f_i).
+    \]
+    That is \textbf{$L_2$-regularized ERM} with the \textbf{hinge loss} --- the same recipe as
+    every model since L02, a new loss.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_hinge_loss.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Swap the loss:} hinge $\to$ \textbf{log-loss} gives \emph{regularized logistic
+    regression} --- SVM and logreg are the \textbf{same recipe}, different loss. The hinge's
+    \emph{flat} part is what creates support vectors (smooth losses have none).}}
+\end{frame}
+
+\begin{frame}{The dual: what the algorithm actually touches}
+  Introduce a multiplier $\alpha_i \ge 0$ per point. Stationarity of the Lagrangian gives
+  $\thetav = \sumin \alpha_i \yi \xv^{(i)}$, and the problem becomes the \textbf{dual}:
+  \[
+    \max_{\bm{\alpha}}\ \sumin \alpha_i
+      - \tfrac12 \sumin\sum_{j=1}^n \alpha_i\alpha_j\,\yi\, y^{(j)}\, \scp{\xv^{(i)}}{\xv^{(j)}},
+    \quad \text{s.t. } \sumin\alpha_i\yi=0,\ 0\le\alpha_i\le C.
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{(1)} $\alpha_i > 0$ \emph{only} for support vectors (the sparsity, now algebraic).}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{(2)} The data enters \emph{only} through \textbf{inner products}
+      $\scp{\xv^{(i)}}{\xv^{(j)}}$.}}
+  \end{columns}
+  \vfill
+  \footnotesize Prediction, too, is only inner products:
+  $\;f(\xv) = \sum_{\text{SV}} \alpha_i\yi \scp{\xv^{(i)}}{\xv} + \theta_0\;$ --- a weighted vote of
+  \textbf{similarities} to the support vectors. \emph{(Remember that fact.)} \;
+  {\scriptsize(The upper bound $\alpha_i\le C$ comes from the soft-margin slack constraints.)}
+\end{frame}
+
+\begin{frame}{Non-linear data $\to$ feature maps $\to$ a wall}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \textbf{Predict-first:} can a straight line \emph{ever} separate concentric circles?
+    \pause
+    \vskip 2pt
+    Not in 2-D. But \textbf{lift} with $\phi(\xv) = (x_1, x_2,\, x_1^2+x_2^2)$ --- in 3-D a flat
+    plane separates them (a curved boundary back in 2-D).
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{But explicit maps explode:} degree-$d$ monomials of $p$ features give
+      $\binom{d+p}{d}-1$ terms --- infeasible even for $16\times16$ images. Dead end?}}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_circles_lift.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The kernel trick}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    From the dual, the algorithm needs \emph{only} inner products $\scp{\phi(\xv)}{\phi(\xv')}$.
+    A \textbf{kernel} computes that \textbf{directly}, without ever building $\phi$:
+    \[
+      k(\xv,\xv') = \scp{\phi(\xv)}{\phi(\xv')}.
+    \]
+    \small Common kernels:
+    \begin{itemize}\small
+      \item \textbf{linear} $\xv^\top\xv'$;
+      \item \textbf{polynomial} $(\xv^\top\xv'+b)^d$;
+      \item \textbf{RBF} $\exp(-\gamma\|\xv-\xv'\|^2)$ --- \emph{implicitly infinite-dimensional}.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_svm_kernels.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Replace every $\scp{\cdot}{\cdot}$ by $k(\cdot,\cdot)$ (still convex). \textbf{RBF $=$ a
+    similarity bump around each support vector} --- prediction is a weighted vote of similarities
+    (the \textbf{KNN} idea again, learned).}}
+\end{frame}
+
+\begin{frame}{By hand: an RBF kernel is a similarity number}
+  Take $\gamma = 1$ and a query point $\xv = (0,0)$. The RBF kernel
+  $k(\xv,\xv') = \exp(-\gamma\|\xv-\xv'\|^2)$ scores each support vector by \textbf{closeness}:
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Near} SV $\mathbf{s}_1 = (0.3,\, 0.1)$:
+    \[ \|\xv-\mathbf{s}_1\|^2 = 0.09+0.01 = 0.10 \]
+    \[ k = e^{-0.10} \approx \mathbf{0.90} \]
+    \column{0.5\textwidth}
+    \textbf{Far} SV $\mathbf{s}_2 = (1,\, 1)$:
+    \[ \|\xv-\mathbf{s}_2\|^2 = 1+1 = 2 \]
+    \[ k = e^{-2} \approx \mathbf{0.14} \]
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    $k \in (0,1]$ --- a \textbf{similarity} that decays with distance. The prediction
+    $f(\xv)=\sum_{\text{SV}}\alpha_i\yi\,k(\xv^{(i)},\xv)+\theta_0$ counts \emph{near} support
+    vectors far more than \emph{far} ones --- a soft, \emph{learned} version of KNN.}}
+\end{frame}
+
+\begin{frame}[fragile]{SVM in practice --- and where it still wins}
+\begin{lstlisting}
+from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+clf = make_pipeline(StandardScaler(),                 # SCALE first!
+                    SVC(kernel="rbf", C=10, gamma=0.1))  # tune C, gamma by CV
+clf.fit(X_train, y_train)
+\end{lstlisting}
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\small
+      \item \textbf{Scale first} (inner-product based, like KNN).
+      \item Scales poorly: $\sim O(n^2)$--$O(n^3)$, no big data.
+      \item Strong on \textbf{high-dim / text / small-$n$}, clear margins.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\scriptsize
+      \textbf{Honest:} on everyday tabular data, trees \& boosting usually win now (L09--L12).
+      SVM's lasting gift is the \textbf{kernel trick} --- next, Gaussian processes reuse it for
+      \emph{uncertainty}.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Gaussian processes}
+\sectiontransition{Gaussian processes}{The kernel idea one more time --- but instead of one
+boundary, it returns a mean \emph{and} calibrated uncertainty everywhere.}
+
+\begin{frame}{A distribution over functions}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Don't fit \emph{one} function --- keep \textbf{all} functions consistent with the data and
+    average them. A GP returns a \textbf{mean} prediction \emph{and} \textbf{principled
+    uncertainty} everywhere.
+    \vskip 4pt
+    \textbf{Predict-first:} where is the model most uncertain?
+    \pause
+    \vskip 2pt
+    \emph{Far from the data} --- the band \textbf{pinches} at observations and \textbf{balloons}
+    in the gaps.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cm_gp_band.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How it works (intuition)}
+  \begin{itemize}\small
+    \item The \textbf{kernel} says which points \emph{influence} each other --- similarity again,
+      exactly the SVM kernel, \textbf{now it buys you uncertainty}.
+    \item A Bayesian \textbf{prior over smooth functions} $+$ the data $\to$ a \textbf{posterior}
+      over functions.
+    \item The kernel's \textbf{length-scale} sets how wiggly those functions may be.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Same object as the SVM kernel --- a similarity function --- put to a different use: propagate
+    \emph{how sure we are}, not just \emph{where the boundary is}.}}
+\end{frame}
+
+\begin{frame}{Gaussian processes: where they help}
+  \begin{itemize}\small
+    \item \textbf{Principled uncertainty} --- ties to the calibration thread (cf.\ conformal
+      prediction).
+    \item The engine of \textbf{Bayesian optimization} for hyperparameter tuning (callback: the
+      tuning lecture) --- propose where to try next by trading mean vs uncertainty.
+    \item Great for \textbf{small data}, expensive experiments, scientific ML.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Limit:} $O(n^3)$ --- like kernel SVM, \textbf{not for big data}.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Same data, several ways to carve it}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/cm_synthesis.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize KNN (local/jagged) $\cdot$ QDA (Gaussian blobs) $\cdot$ SVM-RBF (kernel curve)
+  $\cdot$ SVM probabilities (soft) --- one dataset, five ideas, different surfaces.
+\end{frame}
+
+\begin{frame}{When would you reach for each?}
+  \begin{center}\scriptsize
+    \renewcommand{\arraystretch}{1.3}\setlength{\tabcolsep}{5pt}
+    \begin{tabular}{l c c c p{4.6cm}}
+      \textbf{Method} & \textbf{Scale?} & \textbf{Boundary} & \textbf{Calibrated?} & \textbf{Reach for it when\dots} \\
+      \hline
+      KNN        & yes & local/jagged & no  & quick baseline; retrieval in embeddings \\
+      Naive Bayes& --  & probabilistic & no & text / tiny data / very fast \\
+      LDA / QDA  & --  & linear / quadr. & okay & low data, $\sim$Gaussian; LDA projects \\
+      \textbf{SVM} & \textbf{yes} & margin / kernel & no & high-dim / text / small-$n$, clear margin \\
+      GP         & yes & smooth $+$ band & \textbf{yes} & small data, need \emph{uncertainty} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize What beats them today: \textbf{trees/boosting} on tabular; \textbf{neural nets} on
+  perception/text. These remain the \emph{ideas} underneath.
+\end{frame}
+
+\begin{frame}{The transferable ideas (the real point)}
+  \begin{itemize}\small
+    \item \textbf{Similarity} $\to$ embeddings \& retrieval (KNN).
+    \item \textbf{Generative modeling} --- ``model how each class looks'' (NB, LDA/QDA).
+    \item \textbf{The kernel idea} --- inner products $\to$ any similarity; the through-line of
+      \textbf{SVM and GP}, \emph{derived} from the dual, not asserted.
+    \item \textbf{Bayesian uncertainty} --- carry ``how sure am I'' everywhere (GP).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    You will meet these again --- in retrieval systems, in kernel methods, and in Bayesian
+    optimization --- long after you stop training a raw SVM.}}
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{KNN} --- vote of nearest neighbors; $k$ is the bias-variance knob; scale first.
+    \item \textbf{Naive Bayes / LDA / QDA} --- generative: model each class, apply Bayes; NB
+      assumes independence, LDA/QDA allow correlations (linear / quadratic boundary).
+    \item \textbf{SVM} --- widest-margin street; $=$ regularized ERM with the \textbf{hinge loss}
+      ($\to$ logistic regression by swapping the loss); the \textbf{dual} touches data only via
+      inner products $\Rightarrow$ the \textbf{kernel trick} bends the boundary to any shape.
+    \item \textbf{Gaussian processes} --- the kernel again, now returning \textbf{uncertainty}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Keepers:} max-margin; the dual sees only dot-products; SVM $\equiv$ logreg's cousin;
+    the kernel trick; generative-vs-discriminative; similarity is retrieval.}}
+\end{frame}
+
+\begin{frame}{HW --- run the classics, compare the ideas}
+  \begin{enumerate}\small
+    \item Fit \texttt{KNeighborsClassifier}, \texttt{GaussianNB},
+      \texttt{LinearDiscriminantAnalysis} / \texttt{QuadraticDiscriminantAnalysis}, and
+      \texttt{SVC} (linear vs \texttt{rbf}) on the cheese / Titanic data; compare to your
+      trees / logistic-regression baselines.
+    \item \textbf{Plot decision boundaries}: KNN $k=1$ vs $k=50$; linear vs RBF SVM on
+      \texttt{moons}/\texttt{circles}. Scale the features first and show it matters for KNN \& SVM.
+    \item Write 2--3 sentences: which idea surprised you most?
+  \end{enumerate}
+  \vskip 2pt
+  \textbf{Bonus:} sweep SVM \texttt{C} and \texttt{gamma} and watch the boundary;
+  \texttt{GaussianProcessRegressor} on the 1-D rent toy (plot the uncertainty band);
+  \texttt{MultinomialNB} on a spam mini-set; LDA as a 2-D projection vs PCA.
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Classic methods deck, SVM-centered (KNN, Naive Bayes, LDA/QDA, SVM+kernel trick, GP).
+%     Built from L12b_svm_and_classic_methods (outline: ../04_trees/
+%     L12b_classic_methods_survey_OUTLINE.md, v5).
+%   - SVM derivation, dual, soft-margin/hinge-ERM, feature-map blow-up, and kernel trick adapted
+%     from LMU SL (lecture_sl/slides/linear-svm + nonlinear-svm, CC BY 4.0), restyled to house
+%     palette + theta/theta_0 notation. RKHS/representer theorem, universal approximation, and full
+%     KKT deliberately cut (as LMU itself keeps them commented out).
+%   - Figures: py_src/make_classic_figures.py (ma venv, seed 509) -> cm_knn_boundary, cm_lda_qda,
+%     cm_svm_margin, cm_svm_soft_margin, cm_hinge_loss, cm_circles_lift, cm_svm_kernels, cm_gp_band,
+%     cm_synthesis. All real matplotlib on 2D/1D toys; Armenian-flag palette.
+%   - Pedagogy: SVM is the focus (9 frames, derived); the other four are intuition-first survey.
+%     Kernel through-line SVM dual -> kernel trick -> GP is the spine. Predict-first frames:
+%     KNN k=1, NB false-assumption, PCA-vs-LDA, SVM widest line, circles separability, GP uncertainty.
+%   - Callbacks: preprocessing (scaling), overfitting/CV (bias-variance knobs), L02 ERM + regularization
+%     (hinge, C), L06 logreg (discriminative, hinge<->log-loss), calibration (NB/SVM uncalibrated),
+%     PCA/dim-reduction (LDA), tuning (GP -> Bayesian optimization), trees/boosting (tabular winners).
+% =============================================================

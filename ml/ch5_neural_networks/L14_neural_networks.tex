@@ -2,61 +2,663 @@
 \input{../preamble}
 
 \title{Lecture 14: Neural Networks}
-\subtitle{From single neurons to multilayer feedforward networks}
+\subtitle{A neuron you already know, stacked}
 \date{}
 
 \begin{document}
 
 \begin{frame}\titlepage\end{frame}
 
+% ================================================================
+% HOOK
+\begin{frame}{Predict-first: where does logistic regression give up?}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    You have data in two interleaving crescents. Logistic regression (L11) is your
+    baseline classifier.
+    \vskip 6pt
+    \textbf{Predict:} draw the \emph{best straight boundary} you can. What train accuracy
+    can logistic regression reach here?
+    \pause
+    \vskip 6pt
+    It tops out around \textbf{0.84}. One straight cut cannot follow two curved
+    classes -- no matter how you tilt it.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      We need a model whose decision boundary can \textbf{bend}. That model is a
+      \textbf{neural network} -- and its atom is a neuron you have already trained.}}
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/two_moons_logreg.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Outline}
   \tableofcontents
 \end{frame}
 
-\section{Why Neural Networks?}
-\begin{frame}{Why Neural Networks?}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-nn-intro-introduction.tex
+% ================================================================
+\section{Why neural networks?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Why neural networks?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      What deep learning is, when it wins, and the one idea behind it all:
+      the model learns its own features.
+    \end{minipage}
+  \end{center}
+  \vfill
 \end{frame}
 
-\section{Single Neuron}
-\begin{frame}{Single Neuron: linear combo + activation}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-single-neuron.tex
+\begin{frame}{What is deep learning?}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Deep learning} is a subfield of machine learning built on \emph{artificial
+    neural networks} with many layers.
+    \vskip 6pt
+    Neural nets are not new (1950s--70s). What changed:
+    \begin{itemize}\small
+      \item \textbf{Hardware} -- GPUs train huge nets fast.
+      \item \textbf{Data} -- large labelled datasets exist.
+      \item \textbf{Architectures} -- specialised nets for images / text.
+      \item \textbf{Training tricks} -- better optimisation and regularisation.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \draw[rounded corners=3pt, fill=armblue!8, draw=armblue, thick] (0,0) rectangle (5,3.8);
+        \node[armblue] at (2.5,3.45) {Artificial Intelligence};
+        \draw[rounded corners=3pt, fill=armorange!14, draw=armorange, thick] (0.5,0.35) rectangle (4.5,2.85);
+        \node[orange1] at (2.5,2.5) {Machine Learning};
+        \draw[rounded corners=3pt, fill=armred!14, draw=armred, thick] (1.0,0.75) rectangle (4.0,1.9);
+        \node[armred] at (2.5,1.33) {Deep Learning};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
 \end{frame}
 
-\section{Single Hidden Layer Networks}
-\begin{frame}{Single Hidden Layer Networks}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-single-hidden-layer-networks.tex
+\begin{frame}{When neural networks win -- and when they do not}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{NNs shine when:}
+    \begin{itemize}\small
+      \item the input is \textbf{high-dimensional raw signal} -- pixels, audio, text;
+      \item each single feature is weakly informative, only \emph{combinations} matter;
+      \item there is a \textbf{lot} of labelled data.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{They usually lose when:}
+    \begin{itemize}\small
+      \item the data is \textbf{tabular} (rows of curated columns);
+      \item the dataset is small;
+      \item you need cheap, interpretable models.
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  {\small\textbf{Two more NN advantages, whatever the data:} \emph{online learning} -- keep
+  updating on fresh data with a few more SGD steps, no refit from scratch (a tree must
+  rebuild); and \emph{transfer learning} -- start from a net pretrained on a huge dataset and
+  adapt it to your task (more on this later).}
+  \vskip 4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Reality check.} On the tabular problems from earlier chapters, \textbf{gradient
+    boosting still wins} most of the time without heavy tuning. Reach for a neural network
+    when you have raw high-dimensional signals -- not by default. (Why, next slide.)}}
 \end{frame}
 
-\section{The XOR Problem}
-\begin{frame}{XOR: Why we need hidden layers}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-mlps-xor.tex
+\begin{frame}{Why trees still win on tabular data}
+  NNs dominate images, audio, and text. On \textbf{tabular} data -- the rows-and-columns
+  problems from earlier chapters -- gradient boosting (XGBoost, LightGBM) usually still wins.
+  Why:
+  \vfill
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{itemize}\small
+      \item \textbf{The columns are already the representation.} There is little raw
+        structure left to learn -- the whole strength of a NN is wasted.
+      \item \textbf{Targets are often irregular} (jumps, thresholds) across feature space.
+        Trees fit piecewise-constant splits naturally; NNs are biased toward \emph{smooth}
+        functions and fight sharp boundaries.
+      \item \textbf{Mixed types, missing values, wild scales} -- trees handle all of it
+        natively; a NN needs encoding, imputation, and scaling first.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \begin{itemize}\small
+      \item \textbf{Robust to useless features} -- a tree simply never splits on them; an MLP
+        must \emph{learn} to ignore them.
+      \item \textbf{Less data and less tuning} to reach a strong baseline.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Rule of thumb.} Raw high-dimensional signal (pixels, tokens, waveforms)
+      $\to$ neural net. Curated table $\to$ start with gradient boosting.}}
+  \end{columns}
+  \vfill
+  \footnotesize Grinsztajn, Oyallon \& Varoquaux (2022), ``Why do tree-based models still
+  outperform deep learning on typical tabular data?'', NeurIPS.
 \end{frame}
 
-\section{Multilayer FNNs}
-\begin{frame}{Multilayer Feedforward Networks}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-multilayer-FNNs.tex
+\begin{frame}{The one big idea: representation learning}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    In L01g you \emph{hand-crafted} features: \texttt{price\_per\_m2}, ratios, datetime
+    parts. A domain expert decides what matters.
+    \vskip 6pt
+    A deep network does this \textbf{automatically}: early layers build simple features,
+    later layers combine them into abstract ones. This is called \textbf{representation
+    learning}.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Feature engineering (L01g), learned.} Instead of you designing features,
+      the network learns them from raw input -- which is exactly why it needs raw signal
+      and lots of data.}}
+    \column{0.4\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, node distance=0.45cm]
+        \node[draw=gray, fill=gray!8, rounded corners, minimum width=2.6cm] (p) {raw pixels};
+        \node[draw=armred, fill=armred!10, rounded corners, minimum width=2.6cm, below=of p] (e) {edges};
+        \node[draw=armorange, fill=armorange!14, rounded corners, minimum width=2.6cm, below=of e] (pa) {parts};
+        \node[draw=armblue, fill=armblue!12, rounded corners, minimum width=2.6cm, below=of pa] (o) {objects};
+        \draw[->,>=Latex] (p)--(e); \draw[->,>=Latex] (e)--(pa); \draw[->,>=Latex] (pa)--(o);
+      \end{tikzpicture}\\[2pt]
+      \scriptsize deeper layer $=$ more abstract feature
+    \end{center}
+  \end{columns}
 \end{frame}
 
-\section{Matrix Notation}
-\begin{frame}{Matrix Notation for MLPs}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-matrix-notation.tex
+% ================================================================
+\section{The single neuron}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The single neuron}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One weighted sum, one nonlinearity. You have met this before -- it is logistic
+      regression wearing a diagram.
+    \end{minipage}
+  \end{center}
+  \vfill
 \end{frame}
 
-\section{MLPs as Predictors}
-\begin{frame}{MLP as a Predictor}
-  % TODO: port from _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-mlps-as-predictor.tex
+\begin{frame}{A neuron: affine transform, then activation}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    A single artificial neuron (a \textbf{perceptron}) does a \textbf{2-step} computation:
+    \begin{enumerate}\small
+      \item \textbf{Affine:} a weighted sum of inputs plus a bias, $\; z = \mathbf{w}^\top\xv + b$.
+      \item \textbf{Activation:} a nonlinearity $\varphi$ on that sum.
+    \end{enumerate}
+    \[
+      f(\xv) = \varphi\!\left(w_1 x_1 + \dots + w_p x_p + b\right) = \varphi(\mathbf{w}^\top\xv + b)
+    \]
+    The weights $\mathbf{w}$ and bias $b$ are \textbf{learned}; $\varphi$ is chosen.
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[>=Latex, font=\small]
+        \node[circle,draw=armblue,fill=armblue!10, minimum size=0.8cm] (s) at (2.2,0) {$\Sigma$};
+        \node[circle,draw=armorange,fill=armorange!15, minimum size=0.8cm] (a) at (3.8,0) {$\varphi$};
+        \node (o) at (5.4,0) {$f(\xv)$};
+        \foreach \i/\y in {1/1.1,2/0,3/-1.1} {
+          \node (x\i) at (0,\y) {$x_{\i}$};
+          \draw[->] (x\i) -- (s) node[pos=0.55,above,font=\tiny,sloped]{$w_{\i}$};
+        }
+        \draw[->] (s)--(a);
+        \draw[->] (a)--(o);
+        \node[font=\scriptsize, below=2pt of s] {$+\,b$};
+        \node[font=\tiny, gray, above=1pt of s] {sum};
+        \node[font=\tiny, gray, above=1pt of a] {squash};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A neuron is a regression you already know}
+  Put the two side by side -- they are \emph{the same equation}:
+  \vskip 2pt
+  \begin{center}\small
+    \begin{tabular}{@{}p{5.2cm}@{\hskip 1.0cm}p{5.2cm}@{}}
+      \textbf{Logistic regression (L11)} & \textbf{A sigmoid neuron} \\[4pt]
+      $\displaystyle \hat{p} = \sigma\!\left(\bm{\theta}^\top\xv + b\right)$ &
+      $\displaystyle f(\xv) = \sigma\!\left(\mathbf{w}^\top\xv + b\right)$ \\
+    \end{tabular}
+  \end{center}
+  \vskip 2pt
+  Only the name of the weight vector changed ($\bm{\theta}\to\mathbf{w}$). Swap the
+  activation and you recover other models you already fit:
+  \vskip 2pt
+  \begin{center}\small
+    \begin{tabular}{p{3.4cm} p{4.4cm} p{2.8cm}}
+      \textbf{Activation $\varphi$} & \textbf{The neuron is\ldots} & \textbf{From} \\ \hline
+      identity ($\varphi(z)=z$) & linear regression & regression chapter \\[2pt]
+      sigmoid $\sigma(z)$ & \textbf{logistic regression} & L11 \\[2pt]
+      softmax (many outputs) & multiclass logistic regression & L11 \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{So what is a neural network?} \textbf{Regressions stacked on regressions} -- each
+    layer's outputs become the next layer's inputs. Early layers build features; the last one
+    is the logistic (or linear) regression you already know, run on those learned features.}}
+\end{frame}
+
+\begin{frame}{Activation functions: the usual suspects}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    The nonlinearity is the whole point. Without it a stack of layers collapses into
+    \emph{one} linear model -- a matrix times a matrix is still a matrix.
+    \begin{itemize}\small
+      \item \textbf{Sigmoid} $\sigma(z)=\frac{1}{1+e^{-z}}$ -- squashes to $(0,1)$.
+      \item \textbf{Tanh} $=\frac{e^z-e^{-z}}{e^z+e^{-z}}$ -- squashes to $(-1,1)$,
+        zero-centred.
+      \item \textbf{ReLU} $\max(0,z)$ -- identity for $z>0$, flat $0$ for $z<0$.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize They all add ``bend''. They differ in \emph{how they pass gradients} --
+    which decides how well a deep net actually trains. Next slide.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/activations.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Which activation, and why}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Training moves weights along \emph{gradients} (L15). Where an activation \textbf{flattens
+    out}, its derivative is near $0$, so it passes almost no gradient back and those neurons
+    barely learn -- the \textbf{vanishing-gradient} problem.
+    \begin{itemize}\small
+      \item \textbf{Sigmoid:} derivative peaks at only $0.25$ and dies at both ends; not
+        zero-centred. Weak for hidden layers -- keep it for a final probability.
+      \item \textbf{Tanh:} zero-centred, derivative up to $1$, but still saturates.
+      \item \textbf{ReLU:} derivative is exactly $1$ for $z>0$ -- gradients flow, and it is
+        cheap. \textbf{The default for hidden layers.}
+    \end{itemize}
+    \vskip 3pt
+    \footnotesize \textbf{Where they go:} hidden $\to$ ReLU; output $\to$ sigmoid (binary),
+    softmax (multiclass), identity (regression).
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/activation_grads.pdf}
+    \end{center}
+    \vskip 2pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\scriptsize
+      \textbf{Dead ReLU:} a unit stuck at $z<0$ has gradient $0$ forever. Fixes:
+      \textbf{Leaky ReLU} (small negative slope), \textbf{GELU} / \textbf{ELU} (smooth
+      variants used in modern nets).}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The loss is not new either}
+  To \emph{train} a neuron (or a whole network) we minimise empirical risk, exactly as
+  before:
+  \[
+    \riske(\thetav) = \frac{1}{n}\sumin L\!\left(\yi, f(\xv^{(i)})\right)
+  \]
+  \begin{itemize}\small
+    \item \textbf{Regression:} squared loss $L(y,f)=\tfrac12 (y-f)^2$.
+    \item \textbf{Classification:} \textbf{cross-entropy} (log-loss) --
+      $L(y,f) = -\big(y\log f + (1-y)\log(1-f)\big)$.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Same losses as L11. What is new is only the \emph{model} $f$: instead of one linear
+    layer, a stack of them. \textbf{How we minimise this loss -- backpropagation -- is L15.}}}
+\end{frame}
+
+\begin{frame}{Why one neuron is not enough}
+  A single neuron applies one nonlinearity to \emph{one} weighted sum, so its decision
+  boundary is a single \textbf{hyperplane} -- a straight cut. That is why logistic
+  regression stalled at $0.84$ on the crescents in the opening.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Two ways out:}
+    \begin{enumerate}\small
+      \item \textbf{Transform the features} by hand so the classes \emph{become} linearly
+        separable (e.g.\ Cartesian $\to$ polar). This is feature engineering.
+      \item \textbf{Let the model learn the transform} -- put a layer of neurons
+        \emph{before} the output neuron. This is a neural network.
+    \end{enumerate}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{The trap.} You cannot fix a curved problem by tuning one straight line
+      harder. You need a \emph{new feature space} -- and hidden layers build one for free.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{From one neuron to a network}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{From one neuron to a network}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Add a hidden layer, and the boundary starts to bend.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{A hidden layer bends the boundary}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Put a layer of neurons \emph{between} input and output. Each hidden neuron learns its
+    own weighted-sum-plus-activation -- a new learned feature. The output neuron then draws
+    a straight boundary \emph{in that learned feature space}, which is curved back in the
+    original space.
+    \vskip 6pt
+    Same crescents, same data, \textbf{one hidden layer} of $32$ ReLU neurons:
+    \textbf{accuracy $0.84 \to 0.92$}, and the boundary follows the curves.
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/two_moons_mlp.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Single-hidden-layer network}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A network with one hidden layer has:
+    \begin{itemize}\small
+      \item a \textbf{hidden layer} of $m$ neurons, each doing affine $+$ activation;
+      \item an \textbf{output layer} of one or more neurons.
+    \end{itemize}
+    \vskip 4pt
+    Inputs are fed in on the left; computation flows left to right. This is a
+    \textbf{forward pass}.
+    \vskip 6pt
+    \footnotesize Hidden neuron $j$: $\; z_j = \varphi(\mathbf{w}_j^\top\xv + b_j)$.\\
+    Output: $\; f = \varphi_{\text{out}}(\mathbf{u}^\top\mathbf{z} + c)$.
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[>=Latex, font=\scriptsize,
+        n/.style={circle,draw,minimum size=0.55cm,inner sep=0}]
+        \node[n,draw=gray,fill=gray!8] (i1) at (0,1.6) {$x_1$};
+        \node[n,draw=gray,fill=gray!8] (i2) at (0,0) {$x_2$};
+        \node[n,draw=gray,fill=gray!8] (i3) at (0,-1.6) {$x_3$};
+        \foreach \i/\y in {1/2.1,2/0.7,3/-0.7,4/-2.1} \node[n,draw=armblue,fill=armblue!12] (h\i) at (2.2,\y) {};
+        \node[n,draw=armorange,fill=armorange!16] (o) at (4.4,0) {$f$};
+        \foreach \a in {i1,i2,i3} \foreach \b in {h1,h2,h3,h4} \draw[gray!55,->] (\a)--(\b);
+        \foreach \b in {h1,h2,h3,h4} \draw[armblue!60,->] (\b)--(o);
+        \node[gray,font=\tiny] at (0,-2.7){input};
+        \node[armblue,font=\tiny] at (2.2,-2.7){hidden ($m{=}4$)};
+        \node[orange1,font=\tiny] at (4.4,-2.7){output};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Worked forward pass, by hand}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \footnotesize
+    Tiny net: $2$ inputs, $2$ sigmoid hidden neurons, $1$ sigmoid output.
+    \vskip 3pt
+    Input $\xv = (2,\,-1)$. Weights:
+    \begin{align*}
+      \mathbf{w}_1 &= (0.5,-0.5),\; b_1 = 0\\
+      \mathbf{w}_2 &= (-0.3,\,0.8),\; b_2 = 0.1\\
+      \mathbf{u} &= (1.0,-1.0),\; c = 0.2
+    \end{align*}
+    \begin{center}
+      \begin{tikzpicture}[>=Latex, font=\tiny,
+        n/.style={circle,draw,minimum size=0.42cm,inner sep=0}]
+        \node[n,draw=gray,fill=gray!8] (i1) at (0,0.8){$x_1$};
+        \node[n,draw=gray,fill=gray!8] (i2) at (0,-0.8){$x_2$};
+        \node[n,draw=armblue,fill=armblue!12] (z1) at (1.6,0.8){$z_1$};
+        \node[n,draw=armblue,fill=armblue!12] (z2) at (1.6,-0.8){$z_2$};
+        \node[n,draw=armorange,fill=armorange!16] (o) at (3.2,0){$f$};
+        \foreach \a in {i1,i2}\foreach \b in {z1,z2}\draw[gray!55,->](\a)--(\b);
+        \foreach \b in {z1,z2}\draw[armblue!60,->](\b)--(o);
+      \end{tikzpicture}
+    \end{center}
+    \column{0.56\textwidth}
+    \footnotesize
+    \textbf{Hidden layer} (affine, then $\sigma$):
+    \begin{align*}
+      z_{1,\text{in}} &= 0.5(2) + (-0.5)(-1) + 0 = 1.5 \;\Rightarrow\; z_1 = \sigma(1.5)=0.82\\
+      z_{2,\text{in}} &= -0.3(2) + 0.8(-1) + 0.1 = -1.3 \;\Rightarrow\; z_2 = \sigma(-1.3)=0.21
+    \end{align*}
+    \textbf{Output neuron} (affine, then $\sigma$):
+    \begin{align*}
+      f_{\text{in}} &= 1.0(0.82) + (-1.0)(0.21) + 0.2 = 0.81\\
+      f_{\text{out}} &= \sigma(0.81) = \mathbf{0.69}
+    \end{align*}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\scriptsize
+      The net predicts $P(y{=}1\mid\xv)=0.69$. Every arrow is one multiply-add; every
+      circle one $\sigma$. That is all a forward pass is.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The same forward pass, in matrix form}
+  Doing each neuron separately is tidy for two of them and hopeless for a thousand. A whole
+  layer's affine step is really \textbf{one matrix-vector product}. Stack the hidden neurons'
+  weight vectors as the \textbf{rows} of a matrix $\mathbf{W}$:
+  \[
+    \mathbf{z}_{\text{in}} = \mathbf{W}\xv + \mathbf{b},\qquad
+    \mathbf{W}=\begin{pmatrix} 0.5 & -0.5 \\ -0.3 & 0.8 \end{pmatrix},\quad
+    \xv=\begin{pmatrix} 2 \\ -1 \end{pmatrix},\quad
+    \mathbf{b}=\begin{pmatrix} 0 \\ 0.1 \end{pmatrix}
+  \]
+  Multiply \textbf{one row at a time} -- each row is exactly one neuron's weighted sum:
+  \[
+    \mathbf{z}_{\text{in}}=\begin{pmatrix}
+      0.5\cdot 2 + (-0.5)\cdot(-1) + 0 \\[2pt]
+      -0.3\cdot 2 + 0.8\cdot(-1) + 0.1
+    \end{pmatrix}
+    =\begin{pmatrix} 1.5 \\ -1.3 \end{pmatrix}
+    \;\xrightarrow{\ \sigma\ (\text{elementwise})\ }\;
+    \begin{pmatrix} 0.82 \\ 0.21 \end{pmatrix}
+  \]
+  Same numbers as the by-hand pass -- just bookkept as a matrix.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Shapes must line up.} If a layer has $m$ neurons and takes $d$ inputs, then
+    $\mathbf{W}$ is $m\times d$, the input is $d\times 1$, and the output is $m\times 1$. A
+    deep net is a \emph{chain} of these matrix multiplies -- which is exactly what a GPU is
+    built to do fast.}}
+\end{frame}
+
+\begin{frame}{Multiclass: a softmax output layer}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    For $g$ classes, use $g$ output neurons and apply \textbf{softmax} across them:
+    \[
+      f_{\text{out},k} = \frac{e^{f_{\text{in},k}}}{\sum_{k'=1}^{g} e^{f_{\text{in},k'}}}
+    \]
+    This returns a probability distribution over classes (sums to $1$).
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Same softmax as L11} multiclass logistic regression -- now sitting on top of
+      \emph{learned} hidden features instead of raw inputs.}}
+    \column{0.44\textwidth}
+    \footnotesize \textbf{Mini example.} Output logits $(2.0,\,1.0,\,0.1)$:
+    \begin{align*}
+      e^{\cdot} &= (7.39,\; 2.72,\; 1.11),\quad \textstyle\sum = 11.22\\
+      \text{softmax} &= (0.66,\; 0.24,\; 0.10)
+    \end{align*}
+    Predicted class $=$ argmax $=$ class $1$, with confidence $0.66$. Softmax is a smooth,
+    differentiable ``argmax''.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Deep feedforward networks}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Deep feedforward networks}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Stack more hidden layers. Why depth helps, and what it costs.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Stacking layers: the multilayer perceptron}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Allow \textbf{any number $L$ of hidden layers}. Information flows input $\to$ hidden$_1
+    \to \dots \to$ output, with no loops: a \textbf{feedforward} network, or \textbf{MLP}.
+    \vskip 6pt
+    Each layer is one affine map followed by a nonlinearity. In vector form, layer $l$:
+    \[
+      \mathbf{a}^{(l)} = \varphi\!\left(\mathbf{W}^{(l)}\mathbf{a}^{(l-1)} + \mathbf{b}^{(l)}\right)
+    \]
+    \footnotesize (An MLP is just a long composition of these -- a fancy function. This
+    matrix form is what we differentiate in L15.)
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[>=Latex, font=\scriptsize,
+        n/.style={circle,draw,minimum size=0.42cm,inner sep=0}]
+        \foreach \i/\y in {1/1.5,2/0.5,3/-0.5,4/-1.5} \node[n,draw=gray,fill=gray!8] (i\i) at (0,\y){};
+        \foreach \i/\y in {1/1.8,2/0.9,3/0,4/-0.9,5/-1.8} \node[n,draw=armblue,fill=armblue!12] (a\i) at (1.5,\y){};
+        \foreach \i/\y in {1/1.8,2/0.9,3/0,4/-0.9,5/-1.8} \node[n,draw=armblue,fill=armblue!12] (b\i) at (3.0,\y){};
+        \foreach \i/\y in {1/0.6,2/-0.6} \node[n,draw=armorange,fill=armorange!16] (o\i) at (4.5,\y){};
+        \foreach \p in {1,2,3,4}\foreach \q in {1,2,3,4,5}\draw[gray!35,->](i\p)--(a\q);
+        \foreach \p in {1,2,3,4,5}\foreach \q in {1,2,3,4,5}\draw[armblue!25,->](a\p)--(b\q);
+        \foreach \p in {1,2,3,4,5}\foreach \q in {1,2}\draw[armblue!40,->](b\p)--(o\q);
+        \node[gray,font=\tiny] at (0,-2.3){input};
+        \node[armblue,font=\tiny] at (2.25,-2.3){hidden $\times L$};
+        \node[orange1,font=\tiny] at (4.5,-2.3){output};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why add more layers?}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    Each layer composes the features of the layer below into more abstract ones. Depth buys
+    \textbf{expressivity}:
+    \begin{itemize}\small
+      \item a shallow-but-wide net and a deep net can represent the same functions in
+        principle,
+      \item but for many functions, a \textbf{deep} net needs exponentially \emph{fewer}
+        neurons than a shallow one (Mont\'ufar et al., 2014).
+    \end{itemize}
+    \vskip 4pt
+    Intuition: deeper layers can reuse and combine the boundaries built below, carving
+    complex decision regions from simple pieces.
+    \column{0.42\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Misconception guard.} The \emph{universal approximation theorem} says one
+      hidden layer can approximate any continuous function -- but possibly with an absurd
+      number of neurons, and it says \emph{nothing} about whether you can \textbf{train} it
+      or whether it will \textbf{generalise}. Depth is the practical win.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Depth folds space}
+  A ReLU layer \textbf{folds} the input space along its kinks. Layers above then reuse the
+  same boundary on both sides of a fold, so folds \textbf{compound} -- the number of linear
+  regions grows \emph{exponentially} with depth.
+  \vfill
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/folding_tent.pdf}
+    \end{center}
+    \vskip 2pt
+    \footnotesize Each fold doubles the pieces: a depth-$k$ net expresses $2^k$ linear pieces
+    from $O(k)$ neurons. A shallow net would need $2^k$ neurons to match.
+    \column{0.4\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/folding_space.pdf}
+    \end{center}
+    \vskip 2pt
+    \scriptsize The same folding in 2D: a small depth-$3$ net creases the plane into $170{+}$
+    regions. \emph{(Mont\'ufar et al., 2014.)}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The catch: a lot of parameters}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    A modest MLP for MNIST digits ($28\times28 = 784$ pixels in, $10$ classes out) with
+    hidden layers of $128$ and $64$:
+    \vskip 4pt
+    \footnotesize
+    \begin{tabular}{l r}
+      layer & weights $+$ biases \\ \hline
+      $784 \to 128$ & $100{,}480$ \\
+      $128 \to 64$ & $8{,}256$ \\
+      $64 \to 10$ & $650$ \\ \hline
+      \textbf{total} & $\mathbf{109{,}386}$ \\
+    \end{tabular}
+    \column{0.44\textwidth}
+    Training means finding good values for \textbf{all $109{,}386$} of them by gradient
+    descent.
+    \vskip 6pt
+    Gradient descent needs $\partial L / \partial w$ for \emph{every} weight. Computing each
+    one naively is hopeless.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next (L15):} \textbf{backpropagation} computes all $109{,}386$ gradients in
+      essentially one extra pass. That is what makes training networks possible.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Wrap-up}
+
+\begin{frame}{Play with it before L15}
+  The fastest way to build intuition for everything in this deck is to watch a net train live:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{TensorFlow Playground} -- \texttt{playground.tensorflow.org}. Add layers and
+      neurons, switch activations, and watch the boundary bend. Try the two-spirals dataset
+      with $1$ vs $3$ hidden layers, and toggle ReLU vs sigmoid.
+    \item \textbf{3Blue1Brown}, ``Neural networks'' (chapters 1--3) -- the best visual
+      intuition for what the weights are doing.
+    \item \textbf{mlu-explain.github.io/neural-networks} -- a short interactive explainer.
+  \end{itemize}
+  \vfill
+  \footnotesize Optional, but genuinely worth 20 minutes before the training lecture.
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item A \textbf{neuron} $=$ affine map $\mathbf{w}^\top\xv + b$ then a nonlinearity
+      $\varphi$. With $\varphi=\sigma$ it \emph{is} logistic regression (L11).
+    \item \textbf{Activations} give the model its bend: sigmoid / softmax for outputs, ReLU
+      for hidden layers.
+    \item One neuron draws a straight boundary; a \textbf{hidden layer} learns a new feature
+      space so the boundary can \textbf{curve} ($0.84 \to 0.92$ on the crescents).
+    \item A \textbf{forward pass} is just multiply-add-then-$\varphi$, layer by layer;
+      \textbf{softmax} at the end gives multiclass probabilities (L11).
+    \item \textbf{Depth} $=$ learned representations, exponentially more expressive -- but
+      many parameters and no free lunch on training or tabular data.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next (L15):} how to actually learn those weights -- \textbf{backpropagation}
+    (by hand and vectorised), the PyTorch training loop, and how to keep the network from
+    overfitting.}}
 \end{frame}
 
 \end{document}
 
 % =============================================================
-% Provenance (Phase 2 porting):
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-nn-intro-introduction.tex
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-single-neuron.tex
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-single-hidden-layer-networks.tex
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-mlps-xor.tex
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-multilayer-FNNs.tex
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-matrix-notation.tex
-%   - _reference/lecture_i2ml/slides/neural-networks/slides-nn-mlps-mlps-as-predictor.tex
+% Provenance:
+%   - Topic: neural network fundamentals (Deck 1 of the 2-deck MLP-core NN chapter).
+%   - Source: ml_old/Chapter 5 Neural Networks/PDFs/L09 Neural Networks.pdf (LMU i2ml
+%     single-neuron -> hidden-layer -> deep-FNN arc + the by-hand forward pass), re-cut to
+%     ml/ house style per NN_CHAPTER_OUTLINE.md.
+%   - Callback spine: L11 (sigmoid/softmax/log-loss), L01g (feature engineering ->
+%     representation learning), ch4 (trees/boosting still win on tabular).
+%   - Real figures (py_src/nn_fundamentals_figs.py): activations, two-moons logreg vs MLP.
+%   - Decisions (2026-07-07): 2-deck MLP core, PyTorch (code lands in L15), backprop
+%     by-hand + vectorized (L15). Predict-first hook per feedback_predict_first_slides.
+%   - Next: L15 training (backprop, dropout, tuning); CNN/RNN/optim deferred to a later
+%     deep-learning chapter.
 % =============================================================

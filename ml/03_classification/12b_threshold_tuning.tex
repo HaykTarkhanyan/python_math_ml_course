@@ -1,0 +1,297 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{[12b] Threshold Tuning}
+\subtitle{Turning scores into decisions - picking the operating point}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK -- bridge from the metrics deck
+\begin{frame}{Picking up from the metrics deck}
+  Your cheese detector earns \textbf{ROC AUC $0.95$} and a healthy PR AUC. The ranking is
+  excellent. Ship it?
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Not yet. AUC and PR rank batches \emph{without} a threshold. To \textbf{act} --- flag this
+    batch or not --- you must pick one cutoff $c$. And on a $3\%$-bad, asymmetric-cost line, the
+    default $c = 0.5$ is almost never the right one.}}
+  \vfill
+  This deck: how to turn a good \emph{score} into a good \emph{decision} --- three ways to choose
+  the operating point, the formula behind the best one, and the sklearn tool that does it for you.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The threshold is a knob}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The threshold is a knob}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A classifier outputs a \emph{score}; a cutoff $c$ turns it into a yes/no. Every metric you
+      care about moves as you slide $c$ --- so $c$ is a \textbf{choice}, not a given.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Every metric is a function of the threshold}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    The model outputs scores; the \textbf{cutoff $c$} turns them into decisions. Sweep it:
+    \begin{itemize}\small
+      \item low $c$ $\Rightarrow$ flag more $\Rightarrow$ recall up, precision down;
+      \item high $c$ $\Rightarrow$ flag fewer $\Rightarrow$ precision up, recall down.
+    \end{itemize}
+    \vskip 4pt
+    The \textbf{default $0.5$ is just one point}. Here the F1-best cutoff is $\approx 0.08$
+    --- the $3\%$ imbalance pushes it far left of $0.5$.
+    \column{0.54\textwidth}
+    \includegraphics[width=\textwidth]{fig/cm_threshold_metrics.pdf}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Three ways to pick the cutoff}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Three ways to pick the cutoff}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Which rule you use depends on what you know: the \textbf{costs}, \textbf{nothing}, or a hard
+      \textbf{requirement}. All three just slide the one number $c$.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Three ways to pick the cutoff}
+  Choosing $c$ is a \textbf{business} decision, not a modeling one. Which rule you use depends on
+  what you know:
+  \vskip 8pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabular}{p{5.4cm} p{7.0cm}}
+      \textbf{What you know} & \textbf{Pick the cutoff by\dots} \\
+      \hline
+      the \textbf{costs} --- a miss vs.\ a false alarm & \textbf{minimizing total cost} (cost-sensitive) \\
+      \textbf{nothing} --- just balance the two errors & \textbf{Youden's J}: best catch-rate minus false-alarm-rate \\
+      a hard \textbf{requirement} (``catch $\ge 80\%$'') & a \textbf{recall floor}: meet it, then cut false alarms \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    All three just slide the one number $c$ --- and every one of them beats blindly leaving it at
+    $0.5$. We take them in turn.}}
+\end{frame}
+
+\begin{frame}{Cost-sensitive: when you know the price of a mistake}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Each mistake has a price: a \textbf{miss (FN)} ships bad cheese; a \textbf{false alarm (FP)}
+    wastes an inspection. Say a miss costs \$100, a false alarm \$10 --- pick the cutoff with the
+    \textbf{smallest total bill}:
+    \[ c^* = \argmin_c \; C_{FN}\,FN(c) + C_{FP}\,FP(c). \]
+    Sweep $c$, sum the cost, keep the cheapest: here $c^* \approx 0.08$, \textbf{far below $0.5$}
+    (a miss hurts $10\times$ more).
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Tune on a validation set}, never the test set you report --- else the cutoff is
+      optimistically biased.}}
+    \column{0.5\textwidth}
+    \includegraphics[width=\textwidth]{fig/cm_cost_curve.pdf}
+  \end{columns}
+  \vskip 3pt
+  \footnotesize In sklearn: \texttt{TunedThresholdClassifierCV} tunes $c$ by CV for any scorer
+  (including a business-cost one) --- code at the end of this section.
+\end{frame}
+
+\begin{frame}{The cost-optimal cutoff has a closed form}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    Suppose the score is a \textbf{calibrated probability} $p = P(\text{bad}\mid \xv)$. Flagging is
+    worth it only when the expected cost of flagging beats the expected cost of passing:
+    \[ \underbrace{(1-p)\,C_{FP}}_{\text{flag: risk a false alarm}} \;<\;
+       \underbrace{p\,C_{FN}}_{\text{pass: risk a miss}}. \]
+    Solve for $p$:
+    \[ p \;>\; \frac{C_{FP}}{C_{FP}+C_{FN}} \;=\; c^*. \]
+    \column{0.44\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Cheese factory} ($C_{FN}=100$, $C_{FP}=10$):
+      \[ c^* = \frac{10}{10+100} \approx 0.09. \]
+      Matches the swept cost curve ($\approx 0.08$) --- and sits \textbf{far below $0.5$}.}}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Big caveat:} this formula assumes $p$ is a \emph{true probability}. Raw model scores
+    are often \emph{not} calibrated --- then you fall back to sweeping $c$ empirically (previous
+    slide). Making scores trustworthy is the \textbf{next lecture: calibration}.}}
+\end{frame}
+
+\begin{frame}{Worked example: sweep the cost by hand}
+  Ten batches ranked by model score; \textbf{3 are truly bad}. Costs: a miss $C_{FN}=\$100$, a
+  false alarm $C_{FP}=\$10$. Flag iff score $\ge c$; total bill $= 100\,FN + 10\,FP$.
+  \vfill
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \begin{center}\scriptsize
+      \renewcommand{\arraystretch}{1.05}
+      \begin{tabular}{c c c}
+        batch & score & truth \\ \hline
+        b1 & 0.92 & \textbf{bad} \\
+        b2 & 0.80 & \textbf{bad} \\
+        b3 & 0.55 & good \\
+        b4 & 0.40 & \textbf{bad} \\
+        b5 & 0.30 & good \\
+        b6 & 0.20 & good \\
+        b7 & 0.12 & good \\
+        b8--b10 & $\le 0.08$ & good \\
+      \end{tabular}
+    \end{center}
+    \column{0.56\textwidth}
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.35}
+      \begin{tabular}{c c c c}
+        $c$ & FN & FP & \textbf{cost} \\ \hline
+        0.90 & 2 & 0 & \$200 \\
+        0.50 & 1 & 1 & \$110 \\
+        0.35 & 0 & 1 & \textbf{\$10} \;(cheapest) \\
+        0.15 & 0 & 3 & \$30 \\
+      \end{tabular}
+    \end{center}
+    \vskip 4pt
+    \footnotesize The cheapest cutoff is \textbf{$c = 0.35$}, not $0.5$. Leaving it at the default
+    costs \textbf{$11\times$} the optimum here (\$110 vs \$10).
+  \end{columns}
+\end{frame}
+
+\begin{frame}{No costs? Youden's J balances the two error rates}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    No price tags, but you still want a sensible cutoff? \textbf{Youden's J} rewards catching bad
+    batches and penalizes false alarms \emph{equally}:
+    \[ J = \underbrace{\mathrm{TPR}}_{\text{catch rate}} - \underbrace{\mathrm{FPR}}_{\text{false-alarm rate}}. \]
+    Pick the cutoff with the \textbf{biggest gap} between the two.
+    \begin{itemize}\small
+      \item On the ROC curve: the point \textbf{farthest above the diagonal}.
+      \item Ignores how rare positives are, and ignores cost.
+      \item A common default in medical screening.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \includegraphics[width=\textwidth]{fig/cm_youden.pdf}
+  \end{columns}
+  \vskip 2pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Watch out:} $J$ balances \emph{rates}, not money --- on rare-positive data it can land
+    far from the cost-optimal cutoff. Use it only when you truly have no cost information.}}
+\end{frame}
+
+\begin{frame}{A hard requirement? Use a recall floor}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Often the business hands you a \textbf{rule}, not costs: \emph{``we must catch at least $80\%$
+    of bad batches.''} So:
+    \vskip 2pt
+    \begin{itemize}\small
+      \item Look at every cutoff that meets \textbf{recall} $\ge 0.80$.
+      \item Among those, take the \textbf{strictest} (highest $c$) --- it meets the rule with the
+        \textbf{fewest false alarms}.
+    \end{itemize}
+    \vskip 2pt
+    Here that forces $c \approx 0.02$ and precision down to $\sim 0.07$: catching almost all of a
+    rare class is \emph{expensive} in false alarms.
+    \column{0.5\textwidth}
+    \includegraphics[width=\textwidth]{fig/cm_recall_floor.pdf}
+  \end{columns}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Mirror image: a \textbf{precision floor} (``at most $X\%$ wasted inspections'') $\to$ maximize
+    recall instead. In sklearn, \texttt{TunedThresholdClassifierCV} with a constrained scorer.}}
+\end{frame}
+
+\begin{frame}[fragile]{One tool does all three: \texttt{TunedThresholdClassifierCV}}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+from sklearn.model_selection import TunedThresholdClassifierCV
+from sklearn.metrics import make_scorer
+
+# business cost: a miss (FN) costs 100, a false alarm (FP) costs 10
+def neg_cost(y_true, y_pred):
+    fn = ((y_true == 1) & (y_pred == 0)).sum()
+    fp = ((y_true == 0) & (y_pred == 1)).sum()
+    return -(100 * fn + 10 * fp)         # higher is better
+
+tuned = TunedThresholdClassifierCV(
+    clf, scoring=make_scorer(neg_cost), cv=5).fit(X_train, y_train)
+
+tuned.best_threshold_                    # the chosen cutoff (not 0.5)
+tuned.predict(X_test)                    # applies that cutoff
+\end{lstlisting}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Swap the rule by swapping the scorer: \texttt{scoring="balanced\_accuracy"} $\approx$ Youden;
+    a recall-floor scorer for a hard requirement. It tunes $c$ \textbf{by CV on the training
+    data} --- so your reported test metrics stay honest. (sklearn $\ge 1.5$.)}}
+\end{frame}
+
+% ================================================================
+\section{Wrap-up}
+
+\begin{frame}{Recap: from score to decision}
+  \begin{enumerate}\small
+    \item A classifier gives a \textbf{score}; a \textbf{cutoff $c$} turns it into a decision.
+      Every metric moves with $c$ --- \textbf{$0.5$ is just one arbitrary point}.
+    \item \textbf{Know the costs?} Minimize total cost. For calibrated $p$:
+      $c^* = C_{FP}/(C_{FP}+C_{FN})$.
+    \item \textbf{Know nothing?} Youden's $J = \mathrm{TPR}-\mathrm{FPR}$ balances the two error rates.
+    \item \textbf{Have a hard rule?} A recall (or precision) floor: meet it, then minimize the other error.
+    \item \textbf{Always tune $c$ on validation / CV}, never on the test set ---
+      \texttt{TunedThresholdClassifierCV} automates it.
+  \end{enumerate}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{One-line takeaway:} the threshold is a business decision, not a modeling default ---
+    choose it on purpose. \textbf{Next:} calibration --- making the score a \emph{trustworthy
+    probability} so $c^*$ actually means what it says.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - [12b] Threshold tuning; split out of [12] Classification Metrics (2026-07-07) because it
+%     was not covered in the metrics lecture. Same cheese-factory running example.
+%   - Extracted verbatim from L12: every-metric-vs-threshold, three-ways overview, cost-sensitive,
+%     Youden's J, recall floor. Figures reused from the shared fig/ folder (cm_threshold_metrics,
+%     cm_cost_curve, cm_youden, cm_recall_floor.pdf), generated by py_src/cheese_metrics.py.
+%   - Added for the standalone deck: cold-open hook, outline, recap+Next; the decision-theoretic
+%     optimal cutoff c* = C_FP/(C_FP+C_FN); a by-hand cost-sweep worked example; and a
+%     TunedThresholdClassifierCV code frame (API verified against sklearn 1.7.1).
+%   - Bridges forward to the calibration deck (why c* needs calibrated probabilities).
+% =============================================================

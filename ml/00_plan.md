@@ -39,8 +39,9 @@ Alt if we want continuity: reuse `data/House_Rent_Dataset.csv` (already used in 
 
 Videos [11], [12], [13]:
 
-- **[11] Logistic regression** — incl. multiclass (softmax / one-vs-rest) and log-loss (built: `L11_classification_logreg`)
-- **[12] Classification metrics** — accuracy → precision/recall/F1 → ROC AUC → PR AUC → lift, plus threshold tuning (cost-sensitive, `TunedThresholdClassifierCV`) (built: `L12_classification_metrics__threshold_tuning`)
+- **[11] Logistic regression** — incl. multiclass (softmax / one-vs-rest) and log-loss (built: `11_classification_logreg`)
+- **[12] Classification metrics** — accuracy → precision/recall/F1 → ROC AUC → PR AUC → lift (built: `12_classification_metrics`)
+- **[12b] Threshold tuning** — cost-sensitive cutoff (`c* = C_FP/(C_FP+C_FN)`), Youden's J, recall floor, `TunedThresholdClassifierCV` (built: `12b_threshold_tuning`; not yet lectured, split out of [12])
 - **[13] Calibration** — reliability diagrams, Brier score, ECE, Platt / isotonic, `CalibratedClassifierCV` (building: `L13_calibration`)
 
 > Note (2026-06-21): the planned [12] "classification losses" and [13] "multiclass" were folded into [11]; metrics + threshold tuning became [12]; calibration is its own [13]. Threshold tuning moved out of [14].
