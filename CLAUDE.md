@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Helper Files - check before starting any task
+
+- **`WORKFLOWS.md`** - maps every recurring task type to its workflow, skill, and source-of-truth file, plus definition-of-done tables and hard rules. **Read the matching row before improvising a workflow.**
+- `LEARNINGS.md` - dated gotchas and incidents (LaTeX, Quarto, Windows tooling, machine limits). Append when something non-obvious bites.
+- `CONVENTIONS.md` - course-specific naming and structure decisions (deck/notebook/folder naming, QMD template, YouTube link-text rule).
+- `PROGRESS.md` - session log (done / pending / next); update at session end via the `wrap-session` skill.
+- `DEFERRED_TODO.md` - parked topics.
+
 ## Build & Deployment
 
 - **GitHub Actions** auto-renders Quarto site on every push to `main` (~5 min). No local rendering needed.
@@ -27,7 +35,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **New deck workflow:** interview the instructor on content first, then draft an outline for approval, then build.
 - **Transition slides:** the instructor likes **section-transition slides** — a `[plain]` frame with a `popblue` bold title + one short motivation line — before each major section. Add them by default.
-- **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml/ch2_classification/py_src/*.py` → `ml/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). Real generated figures are preferred over hand-drawn TikZ where it adds credibility.
+- **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml/ch2_classification/py_src/*.py` → `ml/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). **Every essential figure must be Python-generated, not TikZ** - TikZ only for small throwaway visuals (quick boxes-and-arrows the frame could live without).
 - **Open a compiled deck in the browser for review** with PowerShell `Start-Process`, one at a time with a short gap (a rapid `cmd /c start msedge` loop drops windows):
 
 ```powershell

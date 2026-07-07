@@ -83,7 +83,7 @@ The math homework files follow this pattern for resources:
 Always use Python (via Bash) for editing .qmd files:
 
 ```python
-python -c "
+./ma/Scripts/python.exe -c "
 import pathlib
 f = pathlib.Path('math/FILE.qmd')
 c = f.read_text(encoding='utf-8')

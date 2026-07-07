@@ -84,7 +84,7 @@ Common math macros (from `preamble.tex`): `\xv \yv \thetav \thx \fh \fxh \sumin 
 
 ## Figures
 
-- **Real (matplotlib / generated) for anything data-driven** — curves, distributions, benchmarks, confusion matrices. **TikZ only for conceptual schematics** (boxes, arrows, flow, geometry).
+- **Every essential figure is Python-generated (matplotlib), not TikZ** - anything data-driven (curves, distributions, benchmarks, confusion matrices) and any diagram that carries the frame's core message. **TikZ only for small throwaway visuals** - quick boxes-and-arrows, tiny annotations, decoration the frame could live without.
 - Generation scripts live in a sibling **`py_src/`**; output PDFs/PNGs to a sibling **`fig/`**. Run them with the **`ma` venv** (`./ma/Scripts/python.exe py_src/script.py`).
 - **No enforced figure palette** — sensible per-figure defaults. (Global fallback for 3+ color charts: Armenian-flag red `#D90012`, blue `#0033A0`, orange `#F2A800`.)
 - **Embedded third-party figures:** keep a source/attribution line on the frame (e.g. "Source: LMU i2ml, CC BY 4.0"). Verify the license first.

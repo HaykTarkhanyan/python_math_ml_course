@@ -113,6 +113,7 @@ gform/                     # Apps Script + question CSVs for the Google Form
 | File | Purpose |
 |---|---|
 | `CLAUDE.md` | Project-level instructions for Claude Code (build, LaTeX, Quarto gotchas). |
+| `WORKFLOWS.md` | Task playbook for AI assistants: task -> workflow/skill/source-of-truth map, definition of done, hard rules. |
 | `CONVENTIONS.md` | This file. Naming, structure, YouTube title rules. |
 | `DEFERRED_TODO.md` | Parked topics (bias-variance bits, GLMs, causal inference, etc.). |
 | `LEARNINGS.md` | Non-obvious lessons learned. |

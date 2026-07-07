@@ -37,7 +37,7 @@ For edits to an existing deck: just make the change, recompile, verify.
 - **Skeleton:** cold-open hook -> Outline -> `\section`s each with a `[plain]` transition slide (popblue title + one motivation line) -> recap + paramgreen "Next:" box. No fixed length; one idea per frame.
 - **Palette / callouts:** popblue=theory, armred=data/warnings, paramgreen=params/takeaways, armorange=watch-outs. Boxes: armblue!8=key, armred!8=trap, paramgreen!8=takeaway/Next, armorange!12=watch-out.
 - **Content:** English body; mostly straight tone with occasional light touch; predict-first frames where a result is counter-intuitive; a by-hand worked-numbers frame where mechanics are computable; **full step-by-step** derivations; **minimal code** (one canonical sklearn snippet max).
-- **Figures:** real matplotlib for data, TikZ for schematics; scripts in sibling `py_src/`, output to sibling `fig/`, run with the `ma` venv; no enforced figure palette; attribution line on embedded third-party figures.
+- **Figures:** every essential figure is Python-generated (matplotlib) - TikZ only for small throwaway visuals; scripts in sibling `py_src/`, output to sibling `fig/`, run with the `ma` venv; no enforced figure palette; attribution line on embedded third-party figures.
 - **Prose:** no em-dashes, no curly quotes.
 
 If anything here is ambiguous for the deck at hand, ask before building.
