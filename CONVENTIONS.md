@@ -122,7 +122,7 @@ gform/                     # Apps Script + question CSVs for the Google Form
 
 ## Other holding areas
 
-- **`ml/upcoming_lectures/`** — orphan / not-yet-delivered slide decks live here. Don't bury them in chapter folders until they're actually part of a delivered lecture.
+- **Orphan / not-yet-delivered decks** — keep in a dedicated staging folder; don't bury them in numbered chapter folders until they're part of a delivered lecture. The former `ml/upcoming_lectures/` held feature engineering + selection and was promoted to `ml/06_feature_engineering/` (2026-07-07).
 - **`ml/deferred/`** — pre-built decks parked for "later in the course" (currently: GLMs, causal inference, regression inference). See `DEFERRED_TODO.md`.
 
 ---

@@ -265,6 +265,97 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
 \end{frame}
 
 % ================================================================
+\section{Counterfactual explanations}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Counterfactual explanations}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Not \emph{why} the model decided --- but \emph{what would change} the outcome.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The smallest change that flips the prediction}
+  SHAP and LIME answer ``\emph{why} this prediction?'' A \textbf{counterfactual} answers a
+  different, often more useful question:
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{What is the smallest change to the input that would flip the prediction?}}}
+  \vskip 6pt
+  \begin{itemize}\small
+    \item ``Flip'' needs a \textbf{decision}, so we switch from the (regression) bike model to
+      the \textbf{ch.\,3 bank-marketing} classifier --- \emph{will this client subscribe?}
+      (realistic model, the leaky \texttt{duration} feature removed).
+    \item A counterfactual is \textbf{actionable}: it tells you \emph{what to change}, not just
+      what mattered.
+  \end{itemize}
+  \vfill
+  \footnotesize \textit{Example:} a client predicted \textbf{won't subscribe} --- the
+  counterfactual says that \emph{had the bank called in a different month}, the model would flip
+  to \textbf{will subscribe}.
+\end{frame}
+
+\begin{frame}{What makes a good counterfactual?}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Five things we want at once:
+    \begin{itemize}\small
+      \item \textbf{Validity} --- it actually flips the prediction.
+      \item \textbf{Proximity} --- close to the original (a small change).
+      \item \textbf{Sparsity} --- few features changed (easy to act on, easy to explain).
+      \item \textbf{Plausibility} --- stays in realistic data, no impossible rows (the
+        extrapolation trap, deck 2).
+      \item \textbf{Actionability} --- change only what the user controls (raise a balance, not
+        lower an age; never a protected attribute). The \emph{recourse} angle.
+    \end{itemize}
+    \vskip 2pt
+    \footnotesize Usually \textbf{several} valid counterfactuals exist --- prefer the sparse,
+    actionable ones.
+    \column{0.48\textwidth}
+    \footnotesize Real DiCE counterfactual (bank): \texttt{age}, \texttt{job}, \texttt{poutcome}
+    \textbf{frozen}; only bank-controllable levers may move.
+    \vskip 4pt
+    \renewcommand{\arraystretch}{1.2}
+    \centering
+    \begin{tabular}{l c c}
+      \textbf{feature} & \textbf{orig.} & \textbf{CF} \\
+      \hline
+      age      & 29 & 29 \\
+      job      & mgmt & mgmt \\
+      balance  & 1431 & 1431 \\
+      contact  & cell. & cell. \\
+      \texttt{month} & \textbf{jun} & \textbf{\color{armred}apr} \\
+      campaign & 4 & 4 \\
+      poutcome & unkn. & unkn. \\
+      \hline
+      \textbf{predict} & no\,$(0.44)$ & \textbf{\color{paramgreen}yes\,$(0.78)$} \\
+    \end{tabular}
+    \vskip 4pt
+    \footnotesize One change --- \emph{call in April, not June} --- flips it.
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Counterfactuals in code}
+\begin{lstlisting}
+import dice_ml
+d   = dice_ml.Data(dataframe=df, continuous_features=num, outcome_name="y")
+m   = dice_ml.Model(model=clf, backend="sklearn")   # any fitted classifier
+exp = dice_ml.Dice(d, m, method="random")
+
+cf = exp.generate_counterfactuals(
+        client, total_CFs=3, desired_class="opposite",
+        features_to_vary=["contact", "month", "campaign"])  # actionable only
+cf.visualize_as_dataframe()
+\end{lstlisting}
+  \vskip 2pt
+  \footnotesize Libraries: \textbf{DiCE} (diverse counterfactuals), \textbf{Alibi}. Constrain
+  \texttt{features\_to\_vary} so the advice stays \emph{actionable}.
+\end{frame}
+
+% ================================================================
 \section*{Wrap-up}
 
 \begin{frame}{Same data, four rankings}
@@ -294,10 +385,11 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
     \begin{tabular}{p{5.2cm} p{7.2cm}}
       \textbf{You want\dots} & \textbf{Reach for\dots} \\
       \hline
-      to read the model itself & a \textbf{glass-box model} --- coefficients / a tree (deck 1) \\
+      to read the model itself & a \textbf{glass-box model} --- coefficients / a tree / rules (deck 1) \\
       global ``which features matter'' & \textbf{PFI} or \textbf{SHAP bar} (decks 2--3) \\
       ``how does a feature act'' & \textbf{PDP / ICE} or \textbf{SHAP dependence} (decks 2--3) \\
       ``why this one prediction'' & \textbf{SHAP waterfall} or \textbf{LIME} (deck 3) \\
+      ``what would change the outcome'' & \textbf{counterfactuals} --- DiCE / Alibi (deck 3) \\
       \hline
     \end{tabular}
   \end{center}
@@ -314,6 +406,8 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
     \item \textbf{TreeSHAP} makes it the default for trees/boosting; SHAP \textbf{unifies} PFI \& PDP
       and adds a local view.
     \item \textbf{LIME} is the simpler local cousin --- handy but unstable.
+    \item \textbf{Counterfactuals} answer ``what would change the outcome'' --- the smallest
+      \textbf{valid, sparse, actionable} edit that flips the prediction (DiCE).
     \item Everything explains the \textbf{model}, not causation --- and plots are easy to over-read.
   \end{itemize}
   \vfill
@@ -327,14 +421,18 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
 % =============================================================
 % Provenance:
 %   - Interpretability chapter (ml/05_interpretability/), deck 3 of 3. SHAP (plots + how to read)
-%     + LIME (2 frames), intuition-first; cut: Shapley axioms/orderings math, KernelSHAP weighting,
-%     SAGE, counterfactuals.
+%     + LIME (2 frames) + counterfactuals (DiCE), intuition-first; cut: Shapley axioms/orderings
+%     math, KernelSHAP weighting, SAGE.
 %   - Anchor: bike-sharing RF from decks 1-2.
 %   - Generated (py_src/interp_shap_figs.py, ma, shap lib): all 4 SHAP plots on the bike RF --
 %     shap_waterfall_bike (mixed instance 567, pred 4311 vs base 4502; hum down, yr/temp up),
 %     shap_bar (mean|SHAP|), shap_beeswarm, shap_dependence (temp 0-1, matches the chapter scale).
 %   - Reused (LMU IML, CC BY 4.0, credited): shapley_1 (fair-payout framing), lime_husky
 %     (husky/wolf -> snow), lime_robustness (instability).
+%   - Counterfactuals section: DiCE on ch3 bank-marketing (duration dropped); numbers logged by
+%     py_src/interp_counterfactual_figs.py (client 6190: month jun->apr flips p(yes) 0.44->0.78,
+%     single actionable change; age/job/poutcome frozen). Desiderata: validity, proximity,
+%     sparsity, plausibility, actionability.
 %   - Callbacks: deck 1 (glass-box), deck 2 (PFI ~ SHAP bar, PDP ~ SHAP dependence; ice-cream
 %     != causation), ch4 trees/boosting (TreeSHAP). Chapter decision guide in the wrap-up.
 %   - Design doc: 03_shap_lime_OUTLINE.md (v2). Interview-locked: hybrid figures (reuse LMU

@@ -1,7 +1,7 @@
 # L14 Imbalanced Learning — Deck Outline / Design (v4)
 
 Design doc for a **[14] Imbalanced Learning** deck. House style of
-`ml/03_classification/L12_classification_metrics.tex` and the SLIDE_STYLE guide.
+`ml/03_classification/L12_classification_metrics__threshold_tuning.tex` and the SLIDE_STYLE guide.
 Continues the chapter-3 arc (L11 logreg → L12 metrics → L13 calibration → **L14**), which
 L13's "Next:" box already promises.
 

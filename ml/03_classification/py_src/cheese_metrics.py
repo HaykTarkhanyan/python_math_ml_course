@@ -153,6 +153,45 @@ def fig_lift(yte, s, logger):
     _finish(ax, "cm_lift.pdf", logger)
 
 
+def fig_lift_decile(yte, s, logger):
+    """Lift per decile: rank by score, split into 10 equal groups, bad-rate / base rate."""
+    order = np.argsort(-s)
+    y_sorted = yte[order]
+    base = float(yte.mean())
+    deciles = np.array_split(y_sorted, 10)
+    lift = [float(d.mean()) / base for d in deciles]
+    fig, ax = plt.subplots(figsize=(5.9, 4.0))
+    bars = ax.bar(range(1, 11), lift, color=ARM_BLUE, edgecolor="white")
+    ax.axhline(1.0, ls="--", color="0.6", lw=1.3, label="random (lift 1)")
+    ax.bar_label(bars, fmt="%.1f", fontsize=8, padding=2)
+    ax.set_xticks(range(1, 11))
+    ax.set_xlabel("decile (1 = top-scored 10%)")
+    ax.set_ylabel("lift = decile bad-rate / base rate")
+    ax.set_title("Lift by decile")
+    ax.legend(loc="upper right", fontsize=9, frameon=False)
+    logger.info("lift by decile (1..10): " + ", ".join(f"{l:.1f}" for l in lift))
+    _finish(ax, "cm_lift_decile.pdf", logger)
+
+
+def fig_pr_ap(yte, s, logger):
+    """PR curve with the area (AP) shaded -- for the 'PR AUC = area under PR' explanation."""
+    prec, rec, _ = precision_recall_curve(yte, s)
+    ap = average_precision_score(yte, s)
+    base = float(yte.mean())
+    fig, ax = plt.subplots(figsize=(5.0, 4.0))
+    ax.fill_between(rec, prec, color=ARM_RED, alpha=0.18, step="post")
+    ax.plot(rec, prec, color=ARM_RED, lw=2.4)
+    ax.axhline(base, ls="--", color="0.6", lw=1.2, label=f"base rate = {base:.2f} (random AP)")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1.02)
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title(f"AP = area under PR = {ap:.2f}")
+    ax.legend(loc="upper right", fontsize=9, frameon=False)
+    logger.info(f"pr_ap: AP={ap:.3f}, base={base:.3f}")
+    _finish(ax, "cm_pr_ap.pdf", logger)
+
+
 def fig_roc_vs_pr(logger):
     """Two models on 1%-positive data: ROC both look great, PR diverges."""
     np.random.seed(SEED)
@@ -442,7 +481,9 @@ def main():
                 f"({yte.mean()*100:.1f}%)")
     fig_roc(yte, s, logger)
     fig_pr(yte, s, logger)
+    fig_pr_ap(yte, s, logger)
     fig_lift(yte, s, logger)
+    fig_lift_decile(yte, s, logger)
     fig_roc_vs_pr(logger)
     fig_threshold_metrics(yte, s, logger)
     fig_cost_curve(yte, s, logger)
