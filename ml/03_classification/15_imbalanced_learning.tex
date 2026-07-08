@@ -21,17 +21,17 @@
   xrightmargin=4pt,
 }
 
-\title{[14] Imbalanced Learning}
+\title{[15] Imbalanced Learning}
 \subtitle{Fix the operating point first; reshape the data only when you must}
 \date{}
 
 \begin{document}
 
 % ================================================================
-% HOOK -- bridge from L13
+% HOOK -- bridge from L14
 \begin{frame}{From measuring imbalance to fixing it}
   You can now \textbf{score} a classifier on imbalanced data (L12: PR-AUC, recall, MCC) and
-  \textbf{trust} its probabilities (L13: calibration). But the cheese detector still \emph{misses
+  \textbf{trust} its probabilities (L14: calibration). But the cheese detector still \emph{misses
   most of the 3\% bad batches}.
   \vfill
   Can we do better by changing the \textbf{data} or the \textbf{training} itself --- not just the
@@ -40,25 +40,6 @@
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
     Two families of fixes: \textbf{tilt the training} (class weights / costs) and \textbf{reshape
     the data} (over/under-sampling, SMOTE). Both help \emph{sometimes} --- and both have traps.}}
-\end{frame}
-
-\begin{frame}{Predict-first: just rebalance the classes?}
-  Take the cheese data ($3\%$ bad) and \textbf{duplicate the bad batches until the classes are
-  50/50}, then refit. Predict three things:
-  \vfill
-  \textbf{(a)} recall at the default threshold $0.5$? \quad \textbf{(b)} the ranking (ROC/PR-AUC)?
-  \quad \textbf{(c)} the predicted probabilities?
-  \vfill
-  \begin{itemize}\small
-    \item \textbf{(a) Recall jumps} --- the decision boundary shifts toward the minority.
-    \item \textbf{(b) Ranking barely moves} (if anything, a touch worse) --- copies add no new information.
-    \item \textbf{(c) Probabilities inflate} --- the model now thinks ``bad'' is common; they
-      \textbf{decalibrate}. (And if you duplicated \emph{before} the train/test split, you leaked.)
-  \end{itemize}
-  \vfill
-  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
-    The recall gain in (a) is real --- but you could have gotten it for free by \textbf{lowering
-    the threshold} (L12). That tension is the whole lecture.}}
 \end{frame}
 
 \begin{frame}{Outline}
@@ -73,7 +54,7 @@
   \begin{center}
     {\Large\color{popblue}\textbf{Start with what you already have}}\\[0.9em]
     \begin{minipage}{0.82\textwidth}\centering\small
-      Before reshaping data, remember: two tools from L12--L13 handle most imbalance already.
+      Before reshaping data, remember: two tools from L12--L14 handle most imbalance already.
     \end{minipage}
   \end{center}
   \vfill
@@ -86,7 +67,7 @@
     majority --- so the model can score well by mostly ignoring the rare class (L12: $97\%$
     accuracy, $0$ recall).
     \column{0.5\textwidth}
-    \textbf{You already have two fixes (L12--L13):}
+    \textbf{You already have two fixes (L12--L14):}
     \begin{itemize}\small
       \item the \textbf{right metric} --- PR-AUC, recall, MCC, balanced accuracy;
       \item the \textbf{cost-tuned threshold} --- move $c$ off $0.5$ toward the minority.
@@ -106,7 +87,7 @@
       \hline
       Algorithm-level & reweight errors / cost matrix in training & \textbf{this deck} \\
       Data-level & resample to rebalance the classes & \textbf{this deck} (in depth) \\
-      Cost-sensitive \emph{thresholding} & move the cutoff by cost & \textbf{done in L12/L13} \\
+      Cost-sensitive \emph{thresholding} & move the cutoff by cost & \textbf{done in L12/L14} \\
       Ensemble & imbalance-aware bagging/boosting & \textbf{ch.\,4 (trees)} \\
       \hline
     \end{tabular}
@@ -136,9 +117,12 @@
     \thetah = \argmin_{\thetav} \ \frac1n \sumin w_{\yi}\, L\big(\yi, f(\xv^{(i)})\big),
     \qquad w_k \propto \frac{n}{K\, n_k}.
   \]
+  where $n$ = total examples, $K$ = number of classes, $n_k$ = examples in class $k$
+  (so $w_{\yi}$ is the weight of example $i$'s class).
   \begin{itemize}\small
     \item \texttt{class\_weight="balanced"} sets exactly $w_k = n/(K\,n_k)$ --- the rare class is
-      up-weighted automatically.
+      up-weighted automatically. \emph{(At $3\%$ positive with $K{=}2$: minority weight
+      $\approx 17$, majority $\approx 0.5$.)}
     \item It is just \textbf{weighted ERM} --- works for any loss-based learner (callback Ch.\,1).
   \end{itemize}
   \vfill
@@ -152,36 +136,66 @@
     \item With \textbf{regularization} the fitted coefficients genuinely change, so it is not an
       \emph{exact} threshold move --- but close.
     \item Crucially, it \textbf{decalibrates}: the model trains as if the minority were common, so
-      its probabilities \textbf{inflate} (callback L13).
+      its probabilities \textbf{inflate} (callback L14).
   \end{itemize}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
-    In the bank-marketing project, \texttt{class\_weight="balanced"} blew ECE from $0.01$ to
-    $0.30$. For a probabilistic model it mostly \emph{duplicates threshold tuning at the cost of
+    On a rare-class fit, \texttt{class\_weight="balanced"} can inflate ECE from near-zero to $0.3$
+    or worse. For a probabilistic model it mostly \emph{duplicates threshold tuning at the cost of
     calibration} --- if you use it and report probabilities, \textbf{recalibrate}.}}
   \vskip 3pt
   \footnotesize It \emph{does} change the fit meaningfully for tree split / SVM margin criteria --- more on ``when it helps'' later.
 \end{frame}
 
-\begin{frame}{Cost-sensitive learning --- just the idea}
-  L12/L13 put costs at the \textbf{decision threshold}. You can instead bake a \textbf{cost matrix}
-  into \textbf{training}, so the model itself minimizes expected cost:
-  \begin{center}\small
-    \renewcommand{\arraystretch}{1.2}
-    \begin{tabular}{cc|cc}
-      & & \multicolumn{2}{c}{\textbf{true}} \\
-      & & bad ($y{=}1$) & good ($y{=}0$) \\
-      \hline
-      \multirow{2}{*}{\textbf{pred.}} & bad & $0$ & $C_{FP}$ \\
-      & good & $C_{FN}$ & $0$ \\
-    \end{tabular}
-  \end{center}
+\begin{frame}{Cost-sensitive learning (1/2): costs in the training loss}
+  Class weights use \textbf{one weight per class}. The general version puts a price on \emph{each
+  kind} of mistake --- a \textbf{cost matrix} $C(j,k)$ = cost of predicting $j$ when the truth is
+  $k$ --- and folds it into the \textbf{loss we minimize}:
+  \[ \thetah \;=\; \argmin_{\thetav}\ \frac1n \sumin w_{\yi}\, L\big(\yi, f(\xv^{(i)})\big),
+     \qquad w_{\yi} = \text{cost of misclassifying class } \yi. \]
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.2}
+      \begin{tabular}{cc|cc}
+        & & \multicolumn{2}{c}{\textbf{true}} \\
+        & & bad ($y{=}1$) & good ($y{=}0$) \\
+        \hline
+        \multirow{2}{*}{\textbf{pred.}} & bad & $0$ & $C_{FP}$ \\
+        & good & $C_{FN}$ & $0$ \\
+      \end{tabular}
+    \end{center}
+    \column{0.56\textwidth}
+    \begin{itemize}\small
+      \item \textbf{What we minimize:} average \emph{cost-weighted} loss --- the same weighted ERM
+        as the class-weights slide, weights now read off the matrix.
+      \item \textbf{Class weights are the special case}: cost depends only on the true class
+        ($w_1{=}C_{FN}$, $w_0{=}C_{FP}$).
+      \item It \textbf{changes the fit} (coefficients, tree splits), not just where you cut.
+    \end{itemize}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize General matrices (cost depends on \emph{which} wrong class) need more --- MetaCost, instance-specific costs --- beyond this course.
+\end{frame}
+
+\begin{frame}{Cost-sensitive learning (2/2): costs at the decision}
+  Costs can also enter at \textbf{prediction time} instead of training --- keep the fitted model,
+  but turn its probabilities into the \textbf{cheapest label}:
+  \[ \hat y(\xv) \;=\; \argmin_{j}\ \sum_{k} P(y{=}k \mid \xv)\, C(j,k). \]
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{What is $\hat y(\xv)$?} The \textbf{label we output} for $\xv$ (bad or good) --- not a
+    probability. For each candidate prediction $j$, average its cost over what the truth might be
+    (weighted by the model's probabilities $P(y{=}k\mid\xv)$), then \textbf{pick the cheapest $j$}.}}
+  \vfill
   \begin{itemize}\small
-    \item For a rare, costly positive: $C_{FN} \gg C_{FP}$ (a missed bad batch $\gg$ a re-check).
-    \item \textbf{Class weights are the simple special case} --- one cost per class.
+    \item For two classes this is \textbf{exactly the cost threshold} $c^* = C_{FP}/(C_{FP}+C_{FN})$
+      from L13 --- costs move the cutoff, the \textbf{model is unchanged} (needs calibrated $\hat p$).
   \end{itemize}
   \vfill
-  \footnotesize Full methods (MetaCost, instance-specific costs) exist but are beyond this course --- the \emph{idea} is what to remember.
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Two knobs, one goal (minimize expected cost):} bake costs into the \textbf{training
+    loss} (model changes; class weights are the everyday version) \emph{or} apply them at the
+    \textbf{decision} (a threshold; model unchanged).}}
 \end{frame}
 
 % ================================================================
@@ -237,12 +251,18 @@
 
 \begin{frame}{Oversampling: random replication (ROS)}
   \textbf{Random oversampling (ROS)} --- duplicate minority examples until balanced.
-  \vfill
-  \begin{itemize}
+  \begin{itemize}\small
     \item Cheap, classifier-independent, loses no data.
-    \item \textbf{But: exact copies} $\Rightarrow$ the model can \textbf{overfit} those few points
-      (it sees the same example many times, not new evidence).
+    \item \textbf{But: exact copies} $\Rightarrow$ the model can \textbf{overfit} those few points.
   \end{itemize}
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{``Doesn't duplicating rows create linear dependence and break the fit?''} No ---
+    singularity comes from dependent \emph{columns} (features), not repeated \emph{rows}; a copied
+    row just acts as an integer \emph{weight} on that point (\texttt{class\_weight}, but cruder).
+    What it \emph{does} break is the \textbf{i.i.d.\ assumption} --- the copies aren't new
+    information, so the model over-trusts them, \textbf{decalibrating} (and leaking if you copy
+    before the split).}}
   \vfill
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
     Can we add minority examples that are \emph{plausible but new}, instead of copies? That is the
@@ -251,26 +271,30 @@
 
 \begin{frame}{SMOTE: synthesize, don't copy}
   \textbf{SMOTE} (Synthetic Minority Over-sampling) makes \emph{new} minority points by
-  \textbf{interpolating between neighbours}: for a minority point $\xv^{(i)}$ and one of its
-  minority neighbours $\xv^{(j)}$,
-  \[ \xv_{\text{new}} = \xv^{(i)} + \lambda\,\big(\xv^{(j)} - \xv^{(i)}\big), \qquad \lambda \in [0,1]. \]
-  \vfill
-  \textbf{By hand:} take $\xv^{(i)}=(1,2)$, neighbour $\xv^{(j)}=(3,1)$, and $\lambda=0.25$:
-  \[ \xv_{\text{new}} = (1,2) + 0.25\,(3-1,\ 1-2) = (1,2) + 0.25\,(2,-1) = \mathbf{(1.5,\ 1.75)}. \]
-  \vfill
-  \footnotesize A point a quarter of the way from $\xv^{(i)}$ toward its neighbour --- plausible,
-  and \emph{new} (not a copy). The next slide builds these step by step.
+  \textbf{interpolating between neighbours}. For a minority point $\xv^{(i)}$:
+  \begin{enumerate}\small
+    \item find its $k$ nearest \emph{minority} neighbours (default $k=5$);
+    \item pick \textbf{one of those $k$ at random} --- \emph{not} necessarily the closest --- call
+      it $\xv^{(j)}$;
+    \item step a random fraction $\lambda \in [0,1]$ of the way toward it.
+  \end{enumerate}
+  \[ \xv_{\text{new}} = \xv^{(i)} + \lambda\,\big(\xv^{(j)} - \xv^{(i)}\big). \]
+  \textbf{By hand:} $\xv^{(i)}=(1,2)$, the drawn neighbour $\xv^{(j)}=(3,1)$, $\lambda=0.25$:
+  \[ \xv_{\text{new}} = (1,2) + 0.25\,(2,-1) = \mathbf{(1.5,\ 1.75)}. \]
+  \vskip 1pt
+  \footnotesize The random neighbour \emph{and} random $\lambda$ are what make each point new. Next
+  slide: step through several.
 \end{frame}
 
 \begin{frame}{SMOTE: building the points (step through)}
   \begin{center}
-    \foreach \n in {1,...,12}{%
+    \foreach \n in {1,...,11}{%
       \includegraphics<\n>[width=0.74\linewidth]{fig/smote_viz_\n.pdf}%
     }
   \end{center}
   \vskip 1pt
-  \footnotesize Pick a minority point, find its $k$ nearest minority neighbours, drop a synthetic
-  point on a random connecting segment; repeat. Steps build $K{=}2$, last step $K{=}3$.
+  \footnotesize Pick a minority point, find its $k$ nearest minority neighbours ($K{=}2$ here), drop
+  a synthetic point on a random connecting segment; repeat.
   \hfill \scriptsize Source: LMU AML (CC BY 4.0).
 \end{frame}
 
@@ -360,31 +384,10 @@ LogisticRegression(class_weight="balanced")
     \texttt{imblearn.Pipeline} (previous slide).
     \vskip 4pt
     \textbf{2. Decalibration.} Resampling changes the base rate the model sees $\Rightarrow$ its
-    probabilities inflate. \textbf{Recalibrate} on untouched data (L13), or report rankings only.
+    probabilities inflate. \textbf{Recalibrate} on untouched data (L14), or report rankings only.
     \column{0.5\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{fig/imb_decalibration.pdf}
-    \end{center}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Reality check --- on our own data}
-  \begin{columns}[T]
-    \column{0.5\textwidth}
-    Same imbalanced data, same logistic regression, four pre-processings. Compare \textbf{PR-AUC}
-    (ranking quality, threshold-free):
-    \vskip 4pt
-    \begin{itemize}\small
-      \item Resampling \textbf{barely moves} it --- here it even dips slightly.
-      \item It changes \emph{recall at a fixed threshold}, but that's a threshold move in disguise.
-    \end{itemize}
-    \vskip 4pt
-    \footnotesize The effect is \textbf{small and not even reliably positive} --- a tiny gain
-    sometimes (literature: Optdigits F1 $0.92 \to 0.95$), nothing or slightly worse other times
-    (here). Trees/boosting (ch.\,4) handle imbalance more natively.
-    \column{0.5\textwidth}
-    \begin{center}
-      \includegraphics[width=\linewidth]{fig/imb_benchmark.pdf}
     \end{center}
   \end{columns}
 \end{frame}
@@ -393,7 +396,7 @@ LogisticRegression(class_weight="balanced")
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
   \textbf{In order:}
   \begin{enumerate}\small
-    \item \textbf{Right metric + cost-tuned threshold} (L12/L13) --- almost always start here.
+    \item \textbf{Right metric + cost-tuned threshold} (L12/L14) --- almost always start here.
     \item \textbf{\texttt{class\_weight}} if your learner uses it --- then \textbf{recalibrate}.
     \item \textbf{Resampling / SMOTE} only if the minority is truly tiny \textbf{and the fit (not
       the threshold) is the bottleneck} --- \emph{inside} CV, then recalibrate.
@@ -410,7 +413,7 @@ LogisticRegression(class_weight="balanced")
 \begin{frame}{Recap}
   \begin{itemize}\small
     \item Imbalance hurts because average loss is dominated by the majority --- but you already
-      fix most of it with the \textbf{right metric} + a \textbf{cost-tuned threshold} (L12/L13).
+      fix most of it with the \textbf{right metric} + a \textbf{cost-tuned threshold} (L12/L14).
     \item \textbf{Class weights / cost-sensitive learning} tilt the training; for a probabilistic
       model they mostly mimic a threshold move and \textbf{decalibrate} $\Rightarrow$ recalibrate.
     \item \textbf{Resampling}: RUS / Tomek (undersample), ROS (copies $\to$ overfit),
@@ -428,8 +431,8 @@ LogisticRegression(class_weight="balanced")
 
 % =============================================================
 % Provenance:
-%   - [14] Imbalanced learning; chapter 3 classification, after L13 calibration.
-%   - Thesis: metric + threshold first (L12/L13); resampling/reweighting are secondary,
+%   - [15] Imbalanced learning; chapter 3 classification, after L14 calibration.
+%   - Thesis: metric + threshold first (L12/L14); resampling/reweighting are secondary,
 %     decalibrate, and help mainly when the FIT (not the operating point) is the bottleneck.
 %   - Source: lecture_appml/slides/09_imbalancy_corr (LMU Advanced ML, CC BY 4.0) -- taxonomy
 %     (intro), sampling methods (ROS/RUS/Tomek, SMOTE). Cut as too advanced: cost curves,
@@ -438,7 +441,19 @@ LogisticRegression(class_weight="balanced")
 %   - Generated figures (py_src/imbalanced_figs.py, ma venv): imb_resampling_2d, imb_tomek
 %     (house-style replacement for the third-party Herrera image), imb_decalibration,
 %     imb_benchmark (PR-AUC baseline vs ROS/RUS/SMOTE on our data).
-%   - Callbacks: L11 (class_weight, scaling), L12 (metrics, threshold, leakage), L13
+%   - Callbacks: L11 (class_weight, scaling), L12 (metrics, threshold, leakage), L14
 %     (calibration, recalibrate), bank-marketing project (class_weight ECE 0.01->0.30).
-%   - Design doc: L14_imbalanced_learning_OUTLINE.md (v4).
+%   - Design doc: 15_imbalanced_learning_OUTLINE.md (v4).
+%   - 2026-07-08 instructor-feedback pass: removed the predict-first and reality-check frames;
+%     defined K / n_k on the class-weights frame (+ concrete 3%-positive weights); delabeled the
+%     bank-marketing ECE example on the "catch" frame; added the expected-cost decision rule
+%     y = argmin_j sum_k P(k|x) C(j,k) to the cost-matrix frame; added a linear-dependence /
+%     i.i.d. pre-empt box on the ROS frame; clarified SMOTE draws a RANDOM one of the k nearest
+%     minority neighbours (not the closest); trimmed the SMOTE animation to 11 steps (dropped the
+%     K=3 step). NOTE: fig/imb_benchmark.pdf is now unused (its frame was removed); the
+%     bank-marketing SMOTENC reference on "SMOTE in practice" was left in place (not flagged).
+%   - 2026-07-08 (round 2): split the cost-sensitive frame into two (1/2 costs in the training
+%     loss = weighted ERM with cost-derived weights; 2/2 costs at the decision = the argmin
+%     expected-cost rule) because the single frame conflated the training loss with the decision
+%     rule y-hat(x). Now each clearly states what is minimized vs what y-hat(x) outputs.
 % =============================================================

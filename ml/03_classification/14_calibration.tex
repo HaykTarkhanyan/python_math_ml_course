@@ -19,7 +19,7 @@
   xrightmargin=4pt,
 }
 
-\title{[13] Calibration}
+\title{[14] Calibration}
 \subtitle{Are the predicted probabilities trustworthy?}
 \date{}
 
@@ -61,22 +61,79 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{The reliability diagram}
+\begin{frame}{Building the reliability diagram}
+  Take the model's predictions on held-out data and:
+  \begin{enumerate}\small
+    \item \textbf{Bin} the predicted probabilities $\hat p$ --- say 10 equal-width bins
+      $[0,0.1), [0.1,0.2), \dots, [0.9,1]$.
+    \item In each bin compute two numbers: the \textbf{mean predicted} $\hat p$ ($\to x$) and the
+      \textbf{observed fraction of positives} ($\to y$). \emph{Of the batches this bin scored
+      ``$\approx 0.8$'', how many were actually bad?}
+    \item \textbf{Plot} each bin as a point $(x,y)$ and join them.
+  \end{enumerate}
+  \vskip 2pt
+  A perfectly calibrated model has $y = x$ in every bin --- the points land on the
+  \textbf{45$^\circ$ diagonal}.
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Not a CDF.} Both axes are probabilities and it rises left-to-right, so it \emph{looks}
+    like one --- but it is \textbf{not cumulative}. Each point is a \emph{local} average inside one
+    bin, and the reference is the diagonal $y=x$ (not a CDF's $0\!\to\!1$ ramp). The same model can
+    sit \emph{above} the diagonal in some bins and \emph{below} it in others.}}
+\end{frame}
+
+\begin{frame}{Reading the reliability diagram}
   \begin{columns}[T]
     \column{0.48\textwidth}
-    Bin predictions by $\hat p$; plot \textbf{predicted} ($x$) vs.\ \textbf{observed
-    frequency} ($y$).
+    Compare each bin's point to the diagonal:
     \begin{itemize}\small
-      \item On the diagonal $=$ perfectly calibrated.
-      \item \textbf{Below} the line $=$ \textbf{over-confident} (predicts higher than reality).
-      \item Above $=$ under-confident.
+      \item \textbf{on} the diagonal $=$ perfectly calibrated;
+      \item \textbf{below} $=$ \textbf{over-confident} (predicted higher than reality);
+      \item \textbf{above} $=$ \textbf{under-confident} (predicted lower).
     \end{itemize}
     \vskip 4pt
-    Logistic regression tracks the diagonal; an over-confident model (here naive Bayes) bows
-    \emph{below} the line, pushing $\hat p$ toward the extremes (ECE $0.06$ vs.\ $0.02$).
+    Logistic regression tracks the diagonal; naive Bayes bows away from it, pushing $\hat p$ toward
+    $0$ and $1$.
+    \vskip 4pt
+    Its \textbf{ECE} (\emph{expected calibration error}) --- the bin-size-weighted average of those
+    vertical gaps --- is $0.055$, vs.\ $0.016$ for the calibrated model. We compute one by hand
+    next.
     \column{0.52\textwidth}
     \includegraphics[width=\textwidth]{fig/cal_reliability.pdf}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Worked example: computing ECE by hand}
+  Bin the predictions; in each bin compare the \textbf{average prediction} $\hat p_b$ to the
+  \textbf{observed frequency} of bad batches, then average the gaps \emph{weighted by bin size}.
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.25}
+      \begin{tabular}{c c c c}
+        bin & $n_b$ & $\hat p_b$ / obs. & $|\mathrm{gap}|$ \\
+        \hline
+        $[0.0,0.2)$ & $50$ & $0.10 / 0.10$ & $0.00$ \\
+        $[0.2,0.4)$ & $20$ & $0.30 / 0.25$ & $0.05$ \\
+        $[0.6,0.8)$ & $20$ & $0.70 / 0.50$ & $0.20$ \\
+        $[0.8,1.0]$ & $10$ & $0.90 / 0.60$ & $0.30$ \\
+        \hline
+      \end{tabular}\\[3pt]
+      \scriptsize $n=100$ predictions; empty bins contribute $0$.
+    \end{center}
+    \column{0.46\textwidth}
+    \small Weight each bin's gap by its share of all predictions:
+    \[ \mathrm{ECE} = \sum_b \frac{n_b}{n}\,\big|\mathrm{obs}_b - \hat p_b\big| \]
+    \begin{align*}
+      &= \tfrac{50}{100}(0) + \tfrac{20}{100}(.05) \\
+      &\quad + \tfrac{20}{100}(.20) + \tfrac{10}{100}(.30) \\[2pt]
+      &= .01 + .04 + .03 = \mathbf{0.08}.
+    \end{align*}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize The two high-score bins are \textbf{over-confident} (say $0.7$/$0.9$, only
+  $0.5$/$0.6$ actually bad) and drive almost all the error. \emph{ECE is just a weighted average
+  of the reliability diagram's vertical gaps.}
 \end{frame}
 
 \begin{frame}{Over-confidence, seen another way}
@@ -145,6 +202,46 @@
     ``$90\%$ risk'' to the factory (or a doctor) only means something if it is calibrated.}}
 \end{frame}
 
+\begin{frame}{When calibration matters}
+  \textbf{The deciding question: does your decision read the \emph{value} of $\hat p$ as a chance?}
+  If yes, calibrate.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{You report the probability to someone who acts on the number} --- ``$30\%$ chance
+      malignant'' to a doctor, ``$90\%$ bad'' to the factory, ``$5\%$ default'' to a lender. A
+      wrong $0.9$ is a wrong decision.
+    \item \textbf{Expected-value / cost decisions.} The cost-optimal threshold
+      $c^* = \frac{C_{FP}}{C_{FN}+C_{FP}}$ (L13) plugs $\hat p$ into an expected-cost calculation
+      --- feed it garbage probabilities and $c^*$ is wrong.
+    \item \textbf{You combine probabilities} --- averaging or ensembling several models, multiplying
+      independent ones, or feeding $\hat p$ into a downstream probabilistic model. Only calibrated
+      numbers combine correctly.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Rule: \textbf{if the number itself is consumed}, it has to be true.}}
+\end{frame}
+
+\begin{frame}{When you can skip it}
+  \textbf{If you only ever \emph{compare} scores --- never read one as a chance --- calibration
+  changes nothing.} A monotonic distortion leaves the order intact.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{You only need the ranking:} ROC-AUC, PR ranking, top-$k\%$ / lift, ``flag the
+      worst 100 batches'' --- all depend on \emph{order}, which miscalibration doesn't touch.
+    \item \textbf{You tune the threshold directly} on your target metric (F1, cost) on a validation
+      set --- the threshold \textbf{absorbs} the miscalibration, so $\hat p$'s exact value never
+      matters.
+  \end{itemize}
+  \vskip 2pt
+  \footnotesize Even then, calibrated probabilities can still help \emph{interpretability and
+  monitoring} --- they just won't change these particular decisions.
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Golden rule (whenever you calibrate):} fit on data the base model never saw, and don't
+    re-tune the threshold on that same split --- both bias the result optimistically.}}
+\end{frame}
+
 \begin{frame}{Who is miscalibrated?}
   \begin{columns}[T]
     \column{0.5\textwidth}
@@ -189,39 +286,6 @@
     Brier and log-loss are good overall scores but conflate calibration with discrimination.}}
 \end{frame}
 
-\begin{frame}{Worked example: computing ECE by hand}
-  Bin the predictions; in each bin compare the \textbf{average prediction} $\hat p_b$ to the
-  \textbf{observed frequency} of bad batches, then average the gaps \emph{weighted by bin size}.
-  \begin{columns}[T]
-    \column{0.54\textwidth}
-    \begin{center}\small
-      \renewcommand{\arraystretch}{1.25}
-      \begin{tabular}{c c c c}
-        bin & $n_b$ & $\hat p_b$ / obs. & $|\mathrm{gap}|$ \\
-        \hline
-        $[0.0,0.2)$ & $50$ & $0.10 / 0.10$ & $0.00$ \\
-        $[0.2,0.4)$ & $20$ & $0.30 / 0.25$ & $0.05$ \\
-        $[0.6,0.8)$ & $20$ & $0.70 / 0.50$ & $0.20$ \\
-        $[0.8,1.0]$ & $10$ & $0.90 / 0.60$ & $0.30$ \\
-        \hline
-      \end{tabular}\\[3pt]
-      \scriptsize $n=100$ predictions; empty bins contribute $0$.
-    \end{center}
-    \column{0.46\textwidth}
-    \small Weight each bin's gap by its share of all predictions:
-    \[ \mathrm{ECE} = \sum_b \frac{n_b}{n}\,\big|\mathrm{obs}_b - \hat p_b\big| \]
-    \begin{align*}
-      &= \tfrac{50}{100}(0) + \tfrac{20}{100}(.05) \\
-      &\quad + \tfrac{20}{100}(.20) + \tfrac{10}{100}(.30) \\[2pt]
-      &= .01 + .04 + .03 = \mathbf{0.08}.
-    \end{align*}
-  \end{columns}
-  \vskip 2pt
-  \footnotesize The two high-score bins are \textbf{over-confident} (say $0.7$/$0.9$, only
-  $0.5$/$0.6$ actually bad) and drive almost all the error. \emph{ECE is just a weighted average
-  of the reliability diagram's vertical gaps.}
-\end{frame}
-
 % ================================================================
 \section{Fixing it}
 
@@ -237,21 +301,67 @@
   \vfill
 \end{frame}
 
-\begin{frame}{Post-hoc calibration: Platt and isotonic}
+\begin{frame}{Post-hoc calibration: the common idea}
+  \textbf{Don't retrain.} Freeze the fitted model, then learn a one-dimensional map
+  \[ g:\ \text{raw score } s \ \longmapsto\ \text{calibrated probability } \hat p \]
+  from a \textbf{held-out calibration set} of (score, label) pairs --- data the base model never
+  trained on.
+  \vfill
+  \begin{itemize}\small
+    \item Two standard choices, differing only in how flexible $g$ is: \textbf{Platt scaling}
+      (a rigid sigmoid) and \textbf{isotonic regression} (a free monotonic curve).
+    \item Both are \textbf{monotonic} maps, so they never reorder the scores --- the
+      \textbf{ranking (and AUC) is unchanged}; only the \emph{values} move onto the diagonal.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Calibration is a cheap \emph{post-processing} step: one extra fit on a held-out split, and the
+    model itself is untouched.}}
+\end{frame}
+
+\begin{frame}{Platt scaling: fit a sigmoid on the scores}
   \begin{columns}[T]
-    \column{0.48\textwidth}
-    Learn a map from raw scores to true probabilities, on \textbf{held-out} data:
+    \column{0.56\textwidth}
+    Push the raw score $s$ through a \textbf{logistic sigmoid}:
+    \[ \hat p = \sigma(a\,s + b) = \frac{1}{1 + e^{-(a s + b)}}. \]
     \begin{itemize}\small
-      \item \textbf{Platt scaling}: fit a sigmoid $\sigma(a\,s + b)$. Two parameters --- good
-        for \emph{small} data; assumes an S-shaped distortion.
-      \item \textbf{Isotonic regression}: a free \emph{monotonic} step function. More
-        flexible --- needs \emph{more} data (overfits when small).
+      \item Fit just \textbf{two numbers} $a, b$ by minimizing log-loss on the held-out
+        (score, label) pairs --- literally a 1-feature logistic regression \emph{on the scores}.
+      \item \textbf{Data-thrifty:} two parameters work with only a few hundred calibration points.
+      \item \textbf{Assumption:} the distortion is a smooth \textbf{S-shape}. If the real
+        miscalibration isn't sigmoidal, Platt can't remove it.
     \end{itemize}
-    \vskip 4pt
-    Isotonic snaps naive Bayes onto the diagonal: ECE $0.06 \to 0.01$.
-    \column{0.52\textwidth}
-    \includegraphics[width=\textwidth]{fig/cal_before_after.pdf}
+    \column{0.44\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Originally \textbf{Platt (1999)}, to turn SVM margins into probabilities.}}
+    \vskip 8pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Neural nets:} \textbf{temperature scaling} is the 1-parameter version
+      $\hat p = \sigma(z/T)$ (fit only $T$ on the logits $z$) --- the standard fix (Guo et al.,
+      2017).}}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Isotonic regression: a free monotonic staircase}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \textbf{On what:} the held-out pairs $(s_i, y_i)$ --- raw score and true label
+    $y_i \in \{0,1\}$ (same data as Platt).\\[2pt]
+    \textbf{How:} fit the \textbf{non-decreasing} map $m$ that matches those 0/1 labels in least
+    squares:
+    \[ m = \argmin_{g\ \text{non-decr.}}\ \sum_i \big(g(s_i) - y_i\big)^2. \]
+    \begin{itemize}\small
+      \item \textbf{Pool-adjacent-violators:} sort by score; wherever the fit would \emph{drop},
+        \textbf{pool} those points into their \textbf{average label} (the local positive rate);
+        repeat until monotone $\Rightarrow$ a piecewise-constant \textbf{staircase}.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \includegraphics[width=\textwidth]{fig/cal_before_after.pdf}\\[3pt]
+    \footnotesize Snaps naive Bayes onto the diagonal: ECE $0.055 \to 0.012$.
+  \end{columns}
+  \vskip 3pt
+  \footnotesize \textbf{No shape assumption} $\Rightarrow$ fixes any monotonic distortion, but
+  \textbf{needs more data} ($\gtrsim$ a few thousand) or the steps overfit noise.
 \end{frame}
 
 \begin{frame}[fragile]{Calibration in \texttt{sklearn}}
@@ -274,31 +384,6 @@ cal.predict_proba(X_test)[:, 1]    # now-calibrated probabilities
     \item Calibrate on data the base model did \textbf{not} train on --- \texttt{cv} handles this.
     \item \texttt{CalibrationDisplay.from\_estimator(...)} draws the reliability diagram.
   \end{itemize}
-\end{frame}
-
-% ================================================================
-\section{In practice}
-
-\begin{frame}{When does calibration matter?}
-  \begin{columns}[T]
-    \column{0.5\textwidth}
-    \textbf{Calibrate when\dots}
-    \begin{itemize}\small
-      \item you \emph{report} probabilities (risk to a doctor / factory);
-      \item you make \textbf{cost / expected-value} decisions or tune a threshold by cost;
-      \item you \textbf{average or ensemble} probabilities from several models.
-    \end{itemize}
-    \column{0.5\textwidth}
-    \textbf{Don't bother when\dots}
-    \begin{itemize}\small
-      \item you only need a \textbf{ranking} (ROC AUC, top-$k$\% / lift);
-      \item the threshold is tuned directly on the metric you care about.
-    \end{itemize}
-  \end{columns}
-  \vfill
-  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
-    \textbf{Golden rule:} fit calibration on data the base model never saw, and don't re-tune
-    the threshold on that same split --- both bias the result optimistically.}}
 \end{frame}
 
 % ================================================================
@@ -325,11 +410,24 @@ cal.predict_proba(X_test)[:, 1]    # now-calibrated probabilities
 
 % =============================================================
 % Provenance:
-%   - [13] Calibration; chapter 2 classification, after L12 metrics.
+%   - [14] Calibration; chapter 2 classification, after L12 metrics.
 %   - Figures: py_src/calibration_demo.py (run with ./ma/Scripts/python.exe):
 %     cal_reliability (LR vs NB, ECE), cal_hist (score histograms),
 %     cal_before_after (NB before/after isotonic).
 %   - Running example: cheese factory (continuity with L11/L12).
 %   - Facts verified: ECE/Brier distinction; CalibratedClassifierCV sigmoid/isotonic.
-%   - Forward: [14] imbalanced learning.
+%   - 2026-07-08 pedagogy pass (instructor feedback): (1) moved the cal_reliability annotation
+%     out of the legend; (2) glossed ECE on first use (reliability frame) before the formal
+%     definition; (3) added a "Building the reliability diagram" frame (construction steps +
+%     "not a CDF" clarification); (4) split post-hoc calibration into idea / Platt / isotonic
+%     frames (temperature scaling now on the Platt frame, Guo et al. 2017); (5) split "when it
+%     matters" into two frames (matters vs skip) with the deciding principle + concrete examples.
+%     ECE numbers aligned to the figure (NB 0.055, LR 0.016, isotonic 0.012).
+%   - 2026-07-08 (round 2, instructor feedback): moved the ECE-by-hand worked example to directly
+%     after the reliability-plot frame; moved "When calibration matters" + "When you can skip it"
+%     up into the "Why it matters" section (right after the discrimination frame) and dropped the
+%     now-empty "In practice" section; expanded the isotonic frame to state the fit objective
+%     (least-squares of a non-decreasing m to the 0/1 labels on held-out pairs, via
+%     pool-adjacent-violators).
+%   - Forward: [15] imbalanced learning.
 % =============================================================

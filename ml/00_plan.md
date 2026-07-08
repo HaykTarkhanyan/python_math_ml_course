@@ -37,20 +37,20 @@ Alt if we want continuity: reuse `data/House_Rent_Dataset.csv` (already used in 
 
 ## Classification — Saturday/Sunday 2026-06-27/28
 
-Videos [11], [12], [13]:
+Videos [11], [12], [13], [14]:
 
 - **[11] Logistic regression** — incl. multiclass (softmax / one-vs-rest) and log-loss (built: `11_classification_logreg`)
 - **[12] Classification metrics** — accuracy → precision/recall/F1 → ROC AUC → PR AUC → lift (built: `12_classification_metrics`)
-- **[12b] Threshold tuning** — cost-sensitive cutoff (`c* = C_FP/(C_FP+C_FN)`), Youden's J, recall floor, `TunedThresholdClassifierCV` (built: `12b_threshold_tuning`; not yet lectured, split out of [12])
-- **[13] Calibration** — reliability diagrams, Brier score, ECE, Platt / isotonic, `CalibratedClassifierCV` (building: `L13_calibration`)
+- **[13] Threshold tuning** — cost-sensitive cutoff (`c* = C_FP/(C_FP+C_FN)`), Youden's J, recall floor, `TunedThresholdClassifierCV` (built: `13_threshold_tuning`; not yet lectured, split out of [12])
+- **[14] Calibration** — reliability diagrams, Brier score, ECE, Platt / isotonic, `CalibratedClassifierCV` (building: `14_calibration`)
 
 > Note (2026-06-21): the planned [12] "classification losses" and [13] "multiclass" were folded into [11]; metrics + threshold tuning became [12]; calibration is its own [13]. Threshold tuning moved out of [14].
 
 ## Imbalanced learning — next lecture (Tue 2026-06-30, tentative)
 
-Video [14]:
+Video [15]:
 
-- **[14] Imbalanced learning** — class weights, resampling (over/under-sampling, SMOTE), the precision/recall tradeoff when the positive class is rare
+- **[15] Imbalanced learning** — class weights, resampling (over/under-sampling, SMOTE), the precision/recall tradeoff when the positive class is rare
 
 ## Next lectures (sequence, dates TBD)
 

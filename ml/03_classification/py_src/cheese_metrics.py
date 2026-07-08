@@ -358,6 +358,59 @@ def fig_recall_floor(yte, s, logger, floor=0.80):
     _finish(ax, "cm_recall_floor.pdf", logger)
 
 
+def fig_three_cutoffs(yte, s, logger):
+    """All three operating-point rules on ONE threshold axis.
+
+    Cost-optimal, Youden's J and a recall floor each pick a *different* cutoff --
+    and all three sit far below the default 0.5. The recall/precision curves give
+    context: a lower cutoff buys recall at the price of precision.
+    """
+    VIOLET, GREEN = "#7832A0", "#008C46"
+    ts = np.linspace(0.001, 0.30, 400)
+    P = np.array([_pr_f1_at(yte, s, t)[0] for t in ts])
+    R = np.array([_pr_f1_at(yte, s, t)[1] for t in ts])
+
+    tfull = np.linspace(0.001, 0.999, 400)
+    cost = np.array([100 * _pr_f1_at(yte, s, t)[4] + 10 * _pr_f1_at(yte, s, t)[3]
+                     for t in tfull])
+    c_cost = tfull[int(np.argmin(cost))]
+    fpr, tpr, thr = roc_curve(yte, s)
+    c_youden = thr[int(np.argmax(tpr - fpr))]
+    Rfull = np.array([_pr_f1_at(yte, s, t)[1] for t in tfull])
+    c_floor = tfull[int(np.where(Rfull >= 0.80)[0][-1])]
+
+    # (cutoff, colour, name, text-anchor) -- text fans down-right so short
+    # non-crossing arrows reach the three closely spaced lines.
+    cuts = [
+        (c_floor, GREEN, "recall floor $\\geq 0.80$", (0.105, 0.93)),
+        (c_youden, VIOLET, "Youden's $J$", (0.175, 0.78)),
+        (c_cost, ARM_ORANGE, "cost-optimal $c^*$", (0.250, 0.63)),
+    ]
+
+    fig, ax = plt.subplots(figsize=(6.3, 4.0))
+    ax.plot(ts, R, color=ARM_RED, lw=2.0, label="recall")
+    ax.plot(ts, P, color=ARM_BLUE, lw=2.0, label="precision")
+    for (c, col, name, (xt, yt)), yhead in zip(cuts, (0.83, 0.66, 0.50)):
+        prec, rec, _, fp, fn = _pr_f1_at(yte, s, c)
+        ax.axvline(c, color=col, ls="--", lw=2.0)
+        ax.annotate(f"{name}\n$c={c:.2f}$:  R={rec:.2f}, P={prec:.2f}",
+                    xy=(c, yhead), xytext=(xt, yt), fontsize=8, color=col,
+                    ha="center", va="center",
+                    arrowprops=dict(arrowstyle="->", color=col, lw=1.1))
+    ax.text(0.298, 0.90, "default 0.5 is\nfar to the right", fontsize=8,
+            color="0.45", ha="right", va="center", style="italic")
+    ax.set_xlim(0, 0.30)
+    ax.set_ylim(0, 1.02)
+    ax.set_xlabel("threshold $c$")
+    ax.set_ylabel("metric value")
+    ax.set_title("One score, three rules $\\to$ three cutoffs (all $\\ll 0.5$)")
+    ax.legend(loc="upper right", fontsize=9, frameon=False,
+              bbox_to_anchor=(1.0, 0.52))
+    logger.info(f"three-cutoffs: floor c={c_floor:.3f}, youden c={c_youden:.3f}, "
+                f"cost c={c_cost:.3f}")
+    _finish(ax, "cm_three_cutoffs.pdf", logger)
+
+
 def fig_score_dist(logger, c=0.5):
     """Two score distributions and a movable cutoff -> the TP/FP/FN/TN regions.
 
@@ -489,6 +542,7 @@ def main():
     fig_cost_curve(yte, s, logger)
     fig_youden(yte, s, logger)
     fig_recall_floor(yte, s, logger)
+    fig_three_cutoffs(yte, s, logger)
     fig_score_dist(logger)
     fig_f1_heatmap(logger)
     fig_multiclass_confusion(logger)

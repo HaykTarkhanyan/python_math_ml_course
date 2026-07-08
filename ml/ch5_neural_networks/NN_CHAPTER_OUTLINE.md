@@ -42,8 +42,9 @@ are one-line callbacks. This chapter owns only NN-*specific* training.
 - Deck 2: `L15_training_neural_networks.tex` (supersedes/merges the current
   `L15_backprop_dropout_hpo` stub).
 
-Note the `L14` collision with `ml/03_classification/L14_imbalanced_learning`, and that the
-plan lists NN as video **[23]**. Numbering can be reconciled at build time; not blocking.
+Note: the former `L14` collision with the classification imbalanced-learning deck is resolved
+--- it was renumbered to `15_imbalanced_learning` (2026-07-08), so `L14`/`L15` here are free.
+The plan lists NN as video **[23]**. Numbering can be reconciled at build time; not blocking.
 
 ---
 

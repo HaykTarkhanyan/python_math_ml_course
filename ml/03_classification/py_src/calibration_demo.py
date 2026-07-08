@@ -92,8 +92,8 @@ def fig_reliability(probs, yte, logger):
         ax.plot(mean, frac, "-o", color=c, lw=2, ms=4,
                 label=f"{name}  (ECE {e:.3f})")
         logger.info(f"reliability: {name} ECE={e:.4f}, Brier={brier_score_loss(yte, p):.4f}")
-    ax.annotate("below the line\n= over-confident", xy=(0.83, 0.66),
-                xytext=(0.40, 0.80), fontsize=9, color=ARM_RED,
+    ax.annotate("below the diagonal\n= over-confident", xy=(0.82, 0.66),
+                xytext=(0.72, 0.13), fontsize=9, color=ARM_RED, ha="center",
                 arrowprops=dict(arrowstyle="->", color=ARM_RED))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
