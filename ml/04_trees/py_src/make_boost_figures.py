@@ -1,4 +1,4 @@
-"""Generate the figures for the L11 Boosting deck (incl. the headline animation).
+"""Generate the figures for the [19] Boosting deck (incl. the headline animation).
 
 Outputs into ``ml/04_trees/fig/``:
   1. boost_anim_1..6.pdf  -- the 6-round gradient-boosting ANIMATION (Beamer overlays).
@@ -20,7 +20,7 @@ Also LOGS round-1 details (F_0 = mean(y), the first stump's split threshold + th
 values + eta) so the deck's by-hand frame uses REAL numbers that MATCH animation round 1.
 
 Run with the project venv (repo CLAUDE.md):
-    ./ma/Scripts/python.exe ml/ch3_trees/py_src/make_boost_figures.py
+    ./ma/Scripts/python.exe ml/04_trees/py_src/make_boost_figures.py
 
 Conventions: logging to console + logs/, seed 509, f-strings, Armenian-flag palette.
 """

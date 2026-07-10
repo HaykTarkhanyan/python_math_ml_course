@@ -1,4 +1,4 @@
-"""Generate the real-data figures for the L10 Random Forests deck.
+"""Generate the real-data figures for the [18] Random Forests deck.
 
 Produces four PDFs into ``ml/04_trees/fig/`` from the Titanic dataset:
   1. rf_instability.pdf   -- % of test predictions that change when a single
@@ -42,7 +42,7 @@ ARM_RED = "#D90012"
 ARM_ORANGE = "#F2A800"
 
 HERE = Path(__file__).resolve()
-CH_DIR = HERE.parents[1]               # ml/ch3_trees
+CH_DIR = HERE.parents[1]               # ml/04_trees
 REPO_ROOT = HERE.parents[3]            # repo root
 FIG_DIR = CH_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"
@@ -64,7 +64,7 @@ def setup_logging() -> logging.Logger:
 
 
 def load_titanic(logger: logging.Logger):
-    """Return (X, y, feature_names) -- same tiny preprocessing as the L09 script."""
+    """Return (X, y, feature_names) -- same tiny preprocessing as the [17] script."""
     df = fetch_openml("titanic", version=1, as_frame=True).frame
     features = ["pclass", "sex", "age", "sibsp", "parch", "fare"]
     df = df[features + ["survived"]].copy()

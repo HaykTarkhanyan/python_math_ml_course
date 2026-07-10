@@ -1,4 +1,4 @@
-"""Figures for the Advanced Boosting (L12) deck.
+"""Figures for the Advanced Boosting ([20]) deck.
 
 Figures for the deck:
   - 12_xgb_histogram_split.pdf : percentile bin edges as candidate splits (synthetic)

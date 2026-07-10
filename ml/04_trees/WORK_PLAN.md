@@ -261,6 +261,11 @@ REVIEW §3 L12: sections 2-3 are 7 near-consecutive bullet-only frames; zero pre
 
 ## Phase 6 - Chapter infrastructure (delivery blockers)
 
+**STATUS 2026-07-10:** DONE and committed. HW frames moved from [17]/[18]/[19] into `04_trees.qmd`
+as HW1/2/3 (decks recompile clean without them); `04_trees.qmd` fully built (status callout, deck
+[17]-[20] PDF links, Titanic running-score project, HW1-3, Google Form TBD); `data/titanic.csv`
+pinned from OpenML; `trees_project.ipynb` starter built and verified to run.
+
 ### Task 6.1: Move HW into `04_trees.qmd`; strip in-deck HW frames
 
 **Files:** `04_trees.qmd`, `17/18/19` decks (remove HW frames), `20` (already none).
@@ -293,6 +298,14 @@ REVIEW §3 L12: sections 2-3 are 7 near-consecutive bullet-only frames; zero pre
 ---
 
 ## Phase 7 - Final verification
+
+**STATUS 2026-07-10:** DONE. All four decks compile clean (17=44pp, 18=29pp, 19=31pp, 20=44pp,
+0 errors); every new/edited frame was overflow-checked as authored (full re-render of unchanged
+pages skipped by design). Reference grep clean - no rendered `L09-L12` / `L01c` / `L01d` /
+`ch3_trees` remain; only historical `%` provenance comments and now-fixed script docstrings.
+**Flag:** `ml/00_plan.md` still lists trees as videos [16]-[19] (left untouched per instruction);
+it now disagrees with the delivered [17]-[20]. Task 1.3 (\sectiontransition hoist) remains deferred
+as a cross-chapter cleanup.
 
 - [ ] Full `beamer-overflow-check` pass on all four final PDFs (not just edited frames).
 - [ ] Confirm all four compile clean from scratch; `clean_latex.py` repo-wide.
