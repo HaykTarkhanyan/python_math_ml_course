@@ -102,6 +102,10 @@ not a trees-chapter change - do it as its own focused task.
 
 ## Phase 2 - Low-risk content additions (no new figures)
 
+**STATUS 2026-07-10:** DONE and committed. [17] +6 transitions +local macro, cardinality frame,
+one-hot/CART-binary frame, missing-values line (Context7-verified). [18] OOB caveat. [20]
+calibration ([14]) + imbalanced ([15]) callbacks. All overflow-checked, 0 errors.
+
 Small, high-value, no figures. Each is one frame or a box/line. Verify overflow per new frame.
 
 ### Task 2.1: [17] Decision trees - conceptual gaps
@@ -138,6 +142,13 @@ Small, high-value, no figures. Each is one frame or a box/line. Verify overflow 
 ---
 
 ## Phase 3 - Titanic score story (pedagogical, chapter-level)
+
+**STATUS 2026-07-10:** DONE and committed (options 1+2). Outcome was more honest than the plan
+assumed: on the same 70/30 split, pruned tree = **0.835**, untuned RF = **0.809**, CV-tuned RF =
+**0.827** (max_features=0.8, min_samples_leaf=2). The retune did NOT surpass 0.835 - even tuned, the
+forest stays just below. New `rf_vs_tree.pdf` (bar chart) + a "Reality check" frame in [18] own this:
+the tree's 0.835 is test-picked while the RF's 0.809 is zero-tuning; RF wins with more data/features
+and less tuning effort. No 83.5% chasing / cherry-picking. Overflow-checked, 0 errors.
 
 **Approach (confirm): REVIEW §2 options 1 + 2.** The chapter's own numbers have a pruned single
 tree (83.5%) beating the RF plateau (~81%); HW sends students to discover this, and no deck answers it.

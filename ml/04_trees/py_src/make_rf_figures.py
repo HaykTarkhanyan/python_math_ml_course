@@ -1,6 +1,6 @@
 """Generate the real-data figures for the L10 Random Forests deck.
 
-Produces three PDFs into ``ml/ch3_trees/fig/`` from the Titanic dataset:
+Produces four PDFs into ``ml/04_trees/fig/`` from the Titanic dataset:
   1. rf_instability.pdf   -- % of test predictions that change when a single
                              (unrestricted) tree is refit on bootstrap resamples.
                              Motivates the whole deck: one tree is high-variance.
@@ -9,8 +9,12 @@ Produces three PDFs into ``ml/ch3_trees/fig/`` from the Titanic dataset:
   3. rf_importance.pdf    -- default impurity-based RF feature_importances_, with
                              value labels on the bars (per repo CLAUDE.md).
 
+  4. rf_vs_tree.pdf       -- Titanic test accuracy: pruned single tree vs a
+                             no-tuning RF vs a CV-tuned RF (the chapter's
+                             pruned-tree-vs-forest reality check).
+
 Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
-    ./ma/Scripts/python.exe ml/ch3_trees/py_src/make_rf_figures.py
+    ./ma/Scripts/python.exe ml/04_trees/py_src/make_rf_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours for multi-line plots, value labels on bars, n_jobs=1 to
@@ -27,7 +31,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 from sklearn.datasets import fetch_openml
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.tree import DecisionTreeClassifier
 
 SEED = 509
@@ -178,6 +182,54 @@ def fig_importance(X, y, feature_names, logger):
     logger.info(f"wrote {out.name}")
 
 
+def fig_vs_tree(X, y, feature_names, logger):
+    """Reality check: on this small, one-dominant-feature dataset a well-pruned
+    single tree is competitive with a forest. Compare (identical 70/30 split):
+      - pruned single tree: ccp_alpha picked by best test accuracy (same recipe as
+        the [17] pruning figure -> reproduces the chapter's ~0.835),
+      - default RF: no tuning at all,
+      - tuned RF: max_features / min_samples_leaf chosen by 5-fold CV on the TRAIN
+        fold only (no test peeking)."""
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X, y, test_size=0.3, random_state=SEED, stratify=y)
+
+    path = DecisionTreeClassifier(random_state=SEED).cost_complexity_pruning_path(X_tr, y_tr)
+    tree_accs = [DecisionTreeClassifier(random_state=SEED, ccp_alpha=a)
+                 .fit(X_tr, y_tr).score(X_te, y_te) for a in path.ccp_alphas[:-1]]
+    tree_acc = float(np.max(tree_accs))
+
+    rf_def_acc = float(RandomForestClassifier(n_estimators=300, random_state=SEED, n_jobs=1)
+                       .fit(X_tr, y_tr).score(X_te, y_te))
+
+    grid = GridSearchCV(
+        RandomForestClassifier(n_estimators=300, random_state=SEED, n_jobs=1),
+        {"max_features": ["sqrt", 0.5, 0.8], "min_samples_leaf": [1, 2, 3, 5]},
+        cv=5, scoring="accuracy", n_jobs=1).fit(X_tr, y_tr)
+    rf_tuned_acc = float(grid.best_estimator_.score(X_te, y_te))
+    logger.info(f"vs_tree: pruned tree={tree_acc:.3f}, default RF={rf_def_acc:.3f}, "
+                f"tuned RF={rf_tuned_acc:.3f} (best {grid.best_params_}, "
+                f"CV {grid.best_score_:.3f})")
+
+    labels = ["pruned single tree\n([17], tuned)", "random forest\n(no tuning)",
+              "random forest\n(tuned)"]
+    vals = [tree_acc, rf_def_acc, rf_tuned_acc]
+    colors = [ARM_ORANGE, ARM_RED, ARM_BLUE]
+    fig, ax = plt.subplots(figsize=(6.6, 3.5))
+    bars = ax.barh(labels, vals, color=colors, alpha=0.9)
+    ax.bar_label(bars, fmt="%.3f", padding=4, fontsize=10)
+    ax.set_xlabel("Titanic test accuracy (same 70/30 split)")
+    ax.set_xlim(0, 1.02)
+    ax.invert_yaxis()
+    ax.tick_params(labelsize=9)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "rf_vs_tree.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+    return dict(tree=tree_acc, rf_default=rf_def_acc, rf_tuned=rf_tuned_acc)
+
+
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
@@ -186,9 +238,12 @@ def main():
     inst = fig_instability(X, y, feats, logger)
     ne = fig_n_estimators(X, y, feats, logger)
     fig_importance(X, y, feats, logger)
+    vt = fig_vs_tree(X, y, feats, logger)
     logger.info("=== SUMMARY for the slides ===")
     logger.info(f"single-tree flip rate ~ {inst['mean_flip']:.0f}% of test predictions")
     logger.info(f"RF acc: 1 tree={ne['acc_1']:.2f} -> plateau ~{ne['acc_max']:.2f}")
+    logger.info(f"vs_tree: pruned tree={vt['tree']:.3f}, default RF={vt['rf_default']:.3f}, "
+                f"tuned RF={vt['rf_tuned']:.3f}")
     logger.info("done.")
 
 
