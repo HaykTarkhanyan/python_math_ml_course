@@ -36,6 +36,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **New deck workflow:** interview the instructor on content first, then draft an outline for approval, then build.
 - **Transition slides:** the instructor likes **section-transition slides** — a `[plain]` frame with a `popblue` bold title + one short motivation line — before each major section. Add them by default.
 - **Figures live in a sibling `fig/` folder; the Python that generates them lives in a sibling `py_src/` folder** (e.g. `ml/ch2_classification/py_src/*.py` → `ml/ch2_classification/fig/*.pdf`). Run those scripts with the `ma` venv (see Python Environment). **Every essential figure must be Python-generated, not TikZ** - TikZ only for small throwaway visuals (quick boxes-and-arrows the frame could live without).
+- **Two PDFs per delivered lecture — clean vs `_notes`:** the clean `NN_topic.pdf` is compiled from `.tex` and is fully reproducible; `NN_topic_notes.pdf` is the same slides **hand-annotated live during the lecture**, exported afterward, and is **NOT reproducible**. So a recompile must only ever write the un-suffixed `NN_topic.pdf` — **never overwrite or clean a `_notes.pdf`**. After delivering a lecture: recompile the clean PDF, keep the `_notes.pdf`, and link **both** in the chapter qmd (clean PDF · `PDF (նշումներով)` · video). Naming + qmd template: `CONVENTIONS.md`.
 - **Open a compiled deck in the browser for review** with PowerShell `Start-Process`, one at a time with a short gap (a rapid `cmd /c start msedge` loop drops windows):
 
 ```powershell
