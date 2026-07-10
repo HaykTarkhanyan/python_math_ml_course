@@ -29,7 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
-from sklearn.datasets import fetch_openml
+from sklearn.datasets import fetch_openml, make_moons
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.tree import DecisionTreeClassifier
@@ -107,6 +107,7 @@ def fig_instability(X, y, feature_names, logger, n_resamples=15):
     ax.set_ylabel("% of test predictions\nthat changed")
     ax.set_xticks(np.arange(1, n_resamples + 1))
     ax.tick_params(labelsize=8)
+    ax.set_ylim(0, flips.max() * 1.35)          # headroom so the legend clears the bars
     ax.legend(loc="upper right", fontsize=9, frameon=False)
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
@@ -230,6 +231,90 @@ def fig_vs_tree(X, y, feature_names, logger):
     return dict(tree=tree_acc, rf_default=rf_def_acc, rf_tuned=rf_tuned_acc)
 
 
+def fig_max_features(logger):
+    """The decorrelation knob, made visible. As max_features drops, the trees'
+    predictions get less correlated (rho falls -- the rho*sigma^2 floor term the deck
+    derives); test error is a gentler tradeoff. Synthetic set with one dominant feature,
+    so plain bagging would otherwise make every tree split on it and correlate.
+    (Titanic has too few features to show this cleanly; the error effect is genuinely
+    small and data-dependent, so we show the mechanism rho, not a staged error drop.)"""
+    rng = np.random.default_rng(SEED)
+    n = 2500
+    Xs = rng.normal(size=(n, 25))
+    logit = (1.7 * Xs[:, 0]                       # one dominant feature
+             + 0.55 * Xs[:, 1:5].sum(axis=1)
+             + 0.35 * Xs[:, 5:9].sum(axis=1))
+    ys = (rng.uniform(size=n) < 1.0 / (1.0 + np.exp(-logit))).astype(int)
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        Xs, ys, test_size=0.3, random_state=SEED, stratify=ys)
+
+    mfs = [1, 2, 3, 5, 8, 12, 16, 20, 25]
+    rho, err = [], []
+    for mf in mfs:
+        rf = RandomForestClassifier(n_estimators=150, max_features=mf,
+                                    random_state=SEED, n_jobs=1).fit(X_tr, y_tr)
+        P = np.array([t.predict_proba(X_te)[:, 1] for t in rf.estimators_])
+        C = np.corrcoef(P)
+        rho.append(float(C[np.triu_indices_from(C, k=1)].mean()))
+        err.append(1.0 - rf.score(X_te, y_te))
+    logger.info(f"max_features rho={[round(r,3) for r in rho]}")
+    logger.info(f"max_features err={[round(e,3) for e in err]}")
+
+    fig, ax = plt.subplots(figsize=(6.6, 4.0))
+    ax.plot(mfs, rho, "-o", color=ARM_BLUE, lw=2, ms=4,
+            label=r"tree-to-tree correlation $\rho$")
+    ax.axvline(5, color=ARM_ORANGE, ls="--", lw=1.5)
+    ax.annotate(r"sqrt$\approx$5 (default)", xy=(5, rho[3]), xytext=(6.5, 0.12),
+                color=ARM_ORANGE, fontsize=8,
+                arrowprops=dict(arrowstyle="->", color=ARM_ORANGE))
+    ax.set_xlabel("max_features (features tried per split, of 25)")
+    ax.set_ylabel(r"mean tree-to-tree correlation $\rho$", color=ARM_BLUE)
+    ax.tick_params(axis="y", labelcolor=ARM_BLUE)
+    ax.set_ylim(0, 0.32)
+    ax2 = ax.twinx()
+    ax2.plot(mfs, err, "-s", color=ARM_RED, lw=2, ms=4, label="test error")
+    ax2.set_ylabel("test error (1 - accuracy)", color=ARM_RED)
+    ax2.tick_params(axis="y", labelcolor=ARM_RED)
+    lines = ax.get_lines()[:1] + ax2.get_lines()
+    ax.legend(lines, [l.get_label() for l in lines], loc="upper left",
+              fontsize=8, frameon=False)
+    for a in (ax, ax2):
+        a.spines[["top"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "rf_max_features.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def fig_boundary_smoothing(logger):
+    """One tree's blocky axis-aligned boundary vs a forest's smoother averaged one,
+    on the same 2D data (make_moons). Pairs with the [17] staircase figure."""
+    Xs, ys = make_moons(n_samples=400, noise=0.30, random_state=SEED)
+    tree = DecisionTreeClassifier(random_state=SEED).fit(Xs, ys)
+    rf = RandomForestClassifier(n_estimators=300, random_state=SEED, n_jobs=1).fit(Xs, ys)
+    x0min, x0max = Xs[:, 0].min() - 0.4, Xs[:, 0].max() + 0.4
+    x1min, x1max = Xs[:, 1].min() - 0.4, Xs[:, 1].max() + 0.4
+    xx, yy = np.meshgrid(np.linspace(x0min, x0max, 400), np.linspace(x1min, x1max, 400))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    fig, axes = plt.subplots(1, 2, figsize=(8.8, 3.9), sharex=True, sharey=True)
+    for ax, model, title in zip(axes, [tree, rf],
+                                ["single tree: blocky", "random forest (300): smoother"]):
+        zz = model.predict_proba(grid)[:, 1].reshape(xx.shape)
+        ax.contourf(xx, yy, zz, levels=20, cmap="coolwarm", alpha=0.65)
+        ax.scatter(Xs[ys == 0, 0], Xs[ys == 0, 1], s=10, color=ARM_BLUE,
+                   edgecolor="k", linewidths=0.2, alpha=0.85)
+        ax.scatter(Xs[ys == 1, 0], Xs[ys == 1, 1], s=10, color=ARM_RED,
+                   edgecolor="k", linewidths=0.2, alpha=0.85)
+        ax.set_title(title, fontsize=9)
+        ax.set_xticks([]); ax.set_yticks([])
+    fig.tight_layout()
+    out = FIG_DIR / "rf_boundary.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
@@ -239,6 +324,8 @@ def main():
     ne = fig_n_estimators(X, y, feats, logger)
     fig_importance(X, y, feats, logger)
     vt = fig_vs_tree(X, y, feats, logger)
+    fig_max_features(logger)
+    fig_boundary_smoothing(logger)
     logger.info("=== SUMMARY for the slides ===")
     logger.info(f"single-tree flip rate ~ {inst['mean_flip']:.0f}% of test predictions")
     logger.info(f"RF acc: 1 tree={ne['acc_1']:.2f} -> plateau ~{ne['acc_max']:.2f}")
