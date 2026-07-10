@@ -10,6 +10,7 @@ Append new entries with a date. Strike through obsolete ones, do not delete.
 - Beamer **silently clips** overflowing content - no overfull-vbox warnings. A clean log and correct page count prove nothing about layout; only visual inspection of rendered pages catches clipping (`beamer-overflow-check` skill).
 - pdflatex must run **twice**: after deleting the `.toc`, a single pass leaves the Outline frame empty and page counters stale (footer shows things like `8/7`).
 - "Compiled clean" means `grep -cE "^!" FILE.log` prints `0` (the count - grep's exit code will be nonzero in that success case), not merely that pdflatex exited.
+- **2026-07-10:** A `pdflatex` run killed by a **timeout mid-compile** leaves a truncated `.aux`/`.toc`; the *next* run then dies with `! File ended while scanning use of \@writefile.` pointing (misleadingly) at `\begin{document}`. It is not a source error - delete the deck's aux files (`.aux .toc .nav .snm .out .vrb`) and recompile. Heavy decks (e.g. `20_advanced_boosting`, ~2.7 MB / 40+ pp) can exceed a 2-min tool timeout for two passes - compile the slow deck alone with a longer timeout, and never run a multi-deck loop that might get cut off mid-pass.
 
 ## Quarto
 
@@ -28,6 +29,11 @@ Append new entries with a date. Strike through obsolete ones, do not delete.
 
 - **2026-07-08:** `ax.bar_label(ax.containers[0], ...)` mislabels when the bars were drawn with `yerr=`. `ax.bar(..., yerr=...)` also appends an `ErrorbarContainer` to `ax.containers`, so `containers[0]` can be the errorbar, raising `AttributeError: 'ErrorbarContainer' object has no attribute 'patches'`. Capture the bars: `bars = ax.bar(...)` then `ax.bar_label(bars, ...)`.
 - **2026-07-08:** The global `jupyter` / `nbconvert` launcher is broken on this machine - the system `jupyter_contrib_nbextensions` raises `ModuleNotFoundError: No module named 'notebook.services'` when nbconvert enumerates exporters, so `python -m jupyter nbconvert --execute` fails. To execute a notebook with the `ma` stack (imblearn etc.), bypass the launcher and drive `nbclient` directly with the already-registered `ma` kernel: `NotebookClient(nb, timeout=600, kernel_name="ma", resources={"metadata": {"path": "ml/03_classification"}}).execute()`. Set the `path` resource so relative loads (`data/...`) resolve. Bonus: running the real notebook this way caught a `bar_label` bug the standalone verification script missed - execute the notebook, not just the code.
+
+## Git
+
+- **2026-07-10:** `git mv` **stages the rename immediately**. A later bare `git commit` (no pathspec) then sweeps those already-staged renames into whatever commit you are making - e.g. ch4 deck renames landed inside a commit labelled "ch3". Stage explicitly per commit (`git add <paths>`) and check `git diff --cached --name-status` before committing. Recovery (nothing pushed): `git reset --soft HEAD~1` then `git restore --staged <dir>` to unstage the wrong group, then re-commit each group cleanly.
+- **2026-07-10:** Re-running a figure script regenerates *all* its PDFs; matplotlib output is not byte-deterministic, so untouched figures show as modified (metadata only). Commit only the figures whose generating code actually changed; `git checkout -- <unchanged-figs>` to drop the spurious diffs.
 
 ## Machine / usage limits (incidents)
 
