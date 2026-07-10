@@ -1,14 +1,18 @@
 """Generate the real-data figures for the L09 Decision Trees deck.
 
-Produces three PDFs into ``ml/ch3_trees/fig/`` from the Titanic dataset:
-  1. titanic_tree.pdf     -- a shallow (depth-3) decision tree, plot_tree.
-  2. titanic_overfit.pdf  -- train vs CV-test accuracy across tree depth
-                             (shows a single unrestricted tree overfits).
-  3. titanic_pruning.pdf  -- cost-complexity (ccp_alpha) pruning path.
+Produces PDFs into ``ml/04_trees/fig/`` from the Titanic dataset plus small
+synthetic demos:
+  1. titanic_tree.pdf       -- a shallow (depth-2) decision tree, plot_tree.
+  2. titanic_overfit.pdf    -- train vs CV-test accuracy across tree depth.
+  3. titanic_pruning.pdf    -- cost-complexity (ccp_alpha) pruning path.
+  4. tree_staircase.pdf     -- a diagonal boundary approximated by axis-aligned
+                               steps at depth 3 / 6 / 10 (synthetic 2D).
+  5. tree_extrapolation.pdf -- tree goes flat outside the training range while a
+                               line keeps trending (synthetic 1D rent-vs-area).
+  6. tree_greedy_xor.pdf    -- XOR: one split cannot help, two splits solve it.
 
-Run from anywhere, e.g. (no persistent venv needed):
-    uv run --with scikit-learn --with pandas --with matplotlib \
-        ml/ch3_trees/py_src/make_figures.py
+Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
+    ./ma/Scripts/python.exe ml/04_trees/py_src/make_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours for multi-line plots.
@@ -22,8 +26,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import fetch_openml
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import cross_val_score, train_test_split
-from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, plot_tree
 
 SEED = 509
 
@@ -71,20 +76,107 @@ def load_titanic(logger: logging.Logger):
 
 
 def fig_tree(X, y, feature_names, logger):
-    """A readable depth-3 tree for the slide."""
-    clf = DecisionTreeClassifier(max_depth=3, random_state=SEED)
+    """A readable depth-2 tree for the slide (fewer, bigger boxes than depth-3,
+    which was cramped on a projector)."""
+    clf = DecisionTreeClassifier(max_depth=2, random_state=SEED)
     clf.fit(X, y)
     fig, ax = plt.subplots(figsize=(11, 5.2))
     plot_tree(
         clf, feature_names=feature_names, class_names=["died", "survived"],
         filled=True, rounded=True, impurity=False, proportion=True,
-        fontsize=8, ax=ax,
+        fontsize=12, ax=ax,
     )
     fig.tight_layout()
     out = FIG_DIR / "titanic_tree.pdf"
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
-    logger.info(f"wrote {out.name} (depth-3 tree, train acc={clf.score(X,y):.3f})")
+    logger.info(f"wrote {out.name} (depth-2 tree, train acc={clf.score(X,y):.3f})")
+
+
+def fig_staircase(logger):
+    """A slanted (non-axis-aligned) true boundary and the tree's staircase
+    approximation at increasing depth: axis-aligned splits can only stair-step it."""
+    rng = np.random.default_rng(SEED)
+    Xg = rng.uniform(0, 1, size=(400, 2))
+    yg = (Xg[:, 1] > Xg[:, 0]).astype(int)            # slanted boundary x1 = x0
+    xx, yy = np.meshgrid(np.linspace(0, 1, 300), np.linspace(0, 1, 300))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    fig, axes = plt.subplots(1, 3, figsize=(10.5, 3.7), sharex=True, sharey=True)
+    for ax, d in zip(axes, [3, 6, 10]):
+        clf = DecisionTreeClassifier(max_depth=d, random_state=SEED).fit(Xg, yg)
+        zz = clf.predict(grid).reshape(xx.shape)
+        ax.contourf(xx, yy, zz, levels=[-0.5, 0.5, 1.5],
+                    colors=[ARM_ORANGE, ARM_BLUE], alpha=0.25)
+        ax.plot([0, 1], [0, 1], color=ARM_RED, lw=2, label="true boundary")
+        ax.scatter(Xg[yg == 1, 0], Xg[yg == 1, 1], s=6, color=ARM_BLUE, alpha=0.6)
+        ax.scatter(Xg[yg == 0, 0], Xg[yg == 0, 1], s=6, color=ARM_ORANGE, alpha=0.6)
+        ax.set_title(f"depth {d}", fontsize=10)
+        ax.set_xticks([]); ax.set_yticks([])
+    axes[0].legend(loc="lower right", fontsize=7, frameon=False)
+    fig.suptitle("A diagonal boundary, approximated by axis-aligned steps", fontsize=10)
+    fig.tight_layout()
+    out = FIG_DIR / "tree_staircase.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def fig_extrapolation(logger):
+    """Trees predict a constant outside the training range; a line keeps trending.
+    Shared demo for [17] / [18] / [20]. Synthetic rent-vs-area (k AMD)."""
+    rng = np.random.default_rng(SEED)
+    area = np.linspace(40, 100, 60)
+    rent = 6.0 + 1.8 * area + rng.normal(0, 6, size=area.size)
+    Xtr = area.reshape(-1, 1)
+    lin = LinearRegression().fit(Xtr, rent)
+    tree = DecisionTreeRegressor(max_depth=4, random_state=SEED).fit(Xtr, rent)
+    grid = np.linspace(40, 130, 400).reshape(-1, 1)          # extend ~30% past 100
+    flat = float(tree.predict(np.array([[120.0]]))[0])
+    fig, ax = plt.subplots(figsize=(6.4, 3.8))
+    ax.axvspan(100, 130, color=ARM_ORANGE, alpha=0.10)
+    ax.scatter(area, rent, s=12, color="gray", alpha=0.6, label="training data (area 40-100)")
+    ax.plot(grid, lin.predict(grid), color=ARM_BLUE, lw=2, label="linear fit")
+    ax.plot(grid, tree.predict(grid), color=ARM_RED, lw=2, label="tree fit")
+    ax.axvline(100, color="gray", ls=":", lw=1.2)
+    ax.annotate("beyond the training range:\ntree stays flat, line keeps trending",
+                xy=(122, flat), xytext=(52, rent.max() * 0.78), fontsize=8,
+                color=ARM_ORANGE, arrowprops=dict(arrowstyle="->", color=ARM_ORANGE))
+    ax.set_xlabel(r"apartment area (m$^2$)")
+    ax.set_ylabel("rent (k AMD)")
+    ax.legend(loc="upper left", fontsize=8, frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "tree_extrapolation.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def fig_greedy_xor(logger):
+    """XOR: a single axis-aligned split gains nothing (both sides stay ~50/50),
+    but two splits separate it perfectly -- why 'greedy' is a real caveat."""
+    rng = np.random.default_rng(SEED)
+    Xg = rng.uniform(-1, 1, size=(300, 2))
+    yg = ((Xg[:, 0] > 0) ^ (Xg[:, 1] > 0)).astype(int)       # XOR / checkerboard
+    xx, yy = np.meshgrid(np.linspace(-1, 1, 300), np.linspace(-1, 1, 300))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.9), sharex=True, sharey=True)
+    for ax, d, title in zip(axes, [1, 2],
+                            ["one split: still ~50/50 each side", "two splits: solved"]):
+        clf = DecisionTreeClassifier(max_depth=d, random_state=SEED).fit(Xg, yg)
+        zz = clf.predict(grid).reshape(xx.shape)
+        ax.contourf(xx, yy, zz, levels=[-0.5, 0.5, 1.5],
+                    colors=[ARM_ORANGE, ARM_BLUE], alpha=0.22)
+        ax.scatter(Xg[yg == 1, 0], Xg[yg == 1, 1], s=8, color=ARM_BLUE, alpha=0.7)
+        ax.scatter(Xg[yg == 0, 0], Xg[yg == 0, 1], s=8, color=ARM_ORANGE, alpha=0.7)
+        ax.axhline(0, color="gray", lw=0.5); ax.axvline(0, color="gray", lw=0.5)
+        ax.set_title(title, fontsize=9)
+        ax.set_xticks([]); ax.set_yticks([])
+    fig.tight_layout()
+    out = FIG_DIR / "tree_greedy_xor.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
 
 
 def fig_overfit(X, y, feature_names, logger):
@@ -175,6 +267,9 @@ def main():
     fig_tree(X, y, feats, logger)
     over = fig_overfit(X, y, feats, logger)
     prune = fig_pruning(X, y, feats, logger)
+    fig_staircase(logger)
+    fig_extrapolation(logger)
+    fig_greedy_xor(logger)
     logger.info("=== SUMMARY for the slides ===")
     logger.info(f"unrestricted: depth={over['full_depth']}, leaves={over['full_leaves']}, "
                 f"train={over['full_train']:.2f}, CV={over['full_cv']:.2f}")
