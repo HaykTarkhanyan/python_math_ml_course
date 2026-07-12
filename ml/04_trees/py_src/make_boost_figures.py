@@ -244,8 +244,10 @@ def fig_anim_late(X, y, logger):
 
 
 def fig_adaboost(logger):
-    """AdaBoost (manual SAMME so we can show the per-round weights): 3 panels, point
-    size = sample weight (misclassified points grow), plus each round's stump boundary."""
+    """AdaBoost reweighting, 3 rounds (manual SAMME so we can show the weights). Point
+    size = sample weight; a RED ring marks the points THIS round's stump got wrong -- they
+    grow next round. Each title shows the weighted error and the stump weight alpha."""
+    from matplotlib.lines import Line2D
     Xs, ys = make_moons(n_samples=120, noise=0.28, random_state=SEED)
     ypm = np.where(ys == 1, 1.0, -1.0)
     n = len(ys)
@@ -254,73 +256,138 @@ def fig_adaboost(logger):
         np.linspace(Xs[:, 0].min() - 0.3, Xs[:, 0].max() + 0.3, 300),
         np.linspace(Xs[:, 1].min() - 0.3, Xs[:, 1].max() + 0.3, 300))
     grid = np.c_[xx.ravel(), yy.ravel()]
-    fig, axes = plt.subplots(1, 3, figsize=(10.2, 3.6), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(10.2, 3.9), sharex=True, sharey=True)
     for r in range(3):
         stump = DecisionTreeClassifier(max_depth=1, random_state=SEED)
         stump.fit(Xs, ys, sample_weight=w)
         pred = stump.predict(Xs)
+        miss = pred != ys
         zz = stump.predict(grid).reshape(xx.shape)
         ax = axes[r]
         ax.contourf(xx, yy, zz, levels=[-0.5, 0.5, 1.5],
-                    colors=[ARM_ORANGE, ARM_BLUE], alpha=0.18)
-        sizes = 10 + w / w.max() * 130
+                    colors=[ARM_ORANGE, ARM_BLUE], alpha=0.15)
+        sizes = 12 + w / w.max() * 150
         ax.scatter(Xs[ys == 0, 0], Xs[ys == 0, 1], s=sizes[ys == 0], color=ARM_ORANGE,
-                   edgecolor="k", linewidths=0.2, alpha=0.8)
+                   edgecolor="white", linewidths=0.4, alpha=0.85, zorder=3)
         ax.scatter(Xs[ys == 1, 0], Xs[ys == 1, 1], s=sizes[ys == 1], color=ARM_BLUE,
-                   edgecolor="k", linewidths=0.2, alpha=0.8)
-        ax.set_title(f"round {r + 1}", fontsize=10)
-        ax.set_xticks([]); ax.set_yticks([])
-        err = min(max(w[pred != ys].sum() / w.sum(), 1e-10), 1 - 1e-10)
+                   edgecolor="white", linewidths=0.4, alpha=0.85, zorder=3)
+        ax.scatter(Xs[miss, 0], Xs[miss, 1], s=sizes[miss], facecolors="none",
+                   edgecolors=ARM_RED, linewidths=1.6, zorder=4)
+        err = min(max(w[miss].sum() / w.sum(), 1e-10), 1 - 1e-10)
         alpha = 0.5 * np.log((1 - err) / err)
-        pred_pm = np.where(pred == 1, 1.0, -1.0)
-        w = w * np.exp(-alpha * ypm * pred_pm)
+        ax.set_title(f"round {r + 1}:   err = {err:.2f},   " + r"$\alpha$ = " + f"{alpha:.2f}",
+                     fontsize=9.5)
+        ax.set_xticks([]); ax.set_yticks([])
+        w = w * np.exp(-alpha * ypm * np.where(pred == 1, 1.0, -1.0))
         w = w / w.sum()
-    fig.suptitle("point size = sample weight: misclassified points grow each round",
-                 fontsize=9)
-    fig.tight_layout()
+    fig.legend(handles=[
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="0.6", markersize=10,
+               label="dot size = sample weight"),
+        Line2D([0], [0], marker="o", color="w", markeredgecolor=ARM_RED, markerfacecolor="none",
+               markeredgewidth=1.6, markersize=10, label="wrong this round -> up-weighted next"),
+    ], loc="lower center", ncol=2, fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
     out = FIG_DIR / "adaboost_rounds.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     logger.info(f"wrote {out.name}")
 
 
+def fig_adaboost_combined(logger):
+    """Weak -> strong, shown: one stump (a single straight cut) vs an AdaBoost of 50 stumps
+    (a curved boundary that follows the moons). Reports both accuracies."""
+    from sklearn.ensemble import AdaBoostClassifier
+    Xs, ys = make_moons(n_samples=300, noise=0.30, random_state=SEED)
+    xx, yy = np.meshgrid(
+        np.linspace(Xs[:, 0].min() - 0.3, Xs[:, 0].max() + 0.3, 300),
+        np.linspace(Xs[:, 1].min() - 0.3, Xs[:, 1].max() + 0.3, 300))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    stump = DecisionTreeClassifier(max_depth=1, random_state=SEED).fit(Xs, ys)
+    ada = AdaBoostClassifier(estimator=DecisionTreeClassifier(max_depth=1),
+                             n_estimators=50, random_state=SEED).fit(Xs, ys)
+    a_stump, a_ada = stump.score(Xs, ys), ada.score(Xs, ys)
+    fig, axes = plt.subplots(1, 2, figsize=(8.8, 3.9), sharex=True, sharey=True)
+    for ax, clf, title in [
+            (axes[0], stump, f"1 stump (weak): acc {a_stump:.2f}"),
+            (axes[1], ada, f"50 weighted stumps (strong): acc {a_ada:.2f}")]:
+        zz = clf.predict(grid).reshape(xx.shape)
+        ax.contourf(xx, yy, zz, levels=[-0.5, 0.5, 1.5],
+                    colors=[ARM_ORANGE, ARM_BLUE], alpha=0.20)
+        ax.scatter(Xs[ys == 0, 0], Xs[ys == 0, 1], s=10, color=ARM_ORANGE,
+                   edgecolor="white", linewidths=0.3)
+        ax.scatter(Xs[ys == 1, 0], Xs[ys == 1, 1], s=10, color=ARM_BLUE,
+                   edgecolor="white", linewidths=0.3)
+        ax.set_title(title, fontsize=10)
+        ax.set_xticks([]); ax.set_yticks([])
+    fig.tight_layout()
+    out = FIG_DIR / "adaboost_combined.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    logger.info(f"wrote {out.name}: stump acc={a_stump:.3f}, ada50 acc={a_ada:.3f}")
+
+
 def fig_gb_classification(logger):
     """Classification GB: LEFT = the model F accumulating in log-odds space for a few
-    points; RIGHT = sigmoid(F) tightening toward 0 / 1. Sigmoid is applied at the end."""
+    points; RIGHT = sigmoid(F) tightening toward 0 / 1. Sigmoid is applied at the end.
+    Each line = ONE training point's trajectory (3 per class), made explicit via legend."""
+    from matplotlib.lines import Line2D
     Xs, ys = make_moons(n_samples=300, noise=0.30, random_state=SEED)
     gbc = GradientBoostingClassifier(
         n_estimators=60, max_depth=2, learning_rate=0.3, random_state=SEED).fit(Xs, ys)
     F = np.array([f.ravel() for f in gbc.staged_decision_function(Xs)])   # (rounds, samples)
     rng = np.random.default_rng(SEED)
-    idx0 = rng.choice(np.where(ys == 0)[0], 4, replace=False)
-    idx1 = rng.choice(np.where(ys == 1)[0], 4, replace=False)
+    idx0 = rng.choice(np.where(ys == 0)[0], 3, replace=False)
+    idx1 = rng.choice(np.where(ys == 1)[0], 3, replace=False)
     rounds = np.arange(1, F.shape[0] + 1)
 
     fig, (axL, axR) = plt.subplots(1, 2, figsize=(9.0, 3.7))
     for i in idx1:
-        axL.plot(rounds, F[:, i], color=ARM_BLUE, lw=1.3, alpha=0.75)
-        axR.plot(rounds, 1 / (1 + np.exp(-F[:, i])), color=ARM_BLUE, lw=1.3, alpha=0.75)
+        axL.plot(rounds, F[:, i], color=ARM_BLUE, lw=2.0, alpha=0.9)
+        axR.plot(rounds, 1 / (1 + np.exp(-F[:, i])), color=ARM_BLUE, lw=2.0, alpha=0.9)
     for i in idx0:
-        axL.plot(rounds, F[:, i], color=ARM_ORANGE, lw=1.3, alpha=0.75)
-        axR.plot(rounds, 1 / (1 + np.exp(-F[:, i])), color=ARM_ORANGE, lw=1.3, alpha=0.75)
+        axL.plot(rounds, F[:, i], color=ARM_ORANGE, lw=2.0, alpha=0.9)
+        axR.plot(rounds, 1 / (1 + np.exp(-F[:, i])), color=ARM_ORANGE, lw=2.0, alpha=0.9)
     axL.axhline(0, color="gray", lw=1, ls=":")
-    axL.set_title("$F$ accumulates in log-odds space", fontsize=10)
+    axL.set_title(r"each line = one point's score $F$ (log-odds)", fontsize=10)
     axL.set_xlabel("round"); axL.set_ylabel("$F$ (log-odds)")
     axL.spines[["top", "right"]].set_visible(False)
     axR.axhline(0.5, color="gray", lw=1, ls=":")
-    axR.set_title(r"$\sigma(F)$ tightens toward the labels", fontsize=10)
+    axR.set_title(r"$\sigma(F)$: that same point's probability", fontsize=10)
     axR.set_xlabel("round"); axR.set_ylabel("predicted probability")
     axR.set_ylim(-0.02, 1.02)
     axR.spines[["top", "right"]].set_visible(False)
-    fig.tight_layout()
+    fig.legend(handles=[
+        Line2D([0], [0], color=ARM_BLUE, lw=2.2, label="a class-1 training point"),
+        Line2D([0], [0], color=ARM_ORANGE, lw=2.2, label="a class-0 training point"),
+    ], loc="lower center", ncol=2, fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.03))
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
     out = FIG_DIR / "boost_gb_classification.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     logger.info(f"wrote {out.name} (blue = a class-1 point, orange = a class-0 point)")
+
+
+def fig_boost_meme(logger):
+    """Outline gag for boosting: three guys taking turns, 'first me, then you, then me' --
+    the sequential fix-the-last idea. Armenian caption baked in (pdflatex has no Armenian);
+    the Outline frame hyperlinks the whole image to the video."""
+    import matplotlib.image as mpimg
+    img = mpimg.imread(str(FIG_DIR / "boost_meme_raw.png"))
+    h, w = img.shape[:2]
+    caption = "▶ սկզբից ես, հետո դու, հետո ես"   # 'first me, then you, then me'
+    fig, ax = plt.subplots(figsize=(6.0, 6.0 * h / w + 0.7))
+    ax.imshow(img)
+    ax.axis("off")
+    ax.set_title(caption, fontsize=19, color=ARM_BLUE, fontweight="bold", pad=8)
+    fig.tight_layout()
+    out = FIG_DIR / "boost_meme.pdf"
+    fig.savefig(out, bbox_inches="tight", dpi=120)
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
 
 
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
     np.random.seed(SEED)
+    fig_boost_meme(logger)
     X, y = make_data()
     logger.info(f"data: {X.shape[0]} points, rent mean = {y.mean():.1f} kAMD, "
                 f"animation eta = {ETA_ANIM}")
@@ -329,6 +396,7 @@ def main():
     fig_overfit(logger)
     fig_learning_rate(logger)
     fig_adaboost(logger)
+    fig_adaboost_combined(logger)
     fig_gb_classification(logger)
     logger.info("done.")
 

@@ -8,10 +8,7 @@ Produces four PDFs into ``ml/04_trees/fig/`` from the Titanic dataset:
                              "more trees plateau, they do NOT overfit" curve.
   3. rf_importance.pdf    -- default impurity-based RF feature_importances_, with
                              value labels on the bars (per repo CLAUDE.md).
-
-  4. rf_vs_tree.pdf       -- Titanic test accuracy: pruned single tree vs a
-                             no-tuning RF vs a CV-tuned RF (the chapter's
-                             pruned-tree-vs-forest reality check).
+  (plus oob_fraction, variance_floor, oob_vs_cv, rf_max_features, rf_boundary_smoothing.)
 
 Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
     ./ma/Scripts/python.exe ml/04_trees/py_src/make_rf_figures.py
@@ -31,7 +28,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 from sklearn.datasets import fetch_openml, make_moons
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 
 SEED = 509
@@ -164,7 +161,8 @@ def fig_importance(X, y, feature_names, logger):
                                 n_jobs=1).fit(X, y)
     imp = rf.feature_importances_
     order = np.argsort(imp)                       # ascending -> barh bottom-up
-    names = [feature_names[i] for i in order]
+    disp = ["gender" if f == "sex" else f for f in feature_names]   # relabel sex -> gender
+    names = [disp[i] for i in order]
     vals = imp[order]
     logger.info("importance: " + ", ".join(
         f"{feature_names[i]}={imp[i]:.3f}" for i in np.argsort(imp)[::-1]))
@@ -181,54 +179,6 @@ def fig_importance(X, y, feature_names, logger):
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
     logger.info(f"wrote {out.name}")
-
-
-def fig_vs_tree(X, y, feature_names, logger):
-    """Reality check: on this small, one-dominant-feature dataset a well-pruned
-    single tree is competitive with a forest. Compare (identical 70/30 split):
-      - pruned single tree: ccp_alpha picked by best test accuracy (same recipe as
-        the [17] pruning figure -> reproduces the chapter's ~0.835),
-      - default RF: no tuning at all,
-      - tuned RF: max_features / min_samples_leaf chosen by 5-fold CV on the TRAIN
-        fold only (no test peeking)."""
-    X_tr, X_te, y_tr, y_te = train_test_split(
-        X, y, test_size=0.3, random_state=SEED, stratify=y)
-
-    path = DecisionTreeClassifier(random_state=SEED).cost_complexity_pruning_path(X_tr, y_tr)
-    tree_accs = [DecisionTreeClassifier(random_state=SEED, ccp_alpha=a)
-                 .fit(X_tr, y_tr).score(X_te, y_te) for a in path.ccp_alphas[:-1]]
-    tree_acc = float(np.max(tree_accs))
-
-    rf_def_acc = float(RandomForestClassifier(n_estimators=300, random_state=SEED, n_jobs=1)
-                       .fit(X_tr, y_tr).score(X_te, y_te))
-
-    grid = GridSearchCV(
-        RandomForestClassifier(n_estimators=300, random_state=SEED, n_jobs=1),
-        {"max_features": ["sqrt", 0.5, 0.8], "min_samples_leaf": [1, 2, 3, 5]},
-        cv=5, scoring="accuracy", n_jobs=1).fit(X_tr, y_tr)
-    rf_tuned_acc = float(grid.best_estimator_.score(X_te, y_te))
-    logger.info(f"vs_tree: pruned tree={tree_acc:.3f}, default RF={rf_def_acc:.3f}, "
-                f"tuned RF={rf_tuned_acc:.3f} (best {grid.best_params_}, "
-                f"CV {grid.best_score_:.3f})")
-
-    labels = ["pruned single tree\n([17], tuned)", "random forest\n(no tuning)",
-              "random forest\n(tuned)"]
-    vals = [tree_acc, rf_def_acc, rf_tuned_acc]
-    colors = [ARM_ORANGE, ARM_RED, ARM_BLUE]
-    fig, ax = plt.subplots(figsize=(6.6, 3.5))
-    bars = ax.barh(labels, vals, color=colors, alpha=0.9)
-    ax.bar_label(bars, fmt="%.3f", padding=4, fontsize=10)
-    ax.set_xlabel("Titanic test accuracy (same 70/30 split)")
-    ax.set_xlim(0, 1.02)
-    ax.invert_yaxis()
-    ax.tick_params(labelsize=9)
-    ax.spines[["top", "right"]].set_visible(False)
-    fig.tight_layout()
-    out = FIG_DIR / "rf_vs_tree.pdf"
-    fig.savefig(out, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"wrote {out.name}")
-    return dict(tree=tree_acc, rf_default=rf_def_acc, rf_tuned=rf_tuned_acc)
 
 
 def fig_max_features(logger):
@@ -315,22 +265,150 @@ def fig_boundary_smoothing(logger):
     logger.info(f"wrote {out.name}")
 
 
+def fig_oob_fraction(logger):
+    """(1 - 1/n)^n -> 1/e: the fraction of rows a bootstrap leaves out converges to
+    ~37% as n grows. Explains the OOB '37%' number."""
+    import math
+    ns = np.unique(np.round(np.logspace(np.log10(3), np.log10(500), 60)).astype(int))
+    frac = (1 - 1 / ns) ** ns
+    fig, ax = plt.subplots(figsize=(5.4, 3.8))
+    ax.plot(ns, frac, color=ARM_BLUE, lw=2, zorder=3)
+    ax.axhline(1 / math.e, color=ARM_RED, ls="--", lw=1.5,
+               label=r"$1/e \approx 0.368$")
+    for nn in (6, 20, 100):
+        f = (1 - 1 / nn) ** nn
+        ax.scatter([nn], [f], color=ARM_ORANGE, s=42, zorder=4)
+        ax.annotate(f"n={nn}: {f:.3f}", (nn, f), textcoords="offset points",
+                    xytext=(7, -3), fontsize=8, color="0.25")
+    ax.set_xscale("log")
+    ax.set_xlabel("n (training rows)")
+    ax.set_ylabel(r"fraction left out  $(1-1/n)^n$")
+    ax.set_ylim(0.28, 0.40)
+    ax.legend(loc="lower right", fontsize=9, frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "oob_fraction.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def fig_variance_floor(X, y, logger):
+    """Empirical Var(f_bar) = rho*sigma^2 + (1-rho)/M * sigma^2: retrain the forest on many
+    independent training samples and watch the variance of its prediction fall with M, then
+    flatten at a positive floor (rho*sigma^2). Uses the first-M-trees trick, so one fit per
+    run gives the whole curve."""
+    from sklearn.model_selection import train_test_split
+    X_pool, X_te, y_pool, y_te = train_test_split(
+        X, y, test_size=300, random_state=SEED, stratify=y)
+    rng = np.random.default_rng(SEED)
+    B, n_trees = 40, 60
+    Ms = np.array([1, 2, 3, 5, 8, 13, 21, 34, 60])
+    per_run = []                                   # each: (n_trees, n_test) survival proba
+    for b in range(B):
+        idx = rng.integers(0, len(X_pool), len(X_pool))          # independent training sample
+        rf = RandomForestClassifier(n_estimators=n_trees, max_features="sqrt",
+                                    random_state=b, n_jobs=1).fit(X_pool[idx], y_pool[idx])
+        per_run.append(np.array([t.predict_proba(X_te)[:, 1] for t in rf.estimators_]))
+    per_run = np.array(per_run)                    # (B, n_trees, n_test)
+    var_by_M = np.array([per_run[:, :M, :].mean(axis=1).var(axis=0).mean() for M in Ms])
+    floor = var_by_M[-1]
+    logger.info("variance_floor: sigma^2(M=1)=%.4f -> floor(M=%d)=%.4f",
+                var_by_M[0], Ms[-1], floor)
+
+    fig, ax = plt.subplots(figsize=(5.9, 3.9))
+    ax.plot(Ms, var_by_M, "-o", color=ARM_BLUE, lw=2, ms=4, zorder=3,
+            label=r"Var of the forest's prediction")
+    ax.axhline(floor, color=ARM_RED, ls="--", lw=1.5,
+               label=r"floor $\approx \rho\sigma^2$")
+    ax.annotate(r"one tree ($\sigma^2$)", (Ms[0], var_by_M[0]),
+                textcoords="offset points", xytext=(8, -2), fontsize=8, color="0.25")
+    ax.set_xscale("log")
+    ax.set_xlabel("M (trees in the forest)")
+    ax.set_ylabel("variance of the prediction")
+    ax.set_ylim(0, var_by_M[0] * 1.1)
+    ax.legend(fontsize=9, frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "variance_floor.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def fig_oob_vs_cv(X, y, logger):
+    """OOB error tracks 5-fold CV error across max_features -- 'free validation'."""
+    from sklearn.model_selection import cross_val_score, StratifiedKFold
+    # NB: shuffle the folds -- OpenML Titanic is ordered by pclass, so the default
+    # non-shuffled folds are badly biased (and OOB, being order-agnostic, would not match).
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+    P = X.shape[1]
+    mf_vals = [1, 2, 3, 4, P]                       # features tried per split
+    oob_err, cv_err = [], []
+    for mf in mf_vals:
+        rf = RandomForestClassifier(n_estimators=150, max_features=mf, oob_score=True,
+                                    random_state=SEED, n_jobs=1).fit(X, y)
+        oob_err.append(1 - rf.oob_score_)
+        base = RandomForestClassifier(n_estimators=150, max_features=mf,
+                                      random_state=SEED, n_jobs=1)
+        cv_err.append(1 - cross_val_score(base, X, y, cv=cv).mean())
+    logger.info("oob_vs_cv: oob=%s cv=%s",
+                [f"{e:.3f}" for e in oob_err], [f"{e:.3f}" for e in cv_err])
+
+    fig, ax = plt.subplots(figsize=(5.9, 3.9))
+    ax.plot(mf_vals, oob_err, "-o", color=ARM_BLUE, lw=2, ms=5, label="OOB error (free)")
+    ax.plot(mf_vals, cv_err, "-s", color=ARM_RED, lw=2, ms=5, label="5-fold CV error")
+    ax.set_xlabel("max\\_features (features tried per split)")
+    ax.set_ylabel("error rate")
+    ax.set_xticks(mf_vals)
+    ax.set_ylim(0.10, 0.30)                         # avoid a misleading zoom: they nearly coincide
+    ax.legend(fontsize=9, frameon=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG_DIR / "oob_vs_cv.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
+def fig_forest_meme(logger):
+    """Outline gag: a forest photo + the Armenian caption 'it's all trees'. Baked into
+    the image because pdflatex (this preamble) has no Armenian; the Outline frame then
+    hyperlinks the whole image to the video. Armenian written as \\u escapes to keep the
+    source ASCII-clean."""
+    import matplotlib.image as mpimg
+    img = mpimg.imread(str(FIG_DIR / "forest_meme_raw.png"))
+    h, w = img.shape[:2]
+    # U+25B6 play + "էսի սաղ ծառ ա"
+    caption = "▶ էսի սաղ ծառ ա"
+    fig, ax = plt.subplots(figsize=(6.0, 6.0 * h / w + 0.7))
+    ax.imshow(img)
+    ax.axis("off")
+    ax.set_title(caption, fontsize=21, color=ARM_BLUE, fontweight="bold", pad=8)
+    fig.tight_layout()
+    out = FIG_DIR / "forest_meme.pdf"
+    fig.savefig(out, bbox_inches="tight", dpi=120)
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
     np.random.seed(SEED)
+    fig_forest_meme(logger)
     X, y, feats = load_titanic(logger)
     inst = fig_instability(X, y, feats, logger)
     ne = fig_n_estimators(X, y, feats, logger)
     fig_importance(X, y, feats, logger)
-    vt = fig_vs_tree(X, y, feats, logger)
     fig_max_features(logger)
     fig_boundary_smoothing(logger)
+    fig_oob_fraction(logger)
+    fig_variance_floor(X, y, logger)
+    fig_oob_vs_cv(X, y, logger)
     logger.info("=== SUMMARY for the slides ===")
     logger.info(f"single-tree flip rate ~ {inst['mean_flip']:.0f}% of test predictions")
     logger.info(f"RF acc: 1 tree={ne['acc_1']:.2f} -> plateau ~{ne['acc_max']:.2f}")
-    logger.info(f"vs_tree: pruned tree={vt['tree']:.3f}, default RF={vt['rf_default']:.3f}, "
-                f"tuned RF={vt['rf_tuned']:.3f}")
     logger.info("done.")
 
 

@@ -112,8 +112,9 @@ def fig_importance():
     clf.fit(Xt, yt)
     imp = clf.feature_importances_
     order = np.argsort(imp)[::-1]
+    disp = ["gender" if f == "sex" else f for f in feats]   # relabel sex -> gender
     fig, ax = plt.subplots(figsize=(7.5, 4))
-    bars = ax.bar([feats[i] for i in order], imp[order], color=ARM_BLUE)
+    bars = ax.bar([disp[i] for i in order], imp[order], color=ARM_BLUE)
     ax.bar_label(bars, fmt="%.2f", fontsize=9, padding=2)
     ax.set(title="Gain-based feature importance (XGBoost on Titanic)",
            xlabel="feature", ylabel="importance (gain, normalized)")
@@ -182,10 +183,60 @@ def fig_stacking():
     log.info("wrote xgb_stacking.pdf")
 
 
+def fig_lightgbm_meme():
+    """Outline gag: 'me and LightGBM' -- a lone warrior charging with sword and shield.
+    Armenian caption baked in (pdflatex has no Armenian); the Outline frame hyperlinks it."""
+    import matplotlib.image as mpimg
+    img = mpimg.imread(str(FIG / "12_me_and_lightgbm.png"))
+    h, w = img.shape[:2]
+    x0, x1 = int(0.16 * w), int(0.84 * w)          # center-crop the very wide frame a bit
+    img = img[:, x0:x1]
+    hh, ww = img.shape[:2]
+    caption = "LightGBM ♥: էլ ուրիշ մոդելի անուն չգիտե՞ս"
+    fig, ax = plt.subplots(figsize=(6.4, 6.4 * hh / ww + 0.7))
+    ax.imshow(img)
+    ax.axis("off")
+    ax.set_title(caption, fontsize=13.5, color=ARM_BLUE, fontweight="bold", pad=7)
+    fig.tight_layout()
+    out = FIG / "lightgbm_meme.pdf"
+    fig.savefig(out, bbox_inches="tight", dpi=120)
+    plt.close(fig)
+    log.info(f"wrote {out.name}")
+
+
+def fig_goss():
+    """GOSS illustrated: most rows have a small |gradient| (already well fit) -- keep the top
+    a% with the largest gradients, randomly sample b% of the rest, drop the others."""
+    rng = np.random.default_rng(SEED)
+    n = 2000
+    g = np.abs(rng.normal(0, 1, n)) ** 1.6          # skewed: many small, few large
+    a, b = 0.2, 0.1
+    thr = np.quantile(g, 1 - a)
+    bins = np.linspace(0, g.max(), 40)
+    fig, ax = plt.subplots(figsize=(6.6, 3.7))
+    ax.hist(g[g < thr], bins=bins, color="0.78",
+            label=f"small $|$grad$|$: keep only {int(b * 100)}% (random), drop the rest")
+    ax.hist(g[g >= thr], bins=bins, color=ARM_RED, alpha=0.9,
+            label=f"large $|$grad$|$: keep ALL (top {int(a * 100)}%)")
+    ax.axvline(thr, color="0.25", ls="--", lw=1.5)
+    ax.text(thr, ax.get_ylim()[1] * 0.92, " threshold", fontsize=8, color="0.3", va="top")
+    ax.set_xlabel(r"$|$gradient$|$  (how wrong the model still is on that row)")
+    ax.set_ylabel("number of rows")
+    ax.legend(fontsize=8.5, frameon=False, loc="upper right")
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG / "goss.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"wrote {out.name} (threshold at top {a:.0%})")
+
+
 if __name__ == "__main__":
     fig_histogram_split()
     fig_earlystop()
     fig_importance()
     fig_monotonic()
     fig_stacking()
+    fig_lightgbm_meme()
+    fig_goss()
     log.info("done")
