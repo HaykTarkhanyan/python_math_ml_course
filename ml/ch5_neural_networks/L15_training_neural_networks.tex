@@ -238,6 +238,34 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{Why backprop is cheap: each $\delta$ computed once}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Look again at the hidden-layer gradients. \emph{Both} weights feeding neuron $1$ reused
+    the \textbf{same} signal $\delta_1$:
+    \[
+      \frac{\partial L}{\partial \mathbf{w}_1} = \delta_1\,\xv
+      = \big(\underbrace{\delta_1 x_1}_{\partial L/\partial w_{11}},\;
+             \underbrace{\delta_1 x_2}_{\partial L/\partial w_{12}}\big)
+    \]
+    And $\delta_1$ was itself built from $\delta_{\text{out}}$ -- the signal one layer above.
+    \vskip 4pt
+    So each layer computes its $\delta$ \textbf{once} from the layer above, then every weight
+    into that layer is just $\delta \times \text{input}$. Nothing is recomputed.
+    \column{0.46\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Cost, side by side ($5$ weights here):}
+      \begin{itemize}\scriptsize
+        \item \textbf{Naive:} nudge each weight, re-run forward $\to$ $5$ forward passes.
+        \item \textbf{Backprop:} one backward sweep reuses the shared $\delta$'s $\to$ \emph{one}
+          pass gives all $5$ gradients.
+      \end{itemize}}}
+    \vskip 4pt
+    \footnotesize On the MNIST net that is $109{,}386$ forward passes vs.\ \textbf{one}. The
+    reused $\delta$ is the entire reason training is affordable.
+  \end{columns}
+\end{frame}
+
 \begin{frame}{One step of gradient descent, and the loss drops}
   We now have a gradient for every weight. Update each by $w \leftarrow w - \eta\,\partial
   L/\partial w$ with learning rate $\eta = 0.5$:
@@ -325,6 +353,70 @@
       $0.25^{10} \approx 10^{-6}$. A $10$-layer sigmoid net shrinks the gradient a
       \emph{millionfold} before it reaches the first layer -- so the first layer effectively
       stops learning.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Backprop is the chain rule on a computational graph}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Everything from input to loss is one \textbf{computational graph}: each intermediate
+    ($z_{\text{in}}$, $z$, $f_{\text{in}}$, $f$, $L$) is a \textbf{node} -- a function of its
+    parents. The forward pass just evaluates the nodes top to bottom.
+    \vskip 6pt
+    A weight $w$ affects $L$ only \emph{along the path} from $w$ to $L$. The chain rule says:
+    multiply the \textbf{local derivative} on each edge of that path.
+    \[
+      \frac{\partial L}{\partial w}
+      = \frac{\partial L}{\partial f}\,
+        \frac{\partial f}{\partial f_{\text{in}}}\,
+        \frac{\partial f_{\text{in}}}{\partial z}\,
+        \frac{\partial z}{\partial z_{\text{in}}}\,
+        \frac{\partial z_{\text{in}}}{\partial w}
+    \]
+    \footnotesize That is exactly the product you formed by hand -- now named.
+    \column{0.45\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[>=Latex, font=\scriptsize, node distance=0.62cm,
+        v/.style={draw, rounded corners, minimum width=1.4cm, minimum height=0.46cm, inner sep=1pt}]
+        \node[v, draw=gray, fill=gray!8] (w) {$w$};
+        \node[v, draw=armblue, fill=armblue!12, below=of w] (zin) {$z_{\text{in}}$};
+        \node[v, draw=armblue, fill=armblue!12, below=of zin] (z) {$z$};
+        \node[v, draw=armorange, fill=armorange!14, below=of z] (fin) {$f_{\text{in}}$};
+        \node[v, draw=armorange, fill=armorange!14, below=of fin] (f) {$f$};
+        \node[v, below=of f] (L) {$L$};
+        \draw[->] (w)--(zin);
+        \draw[->] (zin)--(z) node[midway,right,font=\tiny]{$\varphi$};
+        \draw[->] (z)--(fin);
+        \draw[->] (fin)--(f) node[midway,right,font=\tiny]{$\varphi$};
+        \draw[->] (f)--(L);
+      \end{tikzpicture}\\[2pt]
+      \scriptsize forward evaluates down; the chain rule multiplies edge-derivatives back up.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reverse mode: one sweep, any architecture}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    When a node feeds \textbf{several} children (a hidden unit into many outputs), its gradient
+    is the \textbf{sum over all outgoing paths} -- the multivariate chain rule:
+    \[
+      \frac{\partial L}{\partial z} = \sum_{k}
+        \frac{\partial L}{\partial f_{\text{in},k}}\,
+        \frac{\partial f_{\text{in},k}}{\partial z}
+    \]
+    \textbf{Reverse-mode autodiff} visits each node \emph{once}, from $L$ backward, storing
+    $\partial L/\partial(\text{node})$ as it goes -- exactly the cached $\delta$'s, now on the
+    whole graph.
+    \column{0.46\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Why this matters.} The rule is stated on the \emph{graph}, not on ``layers''. So
+      the same engine differentiates \textbf{convolutions, attention, residual connections} --
+      any composition of differentiable ops -- with no new math. That is what makes deep-learning
+      frameworks general.}}
+    \vskip 4pt
+    \footnotesize You built the graph for one net by hand; autograd builds it for \emph{any} net
+    automatically. Next slide.
   \end{columns}
 \end{frame}
 
@@ -436,6 +528,31 @@ for epoch in range(n_epochs):
   \end{columns}
 \end{frame}
 
+\begin{frame}{Beyond a fixed rate: learning-rate schedules}
+  A single fixed $\eta$ is a compromise: big enough to move early, small enough to settle late.
+  \textbf{Schedules} vary $\eta$ over training to get both.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{itemize}\small
+      \item \textbf{Decay:} start larger, shrink over time (step, linear, or exponential) --
+        fast progress first, fine-tuning later. The standard.
+      \item \textbf{Warmup:} start \emph{tiny} for a few hundred steps, then ramp up -- stops a
+        fresh, unstable net from diverging on the first big step.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \begin{itemize}\small
+      \item \textbf{Cyclical / cosine:} let $\eta$ rise and fall in cycles -- the bumps can kick
+        the optimizer out of saddles and poor minima.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Practical:} a fixed rate with Adam is a fine start; add \emph{decay} (or warmup
+      $+$ cosine, the modern default for big models) once you are tuning for the last few
+      points.}}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{A word on the loss landscape}
   With $100$k weights the loss surface is wildly \textbf{non-convex} -- countless local minima
   and saddle points. Classical optimization would despair.
@@ -449,6 +566,32 @@ for epoch in range(n_epochs):
   \vfill
   \footnotesize Contrast with linear/logistic regression (convex: one global minimum, L11).
   Depth buys power at the cost of a messy landscape.
+\end{frame}
+
+\begin{frame}{Saddles and cliffs -- and how we cope}
+  Two obstacles appear once the landscape is non-convex and high-dimensional:
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Saddle points dominate.} At a flat spot, a true minimum needs \emph{every}
+    curvature direction to bend \textbf{up}. With thousands of dimensions that is exponentially
+    unlikely, so almost every flat spot is a \textbf{saddle} (up in some directions, down in
+    others), not a trap.
+    \vskip 3pt
+    \footnotesize Good news: the \textbf{noise} in mini-batch SGD nudges you off saddles that a
+    noiseless method would sit on forever.
+    \column{0.5\textwidth}
+    \textbf{Cliffs / exploding gradients.} Deep and recurrent nets can have near-vertical walls
+    in the loss surface; one step there flings the weights far and undoes training.
+    \vskip 3pt
+    \textbf{Fix: gradient clipping} -- cap the gradient's norm at a threshold $h$:
+    \[
+      \text{if } \|\nabla\| > h:\quad \nabla \leftarrow \frac{h}{\|\nabla\|}\,\nabla
+    \]
+  \end{columns}
+  \vfill
+  \footnotesize None of this existed in the convex world of linear/logistic regression (L11) --
+  the price of a powerful, non-convex model.
 \end{frame}
 
 % ================================================================
@@ -488,11 +631,15 @@ for epoch in range(n_epochs):
     \vskip 4pt
     \footnotesize
     It \textbf{helps}. Each step trains a different random subnetwork, so no neuron can rely on
-    a specific partner -- they must learn robust, redundant features. At test time you keep all
-    neurons (scaling for the ones dropped in training): an implicit \textbf{ensemble average}
+    a specific partner -- they must learn robust, redundant features. At test time you use all
+    neurons: an implicit \textbf{ensemble average}
     over exponentially many subnetworks.
     \vskip 4pt
     Callback: this is \textbf{bagging} (ch4) done inside one network. Typical rate $0.2$--$0.5$.
+    \vskip 3pt
+    {\scriptsize \textbf{In practice:} PyTorch uses \emph{inverse} dropout -- it scales the
+    surviving activations by $1/(1{-}p)$ \emph{during training}, so nothing changes at test
+    time.}
     \column{0.5\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{fig/dropout_test_error.pdf}
@@ -552,8 +699,9 @@ for epoch in range(n_epochs):
     \textbf{Fix: scale the initial weights by the fan-in} so variance is preserved layer to
     layer.
     \begin{itemize}\small
-      \item \textbf{He} init -- for ReLU (variance $2/n_{\text{in}}$).
-      \item \textbf{Xavier/Glorot} -- for tanh/sigmoid.
+      \item \textbf{He} init (ReLU): $\;w \sim \mathcal{N}\!\big(0,\, 2/n_{\text{in}}\big)$.
+      \item \textbf{Xavier/Glorot} (tanh/sigmoid):
+        $\;w \sim \mathcal{U}\!\big(\pm\sqrt{6/(n_{\text{in}}+n_{\text{out}})}\big)$.
     \end{itemize}
     \footnotesize Frameworks default to sensible init, but this is the first thing to check when
     a deep net will not train.
@@ -569,12 +717,17 @@ for epoch in range(n_epochs):
 \begin{frame}{BatchNorm: normalize activations mid-network}
   \begin{columns}[T]
     \column{0.5\textwidth}
-    Even with good init, activation statistics drift during training. \textbf{Batch
-    normalization} standardizes each layer's pre-activations per mini-batch (then rescales with
-    two learned parameters).
+    Even with good init, activation statistics drift as training proceeds. \textbf{Batch
+    normalization} standardizes each layer's pre-activations $z$ over the mini-batch $B$, then
+    rescales with two \emph{learned} parameters:
+    \[
+      \hat z = \frac{z - \mu_B}{\sqrt{\sigma_B^2 + \varepsilon}},\qquad
+      \text{out} = \gamma\,\hat z + \beta
+    \]
     \begin{itemize}\small
-      \item Keeps signals in a good range $\Rightarrow$ faster, more stable training.
-      \item Allows higher learning rates; adds mild regularization noise.
+      \item $\mu_B,\sigma_B^2$: the batch mean/variance; keeps signals in range $\Rightarrow$
+        faster training, higher learning rates, mild regularization noise.
+      \item $\gamma,\beta$ let the net rescale/shift back if it needs to.
       \item One layer in PyTorch: \texttt{nn.BatchNorm1d(width)}.
     \end{itemize}
     \column{0.5\textwidth}
