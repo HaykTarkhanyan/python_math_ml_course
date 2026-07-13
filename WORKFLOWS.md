@@ -36,9 +36,8 @@ matches a row below, follow the referenced workflow - do not improvise a new one
 
 1. Python runs through `./ma/Scripts/python.exe`. Never `uv run --with ...`, never a bare `python` for repo scripts.
 2. No parallel heavy compute and no subagent fan-outs (multi-agent code review included) without explicit user approval. "Quick" always means zero subagents. (Froze the machine 2026-05-21; drained the usage quota 2026-07-06.)
-3. Armenian (any non-ASCII) text in files: edit via a small Python script, not the Edit tool - the Edit tool corrupts the UTF-8.
-4. pdflatex twice, always. One pass leaves a blank Outline frame and stale page counters.
-5. `_quarto.yml` paths are case-sensitive on CI (Linux) even though Windows hides the mismatch locally.
+3. pdflatex twice, always. One pass leaves a blank Outline frame and stale page counters.
+4. `_quarto.yml` paths are case-sensitive on CI (Linux) even though Windows hides the mismatch locally.
 
 ## Knowledge index
 

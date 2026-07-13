@@ -1,0 +1,679 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 20: RNN Foundations}
+\subtitle{Networks with memory - and why the memory fades}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The reviews arrive}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \small
+    The ch6 classifier grades each pomegranate; the boxes ship worldwide. Now the
+    \textbf{reviews} arrive: "Fresh and sweet!" (3 words); an 11-word one naming Yerevan;
+    a 42-word complaint; some in Armenian. Ops wants them read, translated, answered.
+    \vskip 3pt
+    Zoom out: \textbf{every} headline AI system of the 2020s - ChatGPT included - is a
+    \textbf{sequence model}. This chapter and the next are the road there.
+    \vskip 4pt
+    \textbf{Predict:} feed a review into an MLP (L14) - what breaks before you even
+    train?
+    \pause
+    \vskip 3pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      The input layer has a \textbf{fixed size}. Reviews do not.}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\tiny, >=Latex]
+        \node[draw, rounded corners, fill=armblue!8, minimum height=0.42cm,
+          minimum width=1.1cm, align=center] (r1) at (0,2.3) {3 words};
+        \node[draw, rounded corners, fill=armblue!8, minimum height=0.42cm,
+          minimum width=2.0cm, align=center] (r2) at (0.45,1.5) {11 words};
+        \node[draw, rounded corners, fill=armblue!8, minimum height=0.42cm,
+          minimum width=2.9cm, align=center] (r3) at (0.9,0.7)
+          {42 words, verdict at the end};
+        \node[draw, thick, rounded corners, fill=armorange!16, minimum width=1.3cm,
+          minimum height=1.5cm, align=center] (in) at (4.1,1.5) {fixed\\ input\\ layer};
+        \draw[->, armblue] (r1.east) -- (in.west);
+        \draw[->, armblue] (r2.east) -- (in.west);
+        \draw[->, armblue] (r3.east) -- (in.west);
+        \node[armred, font=\large\bfseries] at (4.1,2.35) {?};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Text refuses to fit}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Text refuses to fit}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Order is information, and length is a variable.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The sequence zoo}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Text leads this chapter. Two close cousins get one line each: \textbf{time series}
+    (tonnage logs, exchange rates) and \textbf{audio} (speech, music) share the same
+    shape of problem.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      What they share: \textbf{order matters}, \textbf{length varies}, and dependencies
+      can be \textbf{long-range} - the word that resolves a sentence's meaning may be
+      40 tokens back.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small, >=Latex,
+          box/.style={draw, rounded corners, minimum height=1.1cm, minimum width=3.2cm,
+            align=center}]
+        \node[box, draw=popblue, very thick, fill=popblue!10] (txt) at (0,2.4)
+          {\textbf{Text}\\[2pt]\footnotesize reviews, chats, articles};
+        \node[box, fill=gray!8] (ts) at (0,1.0)
+          {Time series\\[2pt]\footnotesize tonnage logs, FX rates};
+        \node[box, fill=gray!8] (au) at (0,-0.4)
+          {Audio\\[2pt]\footnotesize speech, music};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The shuffle test}
+  \begin{columns}[T]
+    \column{0.30\textwidth}
+    Take the review sentence and shuffle its words with one fixed permutation. Every
+    word is identical; all meaning is gone.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      The bag-of-words histograms are \textbf{pixel-identical}. Any order-blind model
+      literally cannot tell the two apart.}}
+    \vskip 6pt
+    {\footnotesize Callback: L16 did this to an image's \emph{pixels}. Same demo, new
+    axis.}
+    \column{0.70\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{word_shuffle.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The shoehorn hacks}
+  How people force variable-length text into a fixed net - and the price of each:
+  \begin{center}
+    \includegraphics[width=0.82\linewidth]{pad_truncate.pdf}
+  \end{center}
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      \textbf{(2) Bag-of-words averaging} fails the shuffle test by construction - it
+      cannot see order at all. \textbf{(3) A separate weight per position} means "I went
+      to Munich in 2009" and "In 2009, I went to Munich" must each relearn the same fact
+      at a different position.}}
+\end{frame}
+
+\begin{frame}{Tokens, minimally}
+  \begin{columns}[T]
+    \column{0.36\textwidth}
+    To feed text to \emph{any} network, words must first become vectors. For now, the
+    simplest scheme: build a \textbf{vocabulary}, then represent each word as a
+    \textbf{one-hot} vector.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Callback: [03] one-hot encoded categorical features. Same trick, new victim - a
+      \emph{word} instead of a category.}}
+    \vskip 6pt
+    {\footnotesize The full tokenization story (subwords, vocabulary explosion, the
+    Armenian fact) is L21's.}
+    \column{0.64\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=6pt,
+          tok/.style={draw, rounded corners, fill=armblue!10, minimum height=0.55cm,
+            minimum width=1.5cm, align=center}]
+        \node[tok] (t1) at (0,3.0) {The};
+        \node[tok] (t2) at (1.9,3.0) {pomegranates};
+        \node[tok] (t3) at (4.0,3.0) {arrived};
+        \node[tok] (t4) at (5.8,3.0) {fresh};
+        \foreach \x in {0,1.9,4.0,5.8}
+          \draw[->, armblue] (\x,2.72) -- (\x,2.15);
+        \foreach \x/\hotrow in {0/0,1.9/1,4.0/2,5.8/3} {
+          \foreach \r in {0,1,2,3,4} {
+            \ifnum\r=\hotrow
+              \node[draw, minimum size=0.32cm, fill=paramgreen!28] at (\x,1.8-\r*0.34) {1};
+            \else
+              \node[draw, minimum size=0.32cm, fill=paramgreen!3] at (\x,1.8-\r*0.34) {0};
+            \fi
+          }
+        }
+        \node at (2.9,-0.2) {\footnotesize vocabulary size $5$: one-hot columns};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The recurrence idea}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The recurrence idea}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Read like a human: one word at a time, with memory.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{One new arrow}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    How a human reads: word by word, retaining a running summary - the \textbf{state}.
+    \vskip 6pt
+    From L14's hidden layer $\mathbf{z}=\sigma(\mathbf{W}^\top\mathbf{x}+\mathbf{b})$ to
+    \[
+      \mathbf{z}^{[t]} = \sigma\big(\textcolor{armred}{\mathbf{V}^\top \mathbf{z}^{[t-1]}}
+        + \mathbf{W}^\top \mathbf{x}^{[t]} + \mathbf{b}\big):
+    \]
+    a single new term, the \textbf{hidden-to-hidden weights} $\mathbf{V}$.
+    \vskip 4pt
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\small
+      $\mathbf{z}^{[t]}$ is a function of the current input \emph{and} the previous
+      state - by recurrence, a summary of \textbf{everything read so far}.}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=0.5cm,
+          n/.style={draw, circle, minimum size=0.7cm}]
+        \node[n, fill=armblue!12] (x) at (0,0) {$\mathbf{x}^{[t]}$};
+        \node[n, fill=paramgreen!15] (z) at (2.0,0) {$\mathbf{z}^{[t]}$};
+        \node[n, fill=armorange!16] (f) at (4.0,0) {$f^{[t]}$};
+        \node[n, fill=paramgreen!10, xshift=-0.3cm] (zprev) at (2.0,-1.8) {$\mathbf{z}^{[t-1]}$};
+        \draw[->] (x) -- (z) node[midway, above] {$\mathbf{W}$};
+        \draw[->] (z) -- (f) node[midway, above] {$\mathbf{U}$};
+        \draw[->, armred, very thick] (zprev) -- (z)
+          node[midway, right, xshift=1pt] {\textcolor{armred}{$\mathbf{V}$}};
+      \end{tikzpicture}
+      \vskip 2pt
+      {\footnotesize \textcolor{armred}{Red}: the one new arrow, hidden to hidden.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Anatomy of one RNN step}
+  \small Same recurrence, now with concrete numbers to hold onto: a toy vocabulary of
+  $3$ words, a $2$-d hidden state. Every arrow below carries its shape, so you always
+  know exactly what multiplies what.
+  \textbf{Predict:} the one-hot vector $\mathbf{x}^{[t]}$ meets $\mathbf{W}$ - what
+  does that product actually pick out?
+  \pause
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    It selects ONE column of $\mathbf{W}^\top$ - equivalently, one row of
+    $\mathbf{W}$. That row/column IS this word's own vector in $\mathbb{R}^2$ - next
+    lecture calls it an \textbf{embedding}.}}
+  \vskip 4pt
+  \begin{center}
+    \resizebox{0.98\linewidth}{!}{%
+    \begin{tikzpicture}[font=\scriptsize, >=Latex,
+        cell/.style={draw, rounded corners, align=center, minimum height=0.85cm,
+          minimum width=1.55cm}]
+      \node[cell, fill=armblue!10] (x) at (0,0)
+        {$\mathbf{x}^{[t]}$\\[1pt] \tiny one-hot $\in\mathbb{R}^3$};
+      \node[cell, fill=paramgreen!10] (zprev) at (0,-2.2)
+        {$\mathbf{z}^{[t-1]}$\\[1pt] \tiny $\in\mathbb{R}^2$};
+      \node[draw, circle, minimum size=0.55cm] (plus) at (2.5,-1.1) {$+$};
+      \node[cell, fill=armorange!16, minimum width=1.1cm] (tanh) at (4.4,-1.1) {tanh};
+      \node[cell, fill=paramgreen!15] (z) at (6.4,-1.1)
+        {$\mathbf{z}^{[t]}$\\[1pt] \tiny $\in\mathbb{R}^2$};
+      \draw[->] (x) -- (plus) node[midway, above, sloped] {$\mathbf{W}$ (3x2)};
+      \draw[->, armred, very thick] (zprev) -- (plus)
+        node[midway, below, sloped] {\textcolor{armred}{$\mathbf{V}$ (2x2)}};
+      \node[gray] at (2.5,-2.0) {\tiny $+\,\mathbf{b}$};
+      \draw[->, gray] (2.5,-1.75) -- (plus.south);
+      \draw[->] (plus) -- (tanh);
+      \draw[->] (tanh) -- (z);
+      \node[cell, fill=armred!10, dashed, minimum width=1.0cm] (sig) at (8.9,-1.1)
+        {$\sigma$};
+      \node[cell, fill=armred!14, dashed] (score) at (11.1,-1.1)
+        {score\\[1pt] \tiny $\in(0,1)$};
+      \draw[->, armorange, dashed] (z) -- (sig)
+        node[midway, above, sloped] {\textcolor{armorange}{$\mathbf{U}$ (2x1)}};
+      \draw[->, armorange, dashed] (sig) -- (score);
+      \node[armorange] at (10.0,-0.15) {\tiny after the last word};
+    \end{tikzpicture}%
+    }
+  \end{center}
+\end{frame}
+
+\begin{frame}{A complete forward pass, in real numbers}
+  The chapter's Armenian line, first three words, through exactly the net above.
+  \textbf{(Click to advance.)}
+  \begin{center}
+    \only<1>{\includegraphics[width=0.82\linewidth]{forward_pass_0.pdf}}%
+    \only<2>{\includegraphics[width=0.82\linewidth]{forward_pass_1.pdf}}%
+    \only<3>{\includegraphics[width=0.82\linewidth]{forward_pass_2.pdf}}%
+    \only<4>{\includegraphics[width=0.82\linewidth]{forward_pass_3.pdf}}%
+    \only<5>{\includegraphics[width=0.82\linewidth]{forward_pass_4.pdf}}%
+    \only<6>{\includegraphics[width=0.82\linewidth]{forward_pass_5.pdf}}%
+    \only<7>{\includegraphics[width=0.82\linewidth]{forward_pass_6.pdf}}%
+  \end{center}
+\end{frame}
+
+\begin{frame}{Forward pass, summarized}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \small All values rounded to 2 decimals; $\mathbf{z}^{[0]}=[0,0]$:
+    \vskip -3pt
+    \begin{align*}
+      \mathbf{z}^{[1]} &= \tanh(\mathbf{W}^\top\mathbf{x}_1+\mathbf{b}) = [0.46,-0.46]\\[-1pt]
+      \mathbf{z}^{[2]} &= \tanh(\mathbf{V}^\top\mathbf{z}^{[1]}+\mathbf{W}^\top\mathbf{x}_2+\mathbf{b})
+        = [0.65,-0.23]\\[-1pt]
+      \mathbf{z}^{[3]} &= \tanh(\mathbf{V}^\top\mathbf{z}^{[2]}+\mathbf{W}^\top\mathbf{x}_3+\mathbf{b})
+        = [0.10,0.59]\\[-1pt]
+      \text{score} &= \sigma(\mathbf{U}^\top\mathbf{z}^{[3]}) = \sigma(-0.49) = 0.38
+    \end{align*}
+    \column{0.45\textwidth}
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\small
+      Three words, three applications of the \textbf{same} $\mathbf{W}$ and
+      $\mathbf{V}$, one final readout through $\mathbf{U}$. Nothing hidden - every
+      number above came straight out of the ANIM.}}
+    \vskip 8pt
+    {\footnotesize In practice $d_h=64$-$512$, not $2$ - but the recipe is identical.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Picking the activation: why tanh}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \footnotesize Three candidates for the state's activation - only one is the RNN
+    default:
+    \begin{itemize}\footnotesize
+      \item \textbf{tanh} (default): bounded in $(-1,1)$ - the state literally
+        \textbf{cannot blow up} across steps; zero-centered, so both signs flow.
+      \item \textbf{sigmoid}: also bounded, but $|\sigma'|\le 1/4$ everywhere - one
+        more shrinking factor on top of $\mathbf{V}$ every step (the "full derivation,
+        part 2" frame ahead uses exactly this bound).
+      \item \textbf{ReLU}: unbounded above - feed that back through $\mathbf{V}$ every
+        step and the state can genuinely \textbf{explode}, not just saturate.
+      \end{itemize}
+    \vskip 2pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Dead ReLU}, one line: a unit whose pre-activation is always $\le 0$
+      outputs zero forever, and its gradient too - it never updates again.}}
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{activation_zoo.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Unrolling}
+  The \textbf{same} toy net as the forward pass above, same 3 Armenian words - fed
+  forward, then fed in the \emph{opposite} order. \textbf{(Click to advance.)}
+  \begin{center}
+    \only<1>{\includegraphics[width=0.86\linewidth]{unroll_0.pdf}}%
+    \only<2>{\includegraphics[width=0.86\linewidth]{unroll_1.pdf}}%
+    \only<3>{\includegraphics[width=0.86\linewidth]{unroll_2.pdf}}%
+    \only<4>{\includegraphics[width=0.86\linewidth]{unroll_3.pdf}}%
+    \only<5>{\includegraphics[width=0.86\linewidth]{unroll_4.pdf}}%
+    \only<6>{\includegraphics[width=0.86\linewidth]{unroll_5.pdf}}%
+  \end{center}
+\end{frame}
+
+\begin{frame}{Parameter sharing}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    The \emph{same} $\mathbf{W}$ and $\mathbf{V}$ at \textbf{every} step. Parameter
+    count is independent of sequence length: with $d_x=1$, $d_h=16$,
+    \[
+      \underbrace{16}_{W} + \underbrace{256}_{V} + \underbrace{16}_{b}
+      + \underbrace{16}_{U} + \underbrace{1}_{c} = \mathbf{305}
+    \]
+    parameters - whether the review is 3 words or 40.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Convolution shares across \textbf{space} (L16); recurrence shares across
+      \textbf{time}. Same trick, new axis - and it kills hack (3): a pattern learned at
+      position 2 works at position 17 for free.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=0.4cm,
+          n/.style={draw, circle, minimum size=0.65cm, fill=paramgreen!15}]
+        \foreach \i/\x in {1/0,2/1.7,3/3.4}
+          \node[n] (z\i) at (\x,0) {$\mathbf{z}^{[\i]}$};
+        \node[draw, minimum size=0.5cm, fill=armblue!10] (x1) at (0,-1.3) {$\mathbf{x}^{[1]}$};
+        \node[draw, minimum size=0.5cm, fill=armblue!10] (x2) at (1.7,-1.3) {$\mathbf{x}^{[2]}$};
+        \node[draw, minimum size=0.5cm, fill=armblue!10] (x3) at (3.4,-1.3) {$\mathbf{x}^{[3]}$};
+        \draw[->] (x1)--(z1) node[midway,right]{$\mathbf{W}$};
+        \draw[->] (x2)--(z2) node[midway,right]{$\mathbf{W}$};
+        \draw[->] (x3)--(z3) node[midway,right]{$\mathbf{W}$};
+        \draw[->, armred] (z1)--(z2) node[midway,above]{$\mathbf{V}$};
+        \draw[->, armred] (z2)--(z3) node[midway,above]{$\mathbf{V}$};
+      \end{tikzpicture}
+      \vskip 2pt
+      {\footnotesize Every arrow of the same color is the \emph{same} matrix.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The taxonomy}
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{karpathy_rnn_taxonomy.jpeg}
+  \end{center}
+  \vskip 2pt
+  \begin{itemize}\small
+    \item \textbf{seq-to-one}: sentiment (our reviews), document classification.
+    \item \textbf{one-to-seq}: image captioning.
+    \item \textbf{seq-to-seq}: translation, language modeling - the vocabulary L21 needs.
+  \end{itemize}
+  \vskip 2pt
+  {\footnotesize Variants exist - bidirectional (reads both directions), stacked
+  (deeper). The diagram's "many-to-X" naming = our "seq-to-X": same taxonomy.}
+\end{frame}
+
+% ================================================================
+\section{Training - and the fatal flaw}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Training - and the fatal flaw}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Unroll it, and it is just a deep network.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Backprop through time}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    The unrolled RNN is a deep feed-forward net with \textbf{tied weights}. Autograd
+    needs nothing new - the L15 promise ("reverse mode: one sweep, any architecture")
+    kept again.
+    \vskip 6pt
+    For seq-to-one sentiment, the loss sits only at the \textbf{final} step - so its
+    gradient must travel all the way back through every recurrent connection.
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex,
+          n/.style={draw, circle, minimum size=0.6cm, fill=paramgreen!15}]
+        \foreach \i/\x in {1/0,2/1.4,3/2.8,4/4.2}
+          \node[n] (z\i) at (\x,0) {$\mathbf{z}^{[\i]}$};
+        \node[draw, rounded corners, fill=armred!12] (L) at (5.8,0) {$L$};
+        \draw[->] (z1)--(z2); \draw[->] (z2)--(z3); \draw[->] (z3)--(z4);
+        \draw[->] (z4)--(L);
+        \draw[->, armred, thick] (L.north) to[bend left=35] (z4.north);
+        \draw[->, armred, thick] (z4.north) to[bend left=25] (z3.north);
+        \draw[->, armred, thick] (z3.north) to[bend left=25] (z2.north);
+        \draw[->, armred!60, thick] (z2.north) to[bend left=25] (z1.north);
+        \node[armred] at (2.9,1.35) {\footnotesize gradient flows right to left};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: the fading number}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Strip the net down to $1$-d to see the decay cleanly: a scalar state
+    $h^{[t]}=V h^{[t-1]}+W x^{[t]}$, no vectors, no activation. On a 30-word review,
+    how much does token $1$ influence the state at token $30$?
+    \[
+      \frac{d h_{30}}{d h_1} = V^{29} = 0.8^{29}
+    \]
+    \textbf{Guess the value.}
+    \pause
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      $0.8^{29}\approx \mathbf{0.0015}$. And if $V=1.25$? $1.25^{29}\approx\mathbf{646}$.
+      One multiplication, repeated, either starves or explodes.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{vanish_curve.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The full derivation, part 1}
+  For vectors, the state update is
+  $\mathbf{z}^{[t]} = \sigma(\mathbf{V}^\top\mathbf{z}^{[t-1]}+\mathbf{W}^\top\mathbf{x}^{[t]}+\mathbf{b})$,
+  so by the chain rule:
+  \[
+    \frac{d\mathbf{z}^{[t]}}{d\mathbf{z}^{[t-1]}}
+      = \text{diag}\big(\sigma'(\cdot)\big)\,\mathbf{V}^\top
+      = \mathbf{D}^{[t-1]}\,\mathbf{V}^\top
+  \]
+  Chain this back to step $1$:
+  \[
+    \frac{dL}{d\mathbf{z}^{[1]}} = \frac{dL}{d\mathbf{z}^{[t]}}\;
+      \mathbf{D}^{[t-1]}\mathbf{D}^{[t-2]}\cdots\mathbf{D}^{[1]}\,(\mathbf{V}^\top)^{t-1}
+  \]
+  \vskip 8pt
+  \fcolorbox{popblue}{popblue!6}{\parbox{0.97\linewidth}{\small
+      Every path back to an early time-step runs through powers of the \textbf{same}
+      matrix $\mathbf{V}^\top$. For any $i<t$: the term $(\mathbf{V}^\top)^{t-i}$ appears.}}
+\end{frame}
+
+\begin{frame}{The full derivation, part 2 - eigenvalues}
+  The \textbf{largest eigenvalue} $|\lambda_{\max}|$ of $\mathbf{V}$ decides the fate of
+  $(\mathbf{V}^\top)^{t-i}$:
+  \begin{itemize}
+    \item $|\lambda_{\max}| < 1 \Rightarrow$ \textbf{vanishing}.
+    \item $|\lambda_{\max}| > 1 \Rightarrow$ \textbf{exploding}.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+      \textbf{Worse than a deep MLP.} An MLP has a \emph{different} matrix per layer -
+      errors can partially cancel. An RNN multiplies by the \textbf{same} $\mathbf{V}$
+      at every step, so the effect compounds cleanly. The sigmoid's $\mathbf{D}$ factors
+      only make it worse ($|\sigma'|\le 1/4$).}}
+  \vskip 6pt
+  {\footnotesize Callback: L15 already met vanishing gradients in deep MLPs. Same
+  disease, worse here - it is the \emph{same} matrix every step.}
+\end{frame}
+
+\begin{frame}{Exploding is the easy half}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    L15 already gave us the fix (recall "Saddles and cliffs"): cap the gradient's norm
+    at a threshold $h$:
+    \[
+      \text{if } \|\nabla\| > h:\quad \nabla \leftarrow \frac{h}{\|\nabla\|}\,\nabla
+    \]
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      One formula, solved problem. Exploding gradients are the \emph{easy} half of this
+      story.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        \draw[dashed, gray] (0,0) circle (1.3);
+        \node[gray] at (0,-1.6) {norm threshold $h$};
+        \draw[->, armred, very thick] (0,0) -- (2.3,1.3)
+          node[midway, above, sloped] {\textcolor{armred}{too long}};
+        \draw[->, paramgreen, very thick] (0,0) -- (1.13,0.64)
+          node[midway, below, sloped] {\textcolor{paramgreen}{clipped}};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What vanishing means in practice}
+  \begin{center}
+  \begin{tikzpicture}
+    \node[font=\small\bfseries, text=popblue] at (0, 2.6) {Backpropagation through time};
+    \node[draw, circle, fill=paramgreen!20, minimum size=0.8cm, font=\scriptsize] (h1) at (-5.0, 1.1) {$h_1$};
+    \node[draw, circle, fill=paramgreen!20, minimum size=0.8cm, font=\scriptsize] (h2) at (-3.3, 1.1) {$h_2$};
+    \node[draw, circle, fill=paramgreen!20, minimum size=0.8cm, font=\scriptsize] (h3) at (-1.6, 1.1) {$h_3$};
+    \node[font=\large] at (0.1, 1.1) {$\cdots$};
+    \node[draw, circle, fill=paramgreen!20, minimum size=0.8cm, font=\scriptsize] (h8) at (1.7, 1.1) {$h_T$};
+    \node[draw, rounded corners=3pt, fill=armred!15, font=\scriptsize] (loss) at (3.8, 1.1) {Loss $\mathcal{L}$};
+    \draw[-Stealth, thick] (h8) -- (loss);
+    \draw[-Stealth, thick, armred] (h1) -- (h2);
+    \draw[-Stealth, thick, armred] (h2) -- (h3);
+    \draw[-Stealth, thick, armred] (h3) -- (-0.3, 1.1);
+    \draw[-Stealth, thick, armred] (0.7, 1.1) -- (h8);
+    \draw[-Stealth, very thick, armred] (loss.south) -- ++(0, -0.7) -- (h8.south);
+    \draw[-Stealth, thick, armred!70] (h8.south) ++(0, -0.25) -- ++(-1.3, 0);
+    \node[font=\large] at (0.1, 0.05) {$\cdots$};
+    \draw[-Stealth, thick, armred!30] (h3.south) ++(0, -0.25) -- ++(-1.5, 0);
+    \draw[-Stealth, thick, armred!15] (h2.south) ++(0, -0.25) -- ++(-1.5, 0);
+    \node[font=\scriptsize, text=armred] at (3.0, 0.35) {large};
+    \node[font=\scriptsize, text=armred!30] at (-2.2, 0.35) {tiny};
+    \node[font=\scriptsize, text=armred!15] at (-4.2, 0.35) {$\approx 0$};
+    \node[draw=popblue, fill=popblue!5, rounded corners=6pt, inner sep=6pt, text width=9cm,
+      align=center, font=\scriptsize] at (0, -1.0) {
+      $\displaystyle \frac{\partial \mathcal{L}}{\partial h_1} = \frac{\partial \mathcal{L}}{\partial h_T}
+      \cdot \prod_{t=2}^{T} \frac{\partial h_t}{\partial h_{t-1}}$ \quad product of many
+      values $<1$ $\Rightarrow$ gradient vanishes
+    };
+    \node[draw=armred, fill=armred!8, rounded corners=6pt, text width=10.5cm, align=center,
+      inner sep=5pt, font=\scriptsize] at (0, -2.1) {
+      "The cat that I saw yesterday in the garden near the old oak tree \textbf{was}
+      cute" - the gradient from "was" can't reach "cat": the RNN \emph{forgets} early
+      tokens
+    };
+  \end{tikzpicture}
+  \end{center}
+  \vskip 2pt
+  {\footnotesize Our version: the 42-word review from the shoehorn-hacks frame - its
+  verdict, \emph{disappointing}, sits in the last clause. By the time the RNN reaches
+  it, the state has forgotten most of what came before.}
+\end{frame}
+
+\begin{frame}{Empirical proof}
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    Gradient norm per time-step, measured directly on a tiny vanilla RNN (hidden size
+    $16$) trained on a toy recall task.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      Not asserted - \textbf{measured}. The gradient is dead within about $15$ steps.}}
+    \column{0.68\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{gradient_flow_vanilla.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item Text refuses to fit a fixed input: length varies, order matters - every
+      shoehorn hack loses one or the other.
+    \item State $=$ a running summary; \textbf{one new weight matrix} $\mathbf{V}$ turns
+      a dense layer into an RNN.
+    \item Unrolled $=$ a deep network with \textbf{tied weights} - autograd handles it
+      unchanged.
+    \item Same-matrix powers $\Rightarrow$ gradients \textbf{vanish} (derived, not
+      asserted) or explode.
+    \item Clipping fixes exploding. \textbf{Nothing yet fixes vanishing.}
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      \textbf{Next:} 1997's answer - a memory built from \textbf{addition}, not
+      multiplication: the LSTM. It works. And it still will not be enough (L21).}}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L20 RNN Foundations (ch7_rnn). Built 2026-07-13 from
+%   L20_rnn_foundations_OUTLINE.md (approved) + RNN_CHAPTER_PLAN.md, following the
+%   ch6_cnn borrowing mechanics and L16_cnn_foundations.tex as the style exemplar.
+%
+%   Chapter running example (constant for L21 too): the review sentence
+%   "The pomegranates arrived fresh and sweet." Short/medium/long shoehorn-hack
+%   reviews ("Fresh and sweet!"; "...best I've had since Yerevan."; the 42-word
+%   complaint ending "disappointing") are this deck's own text, reused across the
+%   shoehorn-hacks frame and the vanishing-gradient frame.
+%
+%   Sources consulted (REDERIVE, read-only, our own notation z/V/W throughout):
+%   LMU I2DL rnn/slides-introduction.tex (motivation, V-weights derivation, unrolled
+%   sentiment example, parameter sharing, seq-to-one/one-to-seq/seq-to-seq taxonomy);
+%   rnn/slides-backprop.tex (BPTT chain product, D-matrix factors, eigenvalue argument,
+%   clipping reference). Credit line on title frame per instructor decision (CC BY 4.0).
+%   Gradient-clipping frame phrased as a CALLBACK: L15_training_neural_networks.tex
+%   ("Saddles and cliffs -- and how we cope", line ~587) already teaches the identical
+%   formula, so L20 cites rather than re-derives it.
+%
+%   OWN-TEX (per plan's whitelist, ml/preamble.tex macros verified - sampred/warnred
+%   both exist but were swapped to armred/armred!8 for in-deck color consistency):
+%   the "What vanishing means in practice" frame adapts the vanishing-gradient TikZ from
+%   misc/dl4nlp/01_pre_transformer.tex (~lines 477-530), same "cat" sentence, plus our
+%   own 42-word-review callback line. The static unrolled-RNN TikZ from the same file
+%   (~lines 407-472) was NOT added as a separate frame - the mandatory unroll_anim ANIM
+%   already covers unrolling with the locked worked numbers, so a second static diagram
+%   would be redundant (logged in L20_DECISIONS.md).
+%
+%   WEB-IMG: fig/borrowed/karpathy_rnn_taxonomy.jpeg, downloaded from
+%   http://karpathy.github.io/assets/rnn/diags.jpeg ("The Unreasonable Effectiveness of
+%   Recurrent Neural Networks", Andrej Karpathy, 2015), per standing policy (no
+%   licensing caveats needed).
+%
+%   Figures (py_src -> fig, ma venv, seed 509): word_shuffle.pdf (word_shuffle.py, still
+%   the English review sentence - see REVISION PASS below for why it was not switched
+%   to the Armenian line); pad_truncate.pdf (pad_truncate.py, shared per-column widths so
+%   the length-8 boundary lines up across the three review rows); vanish_curve.pdf
+%   (vanish_curve.py, 0.8^k vs 1.25^k, log scale); gradient_flow_vanilla.pdf
+%   (gradient_flow.py, manual RNNCell/LSTMCell unroll with retain_grad() per step -- a
+%   fused nn.RNN call hides the recurrent chain from autograd's exposed gradients, so
+%   per-timestep dL/dh_t must be captured this way; also emits
+%   gradient_flow_vanilla_lstm.pdf for L21, not used here).
+%
+%   REVISION PASS (instructor review, this session) added/changed:
+%   forward_pass_0.pdf..forward_pass_6.pdf (forward_pass_anim.py, NEW, 7-frame ANIM):
+%   the toy 2-d RNN (vocab of 3 words = the Armenian line's first 3 words, W 3x2/
+%   V 2x2/b, tanh, U 2x1/sigmoid readout) fed the chapter's real Armenian words with
+%   real numbers at every intermediate, read from py_src/data/armenian_line.txt (never
+%   retyped). activation_zoo.pdf (activation_zoo.py, NEW): tanh/sigmoid/ReLU curves,
+%   tanh highlighted. unroll_0.pdf..unroll_5.pdf (unroll_anim.py, REWRITTEN): now the
+%   SAME toy 2-d net and the SAME 3 Armenian words as forward_pass_anim.py (previously
+%   a separate 1-d scalar net on the English review words) - narrowed to one
+%   punchline, forward vs reversed order giving a different final state AND a
+%   different final score (0.38 vs 0.82). Both ANIM scripts promote matplotlib's
+%   "Glyph ... missing from current font" warning to a hard error (fail loudly on any
+%   future missing-glyph regression) and render Armenian text in Segoe UI (Noto Sans
+%   Armenian checked, not installed on this machine; Sylfaen also works).
+%
+%   Locked worked numbers verified with a throwaway script before typesetting (original
+%   build): forward [2,1,3] -> h=[1.0,1.3,2.54]; reversed [3,1,2] -> h=[1.5,1.7,2.36];
+%   0.8^29=0.001547; 1.25^29=646.23 (both still used, now only at "Predict-first: the
+%   fading number").
+%
+%   Locked worked numbers (REVISION PASS, toy 2-d net, shared between
+%   forward_pass_anim.py and unroll_anim.py - asserted in both scripts):
+%   forward z[1]=[0.46,-0.46], z[2]=[0.65,-0.23], z[3]=[0.10,0.59], score=0.38;
+%   reversed z[1]=[0.00,0.76], z[2]=[0.94,0.00], z[3]=[0.75,-0.75], score=0.82.
+%
+%   Key decisions: logged in L20_DECISIONS.md.
+%
+%   Forward pointer: L21 The Road to Attention - LSTM intuition (memory highway = ResNet
+%   skip, 18 years earlier), tokenization with the Armenian fragmentation fact, the
+%   char-LSTM Armenian generation demo, word embeddings, seq2seq + the bottleneck
+%   cliffhanger. gradient_flow_vanilla_lstm.pdf (already generated) is L21's payoff
+%   figure for the same toy recall task.

@@ -20,14 +20,16 @@ Append new entries with a date. Strike through obsolete ones, do not delete.
 
 ## Windows / tooling
 
-- **Armenian (any non-ASCII) text gets corrupted by the Edit tool.** Make such edits with a small Python script instead: `pathlib.Path(...).read_text(encoding="utf-8")` -> replace -> `write_text(encoding="utf-8")`.
 - Opening several PDFs for review: a rapid `cmd /c start msedge` loop drops windows. Use PowerShell `Start-Process "msedge.exe" -ArgumentList '"C:\full\path.pdf"'`, one file at a time, ~0.5 s apart.
 - Paths produced inside Git Bash (e.g. `pdftoppm` output under `/tmp`) may need `cygpath -w` before the Read tool can open them.
 - Glob/ripgrep over the whole repo can time out (OneDrive + `ma/` venv with thousands of files). Search specific subfolders, or use `ls`/`git ls-files` for existence checks.
+- **2026-07-13:** Armenian text in Python logging **vanishes silently** on Windows: the cp1252 console cannot encode it and the default-encoding `FileHandler` drops it too - no exception, the lines just never appear. Pass `encoding="utf-8"` to `logging.FileHandler` and keep console output ASCII (or guard it) when logging Armenian.
 
 ## Python / notebooks
 
 - **2026-07-08:** `ax.bar_label(ax.containers[0], ...)` mislabels when the bars were drawn with `yerr=`. `ax.bar(..., yerr=...)` also appends an `ErrorbarContainer` to `ax.containers`, so `containers[0]` can be the errorbar, raising `AttributeError: 'ErrorbarContainer' object has no attribute 'patches'`. Capture the bars: `bars = ax.bar(...)` then `ax.bar_label(bars, ...)`.
+- **2026-07-13:** Fused `nn.RNN`/`nn.LSTM` hide the per-step recurrence from autograd's exposed tensors: `retain_grad()` on the stacked output yields all-zero gradients except at the loss's direct touch point (the last step). To measure per-timestep gradient flow, manually unroll with `nn.RNNCell`/`nn.LSTMCell` and call `retain_grad()` on each individual `h_t`. (Found building L20's gradient_flow.py.)
+- **2026-07-13:** matplotlib **mathtext silently drops** non-mathtext text (e.g. Armenian) appended in the same `ax.text()` string as `$...$` - no warning, just missing glyphs in the output. Keep Armenian/unicode in plain-text annotations, never mixed into mathtext. Also promote font fallback to a hard error when rendering Armenian: `warnings.filterwarnings("error", message=".*Glyph.*missing.*")` - otherwise tofu reaches the slide silently. Verify by rendering pages to PNG and looking; the PDF text-extraction layer is separately unreliable for Armenian and proves nothing.
 - **2026-07-08:** The global `jupyter` / `nbconvert` launcher is broken on this machine - the system `jupyter_contrib_nbextensions` raises `ModuleNotFoundError: No module named 'notebook.services'` when nbconvert enumerates exporters, so `python -m jupyter nbconvert --execute` fails. To execute a notebook with the `ma` stack (imblearn etc.), bypass the launcher and drive `nbclient` directly with the already-registered `ma` kernel: `NotebookClient(nb, timeout=600, kernel_name="ma", resources={"metadata": {"path": "ml/03_classification"}}).execute()`. Set the `path` resource so relative loads (`data/...`) resolve. Bonus: running the real notebook this way caught a `bar_label` bug the standalone verification script missed - execute the notebook, not just the code.
 
 ## Git

@@ -79,19 +79,6 @@ The math homework files follow this pattern for resources:
 - [🛠️📺 Գ NN - Topic](https://youtu.be/VIDEO_ID)
 ```
 
-**IMPORTANT:** Armenian UTF-8 characters get corrupted in the Edit tool.
-Always use Python (via Bash) for editing .qmd files:
-
-```python
-./ma/Scripts/python.exe -c "
-import pathlib
-f = pathlib.Path('math/FILE.qmd')
-c = f.read_text(encoding='utf-8')
-# ... do replacements ...
-f.write_text(c, encoding='utf-8')
-"
-```
-
 ### Mapping: which video goes to which .qmd
 
 | Slide deck | Homework .qmd |

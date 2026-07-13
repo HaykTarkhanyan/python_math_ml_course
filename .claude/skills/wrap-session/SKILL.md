@@ -30,7 +30,6 @@ Work through these in order and report each as done or skipped (with reason).
 4. **If a lecture or practical was delivered today:**
    - Ask the user for the YouTube link, then add it to the matching `.qmd`
      (`update-youtube` skill). Link text must match the YouTube title exactly.
-     Armenian text edits go through a Python script, never the Edit tool.
    - Mark the session complete in the plan file (`ml/00_plan.md` or
      `math/Lectures/stat/00_plan.md`).
 

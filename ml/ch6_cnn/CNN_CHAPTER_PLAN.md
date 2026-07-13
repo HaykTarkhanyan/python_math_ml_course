@@ -237,9 +237,7 @@ Non-negotiables, in build order:
    -> zero `!` lines in the log -> `./ma/Scripts/python.exe clean_latex.py ml/ch6_cnn`
    -> visual overflow check (`beamer-overflow-check`; Beamer clips silently) -> open
    the PDF for instructor review.
-6. **Prose rules:** no em-dashes (use -), no curly quotes; English slide body; any
-   Armenian text is edited only via a small Python script, never the Edit tool (it
-   corrupts the UTF-8).
+6. **Prose rules:** no em-dashes (use -), no curly quotes; English slide body.
 7. **Build one deck at a time** (L16 -> L17 -> L18 -> L19), each compiled,
    overflow-checked and approved before starting the next.
 
