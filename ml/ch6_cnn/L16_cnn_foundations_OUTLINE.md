@@ -33,6 +33,11 @@ Target: ~22 frames, one ~90-min session.
 - **Two wishes.** 1) Locality: detect small patterns from small neighborhoods.
   2) Reuse: an edge detector useful in the corner is useful in the center - "a cat in the
   corner is still a cat". These two wishes ARE the convolutional layer. `[armblue key box]`
+- **CNNs in the wild.** One montage frame mirroring the LMU intro deck's application
+  tour: self-driving perception, medical CT screening, semantic segmentation, image
+  colorization - 3-4 borrowed showcase images with an attribution line (COPY-IMG, see
+  build-notes whitelist). Message: everything on this frame is built from the machinery
+  of this chapter. `[COPY-IMG + attribution]`
 
 ### Section 2: The convolution operation
 
@@ -41,12 +46,15 @@ Target: ~22 frames, one ~90-min session.
   the window. Moving average as the familiar special case. (1D-before-2D per pedagogy
   research; also plants "convolutions work on time series too" for L18.)
   `[TikZ small strip diagram]`
-- **2D by hand.** 2x2 kernel on a 3x3 input, all four output cells computed with real
-  numbers, cell by cell. `[worked-numbers]` (adapted from LMU cnn1/conv2d)
-- **The kernel zoo.** The pomegranate photo (grayscale), six classic kernels. For 2-3 of them:
-  show the kernel numbers first, "predict what this does to the image" `\pause`, reveal the
-  filtered photo. Identity, box blur, sharpen, Sobel X, Sobel Y, emboss.
-  `[predict-first]` `[real fig: kernel_zoo.pdf]`
+- **2D by hand.** 2x2 kernel on a 3x3 input, all four output cells computed cell by
+  cell. Use exactly: input [[1,2,0],[3,1,1],[0,2,4]], kernel [[0,1],[2,2]] -> output
+  [[10,4],[5,13]]; show s11 = 1*0 + 2*1 + 3*2 + 1*2 = 10 fully, the rest as results.
+  Close with the general formula in one line: s_ij = sum_{m,n} I(i+m-1, j+n-1) w(m,n).
+  `[worked-numbers]` (kernel values follow LMU cnn1/conv2d)
+- **The kernel zoo.** The pomegranate photo (grayscale), seven classic kernels. For 2-3
+  of them: show the kernel numbers first, "predict what this does to the image" `\pause`,
+  reveal the filtered photo. Identity, box blur, Gaussian blur, sharpen, Sobel X,
+  Sobel Y, emboss. `[predict-first]` `[real fig: kernel_zoo.pdf]`
 - **Sobel, briefly dissected.** Why those numbers detect vertical edges: a differentiation
   row smoothed by an averaging column. Filters like these ran computer vision for 30 years -
   hand-designed by experts. (Sets up the punchline and HW1 Part A.)
@@ -87,10 +95,11 @@ Target: ~22 frames, one ~90-min session.
 - `[plain]` transition: "The four knobs: channels, padding, stride, pooling."
 - **Channels, done properly.** Color returns: RGB input = depth-3 tensor. ONE filter spans
   the FULL input depth and sums across channels - it outputs ONE feature map, not three.
-  Misconception pre-empt: "3 channels in does not mean 3 maps out." Tiny worked example:
-  2x2x2 input patch, 2x2x2 filter, one output number with the cross-channel sum written
-  out. N filters -> N maps -> the next layer's depth-N input. `[worked-numbers]`
-  `[TikZ stacked-maps sketch]`
+  Misconception pre-empt: "3 channels in does not mean 3 maps out." Tiny worked example,
+  use exactly: input patch R = [[1,0],[2,1]], G = [[0,3],[1,1]]; filter R = [[1,0],[0,1]],
+  G = [[2,1],[0,0]]; output = (1*1 + 0*0 + 2*0 + 1*1) + (0*2 + 3*1 + 1*0 + 1*0) = 2 + 3
+  = 5 (one number - the channel results are SUMMED). N filters -> N maps -> the next
+  layer's depth-N input. `[worked-numbers]` `[TikZ stacked-maps sketch]`
 - **The conv-layer parameter formula.** Boxed: params = k*k*C_in*C_out + C_out (one bias
   per filter). Two cases by hand: 3x3 conv from RGB to 16 maps = 3*3*3*16 + 16 = 448; the
   section-3 5x5 filter on RGB = 76 with its bias. This formula plus the output-size formula
@@ -98,8 +107,9 @@ Target: ~22 frames, one ~90-min session.
   `[worked-numbers]` `[boxed formula]`
 - **Padding.** Valid vs same; without padding the map shrinks every layer and depth is
   capped; with zero-padding depth is free. `[real fig: conv_arithmetic.pdf panel]`
-- **Stride + the output-size formula.** o = floor((i - k + 2p)/s) + 1. Compute 2-3 cases by
-  hand (the classic exam question). `[worked-numbers]`
+- **Stride + the output-size formula.** o = floor((i - k + 2p)/s) + 1. Three cases by
+  hand (the classic exam question): (i=28, k=3, p=1, s=1) -> 28 (same padding); (i=28,
+  k=5, p=0, s=1) -> 24; (i=32, k=3, p=0, s=2) -> 15. `[worked-numbers]`
 - **Pooling.** Max vs average on a 4x4 toy grid, both computed. What pooling buys:
   downsampling, fewer params downstream, a little invariance. Max keeps the strongest
   response; average keeps everything (and blurs). `[worked-numbers]` (adapted from LMU)
@@ -112,11 +122,13 @@ Target: ~22 frames, one ~90-min session.
   (per CNN_BLOCK_DESIGN's prerequisite warning); drop it if the block runs right after
   L15. `[callback: L15 training loop]`
 - **Anatomy of a conv stack.** [conv -> ReLU -> pool] x2 -> flatten -> dense -> softmax
-  (LeNet-style). Track the tensor through every layer for a 28x28 input - one table with a
-  SHAPE column and a PARAMS column (both section-4 formulas); the total lands near ~9k -
-  hold that number for the payoff frame. Note on the frame: conv is affine, so without the
-  ReLU between them stacked convs collapse into one big conv (L14's linearity lesson); and
-  pooling has ZERO parameters. `[worked-numbers]` `[callback: L14 why-nonlinearity]`
+  (LeNet-style). Track the tensor through every layer for a 28x28 input - one table with
+  a SHAPE column and a PARAMS column (both section-4 formulas). Use exactly the chapter's
+  small CNN: conv(1->8, 3x3, pad 1) = 80 params -> pool 2 -> conv(8->16, 3x3, pad 1) =
+  1,168 -> pool 2 -> flatten (16*7*7 = 784) -> dense(784->10) = 7,850; total 9,098. Hold
+  that number for the payoff frame. Notes on the frame: conv is affine, so without the
+  ReLU between them stacked convs collapse into one big conv (L14's linearity lesson);
+  and pooling has ZERO parameters. `[worked-numbers]` `[callback: L14 why-nonlinearity]`
   `[TikZ or real fig]`
 - **What the layers learn.** First-layer kernels of a small CNN trained on Fashion-MNIST:
   edge/texture detectors nobody designed. Deeper layers: parts, then objects. This is L14's
@@ -148,7 +160,7 @@ Target: ~22 frames, one ~90-min session.
 
 1. `pixel_shuffle.pdf` - pomegranate photo vs fixed-permutation shuffled photo; plus the
    zoomed number-patch panel for the image-is-numbers frame.
-2. `kernel_zoo.pdf` - pomegranate photo (grayscale) + 6 filtered versions, kernels shown.
+2. `kernel_zoo.pdf` - pomegranate photo (grayscale) + 7 filtered versions, kernels shown.
 3. `param_explosion.pdf` - labeled bar chart, dense vs conv parameter counts.
 4. `conv_arithmetic.pdf` - padding/stride small-grid diagrams.
 5. `feature_maps.pdf` - learned kernels + activations, small Fashion-MNIST CNN.
@@ -165,3 +177,39 @@ HW1 "Build your own Photoshop, then let the network design the kernels" - Part A
 conv + kernel zoo (local; the pomegranate photo or the student's own), Part B small CNN on
 Fashion-MNIST + learned-kernel visualization (Colab). Direct interventions on the "kernels
 are hand-engineered" misconception.
+
+## Build notes (for the implementing model)
+
+- Consult read-only (REDERIVE): `ml/deep_learning/moodle_s26_course/slides_tex/slides/`
+  `cnn1/{slides-cnn-conv2d, slides-cnn-properties-of-convolution, slides-cnn-components,
+  slides-cnn-pooling, slides-cnn-architecture}.tex`; the 1D-first idea from
+  `cnn2/slides-convolution-types.tex`.
+- **Credit line** (instructor decision): a footnote-size acknowledgment on the title or
+  Outline frame - "Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0".
+- **COPY-IMG whitelist** (into `fig/borrowed/`, attribution on the frame): the "CNNs in
+  the wild" montage only. Candidates from
+  `ml/deep_learning/_reference/lecture_i2dl/slides/cnn1/figure/`: `tesla_autopilot.jpg`,
+  `coronatrack.jpeg`, `cityscapes_visual.png`, `colorization.png` - cite the original
+  papers where LMU's caption does.
+- **COPY-SLIDE option** (allowed per instructor, 2026-07-13): when recreating a
+  multi-overlay build is too costly, embed a full LMU slide page from the compiled PDFs
+  in `ml/deep_learning/moodle_s26_course/slides/week23_cnns_intro/` via
+  `\includegraphics[page=N, height=0.92\textheight]{...pdf}` on a `[plain]` frame + a
+  small source line. Candidate in this deck: the sparse-interactions / parameter-sharing
+  click-through sequences in `03_cnn-properties-of-convolution.pdf`. LMU decks are 4:3,
+  ours 16:9 - fit by height, accept side margins.
+- Kernel-zoo kernels (3x3): identity [[0,0,0],[0,1,0],[0,0,0]]; box blur = 1/9 * ones;
+  Gaussian = 1/16 * [[1,2,1],[2,4,2],[1,2,1]]; sharpen [[0,-1,0],[-1,5,-1],[0,-1,0]];
+  Sobel X [[-1,0,1],[-2,0,2],[-1,0,1]]; Sobel Y = its transpose; emboss
+  [[-2,-1,0],[-1,1,1],[0,1,2]]. Apply with a small NumPy loop (the same loop HW1 Part A
+  asks students to write).
+- The chapter's small CNN is ONE architecture reused everywhere (anatomy frame,
+  `feature_maps.py`, `cnn_vs_mlp.py`): conv(1->8, 3x3, pad 1) - ReLU - maxpool2 -
+  conv(8->16, 3x3, pad 1) - ReLU - maxpool2 - flatten - fc(784->10); 9,098 params.
+  Train on a Fashion-MNIST subsample (<= 8k train / 2k test, <= 5 epochs, Adam lr 1e-3,
+  seed 509) - minutes on CPU.
+- `cnn_vs_mlp.py`: the MLP baseline is the ch5 practical architecture (784-128-64-10,
+  ~109k params); same subsample, same epochs; one accuracy-vs-epoch chart, both curves
+  labeled with final accuracy and parameter count.
+- The pomegranate photo: instructor supplies `ml/ch6_cnn/fig/src_pomegranate.jpg` (plan
+  open question 5); every script that needs it must fail loudly if it is missing.

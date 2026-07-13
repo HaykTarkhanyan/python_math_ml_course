@@ -1,0 +1,896 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 16: CNN Foundations}
+\subtitle{One neuron, reused at every pixel}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{A pomegranate-sorting line}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    A camera photographs each fruit on a conveyor; a model grades it - \textbf{export},
+    \textbf{market}, or \textbf{juice}. This sorting line runs through all three lectures.
+    \vskip 6pt
+    In L14 our modest MNIST net (784-128-64-10) had \textbf{$109{,}386$} weights. The
+    camera's photo is $224 \times 224 \times 3 = 150{,}528$ numbers.
+    \vskip 6pt
+    \textbf{Predict:} how many weights does \emph{one} dense layer with $1{,}000$ hidden
+    units need for that photo?
+    \pause
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      $150{,}528 \times 1{,}000 \approx \textbf{150 million}$ - for \emph{one} layer,
+      before learning anything. Today's fix costs a few \emph{hundred}.}}
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[>=Latex, font=\scriptsize, node distance=0.5cm,
+        box/.style={draw, rounded corners, minimum height=0.8cm, minimum width=1.7cm,
+          align=center}]
+        \node[box, fill=gray!8] (cam) {camera};
+        \node[box, fill=armblue!10, below=of cam] (img) {photo\\$224{\times}224{\times}3$};
+        \node[box, fill=armorange!16, below=of img] (net) {model};
+        \node[box, fill=paramgreen!12, below=of net] (out) {grade:\\export / market / juice};
+        \draw[->] (cam) -- (img);
+        \draw[->] (img) -- (net);
+        \draw[->] (net) -- (out);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Why dense nets are the wrong tool for images}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Images are not feature vectors}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A dense net treats a photo as a bag of unrelated numbers. That throws away the one
+      thing images have: structure.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{How your eye sees color}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Your retina has three kinds of \textbf{cone} cell, tuned to short, medium, and long
+    wavelengths - roughly \textbf{blue}, \textbf{green}, and \textbf{red}.
+    \vskip 6pt
+    Any color you perceive is just how strongly those three fire. The eye already encodes
+    light as \emph{three numbers} at each point.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      That is why images use \textbf{RGB}: three channels, one per cone type.}}
+    \column{0.54\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{eye_cones.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A pixel is three numbers}
+  \begin{columns}[T]
+    \column{0.34\textwidth}
+    A color image stores an \textbf{(R, G, B)} triple at every pixel, each value $0$ to
+    $255$. Red and green high $=$ yellow; all three high $=$ white.
+    \vskip 6pt
+    So a color image is really \textbf{three stacked grids}, one per channel. Hold that -
+    it comes back as \emph{channels} in Section 4.
+    \column{0.66\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{rgb_channels.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{An image is a grid of numbers}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    A grayscale image is \textbf{one matrix}: each entry is a pixel intensity, $0$ (black)
+    to $255$ (white).
+    \vskip 6pt
+    We just saw color as three stacked grids. From here we work in \textbf{grayscale} - one
+    matrix - so the convolution mechanics stay 2D; channels return in Section 4.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      To a computer there is no "image" - only a grid of numbers.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{image_numbers.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{An image is a function}
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    Read the grid as a \textbf{function} $f(x,y)$: position in, intensity out.
+    \vskip 6pt
+    Walk along one horizontal line: $f$ is flat on uniform regions, a \textbf{ramp} across a
+    gradient, and a \textbf{jump} at an edge.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      An edge is where $f$ changes fast. That single idea is how we will detect edges.}}
+    \column{0.68\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{image_as_function.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{An MLP cannot see structure}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    Flattening a photo into a $150{,}528$-vector hands the pixels to the net in \emph{some}
+    order - but a dense layer treats every order the same.
+    \vskip 6pt
+    Shuffle the pixels with one fixed permutation and an MLP learns it \emph{exactly as
+    well}. To us, one is a pomegranate and the other is noise.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      Nearby pixels are related; far-apart ones usually are not. A dense layer knows none
+      of this.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{pixel_shuffle.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Two wishes}
+  We want a layer that builds in what we know about images:
+  \vskip 8pt
+  \begin{enumerate}
+    \item \textbf{Locality.} Detect a small pattern (an edge, a corner) from a small
+      neighborhood of pixels - not from the whole image at once.
+    \item \textbf{Reuse.} A detector that is useful in one corner is useful everywhere. A
+      cat in the corner is still a cat.
+  \end{enumerate}
+  \vskip 10pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{
+      These two wishes - \textbf{locality} and \textbf{weight reuse} - \emph{are} the
+      convolutional layer. The rest of this lecture is just spelling them out.}}
+\end{frame}
+
+\begin{frame}{CNNs in the wild}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[height=0.25\textheight]{tesla_autopilot.jpg}\\[1pt]
+      {\scriptsize self-driving perception}
+    \end{center}
+    \vskip 2pt
+    \begin{center}
+      \includegraphics[height=0.25\textheight]{cityscapes_visual.png}\\[1pt]
+      {\scriptsize semantic segmentation}
+    \end{center}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[height=0.25\textheight]{coronatrack.jpeg}\\[1pt]
+      {\scriptsize medical CT screening}
+    \end{center}
+    \vskip 2pt
+    \begin{center}
+      \includegraphics[height=0.25\textheight]{colorization.png}\\[1pt]
+      {\scriptsize image colorization}
+    \end{center}
+  \end{columns}
+  \vskip 4pt
+  \begin{center}\scriptsize\color{gray}
+    All built from this chapter's machinery.\quad Images: LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Where CNNs came from}
+  Convolutional nets are not new. In \textbf{1989}, \textbf{Yann LeCun} and colleagues at
+  Bell Labs trained one to read \textbf{handwritten digits} - the ZIP codes on U.S. mail.
+  \vskip 6pt
+  That network (\textbf{LeNet}) and its digit benchmark (\textbf{MNIST}) launched the field.
+  Everything in this lecture descends from it.
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Same recipe then and now: local filters, shared weights, pooling, a dense head. Later
+      lectures just make it bigger, deeper, and trained on far more data.}}
+\end{frame}
+
+% ================================================================
+\section{The convolution operation}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The convolution operation}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Slide a small window across the input; at each stop, take a dot product.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Start in 1D: a sliding dot product}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Take a length-3 kernel $\mathbf{w}=(w_1,w_2,w_3)$ and slide it along a sequence. Each
+    output is the dot product of the kernel with the window under it.
+    \vskip 6pt
+    With $\mathbf{w}=(\tfrac13,\tfrac13,\tfrac13)$ this is exactly a \textbf{moving
+    average}. Different weights detect different local patterns.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Same idea works on any sequence - audio, sensor traces, text. Convolution is a prior,
+      not an image trick (more in L18).}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex,
+        c/.style={draw, minimum size=0.6cm, inner sep=0}]
+        \foreach \v/\i in {2/0,1/1,3/2,5/3,4/4,2/5,1/6}
+          \node[c, fill=gray!8] (x\i) at (\i*0.62,1.4) {\v};
+        \node[c, draw=armblue, very thick] at (1*0.62,1.4) {};
+        \node[c, draw=armblue, very thick] at (2*0.62,1.4) {};
+        \node[c, draw=armblue, very thick] at (3*0.62,1.4) {};
+        \node[armblue] at (2*0.62,2.15) {\footnotesize kernel $(w_1,w_2,w_3)$};
+        \foreach \v/\i in {2/0,3/1,4/2,3.7/3,2.3/4}
+          \node[c, fill=paramgreen!12] (o\i) at (\i*0.62+0.62,0.2) {\v};
+        \draw[->, armblue] (2*0.62,1.1) -- (2*0.62+0.0,0.5);
+        \node at (2*0.62,-0.5) {\footnotesize output $=w_1(1)+w_2(3)+w_3(5)$};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The moving average is a convolution}
+  \begin{columns}[T]
+    \column{0.36\textwidth}
+    Slide a box kernel $[\tfrac15,\tfrac15,\tfrac15,\tfrac15,\tfrac15]$ over a noisy signal:
+    each output is the \textbf{average} of its neighbours, so the signal comes out
+    \textbf{smoothed}.
+    \vskip 6pt
+    Blur, smooth, denoise - all the same sliding-and-summing. Different weights give
+    different effects.
+    \column{0.64\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{moving_average.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Aside: convolution lives in probability too}
+  \begin{columns}[T]
+    \column{0.34\textwidth}
+    Roll \textbf{two dice} and add them. The distribution of the \emph{sum} is the
+    \textbf{convolution} of the two single-die distributions.
+    \vskip 6pt
+    Two flat uniforms slide across each other and their overlap is summed - giving the
+    triangle that peaks at $7$.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Same operation, different field. Convolution is a general tool, not an image trick.}}
+    \column{0.66\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{dice_conv.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{2D convolution, by hand}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Input $I$, kernel $W$ ($2\times2$). Slide $W$ over $I$; each output cell is the dot
+    product with the $2\times2$ window under it.
+    \[
+      I=\begin{bmatrix}1&2&0\\3&1&1\\0&2&4\end{bmatrix}\quad
+      W=\begin{bmatrix}0&1\\2&2\end{bmatrix}
+    \]
+    Top-left window $\begin{bmatrix}1&2\\3&1\end{bmatrix}$:
+    \[
+      s_{11}=1{\cdot}0+2{\cdot}1+3{\cdot}2+1{\cdot}2 = 10
+    \]
+    \column{0.5\textwidth}
+    Repeat for all four positions:
+    \[
+      S=\begin{bmatrix}10&4\\5&13\end{bmatrix}
+    \]
+    \vskip 4pt
+    In one line:
+    \[
+      s_{ij}=\sum_{m,n} I(i{+}m{-}1,\,j{+}n{-}1)\,w(m,n)
+    \]
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A $2\times2$ kernel on a $3\times3$ input gives a $2\times2$ output. The map
+      \emph{shrinks} - we fix that with padding in Section 4.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Convolution, step by step}
+  Watch the kernel slide. At each stop the output cell is a \textbf{weighted average} of the
+  window under it. \textbf{(Click to advance.)}
+  \vskip 1pt
+  {\footnotesize Here the kernel is a \emph{Gaussian blur} (center weighted most, divided by
+  $16$), so the patch comes out \emph{smoothed} on the same scale. Cells are shaded by value
+  - light is high.}
+  \vskip 3pt
+  \begin{center}
+    \only<1>{\includegraphics[width=0.80\linewidth]{conv_anim_0.pdf}}%
+    \only<2>{\includegraphics[width=0.80\linewidth]{conv_anim_1.pdf}}%
+    \only<3>{\includegraphics[width=0.80\linewidth]{conv_anim_2.pdf}}%
+    \only<4>{\includegraphics[width=0.80\linewidth]{conv_anim_3.pdf}}%
+    \only<5>{\includegraphics[width=0.80\linewidth]{conv_anim_4.pdf}}%
+    \only<6>{\includegraphics[width=0.80\linewidth]{conv_anim_5.pdf}}%
+    \only<7>{\includegraphics[width=0.80\linewidth]{conv_anim_6.pdf}}%
+    \only<8>{\includegraphics[width=0.80\linewidth]{conv_anim_7.pdf}}%
+    \only<9>{\includegraphics[width=0.80\linewidth]{conv_anim_8.pdf}}%
+  \end{center}
+\end{frame}
+
+\begin{frame}{The kernel zoo: hand-designed filters}
+  \begin{columns}[T]
+    \column{0.30\textwidth}
+    The same $3\times3$ machinery, seven classic kernels. \textbf{Predict} before you look:
+    \vskip 4pt
+    {\footnotesize
+    box blur $=\tfrac19\begin{bmatrix}1&1&1\\1&1&1\\1&1&1\end{bmatrix}$}
+    \vskip 3pt
+    {\footnotesize
+    Sobel X $=\begin{bmatrix}-1&0&1\\-2&0&2\\-1&0&1\end{bmatrix}$}
+    \pause
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Box blur averages a neighborhood; Sobel X responds to \emph{vertical} edges. Same
+      operation, different numbers.}}
+    \column{0.70\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{kernel_zoo.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why do those numbers find edges?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    An edge is where intensity \textbf{changes fast} - a jump in $f$. "Fast change" is
+    precisely what a \textbf{derivative} measures.
+    \vskip 6pt
+    On a pixel grid the derivative is a \textbf{difference of neighbours}:
+    \[
+      f'(x)\ \approx\ \frac{f(x{+}1)-f(x)}{1},
+    \]
+    which is just $f(x{+}1)-f(x)$: near zero on flat regions, large at an edge.
+    \column{0.54\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{edge_1d.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The simplest edge detector is a kernel}
+  A \emph{centered} difference looks one step each way:
+  \[
+    f(x{+}1)-f(x{-}1)\quad\Longleftrightarrow\quad\text{kernel }[\,{-}1\ \ 0\ \ 1\,].
+  \]
+  Slide $[{-}1\ 0\ 1]$ across a row and you read off its horizontal derivative - large
+  wherever a \textbf{vertical} edge sits. Its transpose finds horizontal edges.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      An edge detector is just a tiny kernel. The calculus hands us the numbers - no guessing
+      required.}}
+\end{frame}
+
+\begin{frame}{From a difference to Sobel}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    A bare $[{-}1\ 0\ 1]$ is \textbf{noisy} - it fires on every speckle. Fix it by
+    \textbf{averaging} down the column while differencing across the row:
+    \[
+      \underbrace{\begin{bmatrix}1\\2\\1\end{bmatrix}}_{\text{smooth}}
+      \underbrace{[{-}1\ 0\ 1]}_{\text{difference}}
+      =\begin{bmatrix}-1&0&1\\-2&0&2\\-1&0&1\end{bmatrix}
+    \]
+    That is \textbf{Sobel X}; its transpose is Sobel Y. Together they give the gradient -
+    edge strength and direction.
+    \column{0.60\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{sobel_build.pdf}\end{center}
+  \end{columns}
+  \vskip 2pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      Filters like these ran computer vision for 30 years - each hand-designed by an expert.
+      Hold that thought.}}
+\end{frame}
+
+\begin{frame}{The punchline: a CNN designs its own kernels}
+  A kernel is just a grid of numbers. Those numbers are \textbf{weights}.
+  \vskip 6pt
+  So instead of an expert choosing $\begin{bmatrix}-1&0&1\\-2&0&2\\-1&0&1\end{bmatrix}$, we
+  let \textbf{gradient descent} choose every entry - exactly as it has tuned every weight
+  since L02. The loss decides which detectors are worth having.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{
+      \textbf{Misconception, pre-empted.} CNN kernels are \emph{not} hand-engineered. They
+      are \emph{learned}. That is the whole point: we stop hand-designing feature detectors
+      (L01g) and let the network learn its own representation (L14).}}
+\end{frame}
+
+\begin{frame}{A kernel is a neuron you already know}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    A $3\times3$ kernel has \textbf{$9$ weights $+$ $1$ bias}. At each position it computes
+    \[
+      \textstyle z=\sum_{k} w_k x_k + b,\qquad a=\phi(z)
+    \]
+    an affine map followed by an activation - \textbf{exactly the L14 neuron}.
+    \vskip 6pt
+    Two differences only: it is wired to a small \emph{patch}, not the whole image; and the
+    \emph{same} neuron is reused at every location.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Nothing about training changes. One neuron, reused at every pixel.}}
+    \column{0.45\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        \foreach \i in {0,1,2}\foreach \j in {0,1,2}
+          \node[draw, minimum size=0.42cm, fill=armblue!10] (p\i\j) at (\j*0.46,-\i*0.46) {};
+        \node[circle, draw, fill=armorange!16, minimum size=0.8cm] (n) at (3.0,-0.46) {$\Sigma,\phi$};
+        \foreach \i in {0,1,2}\foreach \j in {0,1,2}
+          \draw[gray!55, ->] (p\i\j) -- (n);
+        \node[draw, minimum size=0.5cm, fill=paramgreen!12] (o) at (4.4,-0.46) {};
+        \draw[->, thick] (n) -- (o);
+        \node at (1.0,-1.65) {\footnotesize $3{\times}3$ patch};
+        \node at (4.4,-1.2) {\footnotesize output pixel};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Footnote: convolution vs cross-correlation}
+  Purists note: true \emph{convolution} flips the kernel before the dot product; what we
+  (and every deep-learning framework) just did, \emph{without} flipping, is technically
+  \textbf{cross-correlation}.
+  \vskip 8pt
+  PyTorch's \texttt{nn.Conv2d} computes cross-correlation and calls it convolution.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      It makes no difference in practice: the kernel is \emph{learned} either way, so it
+      would just learn the flipped version. No Fourier transforms required.}}
+\end{frame}
+
+% ================================================================
+\section{Why convolution is the right prior}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Why convolution is the right prior}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Locality and reuse do not just feel right - they collapse the parameter count.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Sparse connectivity}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A $3\times3$ input, a $2\times2$ kernel, a $2\times2$ output. Each output pixel wires
+    only to the $2\times2$ patch it came from - its \textbf{receptive field}.
+    \vskip 6pt
+    Count the links: $4$ outputs $\times\,4$ inputs each $=\textbf{16}$. A dense layer would
+    wire every output to all $9$ inputs: $9\times4=\textbf{36}$.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Locality alone already cuts the connections. And it scales: bigger images, far bigger
+      savings.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        \foreach \i in {0,1,2}\foreach \j in {0,1,2}
+          \node[draw, minimum size=0.5cm, fill=gray!8] (i\i\j) at (\j*0.55,-\i*0.55) {};
+        % highlight top-left 2x2 receptive field
+        \foreach \i in {0,1}\foreach \j in {0,1}
+          \node[draw=armblue, very thick, minimum size=0.5cm] at (\j*0.55,-\i*0.55) {};
+        \foreach \i in {0,1}\foreach \j in {0,1}
+          \node[draw, minimum size=0.5cm, fill=paramgreen!12] (o\i\j) at (2.7+\j*0.55,-0.28-\i*0.55) {};
+        \foreach \i in {0,1}\foreach \j in {0,1}
+          \draw[armblue!70, ->] (i\i\j) -- (o00);
+        \node at (0.55,-1.75) {\footnotesize $2{\times}2$ patch};
+        \node at (2.95,-1.75) {\footnotesize one output};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Parameter sharing}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Those $16$ connections do not use $16$ different weights. Every output pixel uses the
+    \emph{same} $4$ kernel weights - the kernel is \textbf{shared} across all positions.
+    \vskip 6pt
+    So: $4$ distinct weights, not $36$. Scale it up - a $100\times100\times3$ image, one
+    $5\times5$ filter, same padding:
+    \[
+      \underbrace{5\cdot5\cdot3}_{75}\ \text{vs}\ \underbrace{300{,}000{,}000}_{\text{dense}}
+    \]
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{param_explosion.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Regularization by architecture}
+  Fewer parameters plus the locality assumption means a \textbf{restricted hypothesis
+  space} - one shaped to match how images actually work.
+  \vskip 8pt
+  \begin{itemize}
+    \item Weight decay (L15) \emph{shrinks} weights toward zero.
+    \item Convolution \emph{removes} them outright, and ties the survivors together.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{
+      The strongest regularizer is not a penalty - it is the \textbf{right inductive bias}.
+      Trees win on tabular data (ch4, L14) for the same reason CNNs win on images: the
+      model's assumptions match the data's structure.}}
+\end{frame}
+
+% (translation-invariance frame removed per instructor request, 2026-07-13)
+
+% ================================================================
+\section{The components of a conv layer}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The components of a conv layer}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Four knobs turn the sliding dot product into a real layer: channels, padding, stride,
+      pooling.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Channels, done properly}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Color returns: an RGB input is a \textbf{depth-3 tensor}. One filter spans the
+    \emph{full} depth and \textbf{sums across channels} - it outputs \emph{one} feature map,
+    not three.
+    \vskip 4pt
+    {\footnotesize
+    Patch $R{=}\begin{bmatrix}1&0\\2&1\end{bmatrix}$,
+    $G{=}\begin{bmatrix}0&3\\1&1\end{bmatrix}$;\quad
+    filter $R{=}\begin{bmatrix}1&0\\0&1\end{bmatrix}$,
+    $G{=}\begin{bmatrix}2&1\\0&0\end{bmatrix}$
+    \[
+      \underbrace{(1{\cdot}1{+}0{\cdot}0{+}2{\cdot}0{+}1{\cdot}1)}_{R:\,2}
+      +\underbrace{(0{\cdot}2{+}3{\cdot}1{+}1{\cdot}0{+}1{\cdot}0)}_{G:\,3}=5
+    \]}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      $3$ channels \emph{in} does not mean $3$ maps \emph{out}. $N$ filters give $N$ maps -
+      which become the next layer's depth-$N$ input.}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize]
+        \foreach \c/\col in {0/armred!25,1/paramgreen!25,2/armblue!25}
+          \node[draw, minimum size=1.3cm, fill=\col] at (\c*0.28,-\c*0.28) {};
+        \node at (0.9,-1.4) {\footnotesize R, G, B (depth 3)};
+        \draw[->, thick] (1.9,-0.4) -- (3.0,-0.4);
+        \node[draw, minimum size=1.1cm, fill=paramgreen!12] at (3.7,-0.4) {};
+        \node at (3.7,-1.4) {\footnotesize one map};
+        \node at (2.45,0.15) {\footnotesize sum};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A layer has many kernels}
+  One kernel gives one map. A real conv layer learns \textbf{many} kernels at once - each its
+  own detector - so the layer outputs a \textbf{stack} of maps (the next layer's depth).
+  \vskip 2pt
+  \begin{center}\includegraphics[width=0.72\linewidth]{multi_kernel.png}\end{center}
+  \vskip 1pt
+  \begin{center}\small
+    Conv\_1 learns $n_1$ kernels, Conv\_2 learns $n_2$ - a whole CNN, end to end.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The conv-layer parameter formula}
+  \begin{center}
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.8\linewidth}{\centering\large
+      $\text{params} = k \cdot k \cdot C_{\text{in}} \cdot C_{\text{out}} + C_{\text{out}}$
+      \\[2pt]
+      {\footnotesize (one $k\times k$ filter per output channel, spanning the full input
+      depth, plus one bias each)}}}
+  \end{center}
+  \vskip 10pt
+  Two cases by hand:
+  \begin{itemize}
+    \item $3\times3$ conv, RGB $\to 16$ maps: $\;3\cdot3\cdot3\cdot16 + 16 = \textbf{448}$.
+    \item the Section-3 $5\times5$ filter on RGB: $\;5\cdot5\cdot3\cdot1 + 1 = \textbf{76}$.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      This formula and the output-size formula (next) are the \textbf{two tools} for reading
+      any architecture - we use them all through L17 and the homework.}}
+\end{frame}
+
+\begin{frame}{Padding: valid vs same}
+  \begin{columns}[T]
+    \column{0.34\textwidth}
+    Without padding, every conv \emph{shrinks} the map - so depth is capped: eventually
+    there is nothing left to convolve.
+    \vskip 6pt
+    Pad the border with zeros ("same" padding) and the output keeps the input's size. Depth
+    becomes free.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      "valid" $=$ no padding (shrinks). "same" $=$ pad to preserve size.}}
+    \column{0.66\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{conv_arithmetic.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What stride controls}
+  \textbf{Stride} $s$ is how far the window jumps between stops. Bigger stride $=$ fewer
+  stops $=$ smaller output (and cheaper).
+  \vskip 4pt
+  \begin{center}\includegraphics[width=0.92\linewidth]{stride_demo.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{Stride and the output-size formula}
+  \textbf{Stride} $s$ is how far the window jumps each step. Larger stride $=$ fewer stops
+  $=$ smaller output.
+  \begin{center}
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.6\linewidth}{\centering\large
+      $o = \left\lfloor \dfrac{i - k + 2p}{s} \right\rfloor + 1$}}
+  \end{center}
+  \vskip 6pt
+  The classic exam question, three cases:
+  \begin{itemize}
+    \item $i{=}28,\ k{=}3,\ p{=}1,\ s{=}1:\ \lfloor(28-3+2)/1\rfloor+1 = \textbf{28}$ (same).
+    \item $i{=}28,\ k{=}5,\ p{=}0,\ s{=}1:\ \lfloor(28-5)/1\rfloor+1 = \textbf{24}$.
+    \item $i{=}32,\ k{=}3,\ p{=}0,\ s{=}2:\ \lfloor(32-3)/2\rfloor+1 = \textbf{15}$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Pooling}
+  Pooling downsamples each map with a small window and \textbf{no weights}. $2\times2$
+  windows, stride $2$:
+  \vskip 2pt
+  \begin{center}\includegraphics[width=0.90\linewidth]{pooling_demo.pdf}\end{center}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      \textbf{Max} keeps the strongest response in each window; \textbf{average} smooths.
+      Pooling downsamples, cheapens later layers, and buys a little translation invariance.}}
+\end{frame}
+
+% ================================================================
+\section{Your first CNN}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Your first CNN}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Stack the blocks, track the tensor, and let autograd do the rest.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The training loop, in 60 seconds (recall L15)}
+  Nothing about training changes for a CNN. The L15 loop, unchanged:
+  \vskip 8pt
+  \begin{center}
+    \begin{tikzpicture}[font=\small, >=Latex, node distance=0.35cm,
+      b/.style={draw, rounded corners, minimum height=0.8cm, fill=armblue!10, align=center}]
+      \node[b] (f) {forward};
+      \node[b, right=of f] (l) {loss};
+      \node[b, right=of l] (z) {\texttt{zero\_grad}};
+      \node[b, right=of z] (bw) {backward};
+      \node[b, right=of bw] (s) {step};
+      \draw[->] (f)--(l); \draw[->] (l)--(z); \draw[->] (z)--(bw); \draw[->] (bw)--(s);
+      \draw[->] (s) to[bend left=28] (f);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Forward pass, compute loss, clear old gradients, backprop, update. The only new thing
+      today is \emph{which layers} sit inside the forward pass.}}
+\end{frame}
+
+\begin{frame}{Anatomy of a conv stack}
+  \texttt{[conv $\to$ ReLU $\to$ pool] $\times 2$ $\to$ flatten $\to$ dense $\to$ softmax},
+  a $28\times28$ input:
+  \vskip 4pt
+  \begin{center}\footnotesize
+    \begin{tabular}{l c r}
+      \textbf{Layer} & \textbf{Output shape} & \textbf{Params}\\
+      \hline
+      input & $1\times28\times28$ & $0$\\
+      conv $1{\to}8$, $3\times3$, pad $1$ & $8\times28\times28$ & $80$\\
+      ReLU & $8\times28\times28$ & $0$\\
+      maxpool $2$ & $8\times14\times14$ & $0$\\
+      conv $8{\to}16$, $3\times3$, pad $1$ & $16\times14\times14$ & $1{,}168$\\
+      ReLU & $16\times14\times14$ & $0$\\
+      maxpool $2$ & $16\times7\times7$ & $0$\\
+      flatten & $784$ & $0$\\
+      dense $784{\to}10$ & $10$ & $7{,}850$\\
+      \hline
+      \textbf{total} & & $\mathbf{9{,}098}$\\
+    \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      Two things to notice: the \textbf{ReLU} matters - without it, stacked convs collapse
+      into one big conv (L14's linearity lesson); and \textbf{pooling has zero parameters}.}}
+\end{frame}
+
+\begin{frame}{What the layers learn}
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    Train that CNN on Fashion-MNIST and look at its first-layer kernels: edge and texture
+    detectors \emph{nobody designed}.
+    \vskip 6pt
+    Deeper layers compose these into parts, then objects.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      This is L14's XOR lesson at scale: the network re-coordinatises pixels until a plain
+      linear head can separate the classes.}}
+    \column{0.68\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{feature_maps.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{The canonical snippet}
+  The Section-5 architecture, in PyTorch:
+\begin{lstlisting}
+import torch.nn as nn
+
+net = nn.Sequential(
+    nn.Conv2d(1, 8, 3, padding=1),  nn.ReLU(), nn.MaxPool2d(2),
+    nn.Conv2d(8, 16, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+    nn.Flatten(),
+    nn.Linear(16 * 7 * 7, 10),
+)
+# training loop is the same as L15:
+# forward -> loss -> zero_grad -> backward -> step
+\end{lstlisting}
+  \vskip 2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Autograd differentiates a conv like anything else - the L15 promise ("reverse mode:
+      one sweep, any architecture"), kept.}}
+\end{frame}
+
+\begin{frame}{Why this is fast}
+  A convolution unrolls into a large \textbf{matrix multiply}: every output pixel is a dot
+  product, and all of them stack into one big matmul.
+  \vskip 8pt
+  That is exactly the shape a \textbf{GPU} eats (L14's why-GPUs frame) - thousands of
+  identical multiply-adds in parallel.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Same reason a $60$-million-parameter CNN trains overnight rather than over a decade:
+      the operation maps perfectly onto parallel hardware.}}
+\end{frame}
+
+\begin{frame}{Payoff: CNN vs MLP, same data}
+  \begin{columns}[T]
+    \column{0.34\textwidth}
+    Fashion-MNIST, the same subsample and epochs as the ch5 practical. The L15 MLP baseline
+    vs this small CNN:
+    \vskip 6pt
+    accuracy is \textbf{about equal}, but the CNN uses \textbf{$12\times$ fewer} weights.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      The \emph{architecture}, not raw capacity, did the work. On richer images (L17) the
+      gap becomes a chasm.}}
+    \column{0.66\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{cnn_vs_mlp.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item A dense net cannot afford pixels and ignores their structure.
+    \item Convolution $=$ a \textbf{local}, \textbf{shared} neuron - locality and weight
+      reuse, built in.
+    \item One filter spans the \emph{full input depth} and outputs \emph{one} map;
+      $N$ filters $\to N$ maps.
+    \item Two formulas run everything: $o=\lfloor(i-k+2p)/s\rfloor+1$ and
+      $\text{params}=k\,k\,C_{\text{in}}C_{\text{out}}+C_{\text{out}}$.
+    \item Pooling has \textbf{zero parameters}; it downsamples and buys a little invariance.
+    \item Kernels are \textbf{learned}, not hand-designed.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      \textbf{Next:} we can build a small CNN. What did 10 years of architecture design buy?
+      The ImageNet story - from $26\%$ error to superhuman (L17).}}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L16 CNN Foundations (ch6_cnn). Built 2026-07-13 from
+%   L16_cnn_foundations_OUTLINE.md (approved) + CNN_CHAPTER_PLAN.md.
+%
+%   Sources consulted (REDERIVE, read-only): LMU I2DL cnn1/{conv2d,
+%   properties-of-convolution, components, pooling, architecture}.tex; 1D-first idea from
+%   cnn2/convolution-types. Credit line on title frame per instructor decision (CC BY 4.0).
+%
+%   Figures (py_src -> fig, ma venv): image_numbers.pdf, pixel_shuffle.pdf (pixel_shuffle.py);
+%   kernel_zoo.pdf (kernel_zoo.py, naive NumPy conv = HW1 Part A loop); param_explosion.pdf;
+%   conv_arithmetic.pdf; feature_maps.pdf + cnn_vs_mlp.pdf (feature_maps.py, cnn_vs_mlp.py -
+%   chapter SmallCNN, 9098 params, 15k Fashion-MNIST subsample, 15 epochs, seed 509).
+%   Borrowed montage images (COPY-IMG whitelist, fig/borrowed/): tesla_autopilot.jpg,
+%   coronatrack.jpeg, cityscapes_visual.png, colorization.png.
+%
+%   Key decisions:
+%   - cnn_vs_mlp reframed as accuracy(tie)+params(12x) bars, NOT accuracy-vs-epoch: on
+%     Fashion-MNIST the two nets tie (~86%), so the curve read as "MLP wins" (false to the
+%     lesson). The honest, clear payoff is parameter efficiency. Config bumped from the
+%     plan's 8k/5ep (where the MLP won) to 15k/15ep + full 10k test (CNN edges ahead).
+%   - No photo credit line (instructor instruction 2026-07-13: assets I'm told to use are
+%     cleared; do not add licensing/credit notes for them).
+%   - 7 kernels incl. Gaussian (reviewer B1); training-loop recap frame included (B2).
+%
+%   v2 revision (2026-07-13, instructor requests): expanded the image-fundamentals front
+%   half and added visual/animated aids. New figures (py_src -> fig, ma venv):
+%   eye_cones.pdf (trichromacy), rgb_channels.pdf + kernel_zoo.pdf + sobel_build.pdf (now on
+%   skimage's public-domain 'astronaut' test image - the ethical Lena replacement, per the
+%   "better demo image / Lera" request), image_as_function.pdf (synthetic image + horizontal
+%   intensity profiles), edge_1d.pdf (edge = derivative = difference of neighbours),
+%   conv_anim_0..8.pdf (9-frame flip-book convolution animation, shown via \only<n>),
+%   stride_demo.pdf, pooling_demo.pdf. New frames: eye/RGB, image-as-function, "Where CNNs
+%   came from" (LeCun/MNIST/LeNet), the animation, a 3-frame edges-as-derivatives arc
+%   (replacing the single Sobel-dissected frame), "What stride controls", visual pooling.
+%   REMOVED: the translation-invariance myth-buster frame (instructor request); recap bullet
+%   updated to match. Pomegranate stays only as the cold-open running example.
+%
+%   v3 revision (2026-07-13, instructor requests): 1D case expanded - new frames
+%   "moving average is a convolution" (moving_average.pdf) and "convolution lives in
+%   probability too" (dice_conv.pdf: two-dice sum = convolution of uniforms). conv_anim
+%   redesigned: a Gaussian-blur kernel computing a WEIGHTED AVERAGE (/16) on a value-shaded
+%   grayscale patch, fixed geometry (no click-jitter). New "A layer has many kernels" frame
+%   embedding multi_kernel.png (LeNet pipeline, downloaded per instructor - shows the map
+%   stacks). Fixed the slide-18 formula/figure overlap on the edge-derivative frame.
+%   pooling_demo redesigned to a 1x4 row of the four windows (max/avg each). Demo image for
+%   operations is skimage 'astronaut' (public domain).
+%
+%   Forward pointer: L17 CNN Architectures - ImageNet story LeNet -> AlexNet -> VGG -> ResNet;
+%   ResNet residual = "boosting in depth" (ch4 callback). torchvision needed for L17
+%   pretrained_filters.py (install into ma before starting L17).
