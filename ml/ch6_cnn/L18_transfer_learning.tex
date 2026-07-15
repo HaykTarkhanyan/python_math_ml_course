@@ -1,0 +1,479 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+% trunk diagram colors for the freeze/unfreeze animation
+\colorlet{frzcol}{gray!22}
+\colorlet{trncol}{paramgreen!30}
+
+% one row of the ResNet trunk: colors for conv1, block1..block4, head
+\newcommand{\trunkrow}[6]{%
+  \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=0.3cm,
+    blk/.style={draw, rounded corners, minimum height=1.35cm, minimum width=1.5cm,
+      align=center}]
+    \node[blk, fill=#1] (c1) {conv1};
+    \node[blk, fill=#2, right=of c1] (b1) {block 1};
+    \node[blk, fill=#3, right=of b1] (b2) {block 2};
+    \node[blk, fill=#4, right=of b2] (b3) {block 3};
+    \node[blk, fill=#5, right=of b3] (b4) {block 4};
+    \node[blk, fill=#6, right=of b4, minimum width=1.7cm] (hd) {\textbf{new head}\\(fc)};
+    \draw[->] (c1) -- (b1); \draw[->] (b1) -- (b2); \draw[->] (b2) -- (b3);
+    \draw[->] (b3) -- (b4); \draw[->] (b4) -- (hd);
+    \node[left=0.35cm of c1, align=center] (ph) {photo};
+    \draw[->] (ph) -- (c1);
+    \node[right=0.35cm of hd, align=center] (out) {grade};
+    \draw[->] (hd) -- (out);
+    \draw[->, gray] (0.0,-1.15) -- (9.3,-1.15);
+    \node[gray, anchor=west] at (0.0,-1.44) {\footnotesize edges, textures (generic)};
+    \node[gray, anchor=east] at (9.3,-1.44) {\footnotesize task-specific};
+    % legend
+    \node[draw, fill=frzcol, minimum size=0.28cm, anchor=west] (lf) at (10.6,-1.05) {};
+    \node[anchor=west] at (11.0,-1.05) {\footnotesize frozen};
+    \node[draw, fill=trncol, minimum size=0.28cm, anchor=west] (lt) at (10.6,-1.5) {};
+    \node[anchor=west] at (11.0,-1.5) {\footnotesize training};
+  \end{tikzpicture}}
+
+\title{Lecture 18: Transfer Learning and CNNs in Practice}
+\subtitle{Standing on ImageNet's shoulders}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The 2,000-image reality}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    The sorting line finally needs its own model: grade each fruit as \textbf{export},
+    \textbf{market}, or \textbf{juice}. You spent a week collecting and labeling
+    \textbf{2,000 photos}.
+    \vskip 6pt
+    \textbf{Predict:} you train the L17 ResNet-18 on them, from scratch. What happens?
+    \vskip 6pt
+    \onslide<2->{%
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      It \textbf{memorizes} the training set and falls apart on new fruit:
+      \textbf{11.7 million} parameters vs \textbf{2,000} examples - the overfitting
+      story ([06]) at its bluntest.}}
+    \vskip 6pt
+    The fix is not a smaller net. It is to \textbf{not start from scratch}.}
+    \column{0.42\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{src_pomegranate.jpg}\\[2pt]
+      {\scriptsize 2,000 of these - and that is all you get.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Transfer learning}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reuse features, not just architectures}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Somebody already trained a net on 1.3 million images. Most of what it learned is
+      about \emph{seeing}, not about their classes.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Why transfer works}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    L16: conv layers learn a \textbf{feature hierarchy} - edges $\to$ textures $\to$
+    parts $\to$ objects.
+    \vskip 6pt
+    L17: a pretrained net's conv1 filters \emph{are} the kernel zoo - edge and color
+    detectors nobody designed.
+    \vskip 6pt
+    Edges and textures are the \textbf{same} for pomegranates, pets, and X-rays. Only the
+    late, task-specific layers need \emph{your} data.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A pretrained trunk is a general-purpose \textbf{visual feature extractor}. The
+      hierarchy is the reusable asset.}}
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=0.72\linewidth]{pretrained_filters.pdf}\\[2pt]
+      {\scriptsize The L17 payoff figure: learned on ImageNet, useful everywhere.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Two recipes}
+  \textbf{(Click to unfreeze.)}
+  \vskip 4pt
+  \begin{center}
+    \only<1>{\resizebox{0.97\textwidth}{!}{\trunkrow{frzcol}{frzcol}{frzcol}{frzcol}{frzcol}{trncol}}}%
+    \only<2>{\resizebox{0.97\textwidth}{!}{\trunkrow{frzcol}{frzcol}{frzcol}{frzcol}{trncol}{trncol}}}%
+    \only<3>{\resizebox{0.97\textwidth}{!}{\trunkrow{frzcol}{frzcol}{trncol}{trncol}{trncol}{trncol}}}%
+    \only<4>{\resizebox{0.97\textwidth}{!}{\trunkrow{trncol}{trncol}{trncol}{trncol}{trncol}{trncol}}}%
+  \end{center}
+  \vskip 2pt
+  \parbox[t][1.05cm][t]{\textwidth}{\small
+    \only<1>{\textbf{Recipe 1 - feature extraction.} Freeze the whole trunk; train only a
+      new head. The trunk is a fixed feature extractor - tiny data suffices.}%
+    \only<2>{\textbf{Recipe 2 - fine-tuning.} Start by unfreezing the \emph{top} block -
+      the most task-specific features - with a \textbf{small} learning rate.}%
+    \only<3>{With more data, unfreeze deeper. Early layers stay frozen longest - their
+      features are the most generic.}%
+    \only<4>{With enough data, everything trains - still at a small LR. Better ceiling,
+      more ways to overfit.}}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      \textbf{Feature extraction} $=$ new head only, tiny data suffices.
+      \textbf{Fine-tuning} $=$ also nudge the trunk - needs more data, buys a better
+      ceiling.}}
+\end{frame}
+
+\begin{frame}{Which recipe? Two questions decide}
+  \begin{center}
+    \begin{tikzpicture}[font=\small, >=Latex]
+      % axes
+      \draw[->, thick] (-0.1,0) -- (10.9,0);
+      \draw[->, thick] (0,-0.1) -- (0,5.5);
+      \node[anchor=north] at (2.6,-0.08) {\footnotesize small};
+      \node[anchor=north] at (8.0,-0.08) {\footnotesize large};
+      \node[anchor=north, gray] at (5.3,-0.5) {\textbf{your dataset size}};
+      \node[anchor=east, rotate=90, gray] at (-0.55,2.4) {\textbf{domain similarity}};
+      \node[anchor=east] at (-0.12,1.3) {\footnotesize far};
+      \node[anchor=east] at (-0.12,4.0) {\footnotesize close};
+      % cells
+      \fill[paramgreen!14] (0.15,2.7) rectangle (5.25,5.25);
+      \fill[paramgreen!24] (5.35,2.7) rectangle (10.6,5.25);
+      \fill[armred!10]     (0.15,0.15) rectangle (5.25,2.6);
+      \fill[armorange!16]  (5.35,0.15) rectangle (10.6,2.6);
+      \node[align=center] at (2.7,4.15) {\textbf{feature extraction}\\[1pt]
+        \footnotesize freeze the trunk,\\[-1pt] \footnotesize train the head};
+      \node[align=center] at (7.95,4.15) {\textbf{fine-tune}\\[1pt]
+        \footnotesize unfreeze some or all,\\[-1pt] \footnotesize small LR};
+      \node[align=center] at (2.7,1.25) {\textbf{hardest case}\\[1pt]
+        \footnotesize extract from \emph{earlier} layers\\[-1pt]
+        \footnotesize + a simple head; get more data};
+      \node[align=center] at (7.95,1.25) {\textbf{fine-tune everything}\\[1pt]
+        \footnotesize pretrained init still helps};
+      % running example marker
+      \node[armred] at (1.35,3.25) {\textbullet};
+      \node[armred, anchor=west] at (1.55,3.25) {\footnotesize the sorting line};
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Fine-tuning in practice: you know all of this}
+  \begin{itemize}
+    \item \textbf{Small learning rate.} You start \emph{near a good minimum} - a big step
+      jumps away from everything ImageNet taught the net (the L15 LR intuition).
+    \item \textbf{Augmentation on.} Flips, crops, color jitter stretch 2,000 photos
+      further (L15).
+    \item \textbf{Early stopping} on a validation split - the overfitting guardrail
+      ([06], L15).
+    \item \textbf{Freeze first, unfreeze gradually} - the only genuinely new move today.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Fine-tuning is the L15 toolkit applied near a good minimum. Nothing new to learn -
+      just new discipline.}}
+\end{frame}
+
+\begin{frame}{The BatchNorm gotcha}
+  You froze the trunk: \texttt{requires\_grad = False} on every weight. Accuracy is
+  still bad. Why?
+  \vskip 6pt
+  \begin{itemize}
+    \item BatchNorm normalizes with \textbf{running statistics} collected from data
+      (L15 owns the formula).
+    \item Those statistics are \textbf{not weights}: in \texttt{train()} mode they keep
+      updating even when every weight is frozen.
+    \item Small batches from \emph{your} small dataset drift them away from the ImageNet
+      statistics the frozen weights expect - accuracy drops \textbf{silently}.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      \textbf{Practical rule:} when the trunk is frozen, put its BN layers in
+      \textbf{eval mode}. And whenever a "frozen" model underperforms - suspect the BN
+      statistics first.}}
+\end{frame}
+
+\begin{frame}[fragile]{The canonical snippet}
+  The whole idea, in eight lines:
+\begin{lstlisting}
+from torchvision import models
+import torch, torch.nn as nn
+
+model = models.resnet18(weights="IMAGENET1K_V1")  # 11.7M trained weights
+for p in model.parameters():
+    p.requires_grad = False                       # freeze the trunk
+model.fc = nn.Linear(model.fc.in_features, 3)     # new head: 3 grades
+optimizer = torch.optim.SGD(model.fc.parameters(),
+                            lr=0.001, momentum=0.9)
+# then: the L15 training loop, unchanged - only the head learns
+\end{lstlisting}
+  \vskip 2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      The new \texttt{fc} is created \emph{after} the freeze, so it trains by default -
+      and it is the only thing the optimizer sees.}}
+\end{frame}
+
+\begin{frame}{What transfer buys you}
+  \begin{columns}[T]
+    \column{0.36\textwidth}
+    Same small dataset, three ways to train:
+    \vskip 4pt
+    \begin{itemize}
+      \item \textbf{from scratch}: slow, plateaus low - 11.7M parameters memorize
+        2,000 photos;
+      \item \textbf{feature extraction}: fast and good;
+      \item \textbf{fine-tune}: the best ceiling.
+    \end{itemize}
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      These are the \emph{typical shapes}. You will measure the real curves yourself on
+      Oxford-IIIT Pets in HW3.}}
+    \column{0.64\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{transfer_curves.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{When transfer fails}
+  \begin{itemize}
+    \item \textbf{Domain too far.} Spectrograms, medical volumes, radar - ImageNet
+      features stop being the right vocabulary. Expect to unfreeze more, or to rethink.
+    \item \textbf{Bias mismatch.} ImageNet is object-centric daylight photography; if
+      your data is not, the pretrained assumptions can work against you.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      \textbf{Classic silent bug:} normalizing inputs with \emph{your} dataset's
+      statistics. The pretrained net expects \textbf{its own} training statistics -
+      ImageNet's mean $(0.485, 0.456, 0.406)$ and std $(0.229, 0.224, 0.225)$ - and
+      quietly underperforms on anything else.}}
+\end{frame}
+
+% ================================================================
+\section{Seeing what the net sees}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Trust, but verify}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The fine-tuned model scores well. Before it grades a single truckload: \emph{what
+      is it actually looking at?}
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Grad-CAM: where is the net looking?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \small
+    Three steps, no new math:
+    \vskip 3pt
+    \begin{enumerate}
+      \item<1-> Take the \textbf{last conv block's feature maps} - 512 coarse $7\times7$
+        maps in ResNet-18: the most abstract "where" information left.
+      \item<2-> \textbf{Weight each map by the gradient} of the class score with respect
+        to it - one averaged number per map.
+      \item<3-> \textbf{Sum, ReLU, upsample} - a heatmap of the evidence \emph{for} that
+        class.
+    \end{enumerate}
+    \onslide<3->{\vskip 3pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      One forward, one backward - works on any trained CNN, no retraining.}}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \only<1>{\includegraphics[width=0.62\linewidth]{gradcam_anim_0.pdf}}%
+      \only<2>{\includegraphics[width=0.62\linewidth]{gradcam_anim_1.pdf}}%
+      \only<3>{\includegraphics[width=0.62\linewidth]{gradcam_anim_2.pdf}}%
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  {\scriptsize\color{gray} Selvaraju et al., "Grad-CAM: Visual Explanations from Deep
+  Networks via Gradient-based Localization", ICCV 2017.}
+\end{frame}
+
+\begin{frame}{The verdict on our photo}
+  \begin{columns}[T]
+    \column{0.38\textwidth}
+    No cherry-picking: an ImageNet ResNet-18, one forward and one backward, our photo.
+    \vskip 6pt
+    Top-1: \textbf{pomegranate}, $p = 0.99$. The evidence sits on the \textbf{fruit} -
+    the aril clusters - not on the board or the basket.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The interpretability module ([05]) asked which \textbf{features} matter -
+      importance, SHAP. Grad-CAM asks which \textbf{pixels}. Same question, new
+      coordinates.}}
+    \column{0.62\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{gradcam.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Clever Hans, the vision edition}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=0.62\linewidth]{clever_hans.jpg}
+    \end{center}
+    {\small Berlin, early 1900s: the horse \textbf{Clever Hans} "did arithmetic",
+    tapping answers with a hoof. A 1907 investigation showed he was reading his
+    questioner's \emph{unconscious posture}. Right answers, wrong reason.}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=0.62\linewidth]{wolf_husky_lime.png}
+    \end{center}
+    {\small A wolf-vs-husky classifier, trained where every wolf photo had \textbf{snow}
+    in the background. It looked accurate - and was a \textbf{snow detector}
+    (Ribeiro et al. 2016 - the LIME paper, [05]).}
+  \end{columns}
+  \vskip 2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+      On the sorting line: is the model grading the \textbf{fruit}, or the
+      \textbf{conveyor belt} behind it? High accuracy is not right reasons. Grad-CAM is
+      the five-minute check before you trust a model.}}
+  \vskip 2pt
+  {\scriptsize\color{gray} Ribeiro et al., "Why Should I Trust You?": Explaining the
+  Predictions of Any Classifier, KDD 2016.}
+\end{frame}
+
+% ================================================================
+\section{The economics of small data}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The real budget is labels}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      GPUs are rented by the hour. Human attention is the expensive part.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Somebody has to draw the boxes}
+  \begin{itemize}
+    \item Your 2,000 labeled photos meant somebody \textbf{looked at every single one} -
+      hours of human attention, plus a second pass wherever labelers disagreed.
+    \item Costs climb with detail: a class label is a \textbf{click}; a bounding box is a
+      \textbf{drawing}; a per-pixel mask is a \textbf{tracing}. Each step up costs far
+      more attention per image.
+    \item Real projects spend their budget on \textbf{labels and label quality}, not on
+      GPUs.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Pretraining + transfer trade \textbf{your labels} for compute \textbf{somebody else
+      already spent}. That is why transfer is the default - economically, not just
+      statistically.}}
+  \vskip 6pt
+  {\small Hold that thought: L19's detection tasks need those \emph{boxes} - keep the
+  price in mind.}
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item With 2,000 photos, \textbf{never start from scratch} - reuse the feature
+      hierarchy someone already paid to learn.
+    \item \textbf{Feature extraction}: freeze the trunk, train the head.
+      \textbf{Fine-tune}: unfreeze gradually, small LR + augmentation + early stopping.
+      The $2\times2$ quadrant picks between them.
+    \item Frozen trunk $\Rightarrow$ \textbf{BN layers to eval mode}; suspect BN
+      statistics whenever a frozen model underperforms.
+    \item \textbf{Grad-CAM}: gradient-weighted activation maps show \emph{where} the
+      evidence is - the five-minute Clever Hans check.
+    \item \textbf{Labels are the budget.} Transfer trades your labels for someone else's
+      compute.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      \textbf{Next:} the classifier is built and audited. But the belt camera sees
+      \emph{ten} fruit at once - object detection and segmentation (L19).}}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L18 Transfer Learning and CNNs in Practice (ch6_cnn). Built 2026-07-14 from
+%   L18_transfer_learning_OUTLINE.md (approved, 2 interview rounds) + CNN_CHAPTER_PLAN.md.
+%   No LMU upstream - own material (transfer learning and Grad-CAM are not in the LMU
+%   CNN decks). Facts sanity-checked against the web, not memory (2026-07-14):
+%   - transfer recipe vs the official PyTorch transfer-learning tutorial
+%     (docs.pytorch.org/tutorials/beginner/transfer_learning_tutorial.html): weights=
+%     "IMAGENET1K_V1", fc replacement via fc.in_features, freeze via requires_grad=False,
+%     optimizer on fc.parameters() only, SGD lr=0.001 momentum=0.9, ImageNet
+%     normalization mean (0.485,0.456,0.406) / std (0.229,0.224,0.225).
+%   - Grad-CAM vs Selvaraju et al., arXiv:1610.02391 (ICCV 2017): last conv layer's maps,
+%     alpha_k = GAP of gradients of class score wrt A^k, weighted sum + ReLU, upsample.
+%   - wolf-vs-husky: Ribeiro et al., KDD 2016 (arXiv:1602.04938), Figure 11 - classifier
+%     trained so every wolf photo had snow; predicts from the snow.
+%
+%   Figures (py_src -> fig, ma venv):
+%   - gradcam.pdf + gradcam_anim_0..2.pdf (gradcam.py): REAL run - torchvision resnet18
+%     IMAGENET1K_V1 (11,689,512 params, hence "11.7M" on the slides), one forward+backward
+%     on CPU, layer4 hooked, src_pomegranate.jpg. Actual top-1: 'pomegranate' p=0.995
+%     (top-3: strawberry 0.004, trifle 0.001) - the p=0.99 on the verdict frame is the
+%     measured value. Overlay uses per-pixel alpha (peak ~0.45, gamma 1.5) so the heatmap
+%     reads as a spotlight over an already-red photo.
+%   - transfer_curves.pdf (transfer_curves.py): SCHEMATIC - the HW3 notebook that will
+%     produce real metrics does not exist yet, so the figure shows the three canonical
+%     curve shapes with unlabeled axes and a printed "schematic - typical shapes, real
+%     curves come with HW3" disclaimer. The script auto-switches to plotting measured
+%     curves once py_src/data/hw3_metrics.csv appears (fails loudly on malformed files).
+%   - pretrained_filters.pdf is L17's figure (generated by the L17 build), embedded here
+%     as the "conv1 filters ARE the kernel zoo" callback - same file, not duplicated.
+%   Borrowed (WEB-IMG, fig/borrowed/): wolf_husky_lime.png (the actual Figure 11 cropped
+%   at 300 dpi from the arXiv LIME paper PDF), clever_hans.jpg (historic von Osten photo,
+%   Wikimedia Commons "Osten und Hans.jpg").
+%
+%   Key decisions (details in L18_DECISIONS.md):
+%   - 19 frames total vs the outline's ~16: the two-recipes frame split from the quadrant
+%     frame (one idea per frame), and Grad-CAM split into idea (ANIM) + verdict (static).
+%   - Mandatory ANIM = TikZ \only freeze/unfreeze trunk (4 clicks); optional Grad-CAM
+%     ANIM also built (3 clicks: photo -> 7x7 map -> overlay).
+%   - Interview-rejected extras honored: no live Colab demo, no in-class labeling
+%     activity, no domain-gap failure demo. BN gotcha = claim + rule only, no evidence
+%     figure. Labeling economics kept qualitative - zero invented numbers.
+%
+%   Forward pointer: L19 Vision Tasks - detection (IoU/NMS, YOLO) + segmentation (U-Net),
+%   chapter close. HW3 = fine-tune on Oxford-IIIT Pets + Grad-CAM audit.

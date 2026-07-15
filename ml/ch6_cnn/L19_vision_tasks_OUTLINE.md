@@ -19,8 +19,11 @@ recap, inductive-bias ledger, ViT hand-off). Subtitle idea: "One photo, four que
   SAM demo screenshot, mask-metrics (Dice) one-liner.
 - Multi-fruit belt photo: WEB-DOWNLOAD one (resolves plan open question 7) - a
   sorting-line or market-stall shot with several pomegranates, into `fig/borrowed/`.
+- (Added 2026-07-14, instructor direction) GANs + NEURAL STYLE TRANSFER appear in the
+  chapter close as SHOWCASE EXAMPLES ONLY - no math, no training details, no depth.
+  One frame (builder may split into two if layout demands - log it).
 
-Target: ~20 frames, one ~90-min session.
+Target: ~21 frames, one ~90-min session.
 
 ### Cold open (before Outline)
 
@@ -118,6 +121,19 @@ Target: ~20 frames, one ~90-min session.
   conv on video and MRI volumes. Convolution is a structural prior, not an image trick -
   sets up the ledger. `[moved here per interview: just-in-time = right before the
   zoom-out]`
+- **CNNs can also paint (showcase, not deep - added 2026-07-14).** Two examples, one
+  intuition sentence each, big visuals: 1) NEURAL STYLE TRANSFER (Gatys et al. 2015) -
+  repaint a photo in a painting's style by matching CNN features: content = deep-layer
+  activations, style = feature correlations - and the features come from VGG (L17!).
+  2) GANs (Goodfellow et al. 2014) - two networks in a duel: a generator forges
+  images, a discriminator calls fakes, both improve until the fakes pass (StyleGAN's
+  "this person does not exist" faces); the generator is built from THIS lecture's
+  transposed convolutions. Honest one-liner: for image generation, diffusion has
+  largely taken over (L17 epilogue) - GANs live on in upscaling and faces. No formulas,
+  no training mechanics - the GenAI chapter owns generation.
+  `[WEB-IMG: a classic style-transfer triptych (content photo / painting / result) +
+  a StyleGAN face grid]` `[callback: L17 VGG + epilogue diffusion; this deck's
+  transposed convs]` `[story frame]`
 - **The inductive-bias ledger (chapter close I).** CNNs assume locality + translation
   equivariance. That is why they win on images with less data - and why they are NOT the
   answer for tabular (ch4: trees/boosting) and struggle when global context dominates.
@@ -207,3 +223,9 @@ and observe the receptive-field / accuracy effect. Difficulty markers TBD.
 - **Rejected in the interview (do not add):** real YOLO output images embedded in the
   deck; IoU as a compute-it moment; SAM demo screenshot; Dice/mask-IoU metrics line.
 - Transfer-learning content lives in L18 - do not duplicate it here.
+- **GANs / style transfer showcase (added 2026-07-14):** WEB-IMG both visuals (a
+  classic Gatys-style triptych - the paper's own figure is fine - and a StyleGAN face
+  grid); cite Gatys et al. 2015, Goodfellow et al. 2014, StyleGAN = Karras et al. on
+  the frame as paper citations. NO local style-transfer optimization runs, no GAN
+  training, no formulas (standing rule: no training, no dataset downloads; small
+  WEB-IMG downloads are fine).

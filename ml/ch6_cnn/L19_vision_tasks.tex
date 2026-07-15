@@ -1,0 +1,657 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 19: Vision Tasks - Detection and Segmentation}
+\subtitle{One photo, four questions}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The belt camera sees ten fruit}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    The L18 classifier grades \textbf{one} fruit per photo. But the real camera frame
+    looks like this - a whole stall of them.
+    \vskip 6pt
+    \textbf{Predict:} feed this photo to the L18 classifier. What comes out?
+    \pause
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{One label for the whole image} - "pomegranate", high confidence. True,
+      and useless: \emph{which} fruit? \emph{where}? \emph{how many}?}}
+    \vskip 6pt
+    We need models whose \textbf{output has structure}: boxes, masks. That is today -
+    and it closes the chapter.
+    \column{0.53\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\linewidth]{pomegranate_market.jpg}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{One photo, four tasks}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{One photo, four tasks}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      What changes is the \emph{output}, not the backbone.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The task zoo}
+  \begin{center}
+    \includegraphics[height=0.72\textheight]{task_zoo.pdf}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Same photo, same conv backbone - four \textbf{output structures}: a label, a
+      label $+$ a box, a box \emph{per object}, a class \emph{per pixel}. The output
+      structure \emph{defines} the task. (Overlays drawn for illustration - no model
+      ran on this photo.)}}
+\end{frame}
+
+% ================================================================
+\section{Object detection}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Object detection}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      What \emph{and} where - a class and a box for every object in the frame.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{From "what" to "what and where"}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    For \emph{one} object, no new machinery is needed - just a \textbf{longer label
+    vector}:
+    \[
+      \yv =
+      \begin{bmatrix}
+        b_x\\ b_y\\ b_h\\ b_w\\ c_o\\ c_{\text{pom}}\\ c_{\text{apple}}\\ c_{\text{quince}}
+      \end{bmatrix}
+      \begin{matrix}
+        \text{\footnotesize box center }x\\
+        \text{\footnotesize box center }y\\
+        \text{\footnotesize box height}\\
+        \text{\footnotesize box width}\\
+        \text{\footnotesize object present? (binary)}\\
+        \text{\footnotesize class, one-hot}\\
+        \text{\footnotesize class, one-hot}\\
+        \text{\footnotesize class, one-hot}
+      \end{matrix}
+    \]
+    \column{0.56\textwidth}
+    Classification \textbf{and} box regression, one network: the box coordinates are
+    just four regression outputs ([01]'s loss next to L11's).
+    \vskip 6pt
+    \pause
+    But the belt photo holds \textbf{ten} fruit. The next one, \textbf{three}.
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      A photo can contain \textbf{any number} of objects - but a network has a
+      \textbf{fixed output size}. The whole field of object detection is engineering
+      around that mismatch.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{IoU: the overlap score}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    Detectors output many boxes, so we constantly ask: \textbf{how much do two boxes
+    agree?}
+    \[
+      \text{IoU}(A, B) = \frac{\text{area}(A \cap B)}{\text{area}(A \cup B)}
+    \]
+    $1$ = identical boxes, $0$ = no overlap; in practice $\text{IoU} \ge 0.5$ usually
+    counts as "the same object".
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Worked example: $A = (0,0)$-$(4,4)$, $B = (2,0)$-$(6,4)$. Intersection $= 8$,
+      union $= 16 + 16 - 8 = 24$, so $\text{IoU} = 8/24 = \mathbf{1/3}$.}}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=0.9\linewidth]{iou_only.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{NMS: from a flood of boxes to a clean answer}
+  A detector proposes \textbf{many overlapping candidates} per object.
+  \textbf{Non-max suppression} cleans up. \textbf{(Click to advance.)}
+  \vskip 1pt
+  \begin{center}
+    \only<1>{\includegraphics[width=0.50\linewidth]{nms_anim_0.pdf}}%
+    \only<2>{\includegraphics[width=0.50\linewidth]{nms_anim_1.pdf}}%
+    \only<3>{\includegraphics[width=0.50\linewidth]{nms_anim_2.pdf}}%
+    \only<4>{\includegraphics[width=0.50\linewidth]{nms_anim_3.pdf}}%
+    \only<5>{\includegraphics[width=0.50\linewidth]{nms_anim_4.pdf}}%
+  \end{center}
+  \vskip 1pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Repeat until no boxes remain: \textbf{keep} the highest-scoring box, \textbf{drop}
+      every neighbor whose IoU with it exceeds a threshold (here $0.45$). You will turn
+      this knob yourself in HW4.}}
+\end{frame}
+
+\begin{frame}{Scoring a detector: mAP in one line}
+  \begin{itemize}
+    \item A predicted box is \textbf{correct} if the class matches and its IoU with a
+      true box passes a threshold (say $0.5$).
+    \item That makes every prediction a TP or FP - so \textbf{precision} and
+      \textbf{recall} are exactly L12's, computed over boxes.
+    \item \textbf{AP} $=$ area under the precision-recall curve, per class;
+      \textbf{mAP} $=$ the mean over classes. Benchmarks also sweep the IoU threshold
+      ($0.5$ to $0.95$) and average once more.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      No new metric theory: mAP is the \textbf{L12 machinery wrapped around boxes},
+      swept over IoU thresholds.}}
+\end{frame}
+
+\begin{frame}{Two families of detectors}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Two-stage}: first \emph{propose} candidate regions, then classify and
+    refine each.
+    \begin{itemize}
+      \item R-CNN (2014) $\to$ Fast $\to$ \textbf{Faster R-CNN} (2015)
+      \item accurate, but two passes of work
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{One-stage}: predict all boxes and classes in \emph{one} forward pass.
+    \begin{itemize}
+      \item \textbf{YOLO} ("You Only Look Once", 2016), SSD (2016)
+      \item real-time - video-rate detection
+    \end{itemize}
+  \end{columns}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Two-stage bought \textbf{accuracy}, one-stage bought \textbf{speed} - and a decade
+      of iteration has mostly closed the gap.}}
+  \vskip 6pt
+  In practice, YOLO became the industry default: you \texttt{pip install} a pretrained
+  one and fine-tune it on \emph{your} boxes (L18's recipe). That \textbf{is} the sorting
+  line's counting camera.
+  \vskip 4pt
+  {\scriptsize\color{gray} Girshick et al. 2014; Ren et al. 2015; Redmon et al. 2016;
+  Liu et al. 2016.}
+\end{frame}
+
+\begin{frame}{How one-stage works: the YOLO grid}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \begin{itemize}
+      \item Divide the image into an $S \times S$ grid ($7 \times 7$ in the paper).
+      \item \textbf{Each cell} predicts $2$ candidate boxes - $(x, y, w, h,
+        \text{confidence})$ - plus class probabilities.
+      \item All $98$ boxes come out of \textbf{one forward pass}, as one $7 \times 7
+        \times 30$ tensor. That is why it runs in real time.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A flood of overlapping candidates by \emph{design} - exactly why \textbf{NMS}
+      exists.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{yolo_grid.png}\\[2pt]
+      {\scriptsize The paper's own diagram (Redmon et al., "You Only Look Once",
+      2016).}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Separable convolutions: the idea}
+  Real-time detection on a \textbf{belt camera} (or a phone) has no data center behind
+  it. The efficiency trick that makes it fit - used by MobileNet-class backbones -
+  splits one convolution into two cheap ones:
+  \vskip 6pt
+  \begin{enumerate}
+    \item \textbf{Depthwise}: one small filter \emph{per channel}, each filtering its
+      own channel - no mixing across depth.
+    \item \textbf{Pointwise}: a $1 \times 1$ convolution mixes the channels back
+      together - L17's per-pixel dense layer, doing exactly its job.
+  \end{enumerate}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Recall (L16): a \emph{standard} filter spans the \textbf{full input depth} - space
+      and channels processed together. Separable says: do \textbf{space first, channels
+      second}. Almost as expressive, far cheaper - as the next slide counts.}}
+\end{frame}
+
+\begin{frame}{Separable convolutions: the count}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    Input $12 \times 12 \times 3$, $5\times5$ filters, $256$ output channels
+    $\Rightarrow$ output $8 \times 8$. Count multiplications:
+    \vskip 4pt
+    {\small
+    \textbf{Standard:}
+    \[
+      256 \cdot \underbrace{(5 \cdot 5 \cdot 3)}_{\text{per stop}} \cdot
+      \underbrace{(8 \cdot 8)}_{\text{stops}} = \mathbf{1{,}228{,}800}
+    \]
+    \textbf{Depthwise} $+$ \textbf{pointwise}:
+    \[
+      \underbrace{3 \cdot 25 \cdot 64}_{4{,}800} +
+      \underbrace{256 \cdot 3 \cdot 64}_{49{,}152} = \mathbf{53{,}952}
+    \]}
+    \column{0.53\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\linewidth]{separable_count.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      $\sim$\textbf{23}$\times$ fewer multiplications for the same output shape. This is
+      why a pretrained detector runs \emph{on} the sorting line, not in a cloud.}}
+\end{frame}
+
+% ================================================================
+\section{Segmentation}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Segmentation}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Every pixel gets an answer.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Semantic vs instance}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Segmentation $=$ \textbf{per-pixel classification}.
+    \vskip 4pt
+    \begin{itemize}
+      \item \textbf{Semantic}: every pixel gets a class label - all our pomegranates
+        merge into \emph{one} fruit mask (task-zoo panel 4).
+      \item \textbf{Instance}: each fruit gets its \textbf{own} mask.
+        \textbf{Mask R-CNN} $=$ Faster R-CNN $+$ a small mask head per region
+        (He et al., 2017).
+      \item \textbf{Panoptic}: both at once - every pixel labeled \emph{and} grouped
+        into instances.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=0.93\linewidth]{maskrcnn_framework.png}\\[2pt]
+      {\scriptsize Mask R-CNN: detection boxes plus a per-region mask branch
+      (He et al., 2017).}
+    \end{center}
+    \vskip 3pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      And from the L17 epilogue: \textbf{SAM} made segmentation a \emph{promptable}
+      foundation-model capability - click an object, get its mask.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Transposed convolution: the output must be an image}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \small
+    Convs and pools \textbf{shrink} maps - but a per-pixel answer needs \textbf{full
+    resolution} back: a learnable way \emph{up}.
+    \vskip 4pt
+    A \textbf{transposed convolution} upsamples: each input cell \emph{stamps} the
+    kernel onto the output, overlaps add.
+    \vskip 4pt
+    {\small Matrix view, one line: a conv is a sparse multiply $\yv = K\mathbf{z}$; the
+    transposed conv uses $K^\top$'s \emph{sparsity pattern} to go back up - with its own
+    learned weights. Needed whenever the \textbf{output is an image}.}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{Watch-out: checkerboard artifacts.} Uneven kernel overlaps tile the output
+      with a checker pattern. Fixes: kernel size divisible by the stride, or
+      upsample-then-convolve (Odena et al., 2016).}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize]
+        % input 2x2
+        \foreach \i in {0,1}\foreach \j in {0,1}
+          \node[draw, minimum size=0.52cm, fill=armblue!22] at (\j*0.56,-\i*0.56) {};
+        \node[draw=armblue, very thick, minimum size=0.52cm] at (0,0) {};
+        \node at (0.28,-1.5) {input $2\times2$};
+        % arrow
+        \draw[->, thick] (1.6,-0.28) -- (2.5,-0.28)
+          node[midway, above, align=center] {transposed\\conv};
+        % output 4x4 with stamped region
+        \foreach \i in {0,1,2,3}\foreach \j in {0,1,2,3}
+          \node[draw, minimum size=0.52cm, fill=paramgreen!10]
+            at (3.1+\j*0.56,0.56-\i*0.56) {};
+        \foreach \i in {0,1,2}\foreach \j in {0,1,2}
+          \node[draw, minimum size=0.52cm, fill=armblue!35]
+            at (3.1+\j*0.56,0.56-\i*0.56) {};
+        \node at (3.94,-1.78) {output $4\times4$};
+        \node[armblue, align=center] at (3.94,1.35)
+          {one cell stamps a $3\times3$ kernel};
+      \end{tikzpicture}
+    \end{center}
+    \vskip 4pt
+    {\small Segmentation needs it now; \emph{generators} reuse it at the end of this
+    lecture.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dilated convolution: context without losing resolution}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \small
+    Insert \textbf{gaps} into the kernel: a $3\times3$ kernel with dilation $d$ taps
+    cells $d$ apart. \textbf{(Click to widen.)}
+    \vskip 4pt
+    \begin{itemize}
+      \item Same $9$ weights, wider view - no pooling, no lost pixels.
+      \item L17 grew the receptive field by \emph{stacking}; dilation grows it
+        \textbf{per layer}.
+      \item Beyond images: \textbf{WaveNet} audio and TCN time-series models stack
+        dilated 1D convs.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Segmentation's dilemma solved: see the \textbf{whole scene} while keeping
+      \textbf{per-pixel} detail.}}
+    \column{0.53\textwidth}
+    \begin{center}
+      \only<1>{\includegraphics[height=0.64\textheight]{dilation_anim_0.pdf}}%
+      \only<2>{\includegraphics[height=0.64\textheight]{dilation_anim_1.pdf}}%
+      \only<3>{\includegraphics[height=0.64\textheight]{dilation_anim_2.pdf}}%
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Stack dilations and the field explodes}
+  \begin{center}
+    \includegraphics[height=0.68\textheight]{receptive_field_dilated.pdf}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Doubling the dilation each layer ($d = 1, 2, 4$) grows the receptive field
+      \textbf{exponentially}: $15 \times 15$ instead of $7 \times 7$, for the same nine
+      weights per layer (compare L17's receptive-field frame).}}
+\end{frame}
+
+\begin{frame}{U-Net: the segmentation workhorse}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    \small
+    Both tools on the table - the architecture writes itself:
+    \begin{itemize}
+      \item \textbf{Down}: convs $+$ pooling compress the image into context.
+      \item \textbf{Up}: transposed convs climb back to full resolution.
+      \item \textbf{Skips}: early, sharp maps are \emph{concatenated} across - detail
+        the bottleneck destroyed.
+    \end{itemize}
+    \vskip 3pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      L17's skips again - there they rescued \textbf{optimization}, here they carry
+      \textbf{resolution}. Dilated convs often grow context mid-net.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[width=0.82\linewidth]{unet_paper.png}\\[2pt]
+      {\scriptsize The original U-Net (Ronneberger et al., 2015) - medical imaging's
+      favorite architecture.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{U-Net in action: roads from the sky}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    A U-Net trained to segment \textbf{roads in satellite imagery}:
+    \begin{itemize}
+      \item input: an RGB tile $[512, 512, 3]$;
+      \item output: a road probability \textbf{per pixel} $[512, 512, 1]$;
+      \item loss: L11's log-loss, applied \emph{once per pixel} and summed.
+    \end{itemize}
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Top row: truth vs prediction. Bottom left: yellow $=$ correct road pixels, blue
+      $=$ missed, red $=$ false alarms - L12's confusion matrix, \emph{painted onto the
+      map}.}}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[height=0.66\textheight]{unet_road_result.png}\\[1pt]
+      {\scriptsize Source: LMU I2DL (slds-lmu/lecture\_i2dl), CC BY 4.0.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The sorting line, completed - and the chapter close}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The sorting line, completed}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Cash in the running example - then zoom out on the whole chapter.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{One scenario, four output structures}
+  The pomegranate line, end to end:
+  \vskip 4pt
+  \begin{center}\small
+    \begin{tabular}{l l l}
+      \textbf{Question on the line} & \textbf{Task} & \textbf{Tool}\\
+      \hline
+      "what grade is this fruit?" & classification & L16's CNN, built via L18 transfer\\
+      "is it grading fruit or belt?" & attribution & L18's Grad-CAM audit\\
+      "how many fruit, and where?" & detection & a fine-tuned YOLO\\
+      "where exactly is the bruise?" & segmentation & a small U-Net for the cutter\\
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  Swap the nouns and it is the same story everywhere: roads on satellite tiles, tumors
+  on MRI slices, cracks on factory parts.
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      One backbone vocabulary - conv, pool, skip, upsample - and the \textbf{output
+      structure} turns it into whichever tool the problem needs.}}
+\end{frame}
+
+\begin{frame}{Same idea, other shapes: 1D and 3D}
+  Nothing about convolution says "image". The window slides over whatever grid the data
+  lives on:
+  \vskip 6pt
+  \begin{itemize}
+    \item \textbf{1D} - sequences: accelerometer traces for activity recognition,
+      audio, character-level text. L16 \emph{opened} with a 1D kernel sliding over a
+      sequence - that was the real thing, not a warm-up.
+    \item \textbf{2D} - images: this whole chapter.
+    \item \textbf{3D} - volumes: video (stacked frames), MRI and CT scans - the kernel
+      slides in $x$, $y$ \emph{and} $z$.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Convolution is a \textbf{structural prior} - "nearby means related, patterns
+      repeat" - not an image trick. Wherever that assumption holds, the same layer
+      works.}}
+\end{frame}
+
+\begin{frame}{CNNs can also paint}
+  \begin{center}
+    \includegraphics[height=0.30\textheight]{gatys_content.png}\hspace{2pt}
+    \includegraphics[height=0.30\textheight]{gatys_starry.png}\hspace{6pt}
+    \includegraphics[height=0.30\textheight]{stylegan_faces.png}
+  \end{center}
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    {\small \textbf{Neural style transfer}: repaint a photo in a painting's style by
+    matching CNN \emph{features} - content $=$ deep-layer activations, style $=$
+    feature correlations. The features come from \textbf{VGG} (L17!).}
+    \column{0.5\textwidth}
+    {\small \textbf{GANs}: two networks duel - a generator forges images, a
+    discriminator calls fakes, both improve until the fakes pass. None of these people
+    exist. The generator upsamples noise into pixels with \textbf{transposed
+    convolutions} - today's tool.}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Honest footnote: for image \emph{generation}, \textbf{diffusion} has largely taken
+      over (L17 epilogue) - GANs live on in upscaling and faces. Mechanics belong to the
+      GenAI chapter.}}
+  \vskip 2pt
+  {\scriptsize\color{gray} Gatys et al. 2015; Goodfellow et al. 2014; StyleGAN faces:
+  Karras et al. 2019.}
+\end{frame}
+
+\begin{frame}{The inductive-bias ledger}
+  What this chapter really bought us - stated honestly:
+  \vskip 6pt
+  \begin{itemize}
+    \item CNNs \textbf{assume} locality and translation equivariance ("nearby means
+      related, a detector useful here is useful there").
+    \item When the assumption is \emph{true} - images, audio, volumes - it acts as
+      \textbf{regularization by architecture}: win with \emph{less data}.
+    \item When it is \emph{false}, it costs you: \textbf{tabular data} still belongs to
+      trees and boosting (ch4, L14's honest-scope frame), and images where
+      \textbf{global context} dominates strain the local prior.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{
+      There is no universally best architecture - only assumptions that \textbf{match or
+      mismatch} the data. Choosing the bias \emph{is} the modeling decision.}}
+\end{frame}
+
+\begin{frame}{The chapter in one strip}
+  \begin{center}
+    \includegraphics[width=0.99\linewidth]{chapter_arc.pdf}
+  \end{center}
+  \vskip 6pt
+  \begin{center}\small
+    One layer $\to$ architectures $\to$ reuse and trust $\to$ structured outputs.\\
+    You can now read, adapt, audit and deploy the networks that do most of the world's
+    looking.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Hand-off: Vision Transformers}
+  The L17 epilogue's loose thread, tied:
+  \vskip 6pt
+  \begin{itemize}
+    \item \textbf{ViT} cuts the image into patches and feeds them to a transformer as a
+      \emph{sequence} - \textbf{no convolution at all} (Dosovitskiy et al., 2021).
+    \item It \textbf{drops the convolutional prior} - and buys it back with
+      \textbf{scale}: with enough pretraining data, attention \emph{learns} locality
+      instead of assuming it.
+    \item Small data? The CNN prior still wins. Web-scale data? Attention takes the
+      frontier. The ledger from two slides ago, live in 2026.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Attention, transformers and the GenAI stack get their own chapters - vision handed
+      the baton; we follow it there next.}}
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item The \textbf{output structure defines the task}: label $\to$ box $\to$ box per
+      object $\to$ class per pixel.
+    \item Detection vocabulary: \textbf{IoU} (our worked $1/3$), \textbf{NMS} (keep the
+      best, drop overlapping neighbors), \textbf{mAP} ($=$ L12 over boxes).
+    \item Two families: two-stage (Faster R-CNN) vs one-stage (\textbf{YOLO}: $7\times7$
+      grid, all boxes in one pass).
+    \item \textbf{Separable convs} make it fit on a belt camera ($\sim$23$\times$ fewer
+      multiplications).
+    \item Segmentation: semantic vs instance; \textbf{U-Net} $=$ down, up
+      (\textbf{transposed convs}), skips - with \textbf{dilation} for cheap context.
+    \item Convolution is a \textbf{prior with a domain}: 1D/2D/3D where locality holds,
+      trees on tabular, attention at web scale.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      \textbf{Next:} HW4 - run a pretrained YOLO on \emph{your} photos and turn the NMS
+      IoU knob; swap a dilated conv into the L16 CNN. Then a new chapter: networks with
+      \textbf{memory} - RNNs (L20).}}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L19 Vision Tasks - Detection and Segmentation (ch6_cnn, chapter closer).
+%   Built 2026-07-14 from L19_vision_tasks_OUTLINE.md (approved; interview-locked
+%   2026-07-13, GANs/style-transfer showcase added 2026-07-14) + CNN_CHAPTER_PLAN.md.
+%
+%   Sources consulted (REDERIVE, read-only): LMU I2DL cnn2/{dilated-transposed,
+%   separable-convolutions-flattening, convolution-types}.tex, cnn1/application.tex
+%   (label-vector trick, task-zoo idea), cnn3/modern-cnn-2.tex (U-Net). Detection
+%   vocabulary (IoU/NMS/mAP, families, YOLO grid) authored from the outline - no LMU
+%   upstream. Credit line on title frame per chapter policy (CC BY 4.0).
+%
+%   Verified numbers (asserted in the figure scripts before typesetting):
+%   - IoU worked example: A=(0,0)-(4,4), B=(2,0)-(6,4) -> inter 8, union 24, IoU 1/3
+%     (iou_nms.py).
+%   - Separable count: 12x12x3 input, 5x5, 256 out -> standard 256*75*64 = 1,228,800;
+%     depthwise 3*25*64 = 4,800 + pointwise 256*3*64 = 49,152 = 53,952; ratio 22.8x,
+%     stated as ~23x (separable_count.py).
+%   - Dilated RF: stacked d=1,2,4 -> 3, 7, 15 vs standard 3, 5, 7
+%     (receptive_field_dilated.py).
+%   - YOLO v1 facts (Redmon et al. 2016): 7x7 grid, 2 boxes/cell, per-cell class
+%     probabilities, 98 boxes, 7x7x30 output tensor (B*5+C with C=20), one pass.
+%
+%   Figures (py_src -> fig, ma venv): task_zoo.py (task_zoo.pdf - 4 overlays,
+%   hand-placed coords on the web photo, semantic tint baked into RGB per LEARNINGS);
+%   iou_nms.py (iou_nms.pdf + iou_only.pdf + nms_only.pdf; boxes/NMS logic shared);
+%   nms_anim.py (nms_anim_0..4.pdf, 5-frame mandatory ANIM; imports iou_nms so the
+%   final frame equals the static right panel); chapter_arc.py (chapter_arc.pdf,
+%   ribbon-style 4-beat strip, L19 hot in red); receptive_field_dilated.py
+%   (receptive_field_dilated.pdf + dilation_anim_0..2.pdf - NEW files; L17's
+%   receptive_field.pdf deliberately NOT regenerated); separable_count.py
+%   (separable_count.pdf, labeled bars).
+%
+%   Borrowed (fig/borrowed/): pomegranate_market.jpg (WEB-IMG, Wikimedia Commons
+%   "Pomegranates at farmers market (43134440935).jpg", 1920x1280 - the interview-
+%   locked multi-fruit stall shot); yolo_grid.png (YOLO paper Fig 2, arXiv:1506.02640,
+%   300dpi crop); unet_paper.png (U-Net paper Fig 1, arXiv:1505.04597);
+%   maskrcnn_framework.png (Mask R-CNN paper Fig 1, arXiv:1703.06870);
+%   gatys_content.png + gatys_starry.png (Gatys et al. Fig 2 panels A and C,
+%   arXiv:1508.06576); stylegan_faces.png (StyleGAN paper Fig 3 crop, all-generated
+%   faces, arXiv:1812.04948). COPY-IMG (whitelisted): unet_road_result.png = LMU
+%   lecture_i2dl cnn3/plots/outlook/31.png, attribution line on the frame (CC BY 4.0).
+%
+%   Key decisions (details in L19_DECISIONS.md): conv variants just-in-time per the
+%   interview (separable in detection, transposed+dilated in segmentation, 1D/3D in
+%   the close); IoU presented not computed; mAP got its own short frame; separable
+%   split into idea+count; dilated split into kernel-anim + stacked-RF frames; U-Net
+%   split into architecture + road-result frames; GANs/style-transfer stayed ONE
+%   frame (3-image strip). Interview-rejected items honored: no real YOLO outputs,
+%   no SAM screenshot, no Dice line, no transfer-learning re-teach.
+%
+%   Forward pointer: HW4 (pretrained YOLO + NMS-threshold experiment; dilated-conv
+%   swap in the L16 CNN) on the chapter qmd; next chapter ch7_rnn L20 RNN Foundations.

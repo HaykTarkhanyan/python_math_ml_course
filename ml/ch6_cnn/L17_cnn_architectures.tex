@@ -1,0 +1,767 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 17: CNN Architectures}
+\subtitle{Ten years that changed computer vision}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{One chart, one question}
+  \begin{center}
+    \only<1>{\includegraphics[width=0.70\linewidth]{imagenet_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.70\linewidth]{imagenet_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.70\linewidth]{imagenet_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.70\linewidth]{imagenet_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.70\linewidth]{imagenet_anim_5.pdf}}%
+    \only<6>{\includegraphics[width=0.70\linewidth]{imagenet_anim_6.pdf}}%
+  \end{center}
+  \vskip 1pt
+  % fixed-height strip so the chart does not jump between clicks
+  \begin{minipage}[t][1.2cm][t]{\linewidth}
+    \only<2>{\centering\small
+      \textbf{Predict:} something happened in 2012. What?\par}
+    \only<3-5>{\centering\small
+      \textbf{AlexNet} - the first deep CNN winner - cut the error from $26\%$ to
+      $16\%$ in one year.\par}
+    \only<6>{\centering
+      \fcolorbox{armblue}{armblue!8}{\parbox{0.9\linewidth}{\small
+        By 2015, machines passed the human baseline. \textbf{Everything in this
+        lecture is on this chart} - the benchmark, the architectures, and the people
+        who built them.}}\par}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The benchmark that made deep learning}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{ImageNet}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Before the architectures, the arena: a dataset so large it changed what was
+      worth building.
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{ribbon_1.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{The bet on data}
+  In 2006, while most of computer vision tuned \textbf{algorithms}, \textbf{Fei-Fei Li}
+  bet that what the field actually lacked was \textbf{data}.
+  \vskip 6pt
+  \begin{itemize}
+    \item Built on \textbf{WordNet}'s noun hierarchy - with WordNet's creator,
+      Christiane Fellbaum.
+    \item Images scraped from the web; labeled by \textbf{Amazon Mechanical Turk}
+      workers.
+    \item Presented at CVPR \textbf{2009}, to little fanfare:
+      \textbf{$\sim$14M labeled images}, $\sim$22{,}000 categories.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      The lesson that outlives every architecture in this deck: \textbf{data bets age
+      better than algorithm bets}. Models come and go; ImageNet made all of them
+      possible.}}
+\end{frame}
+
+\begin{frame}{ILSVRC and top-5 error}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    The annual challenge (\textbf{ILSVRC}) used a subset: \textbf{1.2M training
+    images, 1{,}000 classes}.
+    \vskip 6pt
+    \textbf{Top-5 error}: the model proposes five labels; it is correct if the true
+    label is among them - fair scoring when an image contains several things.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A shared benchmark accelerates a field for the same reason we always compare
+      models on \emph{held-out} data ([06]): everyone measures the same thing, so
+      progress is real and comparable.}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=0.96\linewidth]{imagenet_samples.png}\\[2pt]
+      {\scriptsize Real ILSVRC test images with a model's five guesses.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The classics: LeNet, AlexNet, VGG}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Three architectures, three ideas}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The blueprint (LeNet), the breakout (AlexNet), and depth done simply (VGG).
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{ribbon_2.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{LeNet (1998): the blueprint}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \textbf{Yann LeCun}, AT\&T Bell Labs (joined 1988): backprop-trained
+    convolutional nets reading \textbf{handwritten digits}.
+    \vskip 4pt
+    \texttt{conv-pool-conv-pool-dense}: everything in L16 was already here.
+    \vskip 4pt
+    Deployed commercially by NCR in \textbf{check-reading machines}; at its peak the
+    system read an estimated \textbf{10-20\% of all checks} written in the US.
+    \vskip 4pt
+    Then the field moved on to SVMs, and CNNs went quiet for a decade. What was
+    missing: \textbf{compute} and \textbf{data}.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{lenet_arch.pdf}
+    \end{center}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      Keep an eye on LeCun - he returns at the end of this lecture.}}
+    \vskip 4pt
+    \begin{center}
+      \href{https://adamharley.com/nn_vis/}{\beamergotobutton{play with a LeNet in 3D
+      (Adam Harley)}}\;
+      \href{https://poloclub.github.io/cnn-explainer/}{\beamergotobutton{CNN Explainer}}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{AlexNet (2012): the breakout}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    Same blueprint, \textbf{scaled}: 8 layers, \textbf{60M parameters} - too big for
+    one GPU, so Krizhevsky \textbf{split the network across two} consumer gaming
+    cards (GTX 580, 3GB each) and trained \textbf{5-6 days} ($\sim$90 epochs over
+    1.2M images) on a single PC.
+    \vskip 4pt
+    The GPU was the unlock: L14's matrix-multiply argument, made history.
+    \vskip 4pt
+    {\small Authors: Krizhevsky, Sutskever, Hinton (2012).}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{alexnet_twogpu.png}\\[1pt]
+      {\scriptsize The paper's own diagram: one GPU runs the top half, one the
+      bottom.}
+    \end{center}
+    \vskip 2pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The "new" tricks are all \textbf{L15 material deployed at once}: ReLU (vs
+      saturating sigmoids), dropout, data augmentation. You already know every
+      ingredient - they had the hardware to use them at scale.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What AlexNet-style networks learn}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    First-layer filters of a modern pretrained network (ResNet-18, trained on
+    ImageNet): crisp \textbf{Gabor-like edge, blob and color detectors}.
+    \vskip 6pt
+    The \textbf{L16 kernel zoo} - reinvented by gradient descent, designed by
+    nobody.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      L16's tiny Fashion-MNIST kernels looked blurry; at ImageNet scale the learned
+      kernels become \emph{textbook}. The hand-designed $\to$ learned arc closes
+      here.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[height=0.78\textheight]{pretrained_filters.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{VGG (2014): depth via small filters}
+  Only \textbf{$3\times3$ convolutions}, stacked. Two stacked $3\times3$ layers see a
+  \textbf{$5\times5$} receptive field - so which costs fewer weights?
+  \vskip 4pt
+  \textbf{Take a minute and compute it} for $C = 64$ channels in and out (ignore
+  biases):
+  \[
+    \text{two } 3{\times}3\text{ layers: } 2 \times 9C^2
+    \qquad\text{vs}\qquad
+    \text{one } 5{\times}5\text{ layer: } 25C^2
+  \]
+  \pause
+  \[
+    2 \times 9 \times 64^2 = \mathbf{73{,}728}
+    \qquad\text{vs}\qquad
+    25 \times 64^2 = \mathbf{102{,}400}
+  \]
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Deeper \textbf{and} cheaper - with an extra ReLU between the two layers
+      \textbf{for free}. That one observation is the whole VGG design: repeat
+      $3\times3$ blocks, double the channels after each pool.}}
+\end{frame}
+
+\begin{frame}{Who built VGG}
+  \textbf{Karen Simonyan} and Andrew Zisserman, Oxford's \textbf{V}isual
+  \textbf{G}eometry \textbf{G}roup - and yes, Karen Simonyan is an Armenian name.
+  \vskip 8pt
+  His arc since:
+  \begin{itemize}
+    \item \textbf{DeepMind} (2014-2022) - contributor to AlphaZero, AlphaFold,
+      WaveNet;
+    \item co-founder of \textbf{Inflection AI} (2022, with Reid Hoffman and Mustafa
+      Suleyman);
+    \item now \textbf{Chief Scientist at Microsoft AI}.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      A VGG author's career \emph{is} the last decade of AI in miniature: benchmark
+      vision $\to$ deep-learning lab $\to$ startup $\to$ big-tech frontier lab.}}
+\end{frame}
+
+\begin{frame}{Receptive field: how far a neuron sees}
+  \begin{columns}[T]
+    \column{0.36\textwidth}
+    The \textbf{receptive field} of a neuron is the input region that can influence
+    it. Stack conv layers and it \textbf{grows with depth}: three $3\times3$ layers
+    reach $7\times7$.
+    \vskip 6pt
+    Deep layers see \emph{objects}; early layers see \emph{edges}. That is the
+    feature hierarchy of L16, measured in pixels.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Growing the receptive field \emph{without} paying for depth is also possible -
+      dilated convolutions, coming in L19.}}
+    \column{0.64\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{receptive_field.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Going deeper: degradation and ResNet}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{If depth is good, why not 100 layers?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Because past $\sim$20 layers, plain networks get \emph{worse} - and the fix
+      reshaped every deep network since.
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{ribbon_3.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{Predict first: the degradation problem}
+  A \textbf{56-layer} plain net vs a \textbf{20-layer} plain net - same data, same
+  recipe. \textbf{Which one has lower \emph{training} error?}
+  \pause
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.72\linewidth]{he_degradation.png}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+      \textbf{The 20-layer one} (He et al. 2015, Figure 1). This is \emph{not}
+      overfitting - it is \emph{training} error. Deep plain nets are simply
+      \textbf{hard to optimize}: the deeper model could imitate the shallow one by
+      making 36 layers do nothing, yet gradient descent fails to find even that.}}
+\end{frame}
+
+\begin{frame}{The residual idea}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    Let the block learn the \textbf{correction}, not the whole mapping:
+    \vskip 4pt
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.9\linewidth}{\centering
+      $H(\xv) = F(\xv) + \xv$}}
+    \vskip 6pt
+    The \textbf{skip connection} carries $\xv$ for free; the layers only learn the
+    residual $F(\xv)$.
+    \vskip 6pt
+    Learning "do nothing" is now trivial - push $F \to 0$ - so \textbf{extra layers
+    can no longer hurt}.
+    \vskip 6pt
+    {\small If dimensions change, project the shortcut:
+    $H(\xv) = F(\xv) + W_s\,\xv$.}
+    \column{0.53\textwidth}
+    \begin{center}
+      \includegraphics[height=0.62\textheight]{residual_block.pdf}\\[1pt]
+      {\scriptsize Left: a plain block must learn all of $f(\mathbf{x})$.
+       Right: a residual block only learns the difference $g(\mathbf{x})$.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{You have seen residual learning before}
+  \begin{center}
+    {\large $H(\xv) = F(\xv) + \xv$}
+  \end{center}
+  \vskip 4pt
+  \textbf{Recall:} where in this course have you already met a model that only fits
+  a \textbf{correction} to what already exists?
+  \pause
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{
+      \textbf{Gradient boosting} (ch4): every new tree fits the \emph{residual} of
+      the ensemble so far. A ResNet block does the same thing \textbf{in depth} -
+      boosting stacks residual learners in sequence, ResNet stacks them layer on
+      layer.}}
+  \vskip 6pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      Analogy, not identity: boosting fits each learner to the \emph{frozen}
+      ensemble's residual, stage by stage; ResNet blocks train \emph{jointly}, end
+      to end.}}
+\end{frame}
+
+\begin{frame}{Why skips also fix gradients}
+  The identity path is not just easy to learn - it is an \textbf{undamped route for
+  the gradient} to flow backwards:
+  \[
+    \frac{\partial H}{\partial \xv} = \frac{\partial F}{\partial \xv} + \id
+  \]
+  Even if the block's own gradient $\partial F / \partial \xv$ is tiny, the $\id$
+  term carries the signal straight through - across a hundred layers if needed.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      The \textbf{vanishing-gradient} problem from L15, relieved by \emph{wiring}
+      rather than by activation choice. Same enemy, a structural weapon.}}
+\end{frame}
+
+\begin{frame}{The modern conv block}
+  What actually repeats inside a modern CNN:
+  \vskip 8pt
+  \begin{center}
+    \begin{tikzpicture}[font=\small, >=Latex, node distance=0.4cm,
+      b/.style={draw, rounded corners, minimum height=0.8cm, align=center}]
+      \node[b, fill=armblue!10] (c1) {conv};
+      \node[b, fill=violet1!12, right=of c1] (b1) {BatchNorm};
+      \node[b, fill=armorange!16, right=of b1] (r1) {ReLU};
+      \node[b, fill=armblue!10, right=of r1] (c2) {conv};
+      \node[b, fill=violet1!12, right=of c2] (b2) {BatchNorm};
+      \node[b, fill=armorange!16, right=of b2] (r2) {ReLU};
+      \node[circle, draw, fill=paramgreen!12, right=of r2, inner sep=2pt] (plus) {$+$};
+      \draw[->] (c1)--(b1); \draw[->] (b1)--(r1); \draw[->] (r1)--(c2);
+      \draw[->] (c2)--(b2); \draw[->] (b2)--(r2); \draw[->] (r2)--(plus);
+      \draw[->, thick, paramgreen] ($(c1.west)+(-0.5,0)$) -- (c1);
+      \draw[->, thick, paramgreen] ($(c1.west)+(-0.35,0)$) to[bend left=32]
+        node[above, pos=0.5, font=\scriptsize]{skip (identity)} (plus);
+      \draw[->, thick] (plus) -- ++(0.8,0);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 8pt
+  \texttt{conv $\to$ BatchNorm $\to$ ReLU}, repeated, plus skip connections.
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      BatchNorm is the \textbf{L15 formula, unchanged} - normalize per batch, then
+      scale and shift with learned $\gamma, \beta$. Nothing new to learn today.}}
+\end{frame}
+
+% ================================================================
+\section{The wider zoo}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Other tricks that stuck}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Three ideas beyond depth - and one network built entirely from them.
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{ribbon_4.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{$1\times1$ convolutions}
+  A $1\times1$ conv is a \textbf{per-pixel dense layer across channels}: it mixes
+  \emph{depth} without touching \emph{space}.
+  \vskip 4pt
+  Two jobs:
+  \begin{enumerate}
+    \item \textbf{cheap channel reduction} before expensive convolutions,
+    \item an extra \textbf{nonlinearity} almost for free.
+  \end{enumerate}
+  \vskip 6pt
+  Reduce $256 \to 64$ channels:
+  \[
+    1{\times}1:\ 256 \cdot 64 + 64 = \mathbf{16{,}448}
+    \qquad\text{vs}\qquad
+    3{\times}3:\ 9 \cdot 256 \cdot 64 + 64 = \mathbf{147{,}520}
+  \]
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Pointwise convolutions return in L19 (separable convolutions - how phones
+      afford CNNs).}}
+\end{frame}
+
+\begin{frame}{The Inception block}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    Why choose a kernel size at all? Run $1\times1$, $3\times3$, $5\times5$
+    \textbf{and} a pooling path \textbf{in parallel}, and \textbf{concatenate} the
+    maps.
+    \vskip 6pt
+    The network picks its own mix, layer by layer.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The $1\times1$ bottlenecks (white boxes) are what keep four parallel paths
+      \emph{affordable} - the previous slide's trick, deployed.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{inception_block.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{GoogLeNet: a network of Inception blocks}
+  The full \textbf{2014 winner}: $\sim$22 layers of stacked Inception blocks - won
+  ILSVRC 2014 at \textbf{6.7\%} top-5 error.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.96\linewidth]{googlenet_full.pdf}
+  \end{center}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Under \textbf{7M parameters} - against AlexNet's \textbf{60M}, with far better
+      accuracy. The zoo tricks \emph{compound}. And note how it ends: no giant dense
+      head, but a \emph{global average pool} - next slides.}}
+\end{frame}
+
+\begin{frame}{The dense-head problem}
+  \textbf{Predict first:} AlexNet has 60M parameters. Where do \emph{most} of them
+  live - the conv layers, or somewhere else?
+  \pause
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+      In the \textbf{flatten $\to$ dense head}. AlexNet's dense layers hold roughly
+      \textbf{58 of its 60M} weights.}}
+  \vskip 6pt
+  Why: flattening keeps every pixel of every map. Take a modest final stack of
+  \textbf{256 maps of $100\times100$}, into a 10-class dense layer:
+  \[
+    256 \cdot 100 \cdot 100 \cdot 10 = \mathbf{25{,}600{,}000}\ \text{weights}
+  \]
+  \vskip 2pt
+  More than all the conv layers combined - spent on one classification layer.
+\end{frame}
+
+\begin{frame}{Global average pooling}
+  The fix (from Network-in-Network): \textbf{average each final map to one number}.
+  256 maps $\to$ a 256-vector $\to$ dense-10.
+  \vskip 4pt
+  \textbf{Compute the head's weight count yourself.}
+  \pause
+  \[
+    256 \cdot 10 = \mathbf{2{,}560}\ \text{weights}
+    \qquad\text{(was } 25{,}600{,}000\text{)} - \text{a } \mathbf{10{,}000\times}
+    \text{ cut}
+  \]
+  \vskip 4pt
+  Bonus: GAP acts as a \textbf{regularizer} (no giant head to overfit) and accepts
+  \textbf{any input size} (the average does not care how big the map is).
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      The \textbf{L16 pooling} operation with a \emph{global} window. Used by
+      everything modern - ResNet already ends this way.}}
+\end{frame}
+
+\begin{frame}{Scaling and searching}
+  Where architecture design went next - one line each:
+  \vskip 6pt
+  \begin{itemize}
+    \item \textbf{DenseNet}: like ResNet, but \emph{concatenate} the skip instead of
+      adding it.
+    \item \textbf{EfficientNet}: scale depth, width and resolution \emph{together}
+      with one compound coefficient.
+    \item \textbf{Neural architecture search}: architectures are now \emph{found} by
+      search as much as designed by hand.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      None of these change the vocabulary you now have: conv blocks, skips,
+      $1\times1$s, GAP. The d2l.ai chapter on modern CNNs covers each, for the
+      curious.}}
+\end{frame}
+
+% ================================================================
+\section{Using architectures in practice}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Nobody types out a ResNet}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Every architecture in this lecture is one import away - trained weights
+      included.
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{ribbon_5.pdf}\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{torchvision.models}
+\begin{lstlisting}
+import torch
+from torchvision import models
+
+net = models.resnet18(weights="IMAGENET1K_V1")  # pretrained
+print(sum(p.numel() for p in net.parameters()))  # 11,689,512
+
+net.fc = torch.nn.Linear(512, 3)  # new head: export/market/juice
+\end{lstlisting}
+  \vskip 4pt
+  Load an architecture, inspect it, swap the head for \emph{your} classes - three
+  lines each.
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      What "keep the body, replace the head" buys you - and when to also retrain the
+      body - is the whole next lecture.}}
+  \vskip 2pt
+  \begin{center}
+    \href{https://docs.pytorch.org/vision/stable/models.html}{\beamergotobutton{torchvision
+    models docs}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Which architecture, when}
+  Back to the \textbf{pomegranate sorting line}:
+  \vskip 8pt
+  \begin{itemize}
+    \item A Fashion-MNIST-sized toy problem (small grayscale crops, few classes)
+      $\to$ the \textbf{small custom CNN from L16}: 9k parameters, trains in
+      minutes, easy to debug.
+    \item The real sorting camera ($224\times224$ color photos, subtle grade
+      differences) $\to$ start from a \textbf{pretrained ResNet-family model} and
+      adapt it.
+  \end{itemize}
+  \vskip 10pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      Adapting a pretrained model to your data \emph{is} \textbf{transfer learning} -
+      exactly where the next lecture picks up.}}
+\end{frame}
+
+% ================================================================
+\section{Epilogue: the pioneers and the field, 2026}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Where did everyone go?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The people on this timeline are still building - and still disagreeing about
+      what comes next.
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{ribbon_6.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{The pioneers today}
+  2018 \textbf{Turing Award} to Hinton, LeCun and Bengio - "for deep learning".
+  \vskip 6pt
+  And the LeNet hook resolves. After $\sim$12 years as Meta's chief AI scientist,
+  \textbf{Yann LeCun left} (Nov 2025) and founded \textbf{AMI Labs} (Paris), raising
+  about \textbf{\$1B within months} - to bet \emph{against} large language models
+  and on \textbf{world models} (JEPA): systems that learn how the physical world
+  works by predicting in \emph{representation space}, not in pixels or tokens.
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      The man who made CNNs work thinks the next leap is \textbf{not a bigger
+      chatbot}. The field's pioneers still disagree about its future - that is
+      healthy, not alarming.}}
+  \vskip 4pt
+  {\scriptsize\color{gray} Sources: CNBC, Nov 2025; MIT Technology Review, Jan 2026.}
+\end{frame}
+
+\begin{frame}{One paper, three fates}
+  The three names on the AlexNet paper, thirteen years on:
+  \vskip 8pt
+  \begin{itemize}
+    \item \textbf{Geoffrey Hinton} - 2018 Turing Award, then the \textbf{2024 Nobel
+      Prize in Physics} (with Hopfield); now the field's loudest safety voice.
+    \item \textbf{Ilya Sutskever} - co-founded \textbf{OpenAI}, chief scientist
+      through the GPT era; left in 2024 to found \textbf{Safe Superintelligence}
+      (SSI) - still research-only, no product, by choice.
+    \item \textbf{Alex Krizhevsky} - the one who actually trained it - quietly
+      stepped away from the field.
+  \end{itemize}
+  \vskip 10pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      One paper, three completely different lives. There is no single "what happens
+      after you change a field".}}
+\end{frame}
+
+\begin{frame}{Vision in 2026 (I): understanding}
+  Two shifts since this lecture's timeline ended:
+  \vskip 6pt
+  \begin{enumerate}
+    \item \textbf{Attention ate the frontier.} Vision Transformers (ViT) treat an
+      image as a \emph{sequence of patches} - no convolution at all. (L19 closes
+      this thought against CNN inductive bias.)
+    \item \textbf{Image-text pretraining} (CLIP, 2021) fused vision with language:
+      today's assistants (GPT, Gemini, Claude) \emph{see} - show them a photo, ask
+      questions.
+  \end{enumerate}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+      Classification stopped being a standalone task and became a \textbf{capability
+      inside larger systems}.}}
+  \vskip 4pt
+  \begin{center}
+    \href{https://claude.ai}{\beamergotobutton{try it: show a VLM a photo, ask it
+    questions}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Vision in 2026 (II): generation}
+  \textbf{Diffusion models flipped the task}: classification asks "what is this?" -
+  diffusion answers "\emph{draw me one}".
+  \vskip 6pt
+  \begin{itemize}
+    \item Images: Stable Diffusion, DALL-E, Flux. Video followed: Sora, Veo.
+    \item Intuition in one line: learn to \textbf{undo noise, step by step} - the
+      mechanics belong to the GenAI chapter.
+    \item And foundation models took the classic tasks: \textbf{SAM} segments
+      anything, promptable, no task-specific training.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+      Generative vision gets its own treatment in the \textbf{GenAI chapter} - here
+      it is context, not curriculum.}}
+  \vskip 4pt
+  \begin{center}
+    \href{https://sam2.metademolab.com/}{\beamergotobutton{SAM demo: click an object,
+    get its mask}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{And yet: CNNs did not die}
+  On phones, cars, cameras and sorting lines - including our \textbf{pomegranate
+  belt} - CNNs and CNN hybrids remain the workhorse:
+  \vskip 6pt
+  \begin{itemize}
+    \item \textbf{cheap and fast} at the edge, where there is no data center;
+    \item the \textbf{right inductive bias} when data is limited (L16's whole
+      argument);
+    \item ResNets are still the \textbf{default baseline} in papers, a decade on.
+  \end{itemize}
+  \vskip 10pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      You learned the layer that still does most of the world's looking.}}
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{Recap}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{itemize}\small
+      \item A shared \textbf{benchmark} (ImageNet) turned architecture design into
+        measurable progress.
+      \item \textbf{LeNet} wrote the blueprint; \textbf{AlexNet} = L15's tricks at
+        GPU scale; \textbf{VGG} = small filters, stacked deep.
+      \item Deeper plain nets \emph{degrade} $\to$ \textbf{residual learning}
+        ($=$ boosting in depth); skips also carry gradients.
+      \item \texttt{conv-BN-ReLU} blocks, $1\times1$ convs, \textbf{GAP} instead of
+        a giant dense head.
+      \item \textbf{Load pretrained models}; don't retype architectures.
+      \item The arc: Bell Labs checks $\to$ ImageNet $\to$ ViT / VLMs / diffusion -
+        and CNNs still run the edge.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \begin{center}
+      \includegraphics[width=0.67\linewidth]{cifar10_grid.png}\\[2pt]
+      {\scriptsize CIFAR-10 - HW2's arena: small custom CNN vs a ResNet-18-scale
+      net.}
+    \end{center}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+        \textbf{Next:} these models were trained on 1.2M images. You have 2{,}000.
+        Transfer learning - stand on ImageNet's shoulders (L18).}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L17 CNN Architectures (ch6_cnn). Built 2026-07-14 from
+%   L17_cnn_architectures_OUTLINE.md (approved, 3 interview rounds) +
+%   CNN_CHAPTER_PLAN.md.
+%
+%   Sources consulted (REDERIVE, read-only): LMU I2DL cnn3/{modern-cnn-1,
+%   modern-cnn-2}.tex, cnn1/architecture.tex. Credit line on title frame per
+%   instructor decision (CC BY 4.0). All history facts from the outline's
+%   verified-facts block, re-verified by web search 2026-07-14 (ILSVRC numbers,
+%   GoogLeNet params "under 7M", Krizhevsky beat, SSI status, AMI Labs $1.03B,
+%   link URLs).
+%
+%   Figures (py_src -> fig, ma venv): imagenet_error.py (imagenet_error.pdf +
+%   imagenet_anim_0..6.pdf flip-book - cold open, winner names revealed with bars);
+%   pretrained_filters.py (resnet18 conv1 8x8 RGB grid, one-time ~45MB weight
+%   download - sanctioned, kept after the no-dataset-downloads scope change);
+%   receptive_field.py (nested-fields grid + 27C^2-vs-49C^2 bars);
+%   timeline_ribbon.py (ribbon_1..6.pdf, one per section transition, "you are
+%   here" in red). cifar_grid.py was DROPPED (instructor scope change 2026-07-14:
+%   no dataset downloads) - the recap's CIFAR-10 grid is WEB-IMG instead
+%   (cifar10_grid.png, the PyTorch-tutorial class grid).
+%
+%   WEB-IMG (fig/borrowed/, no credit lines per standing policy): lenet_arch.pdf,
+%   inception_block.pdf, residual_block.pdf, googlenet_full.pdf (all d2l.ai SVGs
+%   -> cairosvg PDF; googlenet uses the 90-degree horizontal variant);
+%   alexnet_twogpu.png (AlexNet paper Fig 2 crop), he_degradation.png (He et al.
+%   2015 Fig 1 crop), imagenet_samples.png (AlexNet paper Fig 4 left panel crop -
+%   real ILSVRC test photos + top-5 bars, doubles as the top-5-error illustration);
+%   cifar10_grid.png (PyTorch-tutorial CIFAR-10 class grid, recap frame).
+%   degradation.py superseded per round-3 decision (iconic originals).
+%
+%   Key decisions (details in L17_DECISIONS.md): winner names moved into the
+%   chart's tick labels so anim frames don't spoil the reveal; ILSVRC 2012 error
+%   16.4 (winning entry, no outside data; 15.3 was the extra-data variant);
+%   GoogLeNet params stated as "under 7M" (sources vary 5-6.8M); receptive-field
+%   pointer corrected L18 -> L19 (4-deck split moved dilated convs); VLM link =
+%   claude.ai; SAM link = sam2.metademolab.com (segment-anything.com DNS failed at
+%   build time); two link buttons on the LeNet frame (outline names both).
+%
+%   Facts kept soft per outline: "an estimated 10-20% of US checks"; Krizhevsky
+%   "quietly stepped away from the field"; no portraits anywhere (locked).
+%
+%   Forward pointer: L18 Transfer Learning - freeze vs fine-tune, the BatchNorm
+%   gotcha, Grad-CAM/Clever Hans, labeling economics. L17's pretrained_filters
+%   frame is the "why transfer works" anchor L18 calls back to.

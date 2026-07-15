@@ -48,6 +48,20 @@ out what differs. Outlines: `L20_rnn_foundations_OUTLINE.md`,
 | L20 | RNN Foundations | reviews arrive in every length and order matters - MLPs can only pad, truncate, or bag; one new arrow (hidden-to-hidden weights) gives a network memory instead; unroll it and it is a deep net with tied weights - which is exactly why its gradients vanish (full BPTT derivation, the chapter's one deep dive) |
 | L21 | The Road to Attention: LSTM, Tokens and the Bottleneck | LSTM = a memory highway built from addition (ResNet's medicine, 18 years earlier); text becomes tokens becomes vectors (the kit attention will need); a char-LSTM writes text before your eyes; then seq2seq squeezes a whole sentence into ONE vector - and even LSTM cannot fix that. Cliffhanger |
 
+**Build status (2026-07-13): BOTH DECKS BUILT.** L20 (26 frames, v2 after an
+instructor revision pass: full forward-pass ANIM, anatomy + activation frames) and
+L21 (25 frames). The outlines are now historical; each deck's `.tex` + its
+`% Provenance:` block + `L20_DECISIONS.md` / `L21_DECISIONS.md` are the source of
+truth. **Late scope change (instructor, mid-L21-build): no real training runs, no
+dataset/model downloads - concepts explained illustratively.** In practice: the
+char-LSTM demo and Պանիր distributions are hand-crafted and labeled ILLUSTRATIVE on
+the figures; the embeddings map is a hand-placed schematic; the ONLY measured
+artifacts are the tiktoken token counts (Armenian line 104 vs gloss 18 tokens,
+cl100k_base - tiktoken installed trivially, so it stayed real) and the quick-run
+gradient comparison (honest non-dramatic result, reported as such on the frame).
+Remaining chapter work: `rnn.qmd` + `_quarto.yml` registration after both decks are
+instructor-approved.
+
 ## Borrow vs add
 
 ### Borrow table

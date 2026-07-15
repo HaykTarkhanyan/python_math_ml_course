@@ -1,0 +1,658 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 21: The Road to Attention}
+\subtitle{The fix that worked, and the wall it hit}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The disease, recalled}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \small
+    L20 ended on a number: influence fades as $V^k$, and $0.8^{29}\approx 0.0015$.
+    Multiplying the same matrix into itself, 29 times, starved the gradient before it
+    ever reached the first token.
+    \vskip 6pt
+    \textbf{Predict:} what arithmetic operation would \emph{not} shrink a signal no
+    matter how many times you repeated it?
+    \pause
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Addition.} Repeated multiplication decays (or explodes); repeated
+      addition just accumulates. Hold that thought - it is the first half of this
+      lecture, and you have already seen it once (ResNet's skip connection, L17).}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{vanish_curve.pdf}\\[2pt]
+      {\footnotesize \textcolor{armred}{Multiplication}: the disease. \textcolor{paramgreen}{Addition}: today's medicine.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{LSTM: the additive fix}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{A memory highway}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      1997's answer to a disease diagnosed, in full, in L20.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The cell state}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small
+    The LSTM adds a second track running alongside the hidden state $\mathbf{z}$: the
+    \textbf{cell state} $\mathbf{c}$. At every step it is only lightly modified - a
+    little is removed, a little is added.
+    \vskip 6pt
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\small
+      \textbf{Sorting-line metaphor} (ch1-6's world): the belt itself carries context
+      past every station; each worker only adds or removes a little as the box goes
+      by. Nobody rebuilds the box from scratch at every station.}}
+    \vskip 6pt
+    {\footnotesize Every horizontal line in the diagram is a full vector; circles are
+    element-wise operations; boxes are learned layers.}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{olah_lstm_chain.png}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Anatomy of one LSTM step}
+  \footnotesize
+  Same toy setup as L20's anatomy frame: a 3-word vocabulary, now a \textbf{2-d cell
+  state} alongside the 2-d hidden state. Three gates and one candidate, each a function
+  of $\mathbf{x}^{[t]}$ and $\mathbf{z}^{[t-1]}$; each gate is a sigmoid - a vector in
+  $(0,1)^2$ used as an \textbf{element-wise mask} ($\odot$).
+  \vskip 3pt
+  \begin{center}
+    \resizebox{0.98\linewidth}{!}{%
+    \begin{tikzpicture}[font=\scriptsize, >=Latex,
+        cell/.style={draw, rounded corners, align=center, minimum height=0.8cm,
+          minimum width=1.3cm}]
+      % Cell highway, top
+      \draw[-Stealth, very thick, armblue] (-1.3,3.0) -- (10.6,3.0);
+      \node[armblue, anchor=east] at (-1.4,3.0) {$\mathbf{c}^{[t-1]}\in\R^2$};
+      \node[armblue, anchor=west] at (10.7,3.0) {$\mathbf{c}^{[t]}\in\R^2$};
+      \node[armblue, font=\tiny] at (4.6,3.4) {cell highway - modified lightly, additively};
+
+      \node[draw, circle, fill=armred!18, minimum size=0.6cm] (fmul) at (1.2,3.0) {$\odot$};
+      \node[draw, circle, fill=paramgreen!18, minimum size=0.6cm] (iadd) at (5.6,3.0) {$+$};
+
+      % Gates row
+      \node[cell, fill=armred!12, dashed] (fgate) at (1.2,1.1) {$\mathbf{f}^{[t]}$\\[1pt]\tiny$\sigma(\cdot)$};
+      \node[cell, fill=paramgreen!12, dashed] (igate) at (3.5,1.1) {$\mathbf{i}^{[t]}$\\[1pt]\tiny$\sigma(\cdot)$};
+      \node[cell, fill=paramgreen!8] (cand) at (5.6,1.1) {$\tilde{\mathbf{c}}^{[t]}$\\[1pt]\tiny$\tanh(\cdot)$};
+      \node[cell, fill=armorange!16, dashed] (ogate) at (8.4,1.1) {$\mathbf{o}^{[t]}$\\[1pt]\tiny$\sigma(\cdot)$};
+
+      \draw[->, armred] (fgate) -- (fmul);
+      \draw[->, paramgreen] (igate.north) .. controls (3.9,2.2) .. (5.3,2.85);
+      \draw[->, paramgreen] (cand.north) -- (iadd.south);
+      \node[draw, circle, fill=paramgreen!10, minimum size=0.5cm] (imul) at (4.55,1.85) {$\odot$};
+      \draw[->, paramgreen] (igate) -- (imul);
+      \draw[->, paramgreen] (imul) -- (iadd);
+
+      % Inputs
+      \node[cell, fill=armblue!10] (x) at (0.2,-1.1) {$\mathbf{x}^{[t]}$\\[1pt]\tiny one-hot$\in\R^3$};
+      \node[cell, fill=paramgreen!10] (zprev) at (2.5,-1.1) {$\mathbf{z}^{[t-1]}\in\R^2$};
+      \foreach \g in {fgate, igate, cand, ogate} {
+        \draw[->, gray] (x.north) .. controls +(0,0.6) .. (\g.south);
+        \draw[->, gray] (zprev.north) .. controls +(0,0.6) .. (\g.south);
+      }
+
+      % Output side: z[t] = o * tanh(c[t])
+      \node[cell, fill=armblue!10] (tanhc) at (10.6,1.85) {$\tanh(\mathbf{c}^{[t]})$};
+      \draw[->, armblue] (10.6,2.7) -- (tanhc);
+      \node[draw, circle, fill=armorange!18, minimum size=0.6cm] (omul) at (9.5,1.1) {$\odot$};
+      \draw[->, armorange] (ogate) -- (omul);
+      \draw[->, armblue] (tanhc.south) .. controls +(0,-0.7) .. (omul.east);
+      \node[cell, fill=armorange!10] (zt) at (9.5,-1.1) {$\mathbf{z}^{[t]}\in\R^2$};
+      \draw[->, armorange] (omul) -- (zt);
+
+      \node at (5.5,-2.0) {\scriptsize FORGET: drop the old subject on a new one (LMU's
+        gender-pronoun case) \quad INPUT: write down a strong opinion word \quad
+        OUTPUT: what the readout needs right now};
+    \end{tikzpicture}%
+    }
+  \end{center}
+  \vskip 2pt
+  \textbf{Predict:} forget gate $[0.9,0.1]$ meets cell state $[2.0,-1.0]$ - what
+  survives?
+  \pause\quad
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.9\linewidth}{\small
+    $[0.9,0.1]\odot[2.0,-1.0]=[1.8,-0.1]$: memory 1 survives almost untouched, memory 2
+    is nearly wiped. A gate is L14's sigmoid, rebranded as a soft switch.}}
+\end{frame}
+
+\begin{frame}{For the record: the four equations}
+  \footnotesize\textcolor{gray}{Reference, not exam material - shown once.}
+  \vskip 2pt
+  \begin{center}
+    \begin{tikzpicture}[scale=0.86, transform shape]
+      \node[draw=armred, fill=armred!8, rounded corners=6pt, text width=11cm,
+        align=left, inner sep=9pt, font=\normalsize] at (0, 3) {
+        \textbf{\textcolor{armred}{Forget gate:}} \quad
+        $\mathbf{f}^{[t]} = \sigma\!\big(\mathbf{W}_f^\top\xv^{[t]} + \mathbf{V}_f^\top\mathbf{z}^{[t-1]} + \mathbf{b}_f\big)$
+      };
+      \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=11cm,
+        align=left, inner sep=9pt, font=\normalsize] at (0, 1.6) {
+        \textbf{\textcolor{paramgreen}{Input gate:}} \quad
+        $\mathbf{i}^{[t]} = \sigma\!\big(\mathbf{W}_i^\top\xv^{[t]} + \mathbf{V}_i^\top\mathbf{z}^{[t-1]} + \mathbf{b}_i\big)$
+        \\[3pt] \phantom{Input gate:} \quad
+        $\tilde{\mathbf{c}}^{[t]} = \tanh\!\big(\mathbf{W}^\top\xv^{[t]} + \mathbf{V}^\top\mathbf{z}^{[t-1]} + \mathbf{b}\big)$
+      };
+      \node[draw=armblue, fill=armblue!8, rounded corners=6pt, text width=11cm,
+        align=left, inner sep=9pt, font=\normalsize] at (0, 0) {
+        \textbf{\textcolor{armblue}{Cell update:}} \quad
+        $\mathbf{c}^{[t]} = \mathbf{f}^{[t]} \odot \mathbf{c}^{[t-1]} \;+\; \mathbf{i}^{[t]} \odot \tilde{\mathbf{c}}^{[t]}$
+      };
+      \node[draw=armorange, fill=armorange!8, rounded corners=6pt, text width=11cm,
+        align=left, inner sep=9pt, font=\normalsize] at (0, -1.5) {
+        \textbf{\textcolor{armorange}{Output gate:}} \quad
+        $\mathbf{o}^{[t]} = \sigma\!\big(\mathbf{W}_o^\top\xv^{[t]} + \mathbf{V}_o^\top\mathbf{z}^{[t-1]} + \mathbf{b}_o\big)$
+        \quad $\mathbf{z}^{[t]} = \mathbf{o}^{[t]} \odot \tanh(\mathbf{c}^{[t]})$
+      };
+      \node[draw=popblue, fill=popblue!6, rounded corners=6pt, text width=12.5cm,
+        align=center, inner sep=8pt, font=\small] at (0, -3.2) {
+        The punchline: $\mathbf{c}^{[t]} = \mathbf{f}^{[t]}\odot\mathbf{c}^{[t-1]} + \dots$
+        is \textbf{additive} - gradients flow through the cell state with minimal
+        decay. ResNet solved \emph{depth} with addition in 2015; LSTM solved
+        \emph{time} with addition in 1997 - same medicine, 18 years earlier.
+      };
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Does it work? Proof + price}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{gradient_flow_comparison.pdf}
+    \end{center}
+    \column{0.44\textwidth}
+    \footnotesize
+    Same toy recall task as L20's empirical proof, same measurement method
+    (\texttt{RNNCell}/\texttt{LSTMCell} unroll, per-step \texttt{retain\_grad()}).
+    \vskip 2pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Honestly reported}: at this budget the measured gap is not yet
+      dramatic - untrained gates start close to "half open," and a hard recall task
+      needs real training before the additive path pays off. The
+      \emph{architectural} argument (addition, not repeated multiplication) does not
+      depend on this toy net converging.}}
+    \vskip 3pt
+    \textbf{Price:} 4 weight sets instead of 1. Our $d_x{=}1,d_h{=}16$ vanilla cell:
+    $16{+}256{+}16=288$ params. LSTM: $4\times288=\mathbf{1{,}152}$.
+    \vskip 2pt
+    \textbf{GRU} (Cho et al., 2014): a streamlined 3-gate cousin, similar results, a
+    common default when 1,152 is too many.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Tokens: how text becomes numbers}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Before any of this works...}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      ...text must become numbers. The kit attention will need, built here.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The tokenization trilemma}
+  \small
+  The review sentence, split three ways:
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{tokenizer_panel1.pdf}
+  \end{center}
+  \fcolorbox{popblue}{popblue!6}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Characters}: tiny vocabulary, but sequences get long and a letter carries
+    no meaning on its own. \textbf{Words}: meaningful units, but the vocabulary
+    explodes - and "pomegranatey" was never in it (out-of-vocabulary, OOV).
+    \textbf{Subwords}: the compromise every modern model uses - frequent chunks become
+    tokens, rare words split into pieces.}}
+\end{frame}
+
+\begin{frame}{Subwords on a real tokenizer}
+  \small
+  The same sentence through an actual production tokenizer (\texttt{cl100k\_base},
+  the GPT-3.5/4 family), token boundaries and IDs visible:
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{tokenizer_panel2.pdf}
+  \end{center}
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The vocabulary is chosen by merging frequent character pairs (byte-pair encoding,
+    BPE) - one breath here; the full merge mechanics belong to the GenAI chapter.
+    Try it live: \textbf{tiktokenizer.vercel.app} - type Armenian and watch it
+    fragment (next frame).}}
+\end{frame}
+
+\begin{frame}{The Armenian tax}
+  \footnotesize
+  The chapter's Armenian line vs. its English gloss, through the \emph{same}
+  tokenizer - counts measured, not invented:
+  \begin{center}
+    \includegraphics[width=0.5\linewidth]{tokenizer_panel3.pdf}
+  \end{center}
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    English-centric vocabularies fragment other scripts. Why it matters, twice over:
+    longer sequences mean more steps, which means more fading (L20's disease again);
+    and later, literally more money per API call - every token is billed.}}
+\end{frame}
+
+\begin{frame}{One-hot and its poverty}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small
+    Each token gets an ID; each ID, a one-hot vector. Callback: [03]'s one-hot
+    encoding; L20's toy net used a 3-word version of exactly this.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      In a 10,000-dimensional one-hot space, \textbf{every pair of words is equally
+      far apart}. "good" is as far from "great" as it is from "plastic" - the
+      geometry carries zero meaning.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        \foreach \x/\w/\hotrow in {0/good/0, 2.0/great/1, 4.0/plastic/2} {
+          \node[font=\tiny] at (\x,2.05) {\w};
+          \foreach \r in {0,1,2,3} {
+            \ifnum\r=\hotrow
+              \node[draw, minimum size=0.34cm, fill=paramgreen!30] at (\x,1.6-\r*0.36) {1};
+            \else
+              \node[draw, minimum size=0.34cm, fill=paramgreen!3] at (\x,1.6-\r*0.36) {0};
+            \fi
+          }
+        }
+        \draw[<->, armred, thick] (0.5,0.4) -- (1.5,0.4)
+          node[midway, below, font=\tiny] {dist $=\sqrt{2}$};
+        \draw[<->, armred, thick] (2.5,0.4) to[bend right=25] (3.5,0.4);
+        \node[armred, font=\tiny] at (3.0,-0.35) {dist $=\sqrt{2}$, \emph{too}};
+        \node[font=\tiny] at (2.0,-1.0) {\emph{same distance, no relationship implied}};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Embeddings}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small
+    Cashing in L20's planted beat, \textbf{by name}: the anatomy frame showed one-hot
+    $\times\,\mathbf{W}$ selecting a row of $\mathbf{W}$ - that row \emph{is} the
+    word's own vector. An \textbf{embedding table} is just that $\mathbf{W}$, grown to
+    vocabulary size and learned.
+    \vskip 4pt
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\small
+      Dense, learned vectors: similar words end up close: the famous
+      $\mathrm{king}-\mathrm{man}+\mathrm{woman}\approx\mathrm{queen}$ arithmetic.}}
+    \vskip 4pt
+    {\footnotesize Trained once on huge corpora (word2vec, GloVe) and reused - a warm
+    start, i.e. L18's transfer learning, for text. Limitation in one line: "bank" gets
+    ONE vector regardless of context - the GenAI chapter scratches that itch. Explore:
+    \textbf{projector.tensorflow.org}.}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{embedding_2d.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Language modeling}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{One task to rule them all}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Predict the next token. That is the whole objective.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The objective}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\footnotesize
+      $$P(y_1,\dots,y_T) = \prod_{i=1}^{T} P(y_i \mid y_1,\dots,y_{i-1})$$}}
+    \vskip 6pt
+    \small
+    Turns raw text into supervised data \textbf{for free}: every prefix is an input,
+    every next token a label. No labeling budget, no annotators - just more text.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Said slowly, once: this exact objective, scaled up, is what GPT trains on.}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=6pt]
+        \node[draw, rounded corners, fill=armblue!10, align=left] (s) at (0,3.2)
+          {"The pomegranates arrived fresh"};
+        \node[draw, rounded corners, fill=armblue!6, align=left] (p1) at (0,2.2) {The $\to$ pomegranates};
+        \node[draw, rounded corners, fill=armblue!6, align=left] (p2) at (0,1.5) {The pomegranates $\to$ arrived};
+        \node[draw, rounded corners, fill=armblue!6, align=left] (p3) at (0,0.8) {The pomegranates arrived $\to$ fresh};
+        \draw[->, armblue] (s.south) -- (p1.north);
+        \node[font=\tiny, gray] at (0,0.1) {every prefix $\to$ next-token pair, free supervision};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The mechanics, click by click}
+  \footnotesize
+  Feed a word's characters one at a time; at every step the net outputs a probability
+  distribution over the \emph{next} character (course cheese joke, five letters,
+  shown below). \textbf{(Click to advance.)}
+  \begin{center}
+    \only<1>{\includegraphics[width=0.66\linewidth]{charlm_anim_0.pdf}}%
+    \only<2>{\includegraphics[width=0.66\linewidth]{charlm_anim_1.pdf}}%
+    \only<3>{\includegraphics[width=0.66\linewidth]{charlm_anim_2.pdf}}%
+    \only<4>{\includegraphics[width=0.66\linewidth]{charlm_anim_3.pdf}}%
+    \only<5>{\includegraphics[width=0.66\linewidth]{charlm_anim_4.pdf}}%
+    \only<6>{\includegraphics[width=0.66\linewidth]{charlm_anim_5.pdf}}%
+  \end{center}
+  \only<6>{\footnotesize No repeated character here, so no "double letter" surprise
+  to spring - one remark instead: the word's third letter also appears in several
+  other words of the chapter's Armenian line. The model's bet after that letter
+  depends on what came before it, not on the letter alone.}
+\end{frame}
+
+\begin{frame}{Demo: a char-LSTM learns to write Armenian}
+  \footnotesize
+  What a character-level LSTM trained on Armenian text typically produces, one
+  checkpoint per click (illustrative progression, not a measured run): gibberish
+  $\to$ letter statistics $\to$ word-like fragments $\to$ almost-literary $\to$ a
+  seeded continuation. \textbf{(Click to advance.)}
+  \begin{center}
+    \only<1>{\includegraphics[width=0.82\linewidth]{charlm_gen_0.pdf}}%
+    \only<2>{\includegraphics[width=0.82\linewidth]{charlm_gen_1.pdf}}%
+    \only<3>{\includegraphics[width=0.82\linewidth]{charlm_gen_2.pdf}}%
+    \only<4>{\includegraphics[width=0.82\linewidth]{charlm_gen_3.pdf}}%
+    \only<5>{\includegraphics[width=0.82\linewidth]{charlm_gen_4.pdf}}%
+  \end{center}
+\end{frame}
+
+\begin{frame}{The loss curve, and a link}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{charlm_loss.pdf}
+    \end{center}
+    \column{0.5\textwidth}
+    \small
+    Loss falls as the checkpoints improve (schematic curve) - the same next-token
+    objective from two frames ago, watched from the outside.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      This demo is the Armenian edition of a famous post: Andrej Karpathy,
+      \textbf{"The Unreasonable Effectiveness of Recurrent Neural Networks"}
+      (\texttt{karpathy.github.io/\allowbreak 2015/05/21/\allowbreak
+      rnn-effectiveness/}) - char-RNNs writing Shakespeare, Linux source, and
+      Wikipedia markup, all from the same one objective.}}
+    \vskip 6pt
+    {\footnotesize The most visual proof in this course that next-token prediction
+    alone extracts real structure from raw text.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Seq2Seq and the wall}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Two networks, one vector between them}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Translation needs a different-length output. Here is the classic fix.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Encoder-decoder}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small
+    Translation needs different input/output lengths. Fix: an \textbf{encoder} LSTM
+    reads the source and hands ONE \textbf{context vector} $C$ to a \textbf{decoder}
+    LSTM that writes the target.
+    \vskip 6pt
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\small
+      Running example: "I watch all of this in silence, and the connoisseurs speak
+      inside me." goes in - and the decoder writes out the chapter's Armenian line,
+      the sentence you just watched cost 104 tokens.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{alammar_seq2seq_still.png}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The bottleneck}
+  \footnotesize
+  \textbf{Predict:} the 42-word complaint review (L20's shoehorn-hacks frame - it lost
+  its verdict to truncation already) squeezed into a single 300-dim context vector.
+  What goes wrong?
+  \pause
+  \vskip 3pt
+  \begin{center}
+    \begin{tikzpicture}[scale=0.82, transform shape]
+      \node[font=\small, text width=11cm, align=center] at (0, 3.3) {
+        42 words: "...expecting the same deep red arils and rich tart sweetness...
+        arrived bruised dry and honestly disappointing"};
+      \fill[popblue!10] (-5, 2.5) -- (-0.4, 0.9) -- (0.4, 0.9) -- (5, 2.5) -- cycle;
+      \draw[thick, popblue] (-5, 2.5) -- (-0.4, 0.9);
+      \draw[thick, popblue] (5, 2.5) -- (0.4, 0.9);
+      \node[draw=armred, fill=armred!20, rounded corners=4pt, minimum width=0.9cm,
+        minimum height=0.6cm, font=\small\bfseries] at (0, 0.6) {$C$};
+      \node[font=\scriptsize, text=armred] at (0, 0.15) {one fixed-size vector};
+      \node[draw=armred, fill=armred!8, rounded corners=6pt, text width=5.2cm,
+        align=left, inner sep=6pt, font=\small] at (-3.6, -1.3) {
+        \textbf{\textcolor{armred}{Lost:}} early words get overwritten as the state
+        updates sequentially - "expecting", "childhood markets" fade first};
+      \node[draw=armorange, fill=armorange!8, rounded corners=6pt, text width=5.2cm,
+        align=left, inner sep=6pt, font=\small] at (3.6, -1.3) {
+        \textbf{\textcolor{armorange}{Fixed capacity:}} 5 words or 500, the same-size
+        $C$ must hold them all};
+      \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=12cm,
+        align=center, inner sep=6pt, font=\small] at (0, -2.9) {
+        \textbf{And the LSTM does NOT save us}: the cell state is still one
+        fixed-size vector. The fix for \emph{fading} memory did not fix
+        \emph{compressed} memory.};
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The cliffhanger}
+  \small
+  What if the decoder could look back at \emph{all} the encoder states - and learn
+  \emph{where} to look?
+  \begin{center}
+    \begin{tikzpicture}[scale=0.86, transform shape]
+      \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e1) at (-6.0, 1.2) {$z_1$};
+      \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e2) at (-4.6, 1.2) {$z_2$};
+      \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e3) at (-3.2, 1.2) {$z_3$};
+      \node[draw, circle, fill=paramgreen!30, minimum size=0.7cm, font=\scriptsize] (e4) at (-1.8, 1.2) {$z_4$};
+      \draw[-Stealth, thick, paramgreen] (e1) -- (e2);
+      \draw[-Stealth, thick, paramgreen] (e2) -- (e3);
+      \draw[-Stealth, thick, paramgreen] (e3) -- (e4);
+      \node[font=\scriptsize, text=gray] at (-6.0,0.3) {word 1};
+      \node[font=\scriptsize, text=gray] at (-1.8,0.3) {word 4};
+
+      \node[draw=armred, fill=armred!18, rounded corners=4pt, minimum width=0.8cm,
+        minimum height=1.2cm, font=\small\bfseries] (ctx) at (0, 1.2) {$C$};
+      \draw[-Stealth, very thick, armred] (e4) -- (ctx);
+
+      \node[draw, circle, fill=armorange!20, minimum size=0.7cm, font=\scriptsize] (d1) at (2.0, 1.2) {$s_1$};
+      \node[draw, circle, fill=armorange!20, minimum size=0.7cm, font=\scriptsize] (d2) at (3.4, 1.2) {$s_2$};
+      \node[draw, circle, fill=armorange!20, minimum size=0.7cm, font=\scriptsize] (d3) at (4.8, 1.2) {$s_3$};
+      \draw[-Stealth, thick, armorange] (ctx) -- (d1);
+      \draw[-Stealth, thick, armorange] (d1) -- (d2);
+      \draw[-Stealth, thick, armorange] (d2) -- (d3);
+
+      % Dashed, UNLABELED look-back arrows from every encoder state to every decoder
+      % state -- the answer hiding in plain sight (locked: do not name it here).
+      \foreach \e in {e1,e2,e3,e4} {
+        \foreach \d in {d1,d2,d3} {
+          \draw[dashed, gray, opacity=0.55] (\e) to[bend left=12] (\d);
+        }
+      }
+    \end{tikzpicture}
+  \end{center}
+  \fcolorbox{popblue}{popblue!6}{\parbox{0.97\linewidth}{\small
+    That question has a name. It was answered between 2014 and 2017, and it ends this
+    course's pre-history of sequence models. Next chapter: attention and
+    transformers.}}
+\end{frame}
+
+% ================================================================
+\section{Epilogue: recurrence in 2026}
+
+\begin{frame}{Recurrence, retirement, and a comeback}
+  \begin{center}
+    \includegraphics[width=0.94\linewidth]{rnn_timeline.pdf}
+  \end{center}
+  \small
+  2017's transformer retired RNNs from mainstream NLP - but recurrence came back as
+  state-space models (Mamba) and, fittingly, as \textbf{Hochreiter's own} xLSTM.
+  Where RNNs still earn their keep: streaming/edge inference and small-data settings,
+  where a transformer's full attention is overkill.
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item Length varies, memory fades (L20) $\to$ LSTM fixes fading with an
+      \textbf{additive} cell state - same medicine as ResNet, 18 years earlier - at
+      4$\times$ the parameter cost.
+    \item Text becomes numbers through \textbf{tokenization}: char / word / subword,
+      and the Armenian line costs several times more tokens than its English gloss.
+    \item One-hot is geometry-blind; \textbf{embeddings} are one-hot's learned,
+      dense upgrade - the anatomy frame's "row of $\mathbf{W}$," grown up.
+    \item One objective - \textbf{predict the next token} - powers a char-LSTM
+      writing Armenian and, at a different scale, GPT.
+    \item \textbf{Seq2seq} squeezes an entire source sentence into one vector - and
+      even the LSTM's fix for fading memory cannot fix a memory that is
+      \emph{compressed}.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
+      \textbf{Next:} the decoder wants to look back at everything. Letting it do
+      that - attention - is where the GenAI chapter begins.}}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L21 The Road to Attention: LSTM, Tokens and the Bottleneck (ch7_rnn). Built
+%   2026-07-13 from L21_road_to_attention_OUTLINE.md (BUILD-READY) + RNN_CHAPTER_PLAN.md,
+%   following L20_rnn_foundations.tex as the style exemplar (anatomy-frame idiom, ANIM
+%   \only<n> pattern, callout boxes, [plain] transitions, footer, Provenance format).
+%
+%   INSTRUCTOR SCOPE CHANGE (mid-build, 2026-07-13): no real training runs, no
+%   dataset/model downloads. The outline's char-LSTM corpus fetch (Wikisource
+%   Tumanyan/Charents), the GloVe embedding subset, and the tiktoken Armenian-tax panel
+%   were each re-scoped or replaced -- full accounting in L21_DECISIONS.md.
+%
+%   Chapter constants reused verbatim (locked in L20): review sentence "The
+%   pomegranates arrived fresh and sweet."; the Armenian line (py_src/data/
+%   armenian_line.txt); the 42-word complaint review (py_src/pad_truncate.py's
+%   REVIEWS dict); toy-net forward/reversed scores 0.38/0.82 (forward_pass_anim.py).
+%   New chapter constants (this deck): English gloss "I watch all of this in silence,
+%   and the connoisseurs speak inside me."; char-LM ANIM word Պանիր; gate-mask
+%   micro-example [0.9,0.1] (*) [2.0,-1.0] = [1.8,-0.1] (verified with a throwaway
+%   script before typesetting).
+%
+%   Sources consulted (REDERIVE, read-only, our own z/c/W/V notation throughout):
+%   LMU I2DL rnn/slides-modernrnn.tex (LSTM cell-state idea, gate intuitions incl. the
+%   gender-pronoun forget-gate example -- compressed to intuition level, no 9-click
+%   equation buildup, no GRU derivation); rnn/slides-applications.tex (LM probability
+%   factorization, the character-by-character "hello" click-sequence IDEA rebuilt on
+%   Պանիր instead, word-embeddings framing, encoder-decoder + context vector).
+%
+%   OWN-TEX (misc/dl4nlp/01_pre_transformer.tex, per the chapter plan's whitelist;
+%   colors swapped sampred/warnred/orange1/violet1 -> armred/armblue/armorange/
+%   paramgreen for in-deck consistency, matching L20's item-5 precedent):
+%   the gate-equations frame (~586-617) -> "For the record: the four equations."
+%   The bottleneck frame (~802-838) -> "The bottleneck" (funnel + lost/fixed-capacity
+%   boxes), re-worded around the 42-word review instead of the original's fox sentence.
+%   The memory-highway frame (~535-581) informed the "The cell state" sorting-line
+%   framing, but the WEB-IMG (Olah) diagram was used instead of this OWN-TEX diagram
+%   for the actual figure (see WEB-IMG note below) -- the OWN-TEX seq2seq frame
+%   (~721-797) was NOT used verbatim; the cliffhanger's dashed-arrow TikZ is a fresh
+%   adaptation of its encoder/decoder/context-vector node layout, not a copy.
+%   misc/dl4nlp/03_tokenization.tex was read before writing Section 2 (three-levels
+%   framing, OOV problem) to preview rather than contradict ch8's future BPE deep dive.
+%
+%   WEB-IMG (fig/borrowed/, no credit lines per standing policy):
+%   olah_lstm_chain.png <- https://colah.github.io/posts/2015-08-Understanding-LSTMs/
+%   img/LSTM3-chain.png ("Understanding LSTM Networks", Chris Olah, 2015) -- used for
+%   "The cell state" in place of the OWN-TEX memory-highway diagram (reads better at
+%   16:9, per the outline's "pick whichever reads better" instruction).
+%   alammar_seq2seq_still.png <- a still FRAME extracted with ffmpeg (timestamp ~8s)
+%   from https://jalammar.github.io/images/seq2seq_3.mp4, one of the animated stills
+%   on Jay Alammar's "Visualizing A Neural Machine Translation Model" post -- the site
+%   now serves this content as .mp4, not .png, so a representative frame was captured
+%   instead of a direct image download (logged as a build decision). The generic
+%   input/encoder/decoder/output-triangles version was chosen over the
+%   French-source variant (seq2seq_4) because the latter's frames never show both
+%   source and target text simultaneously (the animation types one at a time), which
+%   would have looked broken as a static still.
+%
+%   Figures (py_src -> fig, ma venv, seed 509): gradient_flow.py (MODIFIED -- added a
+%   quick comparison re-run, TRAIN_STEPS_QUICK=1200, emitting NEW file
+%   gradient_flow_comparison.pdf; gradient_flow_vanilla.pdf and
+%   gradient_flow_vanilla_lstm.pdf are UNTOUCHED, verified byte-identical
+%   before/after this build); tokenizer_demo.py (real tiktoken cl100k_base measurements
+%   -- tokenizer_panel1/2/3.pdf); embedding_2d.py (ILLUSTRATIVE hand-placed schematic
+%   -- embedding_2d.pdf); charlm_anim.py (ILLUSTRATIVE next-char bars on Պանիր --
+%   charlm_anim_0..5.pdf); charlm_generate.py (ILLUSTRATIVE typical-progression panels
+%   -- charlm_gen_0..4.pdf -- and a schematic loss curve, charlm_loss.pdf);
+%   rnn_timeline.py (real, web-verified facts -- rnn_timeline.pdf; no
+%   ml/ch6_cnn/py_src/timeline_ribbon.py exists in this repo to copy from, so this is a
+%   fresh ribbon in the same house visual language). vanish_curve.pdf reused verbatim
+%   from L20 for the cold open (no regeneration needed).
+%
+%   Epilogue facts web-verified at build (2026-07-13): Mamba (Gu & Dao, arXiv
+%   2312.00752, 2023); xLSTM (Beck et al., NeurIPS 2024 spotlight, arXiv 2405.04517,
+%   Sepp Hochreiter listed as senior/last author); GRU (Cho et al., arXiv June 2014,
+%   "Learning Phrase Representations using RNN Encoder-Decoder..."); seq2seq
+%   (Sutskever, Vinyals & Le, NeurIPS 2014, arXiv 1409.3215); "Attention Is All You
+%   Need" (Vaswani et al., NeurIPS 2017, arXiv 1706.03762). All match the outline's
+%   claims verbatim -- no corrections needed. Links verified live: tiktokenizer.vercel.
+%   app, projector.tensorflow.org, karpathy.github.io/2015/05/21/rnn-effectiveness/.
+%
+%   Key decisions, the instructor scope change, and open questions: logged in
+%   L21_DECISIONS.md.
