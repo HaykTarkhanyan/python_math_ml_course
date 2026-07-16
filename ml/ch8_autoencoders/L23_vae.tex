@@ -31,6 +31,9 @@
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
       If the whole space were like this, a \textbf{random draw} would produce a brand-new
       digit. That is a \textbf{generative model}. This lecture builds it.}}
+    \vskip 5pt
+    {\footnotesize VAEs come from \textbf{Kingma \& Welling (2013)}, "Auto-Encoding Variational
+    Bayes" - the same Kingma who gave you the \textbf{Adam} optimizer.}
     \column{0.56\textwidth}
     \begin{center}
       \includegraphics[width=0.92\linewidth]{vae_latent_grid.pdf}
@@ -56,21 +59,41 @@
   \vfill
 \end{frame}
 
+\begin{frame}{Why the plain autoencoder can't generate}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \small
+    A plain autoencoder maps each input to a single \textbf{point} $\mathbf{z}$, and never
+    organizes those points. So generating fails two ways (right):
+    \vskip 3pt
+    \begin{enumerate}
+      \item a \textbf{random draw} lands in a \emph{gap} where no code lives $\to$ the decoder
+        makes garbage;
+      \item even \textbf{nudging a real code} drifts into a gap $\to$ nonsense: nearby points were
+        never made to mean similar things.
+    \end{enumerate}
+    \vskip 3pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      The latent is full of holes. You can \textbf{reconstruct}, but you cannot \textbf{sample}.}}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{ae_two_failures.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{The fix: a blob, not a point}
   \begin{columns}[T]
     \column{0.50\textwidth}
     \small
-    A plain autoencoder maps each input to a single \textbf{point} $\mathbf{z}$. The gaps
-    between points are undefined, so a random draw lands in a hole.
-    \vskip 5pt
     \textbf{The fix, in one line:} make the encoder output a little \textbf{Gaussian blob}
     per input - a mean $\bm{\mu}(\xv)$ and a spread $\bm{\sigma}(\xv)$ - and push all the
     blobs to fill a standard normal $\mathcal{N}(0,I)$ with no gaps.
     \vskip 5pt
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
       Two new ingredients: \textbf{(1)} the encoder predicts $\bm{\mu},\bm{\sigma}$;
-      \textbf{(2)} a regularizer pulls every blob toward $\mathcal{N}(0,I)$. The next two
-      sections make each precise.}}
+      \textbf{(2)} a regularizer pulls every blob toward $\mathcal{N}(0,I)$. The next section makes
+      each precise.}}
     \column{0.50\textwidth}
     \begin{center}
       \begin{tikzpicture}[font=\scriptsize, >=Latex]
@@ -107,22 +130,57 @@
   \vfill
 \end{frame}
 
-\begin{frame}{The plan, before the math}
+\begin{frame}{First, what are we optimizing?}
+  \small
+  A \textbf{generative} model is one that thinks real digits are \textbf{likely} and everything
+  else unlikely. If it does, then a sample drawn from it looks like a real digit.
+  \vskip 4pt
+  So the goal is concrete. Write $p(\xv)$ for the probability the model gives an image $\xv$; we
+  want the training images to score high:
+  \[
+    \text{maximize} \quad \sum_{\text{training images}} \log p(\xv).
+  \]
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    This is just \textbf{maximum likelihood} - the same "make the data likely" you have used all
+    course. The only twist: here $p(\xv)$ is defined through a hidden latent code (next slide).}}
+\end{frame}
+
+\begin{frame}{Where does $p(\xv)$ come from?}
+  \small
+  We define the model by a simple \textbf{two-step recipe} for making an image:
+  \vskip 2pt
+  \begin{enumerate}
+    \item draw a code from a fixed, simple \textbf{prior} $p(\mathbf{z})=\mathcal{N}(0,I)$ - "pick a
+      random point near the origin, from a bell curve";
+    \item push it through the \textbf{decoder} $p(\xv\mid\mathbf{z})$ (the neural net) to get an image.
+  \end{enumerate}
+  \vskip 2pt
+  The probability of an image is then the chance that \emph{any} code produces it - add up over all codes:
+  \[
+    p(\xv) = \int p(\xv \mid \mathbf{z})\, p(\mathbf{z})\, d\mathbf{z}.
+  \]
+  \fcolorbox{armred}{armred!8}{\parbox{0.98\linewidth}{\small
+    That "add up over \emph{all} codes" is the trouble: the integral is \textbf{intractable} - we
+    cannot compute it, let alone maximize it. We need a shortcut.}}
+\end{frame}
+
+\begin{frame}{The plan: push up a lower bound}
   \begin{columns}[T]
-    \column{0.54\textwidth}
+    \column{0.56\textwidth}
     \small
-    We want the training images to be \textbf{likely}: maximize $\log p(\xv)$. But that means
-    adding up \emph{every} possible code that could have made $\xv$ - we cannot compute it.
+    We cannot maximize $\log p(\xv)$ directly. \textbf{The trick:} build a quantity we \emph{can}
+    compute, the \textbf{ELBO} (Evidence Lower Bound), that is always $\leq \log p(\xv)$. Push the
+    ELBO up, and $\log p(\xv)$ is dragged up with it.
     \vskip 4pt
-    \textbf{The move:} build a quantity we \emph{can} compute - the \textbf{ELBO} - that never
-    rises above $\log p(\xv)$. Push the ELBO up, and $\log p(\xv)$ is dragged up with it.
-    \vskip 5pt
+    To build it we bring in the \textbf{encoder} $q(\mathbf{z}\mid\xv)$: given an image, its best
+    guess at which codes could have made it.
+    \vskip 4pt
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      The \textbf{gap} between floor and ceiling is exactly how wrong the encoder's guess is.
-      Raising the ELBO does two jobs at once: fit the data better \emph{and} make the encoder a
-      better guesser. ($\mathrm{KL}(a\,\|\,b)$ just measures how far apart two distributions
-      are - zero when they match.)}}
-    \column{0.46\textwidth}
+      The \textbf{gap} between floor (ELBO) and ceiling ($\log p(\xv)$) is exactly how wrong that
+      guess is - so raising the ELBO does two jobs: fit the data better \emph{and} sharpen the
+      encoder. ($\mathrm{KL}(a\|b)$ below just measures how far apart two distributions are, zero
+      when they match.)}}
+    \column{0.44\textwidth}
     \begin{center}
       \begin{tikzpicture}[font=\scriptsize, >=Latex]
         \draw[->] (0,-0.2) -- (0,3.5) node[left] {\rotatebox{90}{\tiny higher is better}};
@@ -133,28 +191,10 @@
         \node[paramgreen] at (0.95,2.95) {\tiny push};
       \end{tikzpicture}
       \vskip 4pt
-      {\scriptsize The loss is then a \textbf{tug of war}: reconstruction spreads codes apart,
-      the KL tidies them toward $\mathcal{N}(0,I)$.}
+      {\scriptsize Its loss is a \textbf{tug of war}: reconstruction spreads codes apart, the KL
+      tidies them toward $\mathcal{N}(0,I)$.}
     \end{center}
   \end{columns}
-\end{frame}
-
-\begin{frame}{A latent-variable model}
-  \small
-  Assume each image is generated by first drawing a latent code, then decoding it:
-  \[
-    p(\xv) = \int p(\xv \mid \mathbf{z})\, p(\mathbf{z})\, d\mathbf{z},
-    \qquad p(\mathbf{z}) = \mathcal{N}(0, I),
-  \]
-  where the decoder $p(\xv \mid \mathbf{z})$ is a neural network.
-  \vskip 6pt
-  \fcolorbox{armred}{armred!8}{\parbox{0.98\linewidth}{\small
-    We would like to train by maximizing $\log p(\xv)$. But that integral runs over
-    \emph{every} possible code $\mathbf{z}$ - it is \textbf{intractable}. We cannot compute
-    it, let alone differentiate it.}}
-  \vskip 6pt
-  The way out: introduce the \textbf{encoder} $q(\mathbf{z}\mid\xv)$ as a cheap stand-in for
-  the true (unknown) posterior $p(\mathbf{z}\mid\xv)$.
 \end{frame}
 
 \begin{frame}{Deriving the ELBO}
@@ -178,8 +218,7 @@
   \[
     \log p(\xv) \;\geq\; \text{ELBO}(\xv).
   \]
-  We cannot maximize $\log p(\xv)$, so we \textbf{maximize the ELBO} instead (the
-  \emph{Evidence Lower BOund}).
+  We cannot maximize $\log p(\xv)$, so we \textbf{maximize the ELBO} instead.
 \end{frame}
 
 \begin{frame}{Reading the two terms}
@@ -303,6 +342,10 @@
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
       This is the step the plain autoencoder could not take - its codes never matched any
       distribution you could sample.}}
+    \vskip 4pt
+    {\footnotesize \textbf{Not only digits}: the same recipe generates \textbf{molecules} (drug
+    discovery), \textbf{text}, \textbf{tabular} rows, \textbf{audio} and \textbf{time series} -
+    anything you can decode.}
     \column{0.60\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{vae_samples.pdf}
@@ -354,8 +397,9 @@
   \end{itemize}
   \vskip 4pt
   \fcolorbox{armorange}{armorange!12}{\parbox{0.98\linewidth}{\small
-    A single scalar trades \textbf{reconstruction quality} against \textbf{latent structure}.
-    One example of a whole design space; the mechanics are still just the ELBO.}}
+    It is one of a family of ELBO variants: \textbf{conditional} VAE (generate a chosen class),
+    \textbf{VQ}-VAE (a discrete latent, sharper), and more - each a small twist on the same
+    objective.}}
 \end{frame}
 
 \begin{frame}{The VAE is inside modern image generators}
@@ -397,7 +441,8 @@
     \column{0.54\textwidth}
     \small
     You have seen it on every VAE figure in this deck: the samples are recognizable but
-    \textbf{soft}.
+    \textbf{soft}. It gets worse on bigger images - a VAE on \textbf{CelebA} faces gives a
+    recognizable face but a \textbf{blurry-mess background}.
     \vskip 5pt
     \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
       Why: the reconstruction loss rewards the \textbf{average} of all plausible outputs,

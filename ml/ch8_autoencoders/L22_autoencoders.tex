@@ -22,10 +22,12 @@
   \begin{columns}[T]
     \column{0.50\textwidth}
     \small
-    One MNIST digit is a vector of \textbf{784} numbers (28$\times$28 pixels).
+    One MNIST digit is a vector of \textbf{784} numbers (28$\times$28 pixels). Could you
+    describe it with just \textbf{2}? Think of describing a \emph{person} by their age and
+    height - lossy, but wonderfully compact.
     \vskip 4pt
-    \textbf{Predict:} can a network squeeze that digit down to just \textbf{2 numbers}
-    and then rebuild it - with \emph{no labels}, ever?
+    \textbf{Predict:} can a network learn that squeeze \emph{and} rebuild the digit from the
+    2 numbers - with \emph{no labels}, ever?
     \pause
     \vskip 4pt
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
@@ -42,8 +44,57 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{Meet the data: MNIST}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \small
+    Our running dataset: \textbf{MNIST} - 70,000 handwritten digits, each $28\times28$ grayscale
+    ($=784$ numbers).
+    \vskip 2pt
+    \begin{itemize}
+      \item \textbf{LeCun, Cortes \& Burges} (1998), from US Census / high-school forms.
+      \item The \emph{"hello world" of computer vision} - the first benchmark for any new method.
+      \item Small, clean, CPU-friendly.
+    \end{itemize}
+    \vskip 3pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      An autoencoder only looks at the \textbf{pixels}; the labels (0-9) are just for the
+      pictures.}}
+    \vskip 3pt
+    {\footnotesize And not just images: an autoencoder works on \emph{any} vector - tabular rows,
+    sensor time-series, word or audio embeddings.}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{mnist_examples.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Outline}
   \tableofcontents
+\end{frame}
+
+\begin{frame}{Why care? Autoencoders are everywhere}
+  \small
+  Before we build them: the ideas in this short chapter are load-bearing in today's biggest models.
+  \vskip 3pt
+  \begin{itemize}
+    \item \textbf{Self-supervised pretraining.} \textbf{BERT} masks words and rebuilds them;
+      \textbf{MAE} masks image patches - "masked modeling" is an autoencoder idea (denoising), and
+      the recipe behind most foundation models.
+    \item \textbf{LLM interpretability.} A wide \textbf{sparse autoencoder} on a model's activations
+      splits them into single-concept features - how Anthropic reads what is inside Claude
+      (\emph{Scaling Monosemanticity}, 2024).
+    \item \textbf{Cheaper inference.} \textbf{DeepSeek}'s Multi-head Latent Attention squeezes the KV
+      cache into a small \textbf{latent vector} ($\sim$4\% of the size), so long contexts fit in
+      memory (DeepSeek-V3, 2024).
+    \item \textbf{Image generation.} The \textbf{VAE} (next lecture) is the compression layer inside
+      Stable Diffusion and Midjourney.
+  \end{itemize}
+  \vskip 3pt
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.98\linewidth}{\small
+    Encoder, bottleneck, denoising, sparse - we build each piece below; watch for where it powers
+    the models above.}}
 \end{frame}
 
 % ================================================================
@@ -62,23 +113,25 @@
 
 \begin{frame}{Encoder, code, decoder}
   \begin{columns}[T]
-    \column{0.44\textwidth}
+    \column{0.48\textwidth}
     \small
     An \textbf{autoencoder} is two networks trained together:
-    \vskip 4pt
+    \vskip 3pt
     \begin{itemize}
-      \item \textbf{Encoder} $f:\ \xv \mapsto \mathbf{z}$ - compress the input to a small
-        \emph{code} $\mathbf{z}$.
-      \item \textbf{Decoder} $g:\ \mathbf{z} \mapsto \hat{\xv}$ - rebuild the input from
-        the code.
+      \item \textbf{Encoder} $f:\ \xv \mapsto \mathbf{z}$ - compress the input into a small
+        \textbf{code} $\mathbf{z}$.
+      \item \textbf{Decoder} $g:\ \mathbf{z} \mapsto \hat{\xv}$ - rebuild the input from that code.
     \end{itemize}
-    \vskip 4pt
-    Train so that $\hat{\xv} \approx \xv$. No labels: the target \emph{is} the input.
-    \vskip 6pt
-    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      This is \textbf{self-supervised} learning: a supervised loss (rebuild $\xv$) with a
-      free label (the input itself).}}
-    \column{0.56\textwidth}
+    \vskip 3pt
+    Train so $\hat{\xv} \approx \xv$; the target is the input itself, so it needs \textbf{no
+    labels} (self-supervised).
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{Code / latent.} The code $\mathbf{z}$ is a compact summary of the input; the space
+      it lives in is the \textbf{latent space} ("latent" $=$ hidden / underlying). We call
+      $\mathbf{z}$ a \emph{code} because the encoder \textbf{encodes} $\xv$ into it - a short
+      "password" that stands for the whole image.}}
+    \column{0.52\textwidth}
     \begin{center}
       \begin{tikzpicture}[font=\scriptsize, >=Latex]
         \fill[armblue!12] (-2.6,-1.3) -- (-2.6,1.3) -- (-0.5,0.45) -- (-0.5,-0.45) -- cycle;
@@ -129,6 +182,80 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{How an autoencoder learns}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \small
+    It is the same training loop as any net (ch5, L15) - only the \emph{target} is unusual:
+    \vskip 3pt
+    \begin{enumerate}
+      \item \textbf{Forward:} encode $\mathbf{z}=f(\xv)$, then decode $\hat{\xv}=g(\mathbf{z})$.
+      \item \textbf{Loss:} compare the output to the \textbf{input itself},
+        $L=\lVert \xv-\hat{\xv}\rVert^2$.
+      \item \textbf{Backward:} backprop $L$ through decoder \emph{and} encoder.
+      \item \textbf{Update:} one Adam step; repeat over mini-batches.
+    \end{enumerate}
+    \vskip 3pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The one twist vs a normal net: the label \emph{is} the input, so there is nothing to
+      hand-label. Everything else - forward, backprop, Adam - is exactly ch5.}}
+    \column{0.52\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex,
+          b/.style={draw, rounded corners, minimum height=0.6cm, minimum width=1.15cm, align=center}]
+        \node[b, fill=armblue!12] (x) at (0,0) {$\xv$};
+        \node[b, fill=gray!10] (e) at (1.4,0) {encoder};
+        \node[b, fill=paramgreen!22] (z) at (2.8,0) {$\mathbf{z}$};
+        \node[b, fill=gray!10] (d) at (4.2,0) {decoder};
+        \node[b, fill=armorange!16] (xh) at (5.6,0) {$\hat{\xv}$};
+        \draw[->] (x)--(e); \draw[->] (e)--(z); \draw[->] (z)--(d); \draw[->] (d)--(xh);
+        \node[b, fill=armred!12, minimum width=2.4cm] (loss) at (2.8,-1.6)
+          {loss $=\lVert \xv-\hat{\xv}\rVert^2$};
+        \draw[->] (xh) |- (loss);
+        \draw[->] (x) |- (loss);
+        \draw[->, armred, dashed] (loss) -- (z) node[midway, right] {\tiny backprop};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Backprop, in symbols}
+  \small
+  $\hat{\xv} = g\big(f(\xv)\big)$ is a \textbf{composition}, so the chain rule sends the error
+  $L=\lVert \xv-\hat{\xv}\rVert^2$ back through \textbf{both} halves ($\theta_f,\theta_g$ = encoder
+  / decoder weights):
+  \[
+    \underbrace{\frac{\partial L}{\partial \theta_g}}_{\text{decoder}}
+      = \frac{\partial L}{\partial \hat{\xv}}\,\frac{\partial \hat{\xv}}{\partial \theta_g},
+    \qquad
+    \underbrace{\frac{\partial L}{\partial \theta_f}}_{\text{encoder}}
+      = \underbrace{\frac{\partial L}{\partial \hat{\xv}}\,\frac{\partial \hat{\xv}}{\partial \mathbf{z}}}_{\text{back through the decoder}}\,
+        \frac{\partial \mathbf{z}}{\partial \theta_f}.
+  \]
+  \vskip -3pt
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize, >=Latex,
+        b/.style={draw, rounded corners, minimum height=0.5cm, minimum width=1.02cm}]
+      \node[b, fill=armblue!12] (x) at (0,0) {$\xv$};
+      \node[b, fill=gray!12] (e) at (1.5,0) {encoder};
+      \node[b, fill=paramgreen!22] (z) at (3.0,0) {$\mathbf{z}$};
+      \node[b, fill=gray!12] (d) at (4.5,0) {decoder};
+      \node[b, fill=armorange!16] (xh) at (6.0,0) {$\hat{\xv}$};
+      \node (L) at (7.1,0) {$L$};
+      \draw[->] (x)--(e); \draw[->] (e)--(z); \draw[->] (z)--(d); \draw[->] (d)--(xh); \draw[->] (xh)--(L);
+      \draw[->, armred, thick] (L) to[bend right=42] (d);
+      \draw[->, armred, thick] (d) to[bend right=42] (z);
+      \draw[->, armred, thick] (z) to[bend right=42] (e);
+      \node[armred] at (3.55,-0.95) {\tiny gradient flows back: through the decoder $\to$ the code $\to$ the encoder};
+    \end{tikzpicture}
+  \end{center}
+  \vskip -1pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    The \textbf{encoder} is trained \emph{through} the \textbf{decoder}: the decoder first says
+    "this code would rebuild $\xv$ better", then the encoder learns to produce such codes - which
+    is why the two halves share one representation. \texttt{loss.backward()} does it all.}}
+\end{frame}
+
 \begin{frame}{You already built the decoder}
   \begin{columns}[T]
     \column{0.46\textwidth}
@@ -159,6 +286,40 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}[fragile]{In practice (PyTorch)}
+  \small
+  A working autoencoder is a handful of lines - encoder, decoder, and the copy-yourself loop:
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \scriptsize
+\begin{verbatim}
+enc = nn.Sequential(
+  nn.Linear(784,256), nn.ReLU(),
+  nn.Linear(256,32))          # code
+dec = nn.Sequential(
+  nn.Linear(32,256), nn.ReLU(),
+  nn.Linear(256,784), nn.Sigmoid())
+
+for xb in loader:             # no labels!
+  xh = dec(enc(xb))
+  loss = F.mse_loss(xh, xb)
+  opt.zero_grad()
+  loss.backward(); opt.step()
+\end{verbatim}
+    \column{0.46\textwidth}
+    \textbf{Practical notes}
+    \begin{itemize}
+      \item Scale pixels to $[0,1]$; use \texttt{mse\_loss} (or \texttt{BCE} with the
+        \texttt{Sigmoid} output).
+      \item The code size is your main knob - start around \textbf{16-64}.
+      \item \textbf{Identity trap}: perfect reconstruction but a useless code $\Rightarrow$ the
+        code is too big. Shrink it, or add noise / an $L_1$ penalty.
+      \item For images, swap \texttt{Linear} for \texttt{Conv2d} / \texttt{ConvTranspose2d}.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
 % ================================================================
 \section{Autoencoders = nonlinear PCA}
 
@@ -173,28 +334,129 @@
   \vfill
 \end{frame}
 
-\begin{frame}{The bridge: a linear autoencoder is PCA}
+\begin{frame}{PCA is already an encoder-decoder}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \small
+    Rewind to \textbf{PCA} (ch4b). To compress a digit it does two steps:
+    \vskip 3pt
+    \begin{itemize}
+      \item \textbf{Encode:} project the 784 pixels onto the top $k$ directions $\to$ $k$ numbers.
+      \item \textbf{Decode:} multiply those $k$ numbers back out $\to$ a reconstruction
+        $\hat{\xv}$.
+    \end{itemize}
+    \vskip 3pt
+    That is \emph{exactly} an autoencoder - only with \textbf{linear} encode and decode and no
+    hidden layers.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      So PCA is the \textbf{simplest possible autoencoder}. The real question: what changes when
+      the encoder and decoder become real (nonlinear) networks?}}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex,
+          b/.style={draw, rounded corners, align=center}]
+        \node[b, fill=armblue!10, minimum width=1.3cm, minimum height=1.3cm] (x) at (0,0)
+          {$\xv$\\ \tiny 784};
+        \node[b, fill=paramgreen!22, minimum width=0.8cm, minimum height=0.7cm] (z) at (2.3,0) {$k$};
+        \node[b, fill=armorange!14, minimum width=1.3cm, minimum height=1.3cm] (xh) at (4.4,0)
+          {$\hat{\xv}$\\ \tiny 784};
+        \draw[->] (x) -- (z) node[midway, above] {\tiny project};
+        \draw[->] (z) -- (xh) node[midway, above] {\tiny expand};
+      \end{tikzpicture}
+      \vskip 4pt
+      {\scriptsize both arrows are just matrix multiplies}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{From PCA to a real autoencoder}
   \small
-  Give the autoencoder \textbf{linear} activations and a squared-error loss, and it recovers the
-  same top-$k$ subspace as \textbf{PCA} (\emph{ch4b}) - the best \textbf{flat sheet} through the
-  data. Add nonlinearity and the sheet can \textbf{bend} around curved data a flat one misses.
+  Keep the encoder and decoder \textbf{linear} - the activation is the \emph{identity}
+  $\phi(a)=a$ (just weighted sums, no bend) - and minimize reconstruction error: the autoencoder
+  provably recovers the \textbf{same subspace as PCA} - the best flat sheet through the data
+  (directions of maximum variance).
+  \vskip 4pt
+  Now switch the activations \textbf{on} (ReLU, sigmoid). Encode and decode become
+  \textbf{curved}, so the code can follow structure a flat sheet cannot. That is the whole idea:
+  \vskip 6pt
+  \begin{center}
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.92\linewidth}{\centering
+      \textbf{linear} autoencoder $=$ PCA \qquad$\longrightarrow$\qquad
+      \textbf{nonlinear} autoencoder $=$ PCA that can bend}}
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    You do not throw PCA away - you \textbf{generalize} it. The next two slides show the
+    difference: first on a curved toy dataset, then on the digits.}}
+\end{frame}
+
+\begin{frame}{See it: PCA flattens, the autoencoder bends}
+  \small
+  A \textbf{swiss roll} - a 2-D sheet rolled up in 3-D. PCA can only take a flat photo of it; a
+  nonlinear method unrolls it back to the sheet:
   \begin{center}
     \includegraphics[width=0.99\linewidth]{manifold_pca_vs_ae.pdf}
   \end{center}
   \fcolorbox{armblue}{armblue!8}{\parbox{0.99\linewidth}{\small
-    On a curved sheet, PCA's flat projection makes far-apart points \textbf{overlap}; a nonlinear
-    method (an autoencoder, or Isomap here) \textbf{unrolls} it. That is the whole difference.}}
+    In PCA's flat photo (middle) far-apart points on the roll \textbf{land on top of each other};
+    the nonlinear map (right; Isomap here, an autoencoder does the same) \textbf{unrolls} it so the
+    colour runs smoothly. That is what "bend" buys you.}}
 \end{frame}
 
-\begin{frame}{Two numbers: what survives, linear vs nonlinear}
-  Compress each test digit to \textbf{2 numbers}, then reconstruct. Same budget, two methods:
+\begin{frame}{Back to digits: the 2-number experiment}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \small
+    Same task, head to head. Force each test digit through a \textbf{2-number} bottleneck, then
+    rebuild it:
+    \vskip 3pt
+    \begin{itemize}
+      \item \textbf{PCA}: keep only the top \textbf{2 components}, reconstruct (linear).
+      \item \textbf{Autoencoder}: a $784\!\to\!2\!\to\!784$ net with nonlinear activations.
+    \end{itemize}
+    \vskip 3pt
+    Both get the \emph{same} 2-number budget; the only difference is linear vs curved.
+    \vskip 5pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      2 numbers is a brutal squeeze for a 784-pixel digit - neither will be perfect. The question
+      is \emph{which structure survives}.}}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, b/.style={draw, rounded corners, align=center}]
+        \node[b, fill=armblue!10, minimum width=1.1cm, minimum height=1.1cm] (x) at (0,0)
+          {digit\\ \tiny 784};
+        \node[b, fill=paramgreen!25, minimum width=0.65cm, minimum height=0.6cm] (z) at (2.0,0) {2};
+        \node[b, fill=armorange!14, minimum width=1.1cm, minimum height=1.1cm] (xh) at (3.9,0)
+          {rebuilt\\ \tiny 784};
+        \draw[->] (x) -- (z); \draw[->] (z) -- (xh);
+        \node[below] at (2.0,-0.45) {\tiny squeeze};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The result: nonlinear keeps more}
   \begin{center}
     \includegraphics[width=0.96\linewidth]{recon_pca_vs_ae.pdf}
   \end{center}
   \fcolorbox{armorange}{armorange!12}{\parbox{0.98\linewidth}{\small
-    PCA's 2-component reconstruction (linear) collapses several digits to a ghostly
-    \emph{average}; the autoencoder's 2-number code (nonlinear) keeps more real digit
-    structure. Neither is perfect - 2 numbers is brutal - but the curve wins.}}
+    PCA's 2-component reconstruction (middle row) collapses several digits to a ghostly
+    \emph{average} - 4, 5, 6, 7 all blur into a similar blob. The autoencoder's 2-number code
+    (bottom row) keeps more real digit shape. Same budget - the curve wins.}}
+\end{frame}
+
+\begin{frame}{How big should the code be?}
+  \small
+  The code size - the \textbf{latent dimension} - is the key knob (we used 2 only so we could
+  \emph{draw} the space):
+  \begin{center}
+    \includegraphics[width=0.68\linewidth]{latent_dim_recon.pdf}
+  \end{center}
+  \vskip -3pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    Too small (2): the net \textbf{guesses} (a 5 comes back a 9). Bigger (8, 32): sharper, classes
+    separate - but you lose the 2-D picture. Real autoencoders use \textbf{tens to hundreds}.}}
 \end{frame}
 
 \begin{frame}{The same digits as a 2-D map}
@@ -214,6 +476,21 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{The latent captures more than pixels}
+  \small
+  That 2-D map is not just pretty - the code captures \textbf{structure you can use}.
+  \vskip 4pt
+  A striking example from medicine: a patient's \textbf{sex} is nearly impossible to read off a raw
+  \textbf{brain MRI} - even trained radiologists cannot do it by eye. Yet train an autoencoder on
+  the scans, look at the latent, and \textbf{men and women separate}.
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    The autoencoder surfaced a signal that \emph{was} in the data but hidden from the eye - here
+    enough to fill a missing field in a patient record. That is \textbf{representation learning}:
+    a compact code that makes hidden structure explicit. \emph{(Illustrative - a known result on
+    brain imaging, not run here.)}}}
+\end{frame}
+
 % ================================================================
 \section{Regularized autoencoders}
 
@@ -228,18 +505,23 @@
   \vfill
 \end{frame}
 
-\begin{frame}{The overcomplete problem}
+\begin{frame}{Why go overcomplete?}
   \begin{columns}[T]
-    \column{0.55\textwidth}
+    \column{0.56\textwidth}
     \small
-    Sometimes you \emph{want} a big code ($\dim(\mathbf{z}) \geq \dim(\xv)$) - to learn a
-    rich feature set, not just to compress. But then the undercomplete trick is gone: the
-    network can copy the input straight through again.
-    \vskip 6pt
-    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      Fix: keep the network honest with a \textbf{different constraint}. Two classics -
-      \textbf{denoising} and \textbf{sparse}.}}
-    \column{0.45\textwidth}
+    Compression is not always the goal. Sometimes you want to \textbf{re-represent} the input as a
+    \emph{richer} set of features - a code \textbf{bigger} than the input, called
+    \textbf{overcomplete}. Two reasons it helps:
+    \vskip 4pt
+    \begin{itemize}
+      \item \textbf{A vocabulary, not a summary.} A language has thousands of words, but any one
+        sentence uses a handful. An overcomplete code is a big \textbf{dictionary} of
+        feature-detectors; each image switches on just the \textbf{few} it needs (like the brain:
+        many neurons, few firing at once).
+      \item \textbf{Spread out to separate.} Structure tangled in the raw pixels can become easy to
+        read once the input is lifted into a bigger, richer space.
+    \end{itemize}
+    \column{0.44\textwidth}
     \begin{center}
       \begin{tikzpicture}[font=\scriptsize, >=Latex]
         \foreach \y in {-1.2,-0.8,...,1.2} \node[circle, draw, fill=armblue!12,
@@ -255,6 +537,17 @@
       \end{tikzpicture}
     \end{center}
   \end{columns}
+\end{frame}
+
+\begin{frame}{...but a big code can cheat}
+  \small
+  An overcomplete code has room to spare - so the network can take the lazy way out and just
+  \textbf{copy the input straight through} (the identity map again), learning nothing useful.
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.98\linewidth}{\small
+    With a big code we can no longer lean on a tight bottleneck to force learning. We need a
+    \emph{different} constraint to keep the network honest. Two classics, coming up:
+    \textbf{denoising} (corrupt the input) and \textbf{sparse} (penalize how much the code fires).}}
 \end{frame}
 
 \begin{frame}{Denoising autoencoders}
@@ -280,32 +573,17 @@
 \end{frame}
 
 \begin{frame}{Sparse autoencoders}
-  \begin{columns}[T]
-    \column{0.54\textwidth}
-    \small
-    Another way to stay honest: don't shrink the code, \textbf{penalize its activations}.
-    Add an $L_1$ penalty (or a target sparsity) so that for any given input, only a
-    \textbf{few} code neurons fire.
-    \vskip 6pt
-    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      \emph{Callback:} the $L_1$ penalty is Lasso (\emph{ch1}) - same idea, now on hidden
-      activations instead of weights. It forces each input to use a small, specialized set
-      of features.}}
-    \column{0.46\textwidth}
-    \begin{center}
-      \begin{tikzpicture}[font=\scriptsize]
-        \foreach \y/\on in {1.4/0,1.0/1,0.6/0,0.2/0,-0.2/1,-0.6/0,-1.0/0,-1.4/0} {
-          \ifnum\on=1
-            \node[circle, draw=paramgreen, very thick, fill=paramgreen!35, inner sep=1.8pt]
-              at (0,\y) {};
-          \else
-            \node[circle, draw, fill=gray!8, inner sep=1.8pt] at (0,\y) {};
-          \fi
-        }
-        \node[below, align=center] at (0,-1.8) {code neurons\\ (few fire)};
-      \end{tikzpicture}
-    \end{center}
-  \end{columns}
+  \small
+  Constraint \#2: don't shrink the code, \textbf{penalize how much it fires}. Add an $L_1$ penalty
+  on the code activations (or a target average activation), so for any one input only a
+  \textbf{few} of the many code neurons switch on.
+  \begin{center}
+    \includegraphics[width=0.9\linewidth]{sparse_activations.pdf}
+  \end{center}
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    Each input now lights up a \textbf{small, specialised} set of detectors - more interpretable,
+    and it \emph{cannot} copy the input (that would need every neuron). \emph{Callback:} the $L_1$
+    penalty is Lasso (ch1), now on \textbf{activations} instead of weights.}}
 \end{frame}
 
 % ================================================================
@@ -357,41 +635,6 @@
 \end{frame}
 
 % ================================================================
-\section{Autoencoders in the wild}
-
-\begin{frame}[plain]
-  \vfill
-  \begin{center}
-    {\Large\color{popblue}\textbf{Autoencoders in the wild}}\\[0.9em]
-    \begin{minipage}{0.82\textwidth}\centering\small
-      The same three ideas, at frontier scale.
-    \end{minipage}
-  \end{center}
-  \vfill
-\end{frame}
-
-\begin{frame}{The latent idea is everywhere (2026)}
-  \small
-  Every technique in this deck is load-bearing in today's biggest models:
-  \vskip 4pt
-  \begin{itemize}
-    \item \textbf{Self-supervised pretraining} $=$ denoising. \textbf{BERT} masks words and
-      rebuilds them; \textbf{MAE} masks image patches and rebuilds them. Masked modeling is
-      denoising at scale - the recipe behind most foundation models.
-    \item \textbf{LLM interpretability} $=$ sparse. A wide \textbf{sparse autoencoder} trained
-      on a model's activations splits them into single-concept features - how Anthropic reads
-      what is inside Claude (\emph{Scaling Monosemanticity}, 2024).
-    \item \textbf{Cheaper inference} $=$ bottleneck. \textbf{DeepSeek}'s Multi-head Latent
-      Attention compresses the KV cache into a small \textbf{latent vector} - about 4\% of the
-      usual size - so long contexts fit in memory (DeepSeek-V3, 2024).
-  \end{itemize}
-  \vskip 4pt
-  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.98\linewidth}{\small
-    And the biggest use of all is the \textbf{variational autoencoder} of the next lecture:
-    it is the compression layer inside modern \textbf{image generators}.}}
-\end{frame}
-
-% ================================================================
 \section*{Recap}
 
 \begin{frame}{Recap: autoencoders}
@@ -440,6 +683,17 @@
 %   (small AE/VAE trained on MNIST, seed 509, thread-capped CPU): ae_recon_teaser,
 %   recon_pca_vs_ae, pca_vs_ae_mnist, denoising_grid, anomaly_recon_error_hist,
 %   ae_sampling_fail. No borrowed images in this deck.
+% - Conceptual illustrations from py_src/illustrations.py (no training): mnist_examples
+%   (intro grid), manifold_pca_vs_ae (swiss roll: PCA vs Isomap), sparse_activations
+%   (dense vs sparse code bars).
+% - 2026-07-16 clarity pass (instructor): added MNIST intro frame + history; a "how an
+%   autoencoder learns" training-loop frame; expanded the AE=PCA bridge from 1 frame to 5
+%   (PCA-as-encoder-decoder -> linear AE = PCA -> swiss-roll -> 2-number experiment setup ->
+%   result); rewrote the overcomplete motivation; sparse frame now uses the activation figure.
+% - 2026-07-16 transcript-inspired pass (Deepia "Autoencoders"/"VAEs" videos): age+height
+%   analogy in the cold open; "how big should the code be?" latent-dim frame (fig
+%   latent_dim_recon from py_src/latent_dim_sweep.py - real, 3 tiny AEs on MNIST, seed 509);
+%   MRI-sex representation-learning example (illustrative, labeled as not run here).
 % - Callback spine: bottleneck<->PCA (ch4b), decoder<->transposed conv (L19),
 %   denoising<->augmentation (ch5), sparse<->Lasso (ch1), anomaly<->thresholding (ch3).
 % - One rigor beat: linear AE = PCA subspace (Eckart-Young), stated not proved.
