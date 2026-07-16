@@ -1,0 +1,449 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 23: Variational Autoencoders}
+\subtitle{Give the latent space no holes, then sample it}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{What if every point were a digit?}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \small
+    Last lecture ended in failure: the plain autoencoder could not \textbf{generate} -
+    random codes decode to blurry blobs.
+    \vskip 4pt
+    But look what we \emph{want} (right): a latent space where \textbf{every point decodes
+    to a valid digit}, and neighbours morph smoothly into one another.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      If the whole space were like this, a \textbf{random draw} would produce a brand-new
+      digit. That is a \textbf{generative model}. This lecture builds it.}}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{vae_latent_grid.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{From autoencoder to generative model}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{From autoencoder to generative model}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      An autoencoder memorizes points. We want a space we can sample.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The fix: a blob, not a point}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+    \small
+    A plain autoencoder maps each input to a single \textbf{point} $\mathbf{z}$. The gaps
+    between points are undefined, so a random draw lands in a hole.
+    \vskip 5pt
+    \textbf{The fix, in one line:} make the encoder output a little \textbf{Gaussian blob}
+    per input - a mean $\bm{\mu}(\xv)$ and a spread $\bm{\sigma}(\xv)$ - and push all the
+    blobs to fill a standard normal $\mathcal{N}(0,I)$ with no gaps.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Two new ingredients: \textbf{(1)} the encoder predicts $\bm{\mu},\bm{\sigma}$;
+      \textbf{(2)} a regularizer pulls every blob toward $\mathcal{N}(0,I)$. The next two
+      sections make each precise.}}
+    \column{0.50\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        % point code
+        \node at (-1.6,2.2) {\textbf{AE}: a point};
+        \fill[armred] (-1.6,1.2) circle (1.4pt);
+        \draw[gray, dashed] (-2.6,0.5) rectangle (-0.6,1.9);
+        % blob code
+        \node at (1.6,2.2) {\textbf{VAE}: a blob};
+        \shade[ball color=armblue!30] (1.6,1.2) circle (0.42);
+        \draw[armblue, ->] (1.6,1.2) -- (2.02,1.2) node[right] {$\sigma$};
+        \node[armblue] at (1.6,1.2) {$\mu$};
+        % target N(0,I)
+        \draw[paramgreen, thick] (0,-1.4) circle (0.9);
+        \node[paramgreen] at (0,-1.4) {$\mathcal{N}(0,I)$};
+        \draw[->, gray] (1.6,0.7) .. controls (1.2,-0.2) .. (0.5,-0.9);
+        \node[gray] at (2.1,-0.2) {\tiny pull in};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The VAE objective: the ELBO}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The VAE objective: the ELBO}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Where the loss comes from - honestly.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The plan, before the math}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \small
+    We want the training images to be \textbf{likely}: maximize $\log p(\xv)$. But that means
+    adding up \emph{every} possible code that could have made $\xv$ - we cannot compute it.
+    \vskip 4pt
+    \textbf{The move:} build a quantity we \emph{can} compute - the \textbf{ELBO} - that never
+    rises above $\log p(\xv)$. Push the ELBO up, and $\log p(\xv)$ is dragged up with it.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The \textbf{gap} between floor and ceiling is exactly how wrong the encoder's guess is.
+      Raising the ELBO does two jobs at once: fit the data better \emph{and} make the encoder a
+      better guesser. ($\mathrm{KL}(a\,\|\,b)$ just measures how far apart two distributions
+      are - zero when they match.)}}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        \draw[->] (0,-0.2) -- (0,3.5) node[left] {\rotatebox{90}{\tiny higher is better}};
+        \draw[thick, popblue] (0.4,3.0) -- (3.3,3.0) node[right] {$\log p(\xv)$};
+        \draw[thick, paramgreen] (0.4,1.1) -- (3.3,1.1) node[right] {ELBO};
+        \draw[<->, armred] (1.9,1.15) -- (1.9,2.95) node[midway, right] {\color{armred}gap $=$ KL};
+        \draw[->, paramgreen, very thick] (0.9,1.3) -- (0.9,2.75);
+        \node[paramgreen] at (0.95,2.95) {\tiny push};
+      \end{tikzpicture}
+      \vskip 4pt
+      {\scriptsize The loss is then a \textbf{tug of war}: reconstruction spreads codes apart,
+      the KL tidies them toward $\mathcal{N}(0,I)$.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A latent-variable model}
+  \small
+  Assume each image is generated by first drawing a latent code, then decoding it:
+  \[
+    p(\xv) = \int p(\xv \mid \mathbf{z})\, p(\mathbf{z})\, d\mathbf{z},
+    \qquad p(\mathbf{z}) = \mathcal{N}(0, I),
+  \]
+  where the decoder $p(\xv \mid \mathbf{z})$ is a neural network.
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.98\linewidth}{\small
+    We would like to train by maximizing $\log p(\xv)$. But that integral runs over
+    \emph{every} possible code $\mathbf{z}$ - it is \textbf{intractable}. We cannot compute
+    it, let alone differentiate it.}}
+  \vskip 6pt
+  The way out: introduce the \textbf{encoder} $q(\mathbf{z}\mid\xv)$ as a cheap stand-in for
+  the true (unknown) posterior $p(\mathbf{z}\mid\xv)$.
+\end{frame}
+
+\begin{frame}{Deriving the ELBO}
+  \small
+  Start from $\log p(\xv)$, multiply inside by $\tfrac{q(\mathbf{z}\mid\xv)}{q(\mathbf{z}\mid\xv)}$,
+  and split the logarithm:
+  \fcolorbox{popblue}{popblue!6}{\parbox{0.97\linewidth}{\small
+    \vspace{-4pt}
+    \begin{align*}
+      \log p(\xv)
+        &= \underbrace{\E_{q(\mathbf{z}\mid\xv)}\!\big[\log p(\xv\mid\mathbf{z})\big]
+           - \mathrm{KL}\!\big(q(\mathbf{z}\mid\xv)\,\|\,p(\mathbf{z})\big)}_{\textstyle
+           \text{ELBO}(\xv)} \\[2pt]
+        &\quad + \underbrace{\mathrm{KL}\!\big(q(\mathbf{z}\mid\xv)\,\|\,p(\mathbf{z}\mid\xv)\big)}_{\textstyle \geq\, 0}.
+    \end{align*}
+    \vspace{-6pt}
+  }}
+  \vskip 6pt
+  The last term is a KL divergence, so it is $\geq 0$. Drop it and you get a
+  \textbf{lower bound}:
+  \[
+    \log p(\xv) \;\geq\; \text{ELBO}(\xv).
+  \]
+  We cannot maximize $\log p(\xv)$, so we \textbf{maximize the ELBO} instead (the
+  \emph{Evidence Lower BOund}).
+\end{frame}
+
+\begin{frame}{Reading the two terms}
+  \small
+  \[
+    \text{ELBO}(\xv) = \underbrace{\E_{q(\mathbf{z}\mid\xv)}\!\big[\log p(\xv\mid\mathbf{z})\big]}_{\text{\color{paramgreen}reconstruction}}
+      \;-\; \underbrace{\mathrm{KL}\!\big(q(\mathbf{z}\mid\xv)\,\|\,\mathcal{N}(0,I)\big)}_{\text{\color{armred}regularizer}}
+  \]
+  \begin{itemize}
+    \item \textbf{\color{paramgreen}Reconstruction:} decode $\mathbf{z}$ and rebuild $\xv$
+      well - this is exactly the autoencoder loss from L22.
+    \item \textbf{\color{armred}KL regularizer:} keep each blob $q(\mathbf{z}\mid\xv)$ close
+      to $\mathcal{N}(0,I)$ - this is what fills the latent space with no holes.
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    \emph{Callback:} the KL term is a \textbf{prior} on the code - a regularizer, the same role
+    weight decay played in ch5. Closed form for two Gaussians:
+    $\ \mathrm{KL} = \tfrac12\sum_j\big(\mu_j^2 + \sigma_j^2 - \ln\sigma_j^2 - 1\big)$, smallest
+    when $\mu=0,\sigma=1$ - i.e. the blob \emph{is} the prior.}}
+\end{frame}
+
+\begin{frame}{The tug of war}
+  The two ELBO terms pull in opposite directions - their \textbf{balance} is what makes the
+  latent both faithful and samplable:
+  \begin{center}
+    \includegraphics[width=0.99\linewidth]{vae_tug_of_war.pdf}
+  \end{center}
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.99\linewidth}{\small
+    \textbf{Reconstruction} alone spreads codes apart (sharp rebuilds, but the holes come back);
+    the \textbf{KL} alone collapses them onto the prior (samplable, but they carry no
+    information). The VAE keeps just enough of each.}}
+\end{frame}
+
+% ================================================================
+\section{The reparameterization trick}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The reparameterization trick}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      You cannot differentiate a coin flip. Unless.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Backprop through randomness}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \small
+    The ELBO needs a sample $\mathbf{z}\sim\mathcal{N}(\bm{\mu},\bm{\sigma}^2)$. But
+    \textbf{sampling is random} - there is no gradient through a random node, so backprop
+    stops dead.
+    \vskip 4pt
+    \textbf{Predict:} we need a derivative through a random draw. How?
+    \pause
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.95\linewidth}{\small
+      \textbf{The trick:} move the randomness into an \emph{input}.
+      \[ \mathbf{z} = \bm{\mu} + \bm{\sigma}\odot\bm{\epsilon}, \qquad
+         \bm{\epsilon}\sim\mathcal{N}(0,I). \]
+      Now $\bm{\mu},\bm{\sigma}$ are deterministic - gradients flow through them; only
+      $\bm{\epsilon}$ is random, and it carries no parameters.}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=6pt,
+          b/.style={draw, rounded corners, minimum height=0.55cm, minimum width=1.1cm}]
+        % before
+        \node at (0,2.4) {\textbf{before}: gradient blocked};
+        \node[b, fill=armblue!10] (m1) at (-1.1,1.5) {$\mu,\sigma$};
+        \node[b, fill=armred!12] (s1) at (0.6,1.5) {$\sim$ sample};
+        \node[b, fill=paramgreen!10] (z1) at (2.2,1.5) {$\mathbf{z}$};
+        \draw[->] (m1) -- (s1); \draw[->] (s1) -- (z1);
+        \node[armred, font=\tiny] at (0.6,0.95) {no gradient};
+        % after
+        \node at (0,-0.2) {\textbf{after}: gradient flows};
+        \node[b, fill=armblue!10] (m2) at (-1.1,-1.1) {$\mu,\sigma$};
+        \node[b, fill=paramgreen!10] (z2) at (2.2,-1.1) {$\mathbf{z}$};
+        \node[b, fill=gray!12] (e2) at (0.6,-2.0) {$\epsilon\!\sim\!\mathcal{N}$};
+        \draw[->, paramgreen, thick] (m2) -- (z2);
+        \draw[->] (e2) -- (z2);
+        \node[paramgreen, font=\tiny] at (0.55,-0.7) {gradient path};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  {\footnotesize With this, the VAE trains end to end with plain SGD / Adam - the same
+  optimizer from ch5.}
+\end{frame}
+
+% ================================================================
+\section{The VAE in action}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The VAE in action}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Sample the prior, decode, done.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Generate: sample the prior, decode}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    \small
+    Training is done. To generate a brand-new digit that was never in the data:
+    \vskip 3pt
+    \begin{enumerate}
+      \item draw $\mathbf{z}\sim\mathcal{N}(0,I)$,
+      \item decode $\hat{\xv} = g(\mathbf{z})$.
+    \end{enumerate}
+    \vskip 4pt
+    That is it. Because the KL term made the codes fill $\mathcal{N}(0,I)$, almost every
+    draw decodes to a valid digit.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      This is the step the plain autoencoder could not take - its codes never matched any
+      distribution you could sample.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{vae_samples.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The fix, side by side}
+  Decode the \emph{same} $\mathcal{N}(0,I)$ draws with each model:
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{sampling_ae_vs_vae.pdf}
+  \end{center}
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.98\linewidth}{\small
+    The plain AE collapses to repetitive, unreliable blobs (its codes do not live where
+    you are sampling). The VAE gives \textbf{diverse, valid digits} - the KL prior did its
+    job.}}
+\end{frame}
+
+\begin{frame}{Walk the latent space}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small
+    Because neighbouring codes decode to similar digits, you can \textbf{interpolate}:
+    encode a 3 and an 8, walk the straight line between their codes, decode each step.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The VAE path stays closer to valid digits than the plain AE's (top row). And the full
+      latent grid from the cold open shows the same thing everywhere: a smooth, organized
+      space you can \textbf{traverse}.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{interp_ae_vs_vae.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One knob: $\beta$-VAE and disentanglement}
+  \small
+  Multiply the KL term by a weight $\beta$:
+  \[
+    \mathcal{L} = \underbrace{\E_q[\log p(\xv\mid\mathbf{z})]}_{\text{reconstruction}}
+      \;-\; \beta\cdot \mathrm{KL}\!\big(q(\mathbf{z}\mid\xv)\,\|\,\mathcal{N}(0,I)\big).
+  \]
+  \begin{itemize}
+    \item $\beta$ large: press harder toward $\mathcal{N}(0,I)$. The latent axes tend to
+      \textbf{disentangle} into interpretable factors - one axis becomes rotation, another
+      thickness, another width.
+    \item The price: blurrier reconstructions (you spent capacity on a tidy latent).
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.98\linewidth}{\small
+    A single scalar trades \textbf{reconstruction quality} against \textbf{latent structure}.
+    One example of a whole design space; the mechanics are still just the ELBO.}}
+\end{frame}
+
+\begin{frame}{The VAE is inside modern image generators}
+  \small
+  You might think diffusion models replaced the VAE. The opposite is true - they run
+  \emph{inside} one.
+  \vskip 4pt
+  \begin{itemize}
+    \item \textbf{Latent diffusion (Stable Diffusion).} Do not diffuse pixels - diffuse in a
+      \textbf{VAE's latent}. The VAE compresses a $512\times512\times3$ image to
+      $64\times64\times4$ (about $48\times$ fewer numbers); the diffusion model works in that
+      latent; the \textbf{VAE decoder} paints the final image. Every Stable Diffusion or
+      Midjourney image is decoded by a VAE.
+    \item \textbf{Images as tokens (VQ-VAE).} Give the VAE a discrete codebook and an image
+      becomes a \textbf{sequence of tokens} - so a transformer can generate images the same
+      way an LLM generates text (the DALL-E lineage).
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.98\linewidth}{\small
+    The VAE did not lose to diffusion. It became the \textbf{compression layer inside it}.}}
+\end{frame}
+
+% ================================================================
+\section{Honest limits and the road ahead}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Honest limits and the road ahead}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Principled, but blurry.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{VAE samples are blurry}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \small
+    You have seen it on every VAE figure in this deck: the samples are recognizable but
+    \textbf{soft}.
+    \vskip 5pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      Why: the reconstruction loss rewards the \textbf{average} of all plausible outputs,
+      and a Gaussian decoder smears detail. A VAE gives you a \textbf{principled latent
+      space and a likelihood}, but not sharp images.}}
+    \column{0.46\textwidth}
+    \begin{tabular}{@{}p{0.28\linewidth}p{0.64\linewidth}@{}}
+      \small\textbf{VAE} & \small principled latent + likelihood; blurry \\[4pt]
+      \small\textbf{GAN} & \small sharp images; no likelihood, unstable (\emph{L19 showcase}) \\[4pt]
+      \small\textbf{Diffusion} & \small state of the art - and it runs \emph{inside} a VAE latent \\
+    \end{tabular}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Recap and the road ahead}
+  \small
+  \begin{itemize}
+    \item A VAE is an autoencoder whose encoder outputs a \textbf{distribution} per input,
+      trained to fill $\mathcal{N}(0,I)$.
+    \item Its loss is the \textbf{ELBO} $=$ reconstruction $-$ KL; the KL is a prior that
+      removes the holes.
+    \item The \textbf{reparameterization trick} makes the random sampling differentiable,
+      so it trains with plain gradient descent.
+    \item Sample the prior to \textbf{generate}; samples are valid but blurry.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.98\linewidth}{\small
+    \textbf{Next - the GenAI chapter.} Two roads meet there: the \textbf{attention} thread
+    from L21, and this generative thread. Ahead: transformers, GANs, diffusion, and LLMs.}}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+% - Deck 2 of ch8 autoencoders. Built 2026-07-16 from L23_vae_OUTLINE.md.
+% - The chapter's one deep dive: the ELBO derivation (log p(x) = ELBO + KL>=0) + the
+%   reparameterization trick. KL closed form stated, not derived (appendix-worthy).
+% - Figures are REAL outputs of practical/train_ae_vae.py (VAE latent dim 2, MNIST, seed
+%   509): vae_latent_grid, vae_samples, sampling_ae_vs_vae, interp_ae_vs_vae. No borrowed
+%   images. beta-VAE frame is text + equation only (no beta-VAE was trained, by design).
+% - Callback spine: KL term <-> weight-decay prior (ch5); reparameterization <-> backprop
+%   (ch5); GAN row <-> L19 showcase.
+% - Modern-applications frame: latent diffusion (Stable Diffusion, VAE compresses 512x512x3
+%   -> 64x64x4), VQ-VAE image tokens (DALL-E lineage). Landscape frame notes diffusion runs
+%   inside a VAE latent. Web-verified 2026-07-16.
+% - Honesty: blur is kept as the explicit "honest limits" point, not hidden; the
+%   interpolation contrast is framed as modest, the latent grid carries the smooth-space claim.
+% - Next: the GenAI chapter (attention/transformers from L21 + GANs/diffusion/LLMs).
