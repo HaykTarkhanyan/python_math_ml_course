@@ -1,0 +1,164 @@
+\documentclass[aspectratio=43]{beamer}
+\input{../preamble}
+% 4:3 to match the embedded LMU pages. Fourth chunk of the embed-based NN chapter (LMU week 18):
+% basic training -> computational graphs -> backprop 1 & 2 -> hardware & software.
+\usepackage{pdfpages}
+
+\title{Training Neural Networks}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Training Neural Networks}}\\[0.5em]
+    {\large Gradient descent, computational graphs, and backpropagation}\\[1.0em]
+    \begin{minipage}{0.86\textwidth}\centering\small
+      This deck embeds the LMU \emph{Introduction to Deep Learning} training chunks in full
+      (basic training $\rightarrow$ computational graphs $\rightarrow$ backpropagation
+      $\rightarrow$ hardware \& software), with our own notes sprinkled in.
+    \end{minipage}\\[0.9em]
+    \begin{tikzpicture}[>=Latex, n/.style={circle,draw,minimum size=0.3cm,inner sep=0}]
+      \foreach \i/\y in {1/1.0,2/0,3/-1.0} \node[n,draw=gray,fill=gray!10] (i\i) at (0,\y){};
+      \foreach \i/\y in {1/1.2,2/0.4,3/-0.4,4/-1.2} \node[n,draw=armblue,fill=armblue!15] (a\i) at (1.3,\y){};
+      \foreach \i/\y in {1/0.5,2/-0.5} \node[n,draw=armorange,fill=armorange!18] (o\i) at (2.6,\y){};
+      \foreach \p in {1,2,3}\foreach \q in {1,2,3,4}\draw[gray!30,->](i\p)--(a\q);
+      \foreach \p in {1,2,3,4}\foreach \q in {1,2}\draw[armblue!25,->](a\p)--(o\q);
+      \draw[armred, ->, very thick] (2.6,-1.6) to[bend left=18]
+        node[below=1pt,font=\tiny,text=armred]{backward pass: gradients} (0,-1.6);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  {\footnotesize\color{gray} Chapter 5 -- Neural Networks}
+\end{frame}
+
+% ---- LMU chunk: Basic training (13 pp) -------------------------
+\includepdf[pages=-]{lmu_src/01_basic-training.pdf}
+
+% --- OUR SPRINKLE (after basic training): LR & init in pictures ---
+\begin{frame}{Learning rate \& initialization, visualized}
+  Two of the choices LMU just described decide whether training works at all:
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{fig/lr_curves.pdf}\end{center}
+    \vskip 2pt
+    \centering\scriptsize \textbf{Learning rate:} too high overshoots and stalls; too low
+    crawls; just right drops fast and settles.
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{fig/init_variance.pdf}\end{center}
+    \vskip 2pt
+    \centering\scriptsize \textbf{Initialization:} bad init lets the activation scale blow up
+    with depth; He/Glorot init keeps it stable.
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    LMU's initialization slide was text-only -- this is what it looks like: the \emph{variance}
+    of the signal must be preserved layer to layer, or a deep net cannot start learning.}}
+\end{frame}
+
+% ---- LMU chunk: Chain rule & computational graphs (6 pp) ------
+\includepdf[pages=-]{lmu_src/02_comp-graphs.pdf}
+
+% ---- LMU chunk: Backpropagation 1 -- by-hand XOR (20 pp) ------
+\includepdf[pages=-]{lmu_src/03_backpropagation1.pdf}
+
+% --- OUR SPRINKLE (after the by-hand backprop): the clean residual ---
+\begin{frame}{A cleaner residual: the output gradient is $f - y$}
+  LMU used the \textbf{L2 loss} on class labels to keep the algebra simple. In practice,
+  classification uses \textbf{cross-entropy} -- and then the output-layer gradient collapses to
+  something you already know:
+  \vfill
+  \[
+    \text{sigmoid output } + \text{ cross-entropy} \;\;\Longrightarrow\;\;
+    \frac{\partial L}{\partial f_{\text{in}}} = f - y
+  \]
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The same ``residual'' from earlier in the course.} Linear regression, logistic
+    regression, and now a neural net: the output signal is \textbf{prediction $-$ target}.
+    Everything to its left is that residual, passed backward and scaled by local derivatives.}}
+\end{frame}
+
+% ---- LMU chunk: Backpropagation 2 -- recursion & caching (10 pp) --
+\includepdf[pages=-]{lmu_src/04_backpropagation2.pdf}
+
+% --- OUR SPRINKLE (after the recursion): its cost -- vanishing gradients ---
+\begin{frame}{What this recursion costs: vanishing gradients}
+  LMU's recursion $\;\delta^{(i)} = \mathbf{W}^{(i+1)}\delta^{(i+1)} \odot
+  \sigma'(\mathbf{z}^{(i)}_{\text{in}})\;$ multiplies by $\sigma'$ at \emph{every} layer on the
+  way back -- and that factor is small:
+  \vfill
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{fig/activation_grads.pdf}\end{center}
+    \column{0.48\textwidth}
+    \begin{itemize}\small
+      \item Sigmoid: $\sigma'\le 0.25$. After $k$ layers the gradient is scaled by $\le
+        0.25^{k}$ -- it \textbf{vanishes exponentially} with depth.
+      \item $0.25^{10}\approx 10^{-6}$: a $10$-layer sigmoid net shrinks the gradient a
+        \emph{millionfold} before it reaches layer $1$.
+      \item \textbf{ReLU} ($\sigma'=1$ for $z>0$) largely fixes this -- the default hidden
+        activation.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    The \textbf{vanishing-gradient} problem is a direct consequence of the backprop recursion
+    LMU just derived -- and a big reason deep nets were hard to train before ReLU.}}
+\end{frame}
+
+% ---- LMU chunk: Hardware & software (10 pp) ------------------
+\includepdf[pages=-]{lmu_src/05_hardware-and-software.pdf}
+
+% ================================================================
+% OUR ADDITION: recap.
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Putting it together}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One objective, one backward sweep, and the hardware that makes it fast.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Recap: how a network learns}
+  \begin{itemize}\small
+    \item \textbf{Objective:} minimise the empirical risk by \textbf{gradient descent};
+      \textbf{SGD} does it on mini-batches -- cheaper, noisier, and often generalises better.
+    \item \textbf{Backprop} $=$ the chain rule on the computational graph, run \emph{backward
+      once}. Each layer's error signal $\delta$ is computed from the layer above and reused:
+      ``$\delta\times$ local derivative'', ``$\delta\times$ input''.
+    \item That reuse is why \emph{one} backward pass gives \textbf{all} gradients -- the naive
+      alternative is one forward pass per weight.
+    \item \textbf{You won't code it by hand:} frameworks (PyTorch, TensorFlow) build the graph
+      and run backprop when you call \texttt{loss.backward()} -- on \textbf{GPUs/TPUs} that do
+      the matrix math massively in parallel.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    We can now \emph{train} a network. What remains: keeping it from \textbf{overfitting}
+    (regularization), and \textbf{optimizing} faster than plain SGD -- the next two chunks.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Fourth embed-based deck (2026-07-18): LMU week 18 (training / backprop).
+%   - Embeds LMU Introduction to Deep Learning chunks verbatim (pdfpages), 4:3:
+%       01_basic-training (13pp), 02_comp-graphs (6pp), 03_backpropagation1 (20pp),
+%       04_backpropagation2 (10pp), 05_hardware-and-software (10pp)
+%     -> unprotected copies in ml/ch5_neural_networks/lmu_src/ (PyMuPDF-decrypted).
+%   - Sprinkled mid-deck, reusing house L15 figures/content:
+%       * after basic training: lr_curves + init_variance (LMU's init slide was text-only);
+%       * after the by-hand backprop: f - y residual (LMU used L2; cross-entropy gives the clean form);
+%       * after the recursion: vanishing gradients (activation_grads) as its direct consequence.
+%   - End: recap + bridge to regularization (wk19) and optimization (wk20).
+%   - Kept alongside house-style L14/L15; rename to a playlist-numbered name once slotted.
+% =============================================================

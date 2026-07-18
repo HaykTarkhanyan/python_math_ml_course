@@ -1,0 +1,263 @@
+\documentclass[aspectratio=43]{beamer}
+\input{../preamble}
+% 4:3 to match the embedded LMU pages. Third chunk of the embed-based NN chapter (LMU week 17):
+% matrix notation -> multilayer FNNs -> multiclass/softmax -> universal approximation.
+\usepackage{pdfpages}
+
+\title{Deep Feedforward Networks}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Deep Feedforward Networks}}\\[0.5em]
+    {\large Matrix notation, many layers, many classes -- and one theorem}\\[1.2em]
+    \begin{minipage}{0.86\textwidth}\centering\small
+      This deck embeds the LMU \emph{Introduction to Deep Learning} MLP chunks in full
+      (matrix notation $\rightarrow$ deep networks $\rightarrow$ multi-class softmax
+      $\rightarrow$ universal approximation), with our own notes sprinkled in.
+    \end{minipage}\\[1.0em]
+    \begin{tikzpicture}[>=Latex, n/.style={circle,draw,minimum size=0.3cm,inner sep=0}]
+      \foreach \i/\y in {1/1.2,2/0.4,3/-0.4,4/-1.2} \node[n,draw=gray,fill=gray!10] (i\i) at (0,\y){};
+      \foreach \i/\y in {1/1.5,2/0.75,3/0,4/-0.75,5/-1.5} \node[n,draw=armblue,fill=armblue!15] (a\i) at (1.15,\y){};
+      \foreach \i/\y in {1/1.5,2/0.75,3/0,4/-0.75,5/-1.5} \node[n,draw=armblue,fill=armblue!15] (b\i) at (2.3,\y){};
+      \foreach \i/\y in {1/0.8,2/0,3/-0.8} \node[n,draw=armorange,fill=armorange!18] (o\i) at (3.45,\y){};
+      \foreach \p in {1,2,3,4}\foreach \q in {1,2,3,4,5}\draw[gray!30,->](i\p)--(a\q);
+      \foreach \p in {1,...,5}\foreach \q in {1,...,5}\draw[armblue!18,->](a\p)--(b\q);
+      \foreach \p in {1,...,5}\foreach \q in {1,2,3}\draw[armblue!30,->](b\p)--(o\q);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  {\footnotesize\color{gray} Chapter 5 -- Neural Networks}
+\end{frame}
+
+% ---- LMU chunk: MLP matrix notation (8 pp) ---------------------
+\includepdf[pages=-]{lmu_src/01_matrix-notation.pdf}
+
+% --- OUR SPRINKLE (improving LMU's abstract notation deck): track the shapes ---
+\begin{frame}{Improving the notation: track the shapes}
+  LMU's notation is compact but abstract -- pure symbols. The one thing to hold onto is that
+  \textbf{the shapes must line up}: a whole batch of $n$ inputs flows through the layer as
+  matrix multiplies.
+  \vfill
+  \begin{center}
+  \begin{tikzpicture}[font=\footnotesize, >=Latex,
+    box/.style={draw, thick, minimum height=1.1cm, rounded corners=2pt, inner sep=4pt}]
+    \node[box, fill=gray!12, draw=gray, minimum width=1.3cm] (X) {$X$};
+    \node[box, fill=armblue!14, draw=armblue, minimum width=0.9cm, right=1.2cm of X] (W) {$W$};
+    \node[box, fill=armorange!16, draw=armorange, minimum width=1.3cm, right=2.0cm of W] (Z) {$Z$};
+    \node[below=2pt of X, text=gray]    {$n\times \mathbf{p}$};
+    \node[below=2pt of W, text=armblue] {$\mathbf{p}\times m$};
+    \node[below=2pt of Z, text=orange1] {$n\times m$};
+    \draw[->] (X) -- node[above,font=\scriptsize]{$\times$} (W);
+    \draw[->] (W) -- node[above,font=\scriptsize]{$+\,B,\ \sigma$} (Z);
+  \end{tikzpicture}
+  \end{center}
+  \vfill
+  \begin{itemize}\small
+    \item Hidden layer: $Z=\sigma(XW+B)$ has shape $(n\times m)$ -- the \textbf{inner} $p$'s must
+      match ($X$'s columns $=$ $W$'s rows), and they cancel.
+    \item Output layer: $f=\tau(Zu+C)$ has shape $(n\times 1)$ -- one prediction per input.
+  \end{itemize}
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Whenever the algebra feels abstract, \textbf{write the shape under each symbol}. Two adjacent
+    inner dimensions that don't match $=$ an illegal multiply -- the fastest bug-catch in deep
+    learning.}}
+\end{frame}
+
+% ---- LMU chunk: Multi-layer feedforward networks (20 pp) -------
+\includepdf[pages=-]{lmu_src/02_multilayer-FNNs.pdf}
+
+% --- OUR SPRINKLE (after the depth deck): why depth is exponentially expressive ---
+\begin{frame}{Why depth helps: it folds space}
+  LMU's slides said depth gives an \emph{exponential} advantage (Mont\'ufar et al., 2014). Here
+  is the picture behind that claim:
+  \vfill
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{fig/folding_tent.pdf}\end{center}
+    \vskip 2pt
+    \footnotesize A ReLU layer \textbf{folds} the input along its kinks. Each fold doubles the
+    pieces: a depth-$k$ net expresses $2^k$ linear regions from $O(k)$ neurons -- a shallow net
+    would need $2^k$ neurons to match.
+    \column{0.4\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{fig/folding_space.pdf}\end{center}
+    \vskip 2pt
+    \scriptsize The same folding in 2D: a small depth-$3$ net creases the plane into $170{+}$
+    regions.
+  \end{columns}
+\end{frame}
+
+% --- OUR SPRINKLE (depth): what the extra layers represent ---
+\begin{frame}{Depth $=$ a hierarchy of features}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Folding explains \emph{how many} regions depth buys. Here is \emph{what} those extra layers
+    tend to represent: each layer composes the one below into something more abstract.
+    \vskip 6pt
+    On images, a trained deep net learns roughly this progression \textbf{on its own} -- nobody
+    programs the edges or the parts. That is \textbf{representation learning}.
+    \column{0.5\textwidth}
+    \begin{center}
+    \begin{tikzpicture}[font=\scriptsize, node distance=0.42cm,
+      b/.style={draw, rounded corners, minimum width=3.2cm, minimum height=0.55cm}]
+      \node[b, draw=gray, fill=gray!10] (p) {raw pixels};
+      \node[b, draw=armred, fill=armred!10, above=of p] (e) {edges};
+      \node[b, draw=armorange, fill=armorange!16, above=of e] (pa) {parts (eye, wheel, \ldots)};
+      \node[b, draw=armblue, fill=armblue!14, above=of pa] (o) {objects (face, car, \ldots)};
+      \draw[->,>=Latex] (p)--(e); \draw[->,>=Latex] (e)--(pa); \draw[->,>=Latex] (pa)--(o);
+    \end{tikzpicture}\\[4pt]
+    \scriptsize deeper layer $=$ more abstract feature
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ---- LMU chunk: Multi-class classification / softmax (14 pp) --
+\includepdf[pages=-]{lmu_src/03_multiclass-classification.pdf}
+
+% --- OUR SPRINKLE (after multiclass): softmax as a bar chart ---
+\begin{frame}{Softmax, as a picture}
+  LMU's example ran a forward pass to the output scores $f_{in}=(0.57,\,2.95,\,-0.92)$. Softmax
+  turns those raw scores into a \textbf{probability distribution over the classes}:
+  \vfill
+  \begin{center}\includegraphics[width=0.95\linewidth]{fig/softmax_bars.pdf}\end{center}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Exponentiate, then normalise so the bars sum to $1$. It is a \textbf{smooth argmax}: the
+    largest score dominates (class 2, $0.90$), but every class keeps a nonzero probability --
+    the same softmax as multinomial logistic regression.}}
+\end{frame}
+
+% --- OUR SPRINKLE (BEFORE the theorem): Sherlock Holmes balloon joke, as a warning ---
+\begin{frame}{An old joke -- and a warning about what's coming}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \textbf{Sherlock Holmes} and Dr.\ Watson are lost in a hot-air balloon. They drift down and
+    Holmes calls to a man in the field below: \emph{``Excuse me -- where are we?''}
+    \vskip 6pt
+    After a long pause, the answer floats back: \emph{``You are in a hot-air balloon, about
+    thirty feet above this field.''}
+    \vskip 6pt
+    ``That man,'' Holmes remarks to Watson, ``is a \textbf{mathematician}.''\\[2pt]
+    ``How can you tell?''\\[2pt]
+    ``His answer was \textbf{slow}, \textbf{perfectly correct} -- and \textbf{completely
+    useless}.''
+    \column{0.4\textwidth}
+    \centering
+    \includegraphics[height=3.1cm]{img/balloon.png}\\[4pt]
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+      Hold that thought for the theorem you are \emph{about to see}: ``a network can represent
+      \emph{any} continuous function'' is perfectly correct -- and, on its own, useless. It
+      names no layer size, no training recipe, and no guarantee it will generalize.}}
+  \end{columns}
+\end{frame}
+
+% ---- LMU chunk: Universal approximation -- theorem & discussion (pp 1-6) ----
+\includepdf[pages=1-6]{lmu_src/04_univ-approx-theorem.pdf}
+
+% --- OUR SPRINKLE (right after the theorem, before LMU's examples): WHY it works ---
+\begin{frame}{Why it works: any curve is a sum of bumps}
+  The theorem promises an approximation \emph{exists} -- but not \emph{why}. The intuition:
+  each hidden neuron contributes one localized \textbf{bump}, and their sum can trace any
+  continuous curve. More neurons $\Rightarrow$ closer fit.
+  \vfill
+  \begin{center}\includegraphics[width=0.98\linewidth]{fig/uat_bumps.pdf}\end{center}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Each sigmoid pair makes one bump (left). Summing $6$ already follows the target; $20$ nearly
+    nails it (right). ``$m\to\infty$'' in the theorem is just \textbf{``add more bumps''} -- and
+    the LMU examples on the next slides show exactly this, as the hidden-layer size grows.}}
+\end{frame}
+
+% ---- LMU chunk: Universal approximation -- worked examples (pp 7-21) ----
+\includepdf[pages=7-21]{lmu_src/04_univ-approx-theorem.pdf}
+
+% --- OUR SPRINKLE (after the theorem): what it does NOT promise ---
+\begin{frame}{Universal approximation: read the small print}
+  The theorem is reassuring but easy to over-read. Three cautions:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Existence, not construction.} It says good weights \emph{exist} -- not that
+      gradient descent will \emph{find} them. Training can still get stuck.
+    \item \textbf{One layer can be absurdly wide.} ``Some $m$'' may mean an astronomically large
+      hidden layer; \textbf{depth} reaches the same functions far more cheaply (previous
+      sprinkle).
+    \item \textbf{Approximating $\ne$ generalizing.} The LMU example showed it: a size-$5$ net
+      nailed the training data but its \emph{test} error exploded (CV mse $\approx 20$).
+      Capacity you cannot control overfits.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Takeaway.} Universal approximation is a \emph{floor} on what a big-enough net
+    \emph{could} represent -- not a promise about training or test performance. In practice: a
+    \textbf{reasonably sized} hidden layer, plus everything in the training chunk.}}
+\end{frame}
+
+% ================================================================
+% OUR ADDITION: recap + bridge.
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Putting it together}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      We can now write down a network of any depth, width, and number of classes -- and know it
+      is expressive enough.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Recap: the model is now fully specified}
+  \begin{itemize}\small
+    \item \textbf{Matrix notation:} a layer is $\mathbf{z}=\sigma(\mathbf{W}^\top\mathbf{x}+
+      \mathbf{b})$; a whole batch is $Z=\sigma(XW+B)$ -- one matrix multiply per layer.
+    \item \textbf{Depth:} stack $l$ layers into a chain
+      $f=\tau\circ\ldots\circ\sigma^{(1)}$. Each layer builds more abstract features; depth is
+      \textbf{exponentially} more expressive than width (folding).
+    \item \textbf{Many classes:} a \textbf{softmax} output layer turns scores into a probability
+      distribution -- the same softmax as multinomial logistic regression.
+    \item \textbf{Universal approximation:} one hidden layer can approximate any continuous
+      function in principle -- but trainability and generalization are separate questions.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Everything is still ``a stack of affine maps and nonlinearities''. \textbf{One thing is
+    still missing: how to learn the weights.}}}
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Next: learning the weights}
+  Every network so far had its weights \textbf{given} to us. With the model fully specified, the
+  last piece is \textbf{training} -- finding good weights automatically from data.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Gradient descent:} nudge every weight downhill on the loss.
+    \item \textbf{Backpropagation:} get the gradient for \emph{all} weights in one backward
+      pass -- what makes training a million-weight net feasible.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    That is the next chunk (LMU's \emph{backpropagation} week). It turns these static
+    architectures into models that actually learn.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Third embed-based deck (2026-07-18): LMU week 17 (MLP core).
+%   - Embeds LMU Introduction to Deep Learning chunks verbatim (pdfpages), 4:3:
+%       01_matrix-notation (8pp), 02_multilayer-FNNs (20pp),
+%       03_multiclass-classification (14pp), 04_univ-approx-theorem (21pp)
+%     -> unprotected copies in ml/ch5_neural_networks/lmu_src/ (PyMuPDF-decrypted).
+%   - Sprinkled mid-deck, reusing house figures:
+%       * after the depth deck: folding_tent + folding_space (Montufar exponential advantage);
+%       * after the UAT deck: "small print" caution (existence != construction != generalization),
+%         referencing LMU's own size-5 CV overfit spike.
+%   - End: recap + bridge to the training (backprop) chunk.
+%   - Kept alongside house-style L14/L15; rename to a playlist-numbered name once slotted.
+% =============================================================
