@@ -1,0 +1,417 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+% Callout helper: \callout{color}{body}
+\newcommand{\callout}[2]{%
+  \begin{center}\fcolorbox{#1}{#1!8}{\parbox{0.92\textwidth}{#2}}\end{center}}
+
+\title{07: Time Series -- Classical Methods}
+\subtitle{When the order of the rows is the whole point}
+\date{}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ================================================================
+% Cold open
+\begin{frame}{Every model so far assumed the rows were interchangeable}
+  Regression, trees, logistic regression -- all of them treat the dataset as a
+  \emph{bag} of i.i.d. rows. Shuffle the rows, nothing changes.
+  \vfill
+  \callout{armred}{\textbf{Time series breaks that assumption.}
+  Row order \emph{is} the signal. Yesterday's value tells you a lot about
+  today's. You can only train on the past, and you must predict the future --
+  never the other way around.}
+  \vfill
+  Examples everywhere: daily sales, electricity demand, website traffic, AMD /
+  Dram exchange rate, sensor readings, COVID case counts, your heart rate.
+  \vfill
+  \footnotesize Two lectures. \textbf{Today (07):} the classical statistical
+  toolkit -- decomposition, stationarity, ARIMA, exponential smoothing.
+  \textbf{Next (08):} treating forecasting as a supervised ML problem.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What makes time series different}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{What makes time series different}}\\[4pt]
+    \small One column, indexed by time -- and the index carries information.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The vocabulary}
+  A time series is a sequence $y_1, y_2, \dots, y_T$ sampled at regular steps
+  (hourly, daily, monthly, \dots).
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Two jobs:}
+    \begin{itemize}\small
+      \item \textbf{Forecasting} -- predict future values $y_{T+1}, \dots, y_{T+h}$.
+        ($h$ = forecast \emph{horizon}.)
+      \item \textbf{Understanding} -- decompose, explain, find structure.
+    \end{itemize}
+    \vskip6pt
+    \textbf{Two shapes of data:}
+    \begin{itemize}\small
+      \item \textbf{Univariate} -- one series.
+      \item \textbf{Multivariate} -- many series, possibly with exogenous drivers.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \callout{armblue}{\footnotesize
+      \textbf{The one rule that governs everything:}\\
+      information flows forward in time only. Any value, feature, or statistic you
+      feed the model must have been \emph{knowable at prediction time}. Violate this
+      and you get ``leakage'' -- great backtests, useless in production.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The four components of a series}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    A series is usefully thought of as a sum (or product) of:
+    \begin{itemize}\small
+      \item \textbf{Trend} $T_t$ -- long-run drift up or down.
+      \item \textbf{Seasonality} $S_t$ -- a pattern that repeats on a \emph{fixed}
+        period (24h, 7d, 12mo).
+      \item \textbf{Cycle} -- swings with no fixed period (business cycles).
+      \item \textbf{Noise / residual} $R_t$ -- what's left.
+    \end{itemize}
+    \vskip4pt
+    \footnotesize Additive: $y_t = T_t + S_t + R_t$. \\
+    Multiplicative: $y_t = T_t \cdot S_t \cdot R_t$ (season grows with level --
+    take $\log$ to make it additive).
+    \column{0.56\textwidth}
+    \includegraphics[width=\textwidth]{fig/ts_anatomy.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Decomposition: STL}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \textbf{STL} = ``Seasonal-Trend decomposition using Loess''. It splits the
+    series into trend + seasonal + residual, robustly.
+    \vskip6pt
+    Why bother?
+    \begin{itemize}\small
+      \item \emph{See} the structure before modeling.
+      \item Deseasonalize (analyze the trend cleanly).
+      \item The residual is where anomalies show up.
+    \end{itemize}
+    \vskip6pt
+    {\lstset{basicstyle=\ttfamily\scriptsize}\begin{lstlisting}
+from statsmodels.tsa.seasonal import STL
+res = STL(y, period=12).fit()
+res.trend, res.seasonal, res.resid
+\end{lstlisting}}
+    \column{0.56\textwidth}
+    \includegraphics[width=\textwidth]{fig/stl_decomposition.pdf}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Stationarity and differencing}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Stationarity and differencing}}\\[4pt]
+    \small The classical models need a series whose behaviour does not drift.
+  \end{center}
+\end{frame}
+
+\begin{frame}{What is stationarity?}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    A series is (weakly) \textbf{stationary} if its statistical behaviour does not
+    depend on \emph{when} you look:
+    \begin{itemize}\small
+      \item constant mean (no trend),
+      \item constant variance (no growing swings),
+      \item autocovariance depends only on the \emph{lag}, not on absolute time.
+    \end{itemize}
+    \vskip4pt
+    \callout{armorange}{\scriptsize Why we care: ARMA-type models assume
+    stationarity. Trends and seasonality must be removed \emph{first}, then added
+    back to the forecast.}
+    \column{0.56\textwidth}
+    \includegraphics[width=\textwidth]{fig/stationarity.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Differencing makes a series stationary}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \textbf{Differencing:} model the change instead of the level.
+    \[ y'_t = y_t - y_{t-1} \]
+    \begin{itemize}\small
+      \item Removes a trend (do it $d$ times -- usually $d=1$).
+      \item \textbf{Seasonal differencing} $y_t - y_{t-m}$ removes a season of
+        period $m$.
+    \end{itemize}
+    \vskip4pt
+    \textbf{Testing it -- the ADF test.}
+    Augmented Dickey-Fuller: $H_0 = $ ``non-stationary''.
+    \emph{Small $p$-value} $\Rightarrow$ reject $\Rightarrow$ stationary.
+    \column{0.58\textwidth}
+    \includegraphics[width=\textwidth]{fig/differencing.pdf}
+    \vskip4pt
+    \callout{armred}{\scriptsize A trap: differencing too many times injects
+    artificial noise. Difference the \emph{minimum} amount that passes the test.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Autocorrelation: ACF and PACF}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Autocorrelation}}\\[4pt]
+    \small How a series correlates with delayed copies of itself.
+  \end{center}
+\end{frame}
+
+\begin{frame}{ACF and PACF}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \textbf{ACF} (autocorrelation): correlation between $y_t$ and $y_{t-k}$ for
+    each lag $k$. Includes indirect effects.
+    \vskip4pt
+    \textbf{PACF} (partial): correlation at lag $k$ \emph{after} removing the
+    effect of the shorter lags. The direct link only.
+    \vskip8pt
+    They are the classic way to read off model orders:
+    \begin{itemize}\scriptsize
+      \item PACF cuts off after lag $p$ $\Rightarrow$ \textbf{AR($p$)}.
+      \item ACF cuts off after lag $q$ $\Rightarrow$ \textbf{MA($q$)}.
+      \item Both decay $\Rightarrow$ mix (ARMA).
+    \end{itemize}
+    \column{0.58\textwidth}
+    \includegraphics[width=\textwidth]{fig/acf_pacf.pdf}
+    \vskip2pt
+    \footnotesize The shaded band is the ``not significantly different from
+    zero'' region ($\pm 1.96/\sqrt{T}$).
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{ARIMA family}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{The ARIMA family}}\\[4pt]
+    \small The workhorse of classical forecasting.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Building up: AR, MA, ARMA}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{AR($p$) -- autoregressive.} Regress on your own past:
+    \[ y_t = c + \sum_{i=1}^{p}\phi_i\, y_{t-i} + \eps_t \]
+    ``Tomorrow looks like a weighted blend of recent days.''
+    \vskip8pt
+    \textbf{MA($q$) -- moving average.} Regress on past \emph{shocks}:
+    \[ y_t = c + \eps_t + \sum_{j=1}^{q}\theta_j\, \eps_{t-j} \]
+    ``A surprise last week still echoes this week.''
+    \column{0.5\textwidth}
+    \callout{armblue}{\textbf{ARMA($p,q$)} combines both -- for a
+    \emph{stationary} series.}
+    \vskip6pt
+    \textbf{ARIMA($p,d,q$)} adds the ``I'' = Integrated = difference $d$ times
+    first, so it handles trending series directly.
+    \begin{itemize}\scriptsize
+      \item $p$ -- AR order (from PACF)
+      \item $d$ -- differencing (from ADF)
+      \item $q$ -- MA order (from ACF)
+    \end{itemize}
+    \vskip4pt
+    \footnotesize ARIMA(0,1,0) is just the random walk -- the ``tomorrow $=$
+    today'' baseline.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{SARIMA: adding seasonality}
+  Real series are seasonal, so add a second, seasonal triple:
+  \[ \text{SARIMA}(p,d,q)(P,D,Q)_m \]
+  \begin{itemize}\small
+    \item lower-case $(p,d,q)$ -- the short-term, non-seasonal part;
+    \item upper-case $(P,D,Q)$ -- the same idea at the seasonal lag;
+    \item $m$ -- periods per season (12 monthly, 7 daily-with-weekly, 24 hourly-with-daily).
+  \end{itemize}
+  \vfill
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \includegraphics[width=\textwidth]{fig/arima_forecast.pdf}
+    \column{0.45\textwidth}
+    \callout{paramgreen}{\footnotesize The forecast comes with a \textbf{prediction
+    interval} -- uncertainty grows with the horizon. A point forecast without an
+    interval is only half an answer.}
+    \vskip4pt
+    \footnotesize \textbf{In practice:} don't hand-tune $p,d,q$. Use
+    \texttt{pmdarima.auto\_arima} or \texttt{statsforecast.AutoARIMA}, which
+    search orders by AIC.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Exponential smoothing}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Exponential smoothing (ETS)}}\\[4pt]
+    \small Weighted averages where the recent past counts most.
+  \end{center}
+\end{frame}
+
+\begin{frame}{From a simple average to Holt-Winters}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \textbf{Simple (SES)} -- level only. Weights decay geometrically into the past:
+    \[ \hat{y}_{t+1} = \alpha y_t + (1-\alpha)\hat{y}_t \]
+    Flat forecast -- no good if there is a trend or season.
+    \vskip4pt
+    \textbf{Holt} -- adds a trend term (level $+$ slope). Forecast is a line.
+    \vskip4pt
+    \textbf{Holt-Winters} -- adds a seasonal term. Level $+$ trend $+$ season,
+    each with its own smoothing rate ($\alpha,\beta,\gamma$).
+    \column{0.54\textwidth}
+    \includegraphics[width=\textwidth]{fig/exp_smoothing.pdf}
+  \end{columns}
+  \vskip2pt
+  \callout{armblue}{\footnotesize ETS and ARIMA overlap but are not the same:
+  ETS is built from interpretable components (level/trend/season); ARIMA is built
+  from autocorrelation. On many business series they perform similarly -- try both.}
+\end{frame}
+
+% ================================================================
+\section{Baselines and evaluation}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Baselines and evaluation}}\\[4pt]
+    \small A forecast is only ``good'' relative to the dumbest thing that works.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Always start with a naive baseline}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Before any model, write down the trivial forecast:
+    \begin{itemize}\small
+      \item \textbf{Naive:} $\hat{y}_{t} = y_{t-1}$ (tomorrow $=$ today).
+      \item \textbf{Seasonal naive:} $\hat{y}_{t} = y_{t-m}$
+        (this December $=$ last December).
+      \item \textbf{Drift:} last value $+$ average change.
+    \end{itemize}
+    \vskip6pt
+    \callout{armred}{\footnotesize If your fancy model can't beat seasonal naive,
+    it is not helping. This happens far more often than people admit.}
+    \column{0.5\textwidth}
+    \textbf{Error metrics}
+    \begin{itemize}\small
+      \item \textbf{MAE} -- mean $|$error$|$, in the target's units.
+      \item \textbf{RMSE} -- penalizes big misses more.
+      \item \textbf{MAPE} -- percentage error; breaks when $y\approx 0$ and is
+        asymmetric.
+      \item \textbf{MASE} -- error \emph{divided by} the seasonal-naive error.
+        $<1$ beats naive, $>1$ loses. Scale-free -- the one to report.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Evaluate on the future, never by random split}
+  You cannot shuffle-and-split a time series: that trains on the future to predict
+  the past. Instead use a \textbf{time-ordered holdout} and \textbf{backtesting}
+  (rolling / expanding windows).
+  \vfill
+  \callout{armorange}{\footnotesize This ``time-aware validation'' is the hinge
+  between the two lectures -- it is exactly what lets us hand forecasting to a
+  generic ML model next time. We build the full machinery (leakage, lag features,
+  \texttt{TimeSeriesSplit}) in lecture 08.}
+  \vfill
+  \footnotesize \textbf{Rule of thumb for picking an approach:} short, single,
+  strongly-seasonal series $\to$ ARIMA / ETS are hard to beat. Many related
+  series, long history, exogenous drivers $\to$ the ML and deep methods of the
+  next lecture start to win.
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap -- classical time series}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Ideas that transfer:}
+    \begin{itemize}\small
+      \item Time order is information; only train on the past.
+      \item Decompose into trend $+$ season $+$ residual (STL).
+      \item Make it stationary (difference; check with ADF).
+      \item ACF/PACF read off AR/MA orders.
+      \item ARIMA / SARIMA: autocorrelation-based.
+      \item Exponential smoothing: component-based.
+      \item Score against seasonal naive with MASE; evaluate on the future.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \callout{paramgreen}{\textbf{Next (08): ML for time series.}
+    Reframe forecasting as supervised learning --
+    \begin{itemize}\scriptsize
+      \item time-aware splits and leakage,
+      \item lag / rolling / calendar features,
+      \item \texttt{TimeSeriesSplit} cross-validation,
+      \item gradient boosting (and the trend-extrapolation trap),
+      \item deep learning and the new foundation models.
+    \end{itemize}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Questions?}}\\[6pt]
+    \small Next: forecasting as a supervised ML problem.
+  \end{center}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Source material -- Hyndman & Athanasopoulos "Forecasting: Principles and
+%     Practice" (3rd ed., OTexts) for decomposition/ARIMA/ETS/baselines/MASE;
+%     statsmodels docs for STL, ADF, SARIMAX, ExponentialSmoothing.
+%   Figures -- all Python-generated (matplotlib/statsmodels) by
+%     py_src/classical_figs.py on a deterministic synthetic monthly series
+%     (seed 509): ts_anatomy, stl_decomposition, stationarity, differencing,
+%     acf_pacf, arima_forecast, exp_smoothing. No TikZ, no external images.
+%   Pedagogical decisions -- lead with "the rows are no longer interchangeable"
+%     to bridge from all prior i.i.d. supervised lectures; ADF p-values shown
+%     numerically (0.94 -> 0.000) so students see the test move; the naive/MASE
+%     baseline is framed as non-negotiable to set up the ML deck's honest
+%     model comparison; SARIMA orders motivated from ACF/PACF + ADF rather than
+%     auto-fit, but auto_arima flagged as the practical tool.
+%   Forward pointer -- 08_ml_time_series.tex picks up at "time-aware validation".

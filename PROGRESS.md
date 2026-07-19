@@ -4,6 +4,29 @@ Session log: what was done, what is in progress, what comes next. Newest entry f
 Update at the end of every session (`wrap-session` skill). Entries are point-in-time
 snapshots - for anything old, verify against `git log` before acting on it.
 
+## 2026-07-19 - New chapter: Time Series (ml/07_time_series)
+
+### Done
+
+Built a two-lecture time-series chapter from scratch (instructor asked for classic + ML split, full build):
+
+- **`ml/07_time_series/`** new chapter folder: `py_src/`, `fig/`, `data/`.
+- **Lecture 07 (classical, 22 frames)** `07_classical_time_series.tex/.pdf` - what makes TS different, STL decomposition, stationarity + differencing (ADF), ACF/PACF, AR/MA/ARMA/ARIMA/SARIMA, exponential smoothing (Holt-Winters), baselines + MASE.
+- **Lecture 08 (ML, 25 frames)** `08_ml_time_series.tex/.pdf` - forecasting as supervised learning, leakage + time-aware split, lag/rolling/calendar features, `TimeSeriesSplit`, gradient boosting + the trend-extrapolation trap (honest: GBM MAE 19 raw -> 6.7 differenced, MASE 0.39), model comparison (M5 vs M3/M4), deep + foundation models (TimesFM/Chronos-2/Moirai-2/TimeGPT/Time-MoE, from a 2026 web search).
+- **14 Python figures** (`classical_figs.py` + `ml_figs.py`, seed 509, one shared synthetic monthly series). No TikZ, no external images. Both decks compile clean (0 `!`), overflow-checked page by page; the two worst overfulls (stationarity 76pt, differencing 17pt) fixed.
+- **`07_time_series.qmd`** written per CONVENTIONS template, registered in `_quarto.yml` after `04_trees` (exact case, YAML validated). Videos / notes / Google Form / random image are `TBD` (not delivered yet).
+- `concepts_checklist.csv` TS rows marked with deck coverage; two `_OUTLINE.md` files added.
+
+### Pending / flags
+
+- Not-yet-covered TS checklist rows left blank: **state-space / Kalman** (221) and **Granger causality** (224). Prophet is awareness-only.
+- Local build used a throwaway `.tsvenv` (numpy/pandas/matplotlib/sklearn/statsmodels) because the Windows `ma/` venv isn't present in the Linux web container; figure scripts still document `ma` as the intended interpreter. TeX Live was apt-installed in-container.
+- `.tsvenv/` is git-ignored via a scratch path, not committed; regenerate figures on the instructor machine with `ma` if needed.
+
+### Next
+
+- Record lectures 07/08, then add YouTube + `_notes` PDF links + Google Form to `07_time_series.qmd`; add a `00_random_image/07_*.jpg`; optionally add a solution notebook for the forecaster assignment.
+
 ## 2026-07-10 - Trees chapter (ml/04_trees) full rebuild from REVIEW.md
 
 ### Done
