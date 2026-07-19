@@ -392,11 +392,130 @@ def fig_forest_meme(logger):
     logger.info(f"wrote {out.name}")
 
 
+def fig_superdataset(logger):
+    """The 'superdataset' table: one full training set, and how three trees each grab a
+    different RANDOM SLICE of it -- some ROWS (bootstrap, with replacement -> repeats +
+    out-of-bag) and, at the root split, some COLUMNS (a random feature menu, sqrt(P)).
+    The faded/opaque intersection = the rows x columns the tree's root split is chosen
+    from. Draws are a seeded rng sample (509): this IS the real bagging + feature-subset
+    mechanism, not a staged result, so no accuracy is claimed. Concrete anchor for the
+    otherwise-abstract 'two dice rolls' frame."""
+    from matplotlib.patches import Rectangle
+
+    # --- 6 real Titanic rows to make the table concrete (real values, no cherry-pick) ---
+    df = fetch_openml("titanic", version=1, as_frame=True).frame
+    df = df[["sex", "age", "fare", "pclass", "survived"]].dropna(subset=["age", "fare"])
+    rng = np.random.default_rng(SEED)
+    samp = df.iloc[rng.choice(len(df), 6, replace=False)].reset_index(drop=True)
+    gender = ["F" if s == "female" else "M" for s in samp["sex"]]
+    age = [f"{a:.0f}" for a in samp["age"]]
+    fare = [f"{f:.0f}" for f in samp["fare"]]
+    pcls = [f"{int(p)}" for p in samp["pclass"]]
+    surv = [f"{int(s)}" for s in samp["survived"]]
+    feat_headers = ["gender", "age", "fare", "class"]
+    feat_vals = [gender, age, fare, pcls]                 # column-major: [col][row]
+    NR, NF = 6, len(feat_headers)
+
+    # --- the two dice per tree: bootstrap the rows, random root-split feature menu ---
+    accents = [ARM_BLUE, ARM_ORANGE, "#0A7D3B"]           # blue / orange / green (no red = warning)
+    trees = []
+    for _ in range(3):
+        draws = rng.integers(0, NR, NR)                   # bootstrap rows, with replacement
+        counts = np.bincount(draws, minlength=NR)         # how many times each row was drawn
+        menu = sorted(rng.choice(NF, 2, replace=False))   # sqrt(4)=2 features tried at the root
+        trees.append((counts, menu))
+    logger.info("superdataset rows: " + "; ".join(
+        f"r{i+1}={g}/{a}/{fa}/{p}/y{sv}" for i, (g, a, fa, p, sv)
+        in enumerate(zip(gender, age, fare, pcls, surv))))
+    for k, (counts, menu) in enumerate(trees, 1):
+        logger.info(f"  tree{k}: in-bag counts={list(counts)} "
+                    f"(OOB rows {[i+1 for i in range(NR) if counts[i]==0]}), "
+                    f"root menu={[feat_headers[j] for j in menu]}")
+
+    def draw_block(ax, headers, cols_vals, extra=None, counts=None, menu=None, accent=None):
+        """Render one matrix. Master: counts=None (all rows solid, `extra`=(header,vals)
+        appends a y column). Tree: counts/menu given -> fade OOB rows and non-menu columns,
+        highlight the menu-column headers + the in-bag x menu intersection cells."""
+        allh = list(headers) + ([extra[0]] if extra else [])
+        allv = list(cols_vals) + ([extra[1]] if extra else [])
+        nc = len(allh)
+        ax.set_xlim(-1.15, nc + 0.05)
+        ax.set_ylim(-0.15, NR + 1.15)
+        ax.axis("off")
+        ax.set_aspect("equal")
+        top = NR + 1                                       # header band sits at y in [NR, NR+1)
+
+        for c, h in enumerate(allh):
+            is_menu = (menu is not None and c < NF and c in menu)
+            is_y = (extra is not None and c == nc - 1)
+            hc = accent if is_menu else ("0.80" if is_y else "0.90")
+            ax.add_patch(Rectangle((c, NR), 1, 1, facecolor=hc, edgecolor="white", lw=1.4))
+            ax.text(c + 0.5, NR + 0.5, h, ha="center", va="center",
+                    fontsize=8.5, fontweight="bold",
+                    color="white" if is_menu else "0.15")
+
+        for r in range(NR):
+            yb = NR - 1 - r                                # row r's y-bottom (row 0 on top)
+            oob = (counts is not None and counts[r] == 0)
+            # row label (left gutter)
+            lbl = f"r{r+1}"
+            if counts is not None and counts[r] > 1:
+                lbl += f" x{counts[r]}"
+            ax.text(-0.12, yb + 0.5, lbl, ha="right", va="center", fontsize=8,
+                    color="0.55" if oob else "0.15",
+                    fontweight="normal" if oob else "bold")
+            if oob:
+                ax.text(-0.12, yb + 0.5, "", ha="right", va="center")  # keep spacing
+            for c in range(nc):
+                is_menu = (menu is not None and c < NF and c in menu)
+                if counts is None:                         # master: all solid
+                    fc = "#eef1f6" if (extra is not None and c == nc - 1) else "white"
+                    alpha, tcol = 1.0, "0.15"
+                elif oob:                                  # tree: row not drawn
+                    fc, alpha, tcol = "0.94", 1.0, "0.62"
+                elif is_menu:                              # in-bag AND a considered column
+                    fc, alpha, tcol = accent, 0.16, "0.10"
+                else:                                      # in-bag, column not at this split
+                    fc, alpha, tcol = "white", 1.0, "0.45"
+                ax.add_patch(Rectangle((c, yb), 1, 1, facecolor=fc, alpha=alpha,
+                                       edgecolor="0.80", lw=0.8))
+                ax.text(c + 0.5, yb + 0.5, allv[c][r], ha="center", va="center",
+                        fontsize=8, color=tcol)
+            if oob:                                        # "OOB" tag past the last column
+                ax.text(nc + 0.02, yb + 0.5, "OOB", ha="left", va="center",
+                        fontsize=6.5, style="italic", color="0.55")
+
+    fig = plt.figure(figsize=(12.2, 4.5))
+    gs = fig.add_gridspec(1, 4, width_ratios=[1.28, 1.0, 1.0, 1.0], wspace=0.28)
+    ax0 = fig.add_subplot(gs[0])
+    draw_block(ax0, feat_headers, feat_vals, extra=("y", surv))
+    ax0.set_title("the full training set\n(the \"superdataset\")", fontsize=9.5, color="0.15")
+    for k, (counts, menu) in enumerate(trees):
+        axk = fig.add_subplot(gs[k + 1])
+        draw_block(axk, feat_headers, feat_vals, counts=counts, menu=menu, accent=accents[k])
+        axk.set_title(f"Tree {k+1}", fontsize=9.5, color=accents[k], fontweight="bold")
+
+    fig.text(0.5, 0.075,
+             "colored cells = this tree's root-split feature menu     "
+             "faded rows = out-of-bag (not drawn)     \"x2\" = row drawn twice",
+             ha="center", va="bottom", fontsize=8, color="0.35")
+    fig.text(0.5, 0.02,
+             "Rows differ AND the column menu differs  =>  the trees disagree  =>  the "
+             r"correlation $\rho$ falls.",
+             ha="center", va="bottom", fontsize=8.5, color="0.20", fontweight="bold")
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.86, bottom=0.18)
+    out = FIG_DIR / "rf_superdataset.pdf"
+    fig.savefig(out)
+    plt.close(fig)
+    logger.info(f"wrote {out.name}")
+
+
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
     np.random.seed(SEED)
     fig_forest_meme(logger)
+    fig_superdataset(logger)
     X, y, feats = load_titanic(logger)
     inst = fig_instability(X, y, feats, logger)
     ne = fig_n_estimators(X, y, feats, logger)

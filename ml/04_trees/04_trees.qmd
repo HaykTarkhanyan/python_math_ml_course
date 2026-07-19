@@ -3,7 +3,7 @@ title: "04 Trees"
 resources:
   - trees_project.ipynb
   - adult_lightgbm.ipynb
-  - data/titanic.csv
+  - data/wine.csv
 ---
 
 ::: {.callout-note}
@@ -27,35 +27,38 @@ resources:
 
 # 🏡 Տնային
 
-## Chapter project — the Titanic running score 🧀🧀
+## Chapter project — the wine-quality running score 🧀🧀
 
-Build one classifier **three ways** and keep a **running scoreboard** on the same Titanic train/test split: a single tree (HW1) → a random forest (HW2) → gradient boosting (HW3). Report accuracy + F1 / ROC-AUC at each step and watch how - and *whether* - each ensemble beats the last. (The lectures do this too, and the answer on this small, one-dominant-feature dataset is not the textbook one.)
+Build one classifier **three ways** and keep a **running scoreboard** on the same train/test split: a single tree (HW1) → a random forest (HW2) → gradient boosting (HW3). Report accuracy + F1 / ROC-AUC at each step and watch how - and *whether* - each ensemble beats the last.
 
-Starter notebook: <a href="trees_project.ipynb" download>trees_project.ipynb (download)</a> · [view on GitHub](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/04_trees/trees_project.ipynb). Data: `data/titanic.csv` (pinned from [OpenML](https://www.openml.org/d/40945), so no live fetch needed).
+Unlike the lectures' Titanic (where one feature, `gender`, dominates so the ensembles barely help), here you use a **richer** dataset - **wine quality** (~6,500 wines, 12 numeric features, no single dominant one) - so the ensembles have real room to win. **Task:** predict a **"good"** wine (quality score ≥ 7). About **20%** are good, so it is **imbalanced** - always predicting "not good" already scores ~0.80 accuracy, which is why you report **ROC-AUC and F1**, not accuracy.
+
+Starter notebook: <a href="trees_project.ipynb" download>trees_project.ipynb (download)</a> · [view on GitHub](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/04_trees/trees_project.ipynb). Data: `data/wine.csv` ([UCI wine quality](https://archive.ics.uci.edu/dataset/186/wine+quality), red + white combined, pinned so no live fetch needed).
 
 ### HW1 — grow, prune, read a tree ([17])
 
 1. **By hand** (Play Tennis): build the decision stump on Outlook and compute the information gain of *one* other split (Humidity or Wind).
-2. **sklearn** (Titanic): fit a `DecisionTreeClassifier`; plot the depth train/test **U-curve**.
+2. **sklearn** (wine): fit a `DecisionTreeClassifier`; plot the depth train/test **U-curve** (ROC-AUC vs `max_depth`).
 3. **Prune** via `ccp_alpha` chosen by cross-validation; visualize the final tree (`plot_tree`).
-4. Confirm **scale-invariance**: rescale a feature, refit, show the tree is unchanged.
+4. Confirm **scale-invariance**: rescale a feature (e.g. `alcohol`), refit, show the tree is unchanged.
 
-*Bonus:* feature importances + compare to your chapter-3 logistic-regression baseline; refit the single tree as `LGBMRegressor(n_estimators=1, learning_rate=1.0)` and check it matches. Further reading: the r2d3 visual intro to machine learning.
+*Bonus:* fit a logistic-regression baseline on the same split and compare; refit the single tree as `LGBMClassifier(n_estimators=1, learning_rate=1.0)` and check it matches. Further reading: the r2d3 visual intro to machine learning.
 
 ### HW2 — bag the tree ([18])
 
-1. Fit a `RandomForestClassifier`; report the **OOB score** vs 5-fold **CV**; compare **accuracy** to your HW1 single tree (the running score), and also report **F1 / ROC-AUC** (Titanic is imbalanced).
+1. Fit a `RandomForestClassifier`; report the **OOB score** vs 5-fold **CV**, and compare **accuracy + F1 / ROC-AUC** to your HW1 single tree (the running score). On this richer data the forest should clearly beat the tree - a real jump, not Titanic's flat result.
 2. Sweep `n_estimators` and plot the **plateau**; sweep `max_features` and watch it matter.
-3. Read `feature_importances_`; note any high-cardinality bias.
-4. **Regression:** `RandomForestRegressor` on the Yerevan rent toy; plot error vs `n_estimators`.
+3. **The importance trap.** Add two columns of pure junk (Gaussian noise + a random high-cardinality id), refit, and compare the default **impurity** `feature_importances_` against **permutation importance** (on the test set). Impurity hands the junk more importance than the real `is_red` feature; permutation sends it to the bottom. Explain why (cardinality bias).
+4. **Decision boundaries.** On two features (e.g. `alcohol` × `volatile_acidity`), plot the decision regions of the single tree vs the forest vs boosting - watch the blocky staircase ([17]) smooth out ([18]).
+5. **Regression:** `RandomForestRegressor` on the Yerevan rent toy; plot error vs `n_estimators`.
 
 *Bonus:* swap in `ExtraTreesClassifier` and compare; argue from the variance formula why averaging *cannot* beat the $\rho\sigma^2$ floor.
 
 ### HW3 — boost the tree ([19]–[20])
 
 1. **By hand** (Yerevan rent toy): do **3 rounds** of gradient boosting — init $= \text{mean}(y)$, compute residuals, fit a stump, update with $\eta$. Show the residuals shrinking.
-2. **sklearn** (Titanic): fit a `GradientBoostingClassifier` / `HistGradientBoostingClassifier` with early stopping; compare to your HW2 random forest on the same score (accuracy + F1 / ROC-AUC).
-3. Tune `learning_rate` (with early stopping picking `n_estimators`). Then try **LightGBM** and add a **monotonic constraint** on a feature whose effect you expect to be monotone.
+2. **sklearn** (wine): fit a `GradientBoostingClassifier` / `HistGradientBoostingClassifier` with early stopping; compare to your HW2 random forest on the same score (accuracy + F1 / ROC-AUC).
+3. Tune `learning_rate` (with early stopping picking `n_estimators`). Then try **LightGBM** and add a **monotonic constraint** on a feature whose effect you expect to be monotone (e.g. `alcohol`).
 
 *Bonus:* the AdaBoost $\alpha = \tfrac12\ln\frac{1-\text{err}}{\text{err}}$ arithmetic for one round; force overfitting (train $\to$ 0, test U-turn) then early-stop; try `subsample` $< 1$.
 
@@ -66,9 +69,9 @@ A **minimal-scaffold** capstone: use **LightGBM as one lens** on the whole chapt
 Starter notebook (loader + task list only — *you* do the cleaning and all the modelling): <a href="adult_lightgbm.ipynb" download>adult_lightgbm.ipynb (download)</a> · [view on GitHub](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/04_trees/adult_lightgbm.ipynb). Data loads live via `fetch_openml("adult", version=2)` ([UCI Adult](https://archive.ics.uci.edu/dataset/2/adult)).
 
 - **Part 0 — clean & explore:** binary target + imbalance; missing values (LightGBM handles `NaN` natively, no imputation needed); drop `fnlwgt` (a census *sampling weight*) and the duplicated `education` / `education-num`; mark the 8 categoricals (incl. `native-country`, 41 levels); one **stratified** split reused everywhere.
-- **Part 1 — three baselines, one library:** single tree (`n_estimators=1, learning_rate=1`), random forest (`boosting_type='rf'`), gradient boosting (default `gbdt`) — scored on the same test split (**ROC-AUC + F1**). Then **native `categorical_feature` vs one-hot** (watch `native-country` blow up the column count). Expect tree < RF ≲ GBDT.
+- **Part 1 — baselines, one library (+ a linear reference):** a **logistic-regression** baseline (it needs imputation + one-hot + scaling, unlike the trees) plus single tree (`n_estimators=1, learning_rate=1`), random forest (`boosting_type='rf'`), gradient boosting (default `gbdt`) — all scored on the same test split (**ROC-AUC + F1**). Then **native `categorical_feature` vs one-hot** (watch `native-country` blow up the column count). Expect logreg ≈ tree < RF ≲ GBDT.
 - **Part 2 — make the GBDT win:** early stopping; tune in the [20] order (`learning_rate` ↔ trees → `num_leaves` / `min_data_in_leaf` → `lambda_l1/l2` → subsampling); handle imbalance (`is_unbalance` / `scale_pos_weight`) and pick the decision threshold by F1.
-- **Part 3 — read it:** gain vs **permutation** importance; optional **monotonic constraint** on `education-num`; a short reflection on whether tree < RF < GBDT actually held, and by how much.
+- **Part 3 — read it & audit it:** gain vs **permutation** importance; optional **monotonic constraint** on `education-num`; a **subgroup slice-check** - report test **ROC-AUC and positive rate by `sex`** and comment on the gap (a strong overall metric can hide very different per-group behavior); then a short reflection on whether tree < RF < GBDT actually held, and by how much.
 
 *Bonus:* add **XGBoost** and compare; build a **stacking** ensemble (LightGBM + logistic regression) with out-of-fold predictions.
 
