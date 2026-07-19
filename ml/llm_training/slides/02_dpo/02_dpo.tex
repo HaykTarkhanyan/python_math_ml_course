@@ -1,0 +1,377 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false, language=Python, frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg}, numbers=none, breaklines=true,
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\newcommand{\piref}{\pi_{\text{ref}}}
+\newcommand{\yw}{y_w}
+\newcommand{\yl}{y_l}
+
+\title{[LLM-2] DPO: Direct Preference Optimization}
+\subtitle{Your language model is secretly a reward model (Rafailov et al., 2023)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{Alignment without the RL}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    Last time (GRPO) we made RL \emph{cheaper} by deleting the critic. DPO asks a bolder
+    question:
+    \vskip 6pt
+    \emph{What if we delete the reward model \textbf{and} the RL loop entirely?}
+    \vskip 8pt
+    DPO shows the RLHF objective has a \textbf{closed-form} solution, and that inverting it
+    turns preference alignment into a \textbf{single classification loss} -- trained
+    directly on preference pairs, no sampling, no PPO.
+    \vskip 8pt
+    The title says it: \emph{``Your language model is secretly a reward model.''} Today,
+    why that is literally true.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.4cm,
+              align=center] (r) {\textbf{RLHF}\\ SFT $\to$ reward model $\to$ PPO\\
+              \scriptsize 3 stages, RL, sampling};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.4cm, align=center, below=0.7cm of r] (d)
+              {\textbf{DPO}\\ SFT $\to$ one BCE loss\\ \scriptsize 1 stage, no RL};
+        \draw[-{Latex}, thick, paramgreen] (r) -- (d)
+          node[midway, right, font=\scriptsize]{same objective};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Why alignment is hard}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Why is aligning an LLM hard?}\\[4pt]
+    \small The standard RLHF pipeline has a lot of moving parts.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The three-stage RLHF pipeline}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{fig/pipeline.pdf}
+  \end{center}
+  \vskip 2pt
+  \textbf{RLHF} (top): SFT $\to$ fit a reward model on human comparisons $\to$ optimize the
+  policy with PPO against that reward, with a KL leash to the SFT model.
+  \vskip 4pt
+  \warnbox{The pain: \textbf{multiple} large models (reward $+$ policy $+$ critic),
+    \textbf{in-loop sampling} from the policy, and \textbf{unstable} RL that is sensitive
+    to hyperparameters and needs reward normalization.}
+\end{frame}
+
+\begin{frame}{Why preferences, and why a KL leash?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Why preferences over demonstrations?}
+    \begin{itemize}\small
+      \item Humans are better at saying \emph{``A is better than B''} than at writing the
+        gold answer.
+      \item Relative judgments are cheaper and more consistent to collect.
+    \end{itemize}
+    \vskip 6pt
+    \textbf{Why keep a KL constraint to $\piref$?}
+    \begin{itemize}\small
+      \item Stay where the reward model is \emph{accurate}.
+      \item Preserve diversity; avoid collapsing onto one high-reward answer (reward hacking).
+    \end{itemize}
+    \column{0.5\textwidth}
+    \keybox{\small \textbf{The RLHF objective:}
+      \[
+        \max_{\pi_\theta}\ \E_{x,\,y\sim\pi_\theta}\big[r_\varphi(x,y)\big]
+        -\beta\,\mathbb{D}_{\text{KL}}\!\left[\pi_\theta \,\|\, \piref\right]
+      \]
+      Maximize reward, but do not stray far from the reference.}
+    \vskip 4pt
+    \footnotesize DPO will optimize \emph{exactly} this objective -- just without ever
+    running RL.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Preliminaries: the math of preferences}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The math of preferences}\\[4pt]
+    \small Bradley-Terry, and the reward objective we want to solve.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Bradley-Terry: turning preferences into probabilities}
+  A preference dataset is triples $(x,\yw,\yl)$: prompt, \textbf{preferred}, \textbf{dispreferred}.
+  The Bradley-Terry model says the chance $y_1$ beats $y_2$ is a softmax over rewards:
+  \[
+    p^*(y_1\succ y_2\mid x)=\frac{\exp r(x,y_1)}{\exp r(x,y_1)+\exp r(x,y_2)}
+    =\sigma\!\big(r(x,y_1)-r(x,y_2)\big)
+  \]
+  A reward model is fit by maximum likelihood -- i.e.\ binary classification on which
+  answer won:
+  \[
+    \mathcal{L}_R=-\E_{(x,\yw,\yl)}\Big[\log\sigma\big(r_\varphi(x,\yw)-r_\varphi(x,\yl)\big)\Big]
+  \]
+  \watchbox{Notice: only the \textbf{difference} of rewards ever appears. Hold onto this --
+    it is the hinge of the whole derivation.}
+\end{frame}
+
+% ================================================================
+\section{The DPO derivation}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The derivation}\\[4pt]
+    \small From a KL-constrained objective to a classification loss, in four steps.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Step 1: the RLHF objective has a closed-form optimum}
+  For \emph{any} reward $r$, the policy that maximizes reward $-\ \beta$KL is known in closed form:
+  \[
+    \boxed{\;\pi_r(y\mid x)=\frac{1}{Z(x)}\,\piref(y\mid x)\,
+      \exp\!\Big(\tfrac{1}{\beta}r(x,y)\Big)\;}
+    \qquad
+    Z(x)=\sum_y \piref(y\mid x)\,\exp\!\Big(\tfrac1\beta r(x,y)\Big)
+  \]
+  \textbf{Why (sketch):} rewrite the objective as
+  $\min_\pi \E\big[\mathbb{D}_{\text{KL}}(\pi\,\|\,\pi^*)\big]-\log Z(x)$, where $\pi^*$ is the
+  boxed distribution. $Z(x)$ does not depend on $\pi$, so by Gibbs' inequality the KL is
+  minimized (to $0$) exactly when $\pi=\pi^*$. \hfill$\blacksquare$
+  \vskip 4pt
+  \warnbox{But $Z(x)=\sum_y(\dots)$ sums over \textbf{all possible completions} -- astronomically
+    many token sequences. Eq.\ is exact but \textbf{intractable}. This is what forces classic
+    RLHF into sampling-based RL.}
+\end{frame}
+
+\begin{frame}{Step 2: invert -- the reward is a log-ratio}
+  Take logs of the boxed optimum and solve for the reward:
+  \[
+    \boxed{\;r(x,y)=\beta\log\frac{\pi_r(y\mid x)}{\piref(y\mid x)}+\beta\log Z(x)\;}
+  \]
+  \begin{itemize}\small
+    \item The reward that a policy is optimal for equals the \textbf{$\beta$-scaled log-ratio}
+      of that policy to the reference \dots
+    \item \dots plus a term $\beta\log Z(x)$ that depends on the \emph{prompt only}, not on $y$.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{This is the ``secretly a reward model'' identity: \emph{any} language model
+    $\pi_\theta$ \textbf{defines} an implicit reward
+    $\hat r_\theta(x,y)=\beta\log\dfrac{\pi_\theta(y\mid x)}{\piref(y\mid x)}$.}
+\end{frame}
+
+\begin{frame}{Step 3: the intractable $Z(x)$ cancels}
+  Plug the reward identity into Bradley-Terry, which only sees reward \emph{differences}:
+  \[
+    r(x,\yw)-r(x,\yl)=\beta\log\frac{\pi(\yw\mid x)}{\piref(\yw\mid x)}
+    +\underbrace{\beta\log Z(x)}_{\text{prompt only}}
+    -\beta\log\frac{\pi(\yl\mid x)}{\piref(\yl\mid x)}
+    -\underbrace{\beta\log Z(x)}_{\text{prompt only}}
+  \]
+  \begin{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.9\linewidth}{\centering
+      The two $\beta\log Z(x)$ terms are \textbf{identical} and \textbf{cancel}.
+      What was intractable becomes \emph{irrelevant}.}}
+  \end{center}
+  \vskip 4pt
+  \footnotesize Why it works: (a) both completions share the same prompt $x$, and (b) the
+  preference model depends only on reward \emph{differences}. Rewards differing by any
+  prompt-only $f(x)$ give the same preferences -- DPO just picks the representative with
+  $Z(x)=1$.
+\end{frame}
+
+\begin{frame}{Step 4: the DPO loss}
+  Substitute, and fit $\pi_\theta$ by maximum likelihood on the preference data:
+  \[
+    \boxed{\;\mathcal{L}_{\text{DPO}}=-\E_{(x,\yw,\yl)}
+      \left[\log\sigma\!\left(\beta\log\frac{\pi_\theta(\yw\mid x)}{\piref(\yw\mid x)}
+      -\beta\log\frac{\pi_\theta(\yl\mid x)}{\piref(\yl\mid x)}\right)\right]\;}
+  \]
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{itemize}\small
+      \item $\yw,\yl$ -- preferred / dispreferred completion.
+      \item $\pi_\theta$ -- the policy we train; $\piref$ -- frozen SFT model (never updated).
+      \item $\beta$ -- KL strength / sigmoid temperature.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \nextbox{\small It is just \textbf{binary cross-entropy}: ``make the preferred completion's
+      implicit reward exceed the dispreferred one's.''}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Understanding the update}
+
+\begin{frame}{The gradient: focus on what you got wrong}
+  \[
+    \nabla_\theta\mathcal{L}_{\text{DPO}}=-\beta\,\E\Big[
+      \underbrace{\sigma\!\big(\hat r_\theta(x,\yl)-\hat r_\theta(x,\yw)\big)}_{\text{weight: large when ranking is WRONG}}
+      \big(\nabla_\theta\log\pi_\theta(\yw\mid x)-\nabla_\theta\log\pi_\theta(\yl\mid x)\big)\Big]
+  \]
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{itemize}\small
+      \item Push \textbf{up} $\yw$, push \textbf{down} $\yl$.
+      \item Scale each pair by how badly the current \emph{implicit} reward orders it.
+      \item Pairs already ranked right barely move; mis-ranked pairs dominate the update.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \includegraphics[width=\linewidth]{fig/loss_shape.pdf}
+  \end{columns}
+  \vskip 2pt
+  \warnbox{Drop that weight (naive ``raise $\yw$, lower $\yl$'') and the model
+    \textbf{degenerates} into garbage. The dynamic weight is the secret sauce.}
+\end{frame}
+
+\begin{frame}{The recipe in code}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \lstinputlisting[]{code/dpo_loss.py}
+    \column{0.44\textwidth}
+    \textbf{What you need:}
+    \begin{itemize}\small
+      \item preference triples $(x,\yw,\yl)$
+      \item a frozen reference $\piref$ ($=$ SFT model)
+    \end{itemize}
+    \textbf{Per batch:} four log-probs (policy \& ref, on $\yw$ \& $\yl$) $\to$ sigmoid loss.
+    \vskip 4pt
+    \textbf{What you do \emph{not} need:} reward model, critic, policy sampling, RL tuning.
+    \vskip 4pt
+    \footnotesize Defaults: $\beta=0.1$, batch 64, lr $10^{-6}$.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{DPO vs RLHF, side by side}
+  \small
+  \renewcommand{\arraystretch}{1.2}
+  \begin{center}
+  \begin{tabular}{p{3.6cm} p{4.1cm} p{4.3cm}}
+    \toprule
+     & \textbf{RLHF (SFT$\to$RM$\to$PPO)} & \textbf{DPO}\\
+    \midrule
+    Explicit reward model & yes (separate net) & \textbf{no} -- implicit $\hat r=\beta\log\tfrac{\pi_\theta}{\piref}$\\
+    RL loop / critic & yes & \textbf{no}\\
+    Sample from policy in training & yes (on-policy) & \textbf{no} (offline)\\
+    Loss type & policy gradient (unstable) & classification / BCE (stable)\\
+    Objective optimized & KL-constrained reward max & \textbf{the same}, reparameterized\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \nextbox{DPO is not an approximation -- it optimizes \emph{exactly} the RLHF objective,
+    just written as a loss over the policy itself.}
+\end{frame}
+
+% ================================================================
+\section{Does it work?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small A computable frontier, win rates, and temperature robustness.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Reward vs KL: DPO dominates the frontier}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/frontier.pdf}
+    \column{0.44\textwidth}
+    On IMDb the reward is a known sentiment classifier, so the exact reward-vs-KL trade-off
+    is \emph{computable}.
+    \vskip 6pt
+    \begin{itemize}\small
+      \item DPO reaches \textbf{higher reward at every KL} budget.
+      \item It even beats \textbf{PPO-GT} -- PPO given the \emph{ground-truth} reward.
+    \end{itemize}
+    \vskip 6pt
+    \footnotesize Curves reproduce the reported ordering (schematic shape).
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Win rates and temperature robustness}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/temperature.pdf}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/winrate.pdf}
+  \end{columns}
+  \vskip 2pt
+  \small \textbf{Summarization (left):} DPO $\approx$\,61\% win rate vs $\approx$\,57\% for
+  PPO -- and DPO stays high as sampling temperature rises, while PPO collapses.
+  \textbf{Dialogue (right):} on Anthropic-HH, DPO is preferred over PPO by \emph{both}
+  GPT-4 and human raters. GPT-4 agrees with humans about as often as humans agree with
+  each other.
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap and caveats}
+  \begin{itemize}
+    \item DPO optimizes the \textbf{exact RLHF objective} with a single classification loss.
+    \item Key identity: a language model \emph{is} a reward model,
+      $\hat r_\theta=\beta\log(\pi_\theta/\piref)$.
+    \item The intractable partition function $Z(x)$ \textbf{cancels} because preferences use
+      only reward differences within a prompt.
+    \item No reward model, no critic, no policy sampling, minimal tuning -- and it
+      matches or beats PPO.
+    \item The reference $\piref$ is \textbf{essential} (it defines the implicit reward); and
+      the dynamic gradient weight is what prevents collapse.
+    \item Caveat: DPO is \textbf{offline} -- open questions remain on exploration and
+      out-of-distribution behavior vs on-policy RL.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} \emph{LoRA} -- once we know \emph{how} to fine-tune (SFT, DPO, GRPO),
+    how do we do it \textbf{cheaply}, without a full copy of a 175B model per task?}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Rafailov et al., "Direct Preference Optimization" (NeurIPS 2023),
+%   arXiv:2305.18290. Extracted from ml/llm_training/materials_md/papers/08_dpo_*.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py): pipeline (RLHF vs DPO schematic),
+%   frontier (reward-vs-KL, schematic ordering), loss_shape (loss + gradient weight, exact),
+%   temperature (Fig 2 right trend), winrate (Table 2 real numbers). Code snippet in code/.
+% Pedagogical decisions: build the derivation as 4 explicit steps with the Z(x)-cancels
+%   slide as the crux; "implicit reward model" framing throughout; predict-first-style
+%   warning that dropping the gradient weight degenerates.
+% Prior deck: 01_grpo (this deck's hook bridges from "delete the critic" to "delete the RM").
+% Next deck: 03_lora (parameter-efficient fine-tuning).

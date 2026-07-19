@@ -1,0 +1,338 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+\newcommand{\Wz}{W_0}
+
+\title{[LLM-3] LoRA: Low-Rank Adaptation}
+\subtitle{Fine-tuning giant models by training two tiny matrices (Hu et al., 2021)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{One base model, a hundred tasks}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    We now know \emph{how} to adapt an LLM -- SFT, DPO, GRPO. But full fine-tuning has a
+    brutal cost at scale:
+    \vskip 6pt
+    \begin{itemize}\small
+      \item Fine-tuning GPT-3 175B needs \textbf{1.2 TB} of VRAM.
+      \item Each task's checkpoint is \textbf{350 GB}.
+      \item 100 fine-tuned models $\approx$ \textbf{35 TB} to store.
+    \end{itemize}
+    \vskip 8pt
+    \textbf{LoRA:} freeze the pretrained weights, and learn a tiny \emph{low-rank} update
+    instead. Same quality, \textbf{10,000$\times$} fewer trainable parameters,
+    \textbf{35 MB} per task, and \emph{zero} extra inference latency.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.6cm,
+              align=center] (a) {\textbf{Full fine-tune}\\ 100 tasks $\to$ 35 TB\\
+              \scriptsize a full 175B copy each};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.6cm, align=center, below=0.7cm of a] (b)
+              {\textbf{LoRA}\\ 100 tasks $\to$ 350 GB + 100$\times$35 MB\\
+              \scriptsize one base + tiny adapters};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The cost of full fine-tuning}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Why full fine-tuning does not scale}\\[4pt]
+    \small And why existing efficient methods were not good enough.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Full fine-tuning: as big as the original}
+  Fine-tuning learns a task-specific increment $\Delta\Phi$ with $|\Delta\Phi|=|\Phi_0|$ --
+  every parameter moves:
+  \[
+    \max_{\Phi}\sum_{(x,y)}\sum_{t}\log P_{\Phi}\big(y_t\mid x,y_{<t}\big)
+  \]
+  \begin{itemize}\small
+    \item For GPT-2 / BERT this is an inconvenience. For GPT-3 175B it is a
+      \textbf{deployment blocker}: a separate 175B model per task.
+    \item You must store and \emph{serve} a full-size copy for every downstream use.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{Goal: encode the update with a \emph{tiny} parameter set $\Theta$, $|\Theta|\ll|\Phi_0|$
+    -- as small as \textbf{0.01\%} of the model -- without giving up quality or adding
+    latency.}
+\end{frame}
+
+\begin{frame}{Existing PEFT methods: not good enough}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Adapter layers}
+    \begin{itemize}\small
+      \item Insert small trainable layers \emph{in sequence} inside each block.
+      \item Few parameters, but the extra depth is on the critical path.
+      \item \textbf{Adds inference latency} -- worst for online, batch-1 serving (up to
+        \textbf{+30\%}).
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Prefix / prompt tuning}
+    \begin{itemize}\small
+      \item Prepend trainable ``virtual tokens'' to the input.
+      \item \textbf{Hard to optimize}; performance is non-monotonic in \# params.
+      \item Prefix tokens \textbf{eat the sequence length} available for the actual task.
+    \end{itemize}
+  \end{columns}
+  \vskip 6pt
+  \warnbox{Both families often \emph{fail to match} full fine-tuning -- a real
+    efficiency-vs-quality trade-off. LoRA aims to remove that trade-off entirely.}
+\end{frame}
+
+% ================================================================
+\section{The idea: intrinsic rank}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The key hypothesis}\\[4pt]
+    \small The \emph{update} during adaptation has a low intrinsic rank.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{From intrinsic dimension to intrinsic rank}
+  \textbf{Prior finding:} over-parameterized pretrained models live on a low
+  \emph{intrinsic dimension} -- they can be fine-tuned in a tiny random subspace and still
+  learn.
+  \vskip 8pt
+  \textbf{LoRA's hypothesis:} the \emph{change in weights} $\Delta W$ during adaptation also
+  has a low \emph{``intrinsic rank.''} So even though $W_0$ is, say, $12{,}288\times12{,}288$,
+  the update $\Delta W$ can be captured by a rank-$r$ factorization with $r$ as small as
+  $1$ or $2$.
+  \vskip 6pt
+  \keybox{If $\Delta W$ is really low-rank, we should not need to learn a full
+    $d\times k$ matrix -- just its two thin factors.}
+\end{frame}
+
+% ================================================================
+\section{The LoRA method}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The method}\\[4pt]
+    \small Freeze $W_0$; learn $\Delta W = BA$ in parallel.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The reparameterization}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Replace the update with a low-rank product:
+    \[
+      \Wz+\Delta W=\Wz+BA,\qquad
+      \begin{aligned}
+        &B\in\R^{d\times r},\ A\in\R^{r\times k}\\
+        &r\ll\min(d,k)
+      \end{aligned}
+    \]
+    Forward pass (with scaling $\alpha/r$):
+    \[
+      \boxed{\;h=\Wz\,x+\frac{\alpha}{r}\,BA\,x\;}
+    \]
+    \begin{itemize}\small
+      \item $\Wz$ \textbf{frozen} (no gradients); train only $A,B$.
+      \item Init $A\sim\mathcal{N}$, $B=0$ so $\Delta W=0$ at the start -- training begins
+        exactly at the pretrained model.
+      \item $\alpha$ acts like a learning-rate knob; set once, not tuned.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\footnotesize, node distance=0.5cm]
+        \node (x) {$x$};
+        \node[draw=armblue, very thick, fill=armblue!8, minimum width=2.0cm,
+              minimum height=1.9cm, above left=1.1cm and -0.3cm of x, align=center] (w)
+              {$\Wz$\\[2pt]\scriptsize $d\times k$\\ \scriptsize frozen};
+        \node[draw=armorange, thick, fill=armorange!12, minimum width=1.5cm,
+              above right=0.4cm and 0.2cm of x, align=center] (A)
+              {$A$ \scriptsize $r\times k$};
+        \node[draw=paramgreen, thick, fill=paramgreen!12, minimum width=1.5cm,
+              above=0.55cm of A, align=center] (B) {$B$ \scriptsize $d\times r$};
+        \node[circle, draw, above=3.3cm of x, inner sep=1pt] (plus) {$+$};
+        \node[above=0.3cm of plus] (h) {$h$};
+        \draw[-{Latex}] (x) -- (w);
+        \draw[-{Latex}] (x) -| (A);
+        \draw[-{Latex}] (A) -- (B) node[midway,right,font=\tiny]{rank $r$};
+        \draw[-{Latex}] (w) |- (plus);
+        \draw[-{Latex}] (B) |- (plus) node[near end,above,font=\tiny]{$\times\,\alpha/r$};
+        \draw[-{Latex}] (plus) -- (h);
+      \end{tikzpicture}
+      \\[2pt]
+      \scriptsize frozen $\Wz$ and trainable $BA$ run \emph{in parallel}.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why it is (almost) free}
+  \textbf{Parameter savings.} One matrix full update $=d\times k$. LoRA $=r(d+k)$, i.e.
+  $2rd\ll d^2$. Total budget $|\Theta|=2\cdot\hat L\cdot d_{\text{model}}\cdot r$ over the
+  $\hat L$ adapted matrices.
+  \vskip 6pt
+  \textbf{No inference latency.} Because $BA$ is added \emph{in parallel} (not in sequence),
+  at deploy time you simply \textbf{merge}:
+  \[
+    W=\Wz+BA
+  \]
+  and run an ordinary layer -- \emph{zero} extra FLOPs. To switch tasks, subtract $BA$ and
+  add a different $B'A'$.
+  \vskip 4pt
+  \watchbox{Merging removes latency but you lose \textbf{swap-ability}: a merged model can
+    no longer batch \emph{different} tasks in one forward pass. Keep adapters un-merged when
+    you need per-request task selection.}
+\end{frame}
+
+\begin{frame}{Which weights, and which rank?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/which_matrices.pdf}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/rank.pdf}
+  \end{columns}
+  \vskip 2pt
+  \small \textbf{Left:} at a fixed budget, spreading over \textbf{$\{W_q,W_v\}$} beats
+  pouring it all into one matrix. \textbf{Right:} accuracy is flat from \textbf{$r=1$} for
+  $\{W_q,W_v\}$ -- direct evidence of low intrinsic rank. (Only attention
+  $W_q,W_k,W_v,W_o$ were adapted; MLP left frozen.)
+\end{frame}
+
+% ================================================================
+\section{Results}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it match full fine-tuning?}\\[4pt]
+    \small 10,000$\times$ fewer parameters, same or better quality.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The headline numbers}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \includegraphics[width=\linewidth]{fig/param_count.pdf}
+    \column{0.46\textwidth}
+    \textbf{GPT-3 175B with LoRA:}
+    \begin{itemize}\small
+      \item Trainable params \textbf{10,000$\times$} smaller (175B $\to$ 4.7M).
+      \item VRAM \textbf{3$\times$} smaller (1.2 TB $\to$ 350 GB).
+      \item Checkpoint \textbf{350 GB $\to$ 35 MB}.
+      \item \textbf{25\%} training speedup.
+    \end{itemize}
+    \vskip 4pt
+    \nextbox{\small And quality \emph{matches or beats} full fine-tuning.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Quality: on par or better, everywhere}
+  \small
+  \renewcommand{\arraystretch}{1.15}
+  \begin{center}
+  \begin{tabular}{l r r r r}
+    \toprule
+    \textbf{GPT-3 175B} & \# Trainable & WikiSQL & MNLI-m & SAMSum (R1/R2/RL)\\
+    \midrule
+    Full fine-tune & 175{,}255.8M & 73.8 & 89.5 & 52.0 / 28.0 / 44.5\\
+    Prefix-layer & 20.2M & 70.1 & 89.5 & 50.8 / 27.3 / 43.5\\
+    Adapter$_H$ & 40.1M & 73.2 & 91.5 & 53.2 / 29.0 / 45.1\\
+    \textbf{LoRA} & \textbf{4.7M} & 73.4 & \textbf{91.7} & \textbf{53.8 / 29.8 / 45.9}\\
+    \textbf{LoRA} & 37.7M & \textbf{74.0} & 91.6 & 53.4 / 29.2 / 45.1\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  Same story on GLUE (RoBERTa, DeBERTa) and GPT-2 E2E: LoRA reaches full-FT quality with a
+  fraction of a percent of the parameters, and \textbf{no added latency}.
+\end{frame}
+
+% ================================================================
+\section{Why does low rank work?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Why does such a low rank work?}\\[4pt]
+    \small A look inside $\Delta W$.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{$\Delta W$ amplifies directions already in $W$}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/amplification.pdf}
+    \column{0.5\textwidth}
+    Project the update $\Delta W$ onto the top singular directions of $W$ and compare
+    magnitudes:
+    \begin{itemize}\small
+      \item $\Delta W$ overlaps directions that are present in $W$ but \emph{not emphasized}
+        during pretraining.
+      \item It \textbf{amplifies} them $\sim$\textbf{21$\times$} at $r{=}4$ (only $\sim$2$\times$
+        at $r{=}64$).
+      \item So adaptation surfaces a few task-specific features already latent in the model
+        -- not new ones. That is why a tiny rank is enough.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap and practical notes}
+  \begin{itemize}
+    \item LoRA freezes $\Wz$ and learns $\Delta W=BA$ with rank $r\ll\min(d,k)$ --
+      $h=\Wz x+\frac{\alpha}{r}BAx$.
+    \item Init $B=0$: training starts exactly at the pretrained model.
+    \item \textbf{10,000$\times$} fewer trainable params, \textbf{35 MB} checkpoints,
+      \textbf{no} inference latency (merge $W=\Wz+BA$).
+    \item Adapt $\{W_q,W_v\}$; rank as small as $1$--$8$ usually suffices.
+    \item It works because $\Delta W$ has low intrinsic rank -- it amplifies latent
+      task directions rather than inventing new ones.
+    \item \textbf{Not} distillation / pruning / quantization: the base model is untouched
+      and full-size; LoRA \emph{adds} a small trainable branch. Rank $r$ is a hyperparameter.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} \emph{LIMA} -- if fine-tuning is this cheap, how \textbf{much} data
+    do we actually need? The answer is surprisingly little.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Hu et al., "LoRA: Low-Rank Adaptation of Large Language Models" (2021),
+%   arXiv:2106.09685. Extracted from ml/llm_training/materials_md/papers/06_lora_*.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py, all real numbers from the paper's
+%   tables): param_count (trainable params, log), rank (Table 6), which_matrices (Table 5),
+%   latency (Table 1), amplification (Table 7). The reparameterization diagram is TikZ
+%   (small boxes-and-arrows schematic, per SLIDE_STYLE exception).
+% Pedagogical decisions: lead with the 35 TB storage problem; the reparam diagram + boxed
+%   forward pass as the core; "why low rank works" (amplification) as an optional deeper
+%   section; misconception guardrail (not distillation/pruning) in the recap.
+% Prior deck: 02_dpo. Next deck: 04_lima (data efficiency of alignment).
