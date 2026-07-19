@@ -75,7 +75,7 @@ astronaut, pomegranate = cold open only). L17-L19 outlines remain the working sp
 | `cnn2/slides-separable-convolutions-flattening.tex` | spatially separable (6 vs 9 params), depthwise+pointwise (MobileNet), multiplication counts | L19 | REDERIVE |
 | `cnn2/slides-convolution-types.tex` | 1D conv (time series, char-level text), 3D conv (video/MRI) - brief | L16 (1D first), L19 (variants) | REDERIVE |
 | `cnn1/slides-cnn-application.tex` | localization label-vector trick, task zoo, CNN-vs-dense inductive-bias framing | L19 | REDERIVE + REGEN-FIG (task zoo on our photo) |
-| `cnn1/slides-cnn-math.tex` | **skip almost entirely** (convolution theorem/Fourier proof too deep); keep only the one-line "frameworks implement cross-correlation" footnote | L16 footnote | REDERIVE |
+| `cnn1/slides-cnn-math.tex` | **partially added (2026-07-17, reversed the earlier skip):** convolution theorem + Fourier as a 4-frame aside - the statement $\mathcal{F}\{f*g\}=\mathcal{F}\{f\}\mathcal{F}\{g\}$, conv-in-space = multiply-in-frequency, FFT-is-fast, and blur/edges = low/high-pass; framed from Taylor (students know Taylor, not Fourier). The Fubini **proof is still skipped** (too deep for house style). Plus the cross-correlation footnote. | L16 (frames 17-20) + footnote | REDERIVE + REGEN-FIG |
 
 ### Borrowing mechanics - how borrowed material physically enters our decks
 

@@ -1,0 +1,782 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true, xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\graphicspath{{fig/}{fig/borrowed/}{fig/borrowed/3b1b/}}
+
+% small credit / citation lines
+\newcommand{\bbb}{{\scriptsize\color{gray} Screenshot: 3Blue1Brown, CC BY-NC-SA}}
+\newcommand{\lmu}{{\scriptsize\color{gray} Source: LMU I2DL (slds-lmu), CC BY 4.0}}
+\newcommand{\paper}[1]{{\scriptsize\color{gray} #1}}
+
+\title{Lecture 24: Attention}
+\subtitle{How tokens share meaning}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    GenAI chapter. Parts adapt LMU I2DL (CC BY 4.0) and 3Blue1Brown, ``Deep Learning'' Ch.\ 5--6
+    (CC BY-NC-SA).
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN - the cliffhanger
+\begin{frame}{Last chapter ended on a cliffhanger}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    In L21, the encoder read a whole sentence and crushed it into \textbf{one} context vector
+    $C$. The decoder then wrote the translation from $C$ alone.
+    \vskip 6pt
+    For a short sentence, fine. For a long one, $C$ is a bottleneck -- the ending forgets the
+    beginning. \textbf{Even the LSTM could not fix it}: the memory is still one fixed vector.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      The question we left open: \emph{what if the decoder could look back at \textbf{all} the
+      encoder states, not just the last one?}}}
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=0.3cm,
+        e/.style={draw, rounded corners, minimum width=0.9cm, minimum height=0.5cm, fill=armblue!12},
+        c/.style={draw, circle, fill=armorange!25, minimum size=0.8cm}]
+        \foreach \i/\w in {0/The,1/cat,2/sat} \node[e] (h\i) at (\i*1.0,2) {\w};
+        \draw[->] (h0)--(h1); \draw[->] (h1)--(h2);
+        \node[c] (C) at (1.0,0.9) {$C$};
+        \draw[->] (h0)--(C); \draw[->] (h1)--(C); \draw[->] (h2)--(C);
+        \node[e, fill=paramgreen!15] (d) at (1.0,-0.1) {decoder};
+        \draw[->, very thick, armred] (C)--(d);
+        \node[armred, font=\tiny] at (2.6,0.9) {one vector!};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The fix, in one idea}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Predict:} how would \emph{you} fix the bottleneck?
+    \pause
+    \vskip 8pt
+    Don't force everything through one vector. At \textbf{each} step of writing the output, let
+    the decoder \textbf{look back over every input state} and take a \emph{weighted average} --
+    heavier weight on the states that matter right now.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      That weighted look-back \emph{is} \textbf{attention}. The whole chapter unpacks this one
+      sentence -- and then takes it much further.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex,
+        e/.style={draw, rounded corners, minimum width=0.9cm, minimum height=0.5cm, fill=armblue!12},
+        d/.style={draw, rounded corners, minimum width=1.1cm, minimum height=0.5cm, fill=paramgreen!15}]
+        \foreach \i/\w in {0/The,1/cat,2/sat} \node[e] (h\i) at (\i*1.1,2) {\w};
+        \node[d] (dec) at (1.1,0) {output step};
+        \draw[->, gray!50] (h0)--(dec) node[midway,sloped,above,font=\tiny]{.1};
+        \draw[->, very thick, armred] (h1)--(dec) node[midway,sloped,above,font=\tiny,text=armred]{.8};
+        \draw[->, gray!50] (h2)--(dec) node[midway,sloped,above,font=\tiny]{.1};
+      \end{tikzpicture}\\[4pt]
+      {\footnotesize weights sum to 1; here the output leans on ``cat''}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Words are vectors; directions carry meaning}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Words are vectors; directions carry meaning}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Attention moves a word's vector around a meaning-space. First, recall what that space is.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Recall: a token is a vector}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Every token is mapped to a vector -- its \textbf{embedding} -- a point in a high-dimensional
+    space (GPT-3: $12{,}288$ dims). You met this in L21: we plotted word vectors in 2D.
+    \vskip 6pt
+    The key idea: \textbf{directions in this space carry meaning}. Nearby vectors are similar
+    words.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A word starts as a lookup -- \emph{context-free}. The whole job of the network is to enrich
+      it.}}
+    \column{0.48\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{embeddings_3d.png}\end{center}
+    \bbb
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Directions carry meaning}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{king_queen_analogy.png}\end{center}
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=0.9\linewidth]{tower_neighbors.png}\end{center}
+  \end{columns}
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.64\textwidth}
+    \small The famous one: \texttt{king} $-$ \texttt{man} $+$ \texttt{woman} $\approx$
+    \texttt{queen}. A single \emph{direction} encodes ``gender''; another ``royalty.''
+    \paper{(word2vec: Mikolov et al., 2013)}
+    \column{0.36\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      The \textbf{dot product} measures how much two vectors align. \textbf{Remember this} -- it
+      is the engine of attention.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Embeddings soak up context}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{king_context.png}\end{center}
+    \column{0.5\textwidth}
+    The same word means different things: ``a machine learning \textbf{model}'' vs.\ ``a fashion
+    \textbf{model}.'' The starting embedding of \emph{model} is identical in both.
+    \vskip 6pt
+    Something has to \textbf{pull} that generic vector toward the right meaning, using the
+    surrounding words.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
+      \textbf{That pull is exactly what attention does}: move each embedding to a
+      context-specific point in meaning-space.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+% ================================================================
+\section{The attention idea}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The attention idea}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Score, softmax, weighted sum -- the whole mechanism in three moves.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Attention = a weighted look-back}
+  At each output position, attention does three things:
+  \vskip 8pt
+  \begin{enumerate}
+    \item \textbf{Score} every other position for relevance (how much should I look there?).
+    \item \textbf{Softmax} the scores into weights that are positive and sum to $1$.
+    \item \textbf{Weighted sum}: blend the other positions' information by those weights.
+  \end{enumerate}
+  \vskip 10pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{
+      That's it -- a \textbf{content-based average}. The rest of this deck is just \emph{how} we
+      compute the scores and \emph{what} we blend. No new calculus: softmax and weighted sums are
+      L14.}}
+\end{frame}
+
+\begin{frame}{You can see it}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{lmu_translation_attention.png}\end{center}
+    {\scriptsize Translation: each output word's attention over the input words -- the model
+    learns the alignment itself. \paper{(Bahdanau, Cho \& Bengio, 2015 -- the first attention)}}
+    \column{0.44\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{lmu_captioning_attention.png}\end{center}
+    {\scriptsize Captioning: attention over \emph{pixels} while writing each word.
+    \paper{(Xu et al., 2015)}}
+  \end{columns}
+  \vskip 3pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Same skeleton -- score, softmax, weighted sum -- whether the ``positions'' are source words or
+    image patches. Next: let the model \emph{learn} what to score.}}
+  \vskip 1pt \lmu
+\end{frame}
+
+% ================================================================
+\section{The leap: drop the RNN}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The leap: drop the RNN}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      If attention gives direct access to everything, the sequential RNN is dead weight.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Why keep the RNN at all?}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \textbf{Predict:} attention already lets any output position pull from any input position,
+    \emph{directly}. So why keep the slow, sequential RNN underneath -- the part that forces us
+    to process one token at a time?
+    \pause
+    \vskip 8pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{
+      \textbf{You don't.} Rip out the recurrence, keep only attention. That is the 2017 paper
+      whose title says it all: \textbf{``Attention Is All You Need.''}
+      \paper{(Vaswani et al., 2017)}}}
+    \vskip 6pt
+    \small Stack these attention layers and the vectors get refined again and again -- meaning
+    deepens with depth.
+    \column{0.46\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{deep_stack.png}\end{center}
+    \bbb
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Sequential vs.\ all-to-all}
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize, >=Latex]
+      \node[font=\normalsize\bfseries, text=sampred] at (-4,2.9) {RNN / LSTM};
+      \foreach \i/\y in {0/-3.2,1/-2,2/-0.8,3/0.4}
+        \node[draw, circle, fill=sampred!15, minimum size=0.55cm] (l\i) at (\y,1.7) {$h_\i$};
+      \draw[->,thick,sampred] (l0)--(l1); \draw[->,thick,sampred] (l1)--(l2); \draw[->,thick,sampred] (l2)--(l3);
+      \node[text=sampred] at (-1.4,0.8) {sequential: $O(n)$ steps to connect ends};
+      \node[font=\normalsize\bfseries, text=paramgreen] at (4,2.9) {Transformer};
+      \foreach \i/\y in {0/2.2,1/3.4,2/4.6,3/5.8}
+        \node[draw, circle, fill=paramgreen!15, minimum size=0.55cm] (t\i) at (\y,1.7) {$x_\i$};
+      \foreach \a/\b in {0/1,0/2,0/3,1/2,1/3,2/3} \draw[paramgreen!45,thick] (t\a)--(t\b);
+      \node[text=paramgreen] at (4,0.8) {all-to-all: $O(1)$ -- direct};
+      \draw[dashed,gray] (0,3.3)--(0,0.4);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 4pt
+  \begin{center}
+  \fcolorbox{popblue}{popblue!6}{\parbox{0.75\linewidth}{\centering\small
+    Three wins: \textbf{parallel} (all tokens at once) $\cdot$ \textbf{direct access} (any token
+    to any other) $\cdot$ \textbf{contextual} (representations change with context).}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why context matters}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=0.96\linewidth]{mole_polysemy.png}\end{center}
+    {\scriptsize \texttt{mole} means three different things -- but its starting embedding is
+    identical in all three.}
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=0.96\linewidth]{eiffel_context.png}\end{center}
+    {\scriptsize \texttt{tower}, once preceded by \texttt{Eiffel}, should move toward
+    Paris/France/steel.}
+  \end{columns}
+  \vskip 3pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Self-attention} is how each word pulls the context it needs from the \emph{same}
+    sentence. Let's build it -- slowly.}}
+  \vskip 1pt \bbb
+\end{frame}
+
+% ================================================================
+\section{Self-attention: query, key, value}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Self-attention: query, key, value}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The chapter's one deep dive. We go slow -- what each piece \emph{is}, and \emph{why} the
+      equation looks the way it does.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The goal, made concrete}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{query_creature.png}\end{center}
+    \column{0.5\textwidth}
+    Sentence: \emph{``a fluffy blue creature roamed the verdant forest.''}
+    \vskip 6pt
+    We want the noun \textbf{creature} to absorb its adjectives \textbf{fluffy} and
+    \textbf{blue}, so its vector means \emph{``a fluffy, blue creature.''}
+    \vskip 6pt
+    Two questions the mechanism must answer:
+    \begin{itemize}\small
+      \item Which words are \textbf{relevant} to creature?
+      \item \textbf{What} should they contribute?
+    \end{itemize}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Why ``self''-attention? The sentence talks to itself}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    In L21's translation attention, queries came from the \emph{decoder} and keys/values from the
+    \emph{encoder} -- two different sequences.
+    \vskip 6pt
+    In \textbf{self}-attention, $Q$, $K$ and $V$ all come from the \textbf{same} sentence. Every
+    word at once \textbf{asks} (its query) and \textbf{answers} (its key and value). One round is
+    \textbf{all-to-all messaging}: each word gathers what it needs from every other word.
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize,>=Latex]
+        \foreach \i/\a in {0/90,1/162,2/234,3/306,4/18}
+          \node[draw,circle,fill=armblue!14,minimum size=0.85cm] (w\i) at (\a:1.8) {$w_{\i}$};
+        \foreach \i in {0,...,4}\foreach \j in {0,...,4}{\ifnum\i<\j \draw[gray!45,<->](w\i)--(w\j);\fi}
+      \end{tikzpicture}\\[4pt]
+      {\footnotesize every word attends to every word}
+    \end{center}
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Think of it as \textbf{routing}: attention decides who talks to whom, and the values are the
+    messages passed.}}
+\end{frame}
+
+\begin{frame}{The analogy: a soft dictionary lookup}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Think of looking something up in a library:
+    \begin{itemize}\small
+      \item You arrive with a \textbf{query} -- what you want.
+      \item Each book has a \textbf{key} -- its label on the spine.
+      \item Each book has a \textbf{value} -- its actual contents.
+    \end{itemize}
+    \vskip 4pt
+    You compare your query to \emph{every} key, then take the \textbf{values} of the good matches.
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A normal dictionary is a \textbf{hard} lookup: one key matches exactly. Attention is a
+      \textbf{soft} lookup: \emph{every} key matches a little, weighted by similarity -- and you
+      blend all the values.}}
+    \vskip 6pt
+    {\small Every word will produce its own query, key, and value. Next: where these come from.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Another way to picture it: web search}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=0.55cm,
+        b/.style={draw, rounded corners, minimum width=3.4cm, align=center, inner sep=4pt}]
+        \node[b, fill=popblue!12] (q) {your \textbf{query}\\ ``fluffy animals''};
+        \node[b, fill=orange1!12, below=of q] (k) {each page's \textbf{keywords}\\ (its key)};
+        \node[b, fill=paramgreen!12, below=of k] (v) {each page's \textbf{content}\\ (its value)};
+        \draw[->, thick] (q)--(k) node[midway,right,font=\tiny]{match};
+        \draw[->, thick] (k)--(v) node[midway,right,font=\tiny]{return};
+      \end{tikzpicture}
+    \end{center}
+    \column{0.54\textwidth}
+    A search engine compares your \textbf{query} to every page's \textbf{keywords}, ranks the
+    matches, and returns the best pages' \textbf{content}.
+    \vskip 6pt
+    Attention is the same idea -- with one twist: it doesn't return only the top hit. It returns a
+    \textbf{blend} of \emph{every} value, weighted by how well each key matched.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Query} $=$ what you search for $\cdot$ \textbf{Key} $=$ how a word is indexed $\cdot$
+      \textbf{Value} $=$ what it hands back.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Query --- ``what am I looking for?''}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{query_matrix.png}\end{center}
+    \column{0.45\textwidth}
+    Multiply a word's embedding by a learned matrix $W_Q$ to get its \textbf{query} vector
+    (small -- say 128-dim):
+    \[ \mathbf{q}_i = W_Q\, \mathbf{e}_i . \]
+    Think of \emph{creature}'s query as encoding the question \emph{``are there any adjectives in
+    front of me?''}
+    \vskip 4pt
+    \fcolorbox{popblue}{popblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      $W_Q$ is \textbf{learned}. What each word ``asks'' is discovered from data, not written by
+      us.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Key --- ``what do I offer?''}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{key_matrix.png}\end{center}
+    \column{0.45\textwidth}
+    A second learned matrix $W_K$ turns each embedding into a \textbf{key}:
+    \[ \mathbf{k}_j = W_K\, \mathbf{e}_j . \]
+    A key \emph{answers} queries. We'd want \emph{fluffy}'s key to encode \emph{``I am an
+    adjective, sitting just here.''}
+    \vskip 4pt
+    \fcolorbox{orange1}{orange1!10}{\parbox{0.95\linewidth}{\scriptsize
+      A key is a word \emph{advertising} itself -- so that the right queries can find it.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Queries and keys meet in one space}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{qk_space.png}\end{center}
+    \column{0.42\textwidth}
+    $W_Q$ and $W_K$ \textbf{project} the big embedding space down to a shared, smaller
+    \textbf{query/key space}.
+    \vskip 6pt
+    A good $W_Q,W_K$ arrange it so that \emph{creature}'s query (``adjectives before me?'') and
+    \emph{fluffy}'s key (``adjective, here'') point the \textbf{same way} -- so they align.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
+      That is \emph{all} $W_Q,W_K$ do: learn a space where ``relevant'' means ``aligned.''}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Value --- ``what do I pass on?''}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{value_wv.png}\end{center}
+    \column{0.45\textwidth}
+    A third learned matrix $W_V$ makes each word's \textbf{value} -- the information it will hand
+    over if attended to:
+    \[ \mathbf{v}_j = W_V\, \mathbf{e}_j . \]
+    \emph{fluffy}'s value is, roughly, ``the fluffiness to add to a noun.''
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.95\linewidth}{\scriptsize
+      Key $=$ how you're \emph{found}; value $=$ what you \emph{give}. They are different jobs, so
+      they get different matrices.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Why three separate matrices?}
+  One word plays \textbf{three different roles} at once:
+  \vskip 6pt
+  \begin{center}\small
+    \begin{tabular}{l l l}
+      \textcolor{popblue}{\textbf{Query}} $\mathbf{q}=W_Q\mathbf{e}$ & what I'm \emph{looking for}
+        & (creature: ``adjectives?'') \\[3pt]
+      \textcolor{orange1}{\textbf{Key}} $\mathbf{k}=W_K\mathbf{e}$ & what I \emph{advertise}
+        & (fluffy: ``I'm an adjective'') \\[3pt]
+      \textcolor{paramgreen}{\textbf{Value}} $\mathbf{v}=W_V\mathbf{e}$ & what I \emph{contribute}
+        & (fluffy: ``fluffiness'') \\
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Why not just dot the embeddings together directly? Because \emph{``what I'm looking for''} is
+    not the same as \emph{``what I am''} is not the same as \emph{``what I'll give.''} Three
+    matrices let the model learn the three roles \textbf{independently} -- and they are the
+    \emph{only} new weights in attention.}}
+\end{frame}
+
+\begin{frame}{The dot product, up close}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{dot_product_geometry.pdf}\end{center}
+    \column{0.48\textwidth}
+    The dot product $\mathbf{q}\cdot\mathbf{k}=|\mathbf{q}|\,|\mathbf{k}|\cos\theta$ is
+    \textbf{large} when two vectors point the same way, \textbf{zero} when perpendicular, and
+    \textbf{negative} when opposite.
+    \vskip 6pt
+    So the whole question ``how relevant is this key to my query?'' collapses to \textbf{one
+    number}. Aligned $=$ relevant.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      This single operation is the heart of attention. Everything else -- softmax, the weighted
+      sum -- is bookkeeping around it.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Matching: the dot product scores relevance}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{kq_dotgrid.png}\end{center}
+    \column{0.44\textwidth}
+    Score how well key $j$ answers query $i$ with a \textbf{dot product} -- the same
+    ``how-aligned'' measure from the embeddings primer:
+    \[ s_{ij} = \mathbf{q}_i \cdot \mathbf{k}_j . \]
+    Big $\Rightarrow$ ``this word is relevant to me.'' Here \textbf{fluffy} and \textbf{blue}
+    score high against \textbf{creature}'s query.
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      All queries against all keys at once is one matrix product: $\;S = QK^\top$.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Scores $\rightarrow$ weights: why softmax?}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Raw scores can be any real number. But we want a \textbf{weighted average} of the values, so
+    the weights must be
+    \begin{itemize}\small
+      \item non-negative, and
+      \item sum to $1$ (a distribution over ``where to look'').
+    \end{itemize}
+    \textbf{Softmax} does exactly that -- and \emph{softly}: it doesn't just pick the single best
+    key, it spreads weight over all the good ones, and it is smooth (differentiable), so we can
+    train through it.
+    \column{0.48\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{attention_pattern.png}\end{center}
+    \bbb
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The denominator: why divide by $\sqrt{d_k}$?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A dot product in $d_k$ dimensions is a sum of $d_k$ terms, so its size \textbf{grows with}
+    $d_k$ (spread $\sim\!\sqrt{d_k}$). For $d_k=64$ the raw scores swing by $\pm 5$ or more.
+    \vskip 4pt
+    Feed \emph{big} scores to softmax and it \textbf{saturates} -- one weight $\to 1$, the rest
+    $\to 0$. That is a near-hard \texttt{argmax}: it looks at exactly one word, and its gradient
+    is $\approx 0$, so \textbf{training stalls}.
+    \vskip 4pt
+    \fcolorbox{warnred}{warnred!8}{\parbox{0.95\linewidth}{\scriptsize
+      Dividing by $\sqrt{d_k}$ rescales the scores back to $\approx\!\pm 1$, keeping softmax soft
+      and trainable.}}
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{softmax_scaling.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Putting it together: the equation}
+  \begin{center}
+    \fcolorbox{popblue}{popblue!6}{\parbox{0.9\linewidth}{\centering\large
+      $\displaystyle \mathrm{Attention}(Q,K,V)=\mathrm{softmax}\!\Big(\frac{QK^\top}{\sqrt{d_k}}\Big)\,V$}}
+  \end{center}
+  \vskip 8pt
+  Read it left to right -- it is exactly the three moves:
+  \begin{center}\small
+    \begin{tabular}{l l}
+      $QK^\top$ & every query $\cdot$ every key $=$ a grid of relevance \textbf{scores} \\[3pt]
+      $\div \sqrt{d_k}$ & keep the scores tame so softmax stays soft \\[3pt]
+      $\mathrm{softmax}$ & scores $\to$ \textbf{weights} (positive, sum to 1), row by row \\[3pt]
+      $\times V$ & \textbf{weighted sum} of the value vectors \\
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    ``Score, softmax, weighted sum'' -- the same three moves from the start of the deck, now with
+    learned $Q,K,V$.}}
+\end{frame}
+
+\begin{frame}{The output: values, weighted and summed}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{value_delta_e.png}\end{center}
+    \column{0.5\textwidth}
+    The weights say \emph{how much} to listen; the values say \emph{what} to pass. The output for
+    each word is their weighted sum:
+    \[ \mathbf{o}_i = \sum_j \alpha_{ij}\, \mathbf{v}_j . \]
+    \emph{creature}'s output blends big shares of \textbf{fluffy}'s and \textbf{blue}'s values --
+    landing on a new point in meaning-space: a \emph{fluffy blue creature}.
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
+      Every word is updated this way \textbf{at once} -- one parallel step. (In the full block this
+      output is \textbf{added back} to the word's own vector -- a residual connection -- so words
+      \emph{refine} rather than overwrite. That's L25.)}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Let's run the numbers (1/2)}
+  Three words, tiny 2-D embeddings. To keep the arithmetic visible, take $Q=K=V=X$ (skip the
+  learned projections for a moment):
+  \[
+    \mathbf{e}_{\text{fluffy}}=\left[\begin{smallmatrix}1\\0\end{smallmatrix}\right],\quad
+    \mathbf{e}_{\text{blue}}=\left[\begin{smallmatrix}0\\1\end{smallmatrix}\right],\quad
+    \mathbf{e}_{\text{creature}}=\left[\begin{smallmatrix}1\\1\end{smallmatrix}\right]
+  \]
+  Scores $S=QK^\top$ are all the pairwise dot products. \emph{creature}'s row:
+  $\;\mathbf{q}_{\text{cre}}\!\cdot\!\mathbf{k}_{\text{fluffy}}=1,\;\;
+    \mathbf{q}_{\text{cre}}\!\cdot\!\mathbf{k}_{\text{blue}}=1,\;\;
+    \mathbf{q}_{\text{cre}}\!\cdot\!\mathbf{k}_{\text{cre}}=2.$
+  \begin{center}\includegraphics[width=0.9\linewidth]{worked_scores.pdf}\end{center}
+\end{frame}
+
+\begin{frame}{Let's run the numbers (2/2)}
+  Scale \emph{creature}'s scores by $\sqrt{d}=\sqrt{2}$ and softmax:
+  \[
+    \mathrm{softmax}\!\left(\tfrac{1}{\sqrt2},\;\tfrac{1}{\sqrt2},\;\tfrac{2}{\sqrt2}\right)
+    = (\,0.25,\;\; 0.25,\;\; 0.50\,).
+  \]
+  The new \emph{creature} vector is the weighted sum of the values:
+  \[
+    \mathbf{o}_{\text{cre}} = 0.25\!\left[\begin{smallmatrix}1\\0\end{smallmatrix}\right]
+      + 0.25\!\left[\begin{smallmatrix}0\\1\end{smallmatrix}\right]
+      + 0.50\!\left[\begin{smallmatrix}1\\1\end{smallmatrix}\right]
+      = \left[\begin{smallmatrix}0.75\\0.75\end{smallmatrix}\right].
+  \]
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \emph{creature} started at $[1,1]$ and its attention output is $[0.75,0.75]$ -- pulled a
+    quarter of the way toward \textbf{fluffy} and \textbf{blue}. \textbf{That is attention, by
+    hand.} (Real models insert the learned $W_Q,W_K,W_V$; the arithmetic is identical.)}}
+\end{frame}
+
+\begin{frame}{A pattern that makes sense}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[height=0.7\textheight]{attn_illustrative.pdf}\end{center}
+    \column{0.5\textwidth}
+    Our sentence, with the weights laid out (row $=$ query word, column $=$ what it attends to):
+    \begin{itemize}\small
+      \item \textbf{coming} looks at \textbf{spring} (what is coming?),
+      \item \textbf{die} looks at \textbf{Donkey} (who dies?),
+      \item seasonal words cluster together.
+    \end{itemize}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      Illustrative weights -- hand-set to show the \emph{shape} of a sensible pattern before we
+      look at a real one.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Attention in $\sim$15 lines}
+  Every step is a matrix op. In NumPy:
+\begin{lstlisting}
+import numpy as np
+
+def attention(X, Wq, Wk, Wv):
+    Q, K, V = X @ Wq, X @ Wk, X @ Wv       # three learned views
+    d_k = Q.shape[1]
+    scores = Q @ K.T / np.sqrt(d_k)         # relevance, scaled
+    scores -= scores.max(1, keepdims=True)  # numerical stability
+    weights = np.exp(scores)
+    weights /= weights.sum(1, keepdims=True)  # softmax over each row
+    return weights @ V                      # weighted sum of values
+\end{lstlisting}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    No loops over positions, no recurrence -- three matmuls and a softmax. That simplicity is the
+    whole point.}}
+\end{frame}
+
+\begin{frame}{A real head, our sentence}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\includegraphics[height=0.72\textheight]{bert_attention_donkey.pdf}\end{center}
+    \column{0.5\textwidth}
+    Real attention from a pretrained model (\textbf{DistilBERT}) on
+    \emph{``Donkey don't die, spring is coming.''} One of its heads.
+    \vskip 6pt
+    This head learned a clean rule: \textbf{attend to the next token}. Nobody wrote it -- the
+    $W_Q,W_K,W_V$ that produce it were \emph{learned}.
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      Real heads specialise, and many are less tidy than our illustration. \textbf{Different
+      heads do different jobs} -- more in L25. (Special tokens dropped for clarity.)}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{It's just matmul $\rightarrow$ it runs on a GPU}
+  $QK^\top$, softmax, and $\times V$ are all \textbf{big matrix multiplies} over the whole
+  sequence at once -- no step depends on the previous one.
+  \vskip 8pt
+  \begin{center}
+    \begin{tikzpicture}[font=\small, >=Latex, node distance=0.5cm,
+      b/.style={draw, rounded corners, minimum height=0.8cm, fill=armblue!12, align=center}]
+      \node[b] (a) {$QK^\top$};
+      \node[b, right=of a] (s) {softmax};
+      \node[b, right=of s] (v) {$\times V$};
+      \draw[->] (a)--(s); \draw[->] (s)--(v);
+      \node[draw, fill=paramgreen!15, minimum size=0.9cm, right=0.7cm of v] (g) {GPU};
+      \foreach \dx in {-0.15,0,0.15} \draw (g.north west)++(\dx+0.32,0)--++(0,0.12);
+      \foreach \dx in {-0.15,0,0.15} \draw (g.south west)++(\dx+0.32,0)--++(0,-0.12);
+      \draw[->, thick] (v)--(g);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Exactly the parallel workload a \textbf{GPU} eats (L14 ``why GPUs,'' L16 ``a convolution is a
+    matmul''). This is \emph{why} attention scales -- and why the RNN, which \emph{couldn't}
+    parallelise over time, lost.}}
+\end{frame}
+
+% ================================================================
+\section*{Recap}
+
+\begin{frame}{One head of attention, end to end}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{single_head_full.png}\end{center}
+    \column{0.44\textwidth}
+    \begin{itemize}\small
+      \item Tokens are \textbf{vectors}; directions carry meaning.
+      \item Each word emits a \textcolor{popblue}{query}, a \textcolor{orange1}{key}, a
+        \textcolor{paramgreen}{value} -- three learned views.
+      \item \textbf{Score} ($QK^\top$), scale ($\sqrt{d_k}$), \textbf{softmax}, \textbf{weighted
+        sum} of values.
+      \item $\mathbf{e}' = \mathbf{e} + \Delta\mathbf{e}$: the word moves to a context-rich point.
+      \item It's matmul $\to$ GPU $\to$ scale.
+    \end{itemize}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\scriptsize
+      \textbf{Next (L25):} run many heads at once, put word \emph{order} back in, and wrap it all
+      in a repeatable block -- the Transformer.}}
+  \end{columns}
+  \vskip 1pt \bbb
+\end{frame}
+
+\begin{frame}{Sources \& further reading}
+  \small
+  \begin{itemize}
+    \item Bahdanau, Cho \& Bengio (2015), \emph{Neural Machine Translation by Jointly Learning to
+      Align and Translate} -- attention, for translation.
+    \item Xu et al.\ (2015), \emph{Show, Attend and Tell} -- attention for image captioning.
+    \item Vaswani et al.\ (2017), \emph{Attention Is All You Need} -- self-attention, the
+      Transformer.
+    \item Mikolov et al.\ (2013), word2vec -- word embeddings and analogies.
+    \item Jay Alammar, \emph{The Illustrated Transformer}; Andrej Karpathy, ``Let's build GPT.''
+    \item \textbf{3Blue1Brown}, ``Deep Learning'' Ch.\ 5--6 -- the visual intuition this deck
+      leans on (screenshots used under CC BY-NC-SA).
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    For the full, animated story of attention, watch 3Blue1Brown Ch.\ 6 -- it is the clearest
+    explanation out there.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   Deck: L24 Attention (ch9_genai). Built 2026-07-19, then revised (v2) after instructor review:
+%   expanded the Q/K/V + equation section to go SLOW (query/key/value each its own frame, the
+%   soft-dictionary analogy, "why three matrices", "why softmax", a dedicated "why sqrt(d_k)"
+%   frame with a generated figure, an annotated equation); added paper attributions (Bahdanau
+%   2015, Xu 2015, Vaswani 2017, Mikolov 2013) + a Sources frame; used more 3b1b frames
+%   (query_matrix, key_matrix, qk_space, value_wv added); fixed slide-5 image overflow
+%   (embeddings_3d now width-sized); replaced the diffuse DistilBERT heatmap.
+%   Reuses/ports TikZ from misc/dl4nlp/02_transformers.tex. Pedagogy spine from 3Blue1Brown
+%   DL Ch.5-6 (transcripts in research/). Demo sentence (instructor 2026-07-19):
+%   "Donkey don't die, spring is coming".
+%   Images:
+%     3b1b (fig/borrowed/3b1b, CC BY-NC-SA, credit per frame): embeddings_3d, king_queen_analogy,
+%       tower_neighbors, king_context, deep_stack, mole_polysemy, eiffel_context, query_creature,
+%       query_matrix, key_matrix, qk_space, value_wv, kq_dotgrid, attention_pattern,
+%       value_delta_e, single_head_full.
+%     LMU (fig/borrowed, CC BY 4.0): lmu_translation_attention, lmu_captioning_attention.
+%     Generated (fig/, ma venv):
+%       bert_attention_donkey.pdf -- REAL DistilBERT attention, content tokens only, cleanest head
+%         auto-picked (bert_attention.py). Also emits bert_heads_grid.pdf for L25.
+%       softmax_scaling.pdf, attn_illustrative.pdf -- why-sqrt(dk) + a clean illustrative pattern
+%         (attn_intuition.py, numpy, no model).
+%   GPU on "It's just matmul" is a small TikZ chip. Callbacks: L21 bottleneck/embeddings; L14
+%   softmax/matmul & why-GPUs; L16 conv=matmul. Forward pointer: L25.
+% =============================================================

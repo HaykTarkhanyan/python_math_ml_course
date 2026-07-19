@@ -95,14 +95,17 @@ def fig_methods_disagree(df, log):
 
 
 def fig_tree(df, log):
+    from sklearn.tree import export_text
     X, y = df[FEATURES].values, df["cnt"].values
-    tree = DecisionTreeRegressor(max_depth=3, random_state=SEED).fit(X, y)
-    fig, ax = plt.subplots(figsize=(11, 5.2))
+    # depth 2: 4 leaves, big font -> actually readable on a projector (was depth 3, too cramped).
+    tree = DecisionTreeRegressor(max_depth=2, random_state=SEED).fit(X, y)
+    fig, ax = plt.subplots(figsize=(10, 5.4))
     plot_tree(tree, feature_names=FEATURES, filled=True, rounded=True,
-              impurity=False, fontsize=7, precision=2, ax=ax)
-    ax.set_title("A shallow regression tree on bike rentals (readable)", fontsize=11)
+              impurity=False, proportion=True, fontsize=12, precision=2, ax=ax)
+    ax.set_title("A shallow regression tree on bike rentals (read a path as a rule)", fontsize=13)
     fig.savefig(FIG_DIR / "tree_bike.pdf", bbox_inches="tight")
     plt.close(fig)
+    log.info("TREE STRUCTURE (depth 2):\n" + export_text(tree, feature_names=FEATURES, decimals=0))
 
     # --- worked numbers: variance reduction of the ROOT split ---
     f_idx = tree.tree_.feature[0]

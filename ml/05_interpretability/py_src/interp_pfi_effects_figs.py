@@ -155,16 +155,28 @@ def fig_ale_vs_pdp(log):
     pdp = np.array([rf.predict(X.assign(temp=g)).mean() for g in grid])
     pdp -= pdp.mean()                                    # centre PDP to compare
 
+    ale_on_grid = np.interp(grid, edges, ale)            # ALE on the PDP grid, for shading
+    gap = pdp - ale_on_grid
+    j = int(np.argmax(np.abs(gap)))                      # where the two disagree most (the extreme)
+
     fig, ax = plt.subplots(figsize=(5.8, 4.2))
-    ax.plot(grid, pdp, color=ARM_BLUE, lw=2.4, label="PDP (averages over all rows)")
-    ax.plot(edges, ale, color=ARM_ORANGE, lw=2.4, label="ALE (local, stays realistic)")
+    # shade the disagreement so it survives slide scale
+    ax.fill_between(grid, pdp, ale_on_grid, color=ARM_RED, alpha=0.15, lw=0,
+                    label="disagreement (extrapolation)")
+    ax.plot(grid, pdp, color=ARM_BLUE, lw=2.6, label="PDP (averages over all rows)")
+    ax.plot(edges, ale, color=ARM_ORANGE, lw=2.6, label="ALE (local, stays realistic)")
+    # annotate the biggest gap, at the extreme
+    ax.annotate(f"PDP overshoots here\ngap $\\approx$ {abs(gap[j]):.0f} rentals",
+                xy=(grid[j], (pdp[j] + ale_on_grid[j]) / 2), xytext=(0.30, 0.30),
+                textcoords="axes fraction", fontsize=8, color=ARM_RED, ha="left",
+                arrowprops=dict(arrowstyle="->", color=ARM_RED, lw=1.2))
     ax.set_xlabel("temp"); ax.set_ylabel("centred effect on cnt")
     ax.set_title("PDP vs ALE for temp (bike)")
-    ax.legend(fontsize=8, loc="upper left")
+    ax.legend(fontsize=7.5, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout(); fig.savefig(FIG_DIR / "ale_vs_pdp_bike.pdf", bbox_inches="tight")
     plt.close(fig)
-    log.info(f"ALE vs PDP: max abs gap = {np.max(np.abs(np.interp(edges, grid, pdp) - ale)):.0f} rentals")
+    log.info(f"ALE vs PDP: max abs gap = {abs(gap[j]):.0f} rentals at temp={grid[j]:.2f}")
     log.info("wrote ale_vs_pdp_bike.pdf")
 
 

@@ -174,7 +174,7 @@
 % ================================================================
 \section{SHAP in practice}
 
-\begin{frame}{TreeSHAP, and how SHAP unifies the chapter}
+\begin{frame}{TreeSHAP, and how SHAP ties the methods together}
   \begin{itemize}\small
     \item \textbf{TreeSHAP} computes SHAP \textbf{exactly and fast} for trees/boosting $\Rightarrow$
       SHAP is the \textbf{default} for tabular models. (KernelSHAP works for any model, but is slow.)
@@ -188,9 +188,10 @@
   \end{itemize}
   \vfill
   \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
-    \textbf{But like every method here, correlation muddies SHAP too} --- the credit split between
-    \texttt{temp} and \texttt{atemp} stays ambiguous. Still \textbf{model behaviour, not causation}
-    (deck 2's ice cream), and rich plots are \textbf{easy to over-read}.}}
+    \textbf{But like every method here, correlation muddies SHAP too} --- the \texttt{temp}/\texttt{atemp}
+    credit split stays ambiguous. SHAP also explains the model's \emph{score}: if that score isn't
+    \textbf{calibrated} (L13), SHAP faithfully explains a \emph{miscalibrated} number. Still
+    \textbf{model behaviour, not causation} (deck 2's ice cream), and rich plots are \textbf{easy to over-read}.}}
 \end{frame}
 
 \begin{frame}[fragile]{SHAP in code}
@@ -258,8 +259,39 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
       simpler/faster but less stable. \textbf{SHAP is the modern default.}}}
     \column{0.5\textwidth}
     \begin{center}
-      \includegraphics[width=\linewidth]{fig/lime_robustness.png}\\[-2pt]
+      \includegraphics[width=0.86\linewidth]{fig/lime_robustness.png}\\[-2pt]
       \scriptsize Two runs, same point, different fits. LMU IML.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LIME's global sibling: the surrogate model}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    LIME fits a simple model \emph{locally}, around one prediction. Its \textbf{global} counterpart
+    does the same for the \emph{whole} model:
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{Global surrogate:} train an interpretable model --- a shallow tree, a linear model, a
+      GAM --- to \textbf{mimic the black box's predictions} everywhere, then read the surrogate
+      instead of the black box.}}
+    \vskip 6pt
+    \begin{itemize}\small
+      \item Check its \textbf{fidelity} first ($R^2$ of surrogate vs.\ black-box output): a poor
+        mimic is a misleading explanation.
+      \item In effect it \textbf{distills the forest back into deck 1's glass box}.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=stealth]
+        \node[draw, rounded corners, fill=armred!12, minimum width=3.2cm, minimum height=0.8cm] (bb)
+          at (0,0) {black box $\hat f$ (forest, NN)};
+        \node[draw, rounded corners, fill=armblue!12, minimum width=3.2cm, minimum height=0.8cm] (s)
+          at (0,-1.9) {surrogate: tree / linear / GAM};
+        \draw[->, thick] (bb.south) -- node[right, font=\tiny, align=left]
+          {fit to $\hat f$'s\\ predictions} (s.north);
+        \node[font=\tiny, armblue] at (0,-2.7) {read this instead};
+      \end{tikzpicture}
     \end{center}
   \end{columns}
 \end{frame}
@@ -300,7 +332,7 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
 
 \begin{frame}{What makes a good counterfactual?}
   \begin{columns}[T]
-    \column{0.52\textwidth}
+    \column{0.5\textwidth}
     Five things we want at once:
     \begin{itemize}\small
       \item \textbf{Validity} --- it actually flips the prediction.
@@ -314,27 +346,14 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
     \vskip 2pt
     \footnotesize Usually \textbf{several} valid counterfactuals exist --- prefer the sparse,
     actionable ones.
-    \column{0.48\textwidth}
-    \footnotesize Real DiCE counterfactual (bank): \texttt{age}, \texttt{job}, \texttt{poutcome}
-    \textbf{frozen}; only bank-controllable levers may move.
-    \vskip 4pt
-    \renewcommand{\arraystretch}{1.2}
-    \centering
-    \begin{tabular}{l c c}
-      \textbf{feature} & \textbf{orig.} & \textbf{CF} \\
-      \hline
-      age      & 29 & 29 \\
-      job      & mgmt & mgmt \\
-      balance  & 1431 & 1431 \\
-      contact  & cell. & cell. \\
-      \texttt{month} & \textbf{jun} & \textbf{\color{armred}apr} \\
-      campaign & 4 & 4 \\
-      poutcome & unkn. & unkn. \\
-      \hline
-      \textbf{predict} & no\,$(0.44)$ & \textbf{\color{paramgreen}yes\,$(0.78)$} \\
-    \end{tabular}
-    \vskip 4pt
-    \footnotesize One change --- \emph{call in April, not June} --- flips it.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cf_flip_bank.pdf}
+    \end{center}
+    \vskip 2pt
+    \footnotesize Real DiCE counterfactual (bank): \texttt{age}, \texttt{job}, \texttt{balance},
+    \texttt{poutcome} \textbf{frozen} (actionability); only the \textbf{call month} moved --- one
+    change, and the model crosses the decision line.
   \end{columns}
 \end{frame}
 
@@ -429,10 +448,14 @@ cf.visualize_as_dataframe()
 %     shap_bar (mean|SHAP|), shap_beeswarm, shap_dependence (temp 0-1, matches the chapter scale).
 %   - Reused (LMU IML, CC BY 4.0, credited): shapley_1 (fair-payout framing), lime_husky
 %     (husky/wolf -> snow), lime_robustness (instability).
-%   - Counterfactuals section: DiCE on ch3 bank-marketing (duration dropped); numbers logged by
-%     py_src/interp_counterfactual_figs.py (client 6190: month jun->apr flips p(yes) 0.44->0.78,
-%     single actionable change; age/job/poutcome frozen). Desiderata: validity, proximity,
-%     sparsity, plausibility, actionability.
+%   - Counterfactuals section: DiCE on ch3 bank-marketing (duration dropped); cf_flip_bank.pdf
+%     (py_src/interp_counterfactual_figs.py) is a before/after probability bar crossing the 0.5
+%     decision line (client 6190: month jun->apr flips p(yes) 0.44->0.78, single actionable change;
+%     age/job/balance/poutcome frozen). Replaced the old 8-row LaTeX table with the figure.
+%     Desiderata: validity, proximity, sparsity, plausibility, actionability.
+%   - Added (review polish): global-surrogate frame (LIME's global sibling, TikZ box diagram) in the
+%     LIME section; a calibration one-liner (L13) in the SHAP-caveat box. LIME-robustness image
+%     shrunk to 0.86\linewidth to clear a caption/page-number collision.
 %   - Callbacks: deck 1 (glass-box), deck 2 (PFI ~ SHAP bar, PDP ~ SHAP dependence; ice-cream
 %     != causation), ch4 trees/boosting (TreeSHAP). Chapter decision guide in the wrap-up.
 %   - Design doc: 03_shap_lime_OUTLINE.md (v2). Interview-locked: hybrid figures (reuse LMU

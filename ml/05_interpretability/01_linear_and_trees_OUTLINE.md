@@ -27,8 +27,10 @@ motivating decks 2–3.
 - **Tree side includes a worked info-gain example** (by hand) + aggregation into importance + biases.
 - **In scope:** coef / odds ratios + scaling (L11/L12 recap, brief); Lasso selection; single-tree
   reading; forest impurity importance + worked info-gain + biases; the "methods disagree" punch.
-- **Out of scope:** GLM/GAM/EBM/RuleFit; PDP (deck 2); SHAP (deck 3); the "≠ causation" *example*
+- **Out of scope:** GLM/GAM/EBM; PDP (deck 2); SHAP (deck 3); the "≠ causation" *example*
   (deck 2, referenced here).
+  > **Note (post-v3):** RuleFit was later folded in as its own `\section{Rule-based models}` (2 content
+  > frames + a `rulefit_scorecard.pdf` figure) - see `ADDITIONS_OUTLINE.md`. This outline predates that add.
 - **Style:** hook, `[plain]` transitions, a worked-numbers frame, Recap + "Next:" box, no HW frame.
   File `LNN_linear_and_trees.tex`.
 

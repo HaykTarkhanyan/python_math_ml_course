@@ -1,19 +1,25 @@
-"""Worked numbers for the counterfactual add to Interpretability Deck 3.
+"""Figure + worked numbers for the counterfactual add to Interpretability Deck 3.
 
 Trains a classifier on the ch3 bank-marketing data (drops the leakage feature `duration`),
 picks one client predicted "won't subscribe" near the boundary, and uses DiCE to find a
 SPARSE, ACTIONABLE counterfactual that flips the prediction. Logs the original vs CF feature
-values + predicted probabilities so the deck's before/after table uses REAL numbers.
+values + predicted probabilities, and draws:
+  - cf_flip_bank.pdf : the before/after probability of subscribing, crossing the 0.5 decision
+                       threshold, with the one changed feature called out (the smallest change
+                       that flips the decision).
 
 Actionability is enforced: we freeze immutable / past-fact features (age, job, education,
 poutcome, pdays, previous) and only let the bank-controllable / financial-state features vary.
 
 Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_counterfactual_figs.py
-Conventions: logging to console + logs/, seed 509, f-strings. dice_ml already in ma.
+Conventions: logging to console + logs/, seed 509, f-strings, Armenian-flag colours. dice_ml in ma.
 """
 import logging
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import dice_ml
@@ -24,9 +30,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 SEED = 509
+ARM_BLUE, ARM_RED, ARM_ORANGE = "#0033A0", "#D90012", "#F2A800"
+ARM_GREEN = "#008C46"
 HERE = Path(__file__).resolve()
 CH_DIR = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
+FIG_DIR = CH_DIR / "fig"
 BANK = CH_DIR.parent / "03_classification" / "data" / "bank-full.csv"
 LOGS_DIR = REPO_ROOT / "logs"
 
@@ -42,6 +51,33 @@ def setup_logging():
     for h in (logging.StreamHandler(), logging.FileHandler(LOGS_DIR / "interp_cf.log")):
         h.setFormatter(fmt); log.addHandler(h)
     return log
+
+
+def fig_flip(best, feats, log):
+    """Before/after probability bar: the smallest change crossing the 0.5 decision line."""
+    ncols, _, rank, p0, p1, cols, q, cf_row = best
+    changes = [f"{c}: {q.iloc[0][c]} $\\to$ {cf_row.iloc[0][c]}" for c in cols]
+
+    fig, ax = plt.subplots(figsize=(7.4, 3.5))
+    ax.barh([1], [p0], color=ARM_RED, height=0.55)
+    ax.barh([0], [p1], color=ARM_GREEN, height=0.55)
+    ax.axvline(0.5, color="0.3", ls="--", lw=1.4)
+    ax.text(0.5, 1.75, "decision threshold (0.5)", ha="center", va="center",
+            fontsize=8, color="0.3")
+    ax.text(p0 + 0.02, 1, f"p(subscribe) = {p0:.2f}", va="center", fontsize=10)
+    ax.text(p1 + 0.02, 0, f"p(subscribe) = {p1:.2f}", va="center", fontsize=10)
+    ax.set_yticks([1, 0], ["original\n(won't subscribe)", "counterfactual\n(will subscribe)"],
+                  fontsize=9)
+    ax.set_xlim(0, 1); ax.set_ylim(-0.6, 2.1)
+    ax.set_xlabel("model's predicted probability of subscribing", fontsize=9)
+    label = "  ".join(changes)
+    ax.set_title(f"The smallest change that flips it: {label}", fontsize=10.5)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    fig.tight_layout()
+    FIG_DIR.mkdir(exist_ok=True)
+    fig.savefig(FIG_DIR / "cf_flip_bank.pdf", bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"wrote cf_flip_bank.pdf (client {rank}: {label}; p {p0:.2f}->{p1:.2f})")
 
 
 def main():
@@ -102,6 +138,10 @@ def main():
             o, n = q.iloc[0][c], cf_row.iloc[0][c]
             mark = "  <-- CHANGED" if c in cols else ""
             log.info(f"    {c:<11} {str(o):>12}  ->  {str(n):>12}{mark}")
+
+    if not found:
+        raise RuntimeError("no clean actionable flip found - cannot build cf_flip_bank.pdf")
+    fig_flip(found[0], feats, log)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,11 @@ lighter local cousin. No game-theory derivations.
 - **In scope (LIME, light — ~2 frames):** local-surrogate idea (perturb → weight by proximity → fit
   a sparse linear model); the **husky-vs-wolf** image example; instability/locality caveats;
   SHAP-vs-LIME in one line.
-- **Out of scope:** Shapley axioms/formula, KernelSHAP weighting math, SAGE, counterfactuals.
+- **Out of scope:** Shapley axioms/formula, KernelSHAP weighting math, SAGE.
+  > **Note (post-v2):** counterfactuals were later folded in as their own `\section{Counterfactual
+  > explanations}` (transition + 3 frames + a `cf_flip_bank.pdf` figure, DiCE on bank-marketing) - see
+  > `ADDITIONS_OUTLINE.md`. A global-surrogate frame and a calibration one-liner were also added later.
+  > This outline predates those adds.
 - **Prereq:** TreeSHAP frame calls back to **ch4 trees/boosting** (1-line recap if ch4 not yet built).
 - **Style:** house style; reuse LMU CC-BY plots, generate **only** the missing waterfall.
   File `LNN_shap_lime.tex`.
