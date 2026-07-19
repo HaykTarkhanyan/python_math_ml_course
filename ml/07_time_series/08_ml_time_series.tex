@@ -1,0 +1,441 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\newcommand{\callout}[2]{%
+  \begin{center}\fcolorbox{#1}{#1!8}{\parbox{0.92\textwidth}{#2}}\end{center}}
+
+\title{08: Time Series -- Machine Learning Approach}
+\subtitle{Forecasting as a supervised learning problem}
+\date{}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ================================================================
+% Cold open
+\begin{frame}{Where we left off}
+  Last time: ARIMA, SARIMA, exponential smoothing -- purpose-built statistical
+  models. They are excellent, and often hard to beat on a single clean series.
+  \vfill
+  \callout{armblue}{\textbf{Today's idea:} we already own a toolbox of powerful
+  regressors -- linear models, random forests, gradient boosting, neural nets.
+  What if we could point \emph{those} at a time series?}
+  \vfill
+  We can. The trick is to turn ``predict the next value'' into an ordinary
+  $(\Xmat, \yv)$ table. Once it's a table, every model from this course applies.
+  \vfill
+  \footnotesize The catch: the i.i.d. assumption is still false, so we have to be
+  very careful about \emph{how} we build the table and \emph{how} we validate.
+  That discipline is most of this lecture.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Forecasting as supervised learning}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Forecasting as supervised learning}}\\[4pt]
+    \small Slide a window over the series and out falls a design matrix.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The reframing}
+  Pick a target ``now'' ($y_t$) and describe it with values from its own past
+  ($y_{t-1}, y_{t-2}, \dots$). Each time step becomes one training row.
+  \vfill
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{fig/supervised_reframe.pdf}
+  \end{center}
+  \vfill
+  \callout{paramgreen}{\footnotesize That's it -- the columns on the left are
+  features, the right column is the label. Feed it to \texttt{LinearRegression},
+  \texttt{RandomForest}, \texttt{HistGradientBoosting} -- whatever you like.}
+\end{frame}
+
+% ================================================================
+\section{Leakage and time-aware splitting}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Leakage and time-aware splitting}}\\[4pt]
+    \small The single most common way to fool yourself with time series.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Predict-first: what's wrong with a random split?}
+  You have your $(\Xmat, \yv)$ table. Instinct says
+  \texttt{train\_test\_split(X, y, shuffle=True)}.
+  \vfill
+  \textbf{Predict: what does a random split do to a time series?}
+  \pause
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \callout{armred}{\footnotesize It puts \emph{future} rows in the training set
+    and \emph{past} rows in the test set. The model peeks at the future to
+    ``predict'' the past. Your test score is a fantasy.}
+    \column{0.5\textwidth}
+    \footnotesize Worse, the rows aren't even independent: $y_{t}$ and $y_{t-1}$
+    share almost everything, so a random test point sits right next to its own
+    neighbours in train. Textbook \textbf{data leakage}.
+  \end{columns}
+  \vfill
+  \footnotesize The fix is boring and non-negotiable: \textbf{split by time}.
+\end{frame}
+
+\begin{frame}{Random split vs forward split}
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/time_aware_split.pdf}
+  \end{center}
+  \vfill
+  \callout{paramgreen}{\footnotesize Train on an earlier block, test on the later
+  block. Same rule as lecture 07: only ever learn from the past. This also means
+  \textbf{no shuffling}, and any scaler / encoder must be fit on train only.}
+\end{frame}
+
+% ================================================================
+\section{Feature engineering for time}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Feature engineering for time}}\\[4pt]
+    \small This is where an ML forecaster is won or lost.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The four families of time features}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{1. Lags} -- past values.
+    \begin{itemize}\scriptsize
+      \item \texttt{y.shift(1)}, \texttt{shift(7)}, \texttt{shift(12)}.
+      \item Pick lags at meaningful horizons (yesterday, last week, last year).
+    \end{itemize}
+    \vskip3pt
+    \textbf{2. Rolling / window stats} -- local summaries.
+    \begin{itemize}\scriptsize
+      \item \texttt{y.shift(1).rolling(7).mean()} / std / min / max.
+      \item \textbf{Always shift before rolling} -- else the window includes $y_t$
+        itself = leakage.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{3. Calendar / date parts} -- known in advance.
+    \begin{itemize}\scriptsize
+      \item month, day-of-week, hour, is\_weekend, is\_holiday.
+      \item Cyclically encode: $\sin/\cos(2\pi \cdot \text{hour}/24)$.
+    \end{itemize}
+    \vskip3pt
+    \textbf{4. Exogenous regressors} -- outside drivers.
+    \begin{itemize}\scriptsize
+      \item price, promotion, weather, events.
+      \item The big advantage of ML over plain ARIMA.
+    \end{itemize}
+  \end{columns}
+  \vskip4pt
+  \callout{armorange}{\scriptsize Golden rule: every feature for row $t$ must be
+  computable using \emph{only} information available strictly before $t$.}
+\end{frame}
+
+% ================================================================
+\section{Time-aware cross-validation}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Time-aware cross-validation}}\\[4pt]
+    \small K-fold, but respecting the arrow of time.
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{TimeSeriesSplit}
+  Ordinary K-fold shuffles -- forbidden here. Use forward-chaining: each fold
+  trains on an expanding past and validates on the next block.
+  \vfill
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\textwidth]{fig/ts_cv.pdf}
+    \column{0.44\textwidth}
+    {\lstset{basicstyle=\ttfamily\scriptsize}\begin{lstlisting}
+from sklearn.model_selection \
+    import TimeSeriesSplit
+cv = TimeSeriesSplit(n_splits=5)
+cross_val_score(model, X, y, cv=cv)
+\end{lstlisting}}
+    \vskip2pt
+    \footnotesize This is also how you tune hyperparameters and pick lag sets --
+    grid/random search with \texttt{cv=TimeSeriesSplit}, never plain K-fold.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Tree models and the extrapolation trap}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Tree models and the extrapolation trap}}\\[4pt]
+    \small Gradient boosting is the tabular champion -- with one sharp edge.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Predict-first: point GBM at a trending series}
+  Gradient boosting (XGBoost / LightGBM / \texttt{HistGradientBoosting}) wins most
+  tabular competitions. We built lag + calendar features. Let it forecast the
+  trending series from lecture 07.
+  \vfill
+  \textbf{Predict: does the boosting model track the upward trend?}
+  \pause
+  \vfill
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/gbm_forecast.pdf}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Trees cannot extrapolate -- so difference first}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A decision tree predicts by averaging \emph{training} labels in a leaf. Its
+    output can never exceed the largest $y$ it saw in training.
+    \vskip4pt
+    On a trending series the future is always above that ceiling, so a raw-level
+    tree model \textbf{flat-lines} below the trend (left panel, MAE 19).
+    \column{0.5\textwidth}
+    \callout{paramgreen}{\footnotesize \textbf{The fix:} make the target
+    stationary first -- predict the \emph{difference} $y_t - y_{t-1}$ (or a ratio),
+    then add it back. Now the targets live in a fixed range trees can handle
+    (right panel, MAE 6.7).}
+    \vskip4pt
+    \footnotesize Same lesson as ARIMA's ``I'': difference away the trend. Linear
+    models and neural nets extrapolate fine; \emph{trees do not}.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Which features actually mattered?}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \includegraphics[width=\textwidth]{fig/feature_importance.pdf}
+    \column{0.45\textwidth}
+    Permutation importance on the differenced model:
+    \begin{itemize}\small
+      \item \texttt{dlag\_12} -- the seasonal lag -- dominates.
+      \item \texttt{dlag\_3} and \texttt{month} carry the rest.
+    \end{itemize}
+    \vskip4pt
+    \callout{armblue}{\footnotesize This is why domain knowledge beats brute force:
+    knowing the season is 12 tells you which lag to build. The model can only use
+    features you gave it.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Forecasting more than one step ahead}
+  For horizon $h > 1$ you have two strategies:
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Recursive} -- predict $t{+}1$, feed it back in as a lag, predict
+    $t{+}2$, \dots
+    \begin{itemize}\scriptsize
+      \item One model, reused.
+      \item Errors compound down the horizon.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Direct} -- train a separate model per horizon ($h{=}1$ model,
+    $h{=}2$ model, \dots).
+    \begin{itemize}\scriptsize
+      \item No error feedback.
+      \item More models to train and store.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \callout{armorange}{\footnotesize You rarely hand-code this. Libraries like
+  \texttt{skforecast}, \texttt{mlforecast} (Nixtla), \texttt{sktime} and
+  \texttt{Darts} wrap any scikit-learn regressor into a recursive/direct
+  forecaster with the leakage-safe plumbing built in.}
+\end{frame}
+
+% ================================================================
+\section{So which wins?}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{So which approach wins?}}\\[4pt]
+    \small Classical vs ML -- the honest answer.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Benchmark everything against the naive baseline}
+  Our three contenders on the held-out year -- seasonal naive, SARIMA, and the
+  (differenced) gradient booster:
+  \vfill
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/model_comparison.pdf}
+  \end{center}
+  \vfill
+  \callout{paramgreen}{\footnotesize On this short, clean series SARIMA and GBM are
+  neck-and-neck, both crushing seasonal naive (MASE $\approx 0.4$ vs $0.9$). The
+  point is the \emph{habit}: report MASE against the naive baseline, always.}
+\end{frame}
+
+\begin{frame}{When to reach for ML vs classical}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Classical (ARIMA / ETS) shines}
+    \begin{itemize}\small
+      \item one or a few series,
+      \item short history,
+      \item strong, stable seasonality,
+      \item you need calibrated prediction intervals cheaply.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{ML (boosting / NN) shines}
+    \begin{itemize}\small
+      \item many related series (retail: 10k products),
+      \item long history,
+      \item rich exogenous features (price, weather, promos),
+      \item non-linear interactions between drivers.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \callout{armblue}{\footnotesize In the M5 forecasting competition (Walmart
+  sales, thousands of series), gradient-boosted trees on engineered features won.
+  On the earlier M3/M4 single-series benchmarks, statistical methods and simple
+  combinations were extremely strong. Match the tool to the shape of the problem.}
+\end{frame}
+
+% ================================================================
+\section{Deep learning and foundation models}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Deep learning and foundation models}}\\[4pt]
+    \small Awareness level -- what exists and when it's worth it.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The deep learning lineage}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{fig/deep_ts_timeline.pdf}
+  \end{center}
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize \textbf{Specialist deep models}
+    \begin{itemize}\scriptsize
+      \item \textbf{DeepAR} -- probabilistic RNN over many series.
+      \item \textbf{N-BEATS / N-HiTS} -- pure MLP stacks.
+      \item \textbf{TFT} -- attention $+$ interpretability.
+      \item \textbf{PatchTST} -- patch the series, feed a Transformer.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \footnotesize \textbf{Why they connect to us}
+    \vskip2pt
+    \scriptsize These pick up in the RNN and attention chapters. They need a lot
+    of data (many series, long history) to beat a well-tuned gradient booster --
+    on a single short series they usually don't.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Foundation models: zero-shot forecasting}
+  The 2023--2025 shift: pre-train one Transformer on billions of time points, then
+  forecast a \emph{new} series with no training at all -- like an LLM prompt.
+  \vfill
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize \textbf{The current crop}
+    \begin{itemize}\scriptsize
+      \item \textbf{TimesFM} (Google) -- patched decoder, pre-trained on 100B points.
+      \item \textbf{Chronos / Chronos-2} (Amazon) -- tokenizes values like language;
+        Chronos-Bolt is much faster.
+      \item \textbf{Moirai / Moirai-2} (Salesforce) -- multivariate, any frequency.
+      \item \textbf{TimeGPT} (Nixtla), \textbf{Lag-Llama}, \textbf{Time-MoE}.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \callout{armorange}{\scriptsize \textbf{Reality check.} Zero-shot is
+    astonishing for a cold start with no history. But a gradient booster with good
+    features and exogenous drivers is still a very strong, cheap, interpretable
+    baseline. Try the simple thing first.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap -- ML for time series}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{itemize}\small
+      \item Forecasting $\to$ supervised learning by sliding a window.
+      \item \textbf{Never} random-split; split and cross-validate by time
+        (\texttt{TimeSeriesSplit}).
+      \item Features: lags, (shifted) rolling stats, calendar, exogenous.
+      \item Trees can't extrapolate -- difference the target first.
+      \item Multi-step: recursive vs direct (let a library handle it).
+      \item Report MASE vs the naive baseline.
+      \item Deep + foundation models: powerful, data-hungry, know they exist.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \callout{paramgreen}{\textbf{The one habit to keep:}
+    \vskip3pt
+    every feature and every split must respect the arrow of time. If a value
+    wasn't knowable yet, it can't be in the row.}
+    \vskip6pt
+    \footnotesize \textbf{Toolbox:} \texttt{sktime}, \texttt{statsforecast} \&
+    \texttt{mlforecast} (Nixtla), \texttt{skforecast}, \texttt{Darts},
+    \texttt{Prophet}, \texttt{GluonTS}.
+  \end{columns}
+\end{frame}
+
+\begin{frame}[plain]
+  \begin{center}
+    {\Large\color{popblue}\textbf{Questions?}}\\[6pt]
+    \small Homework: build a forecaster the leakage-safe way. See the chapter page.
+  \end{center}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Source material -- Hyndman & Athanasopoulos "Forecasting: Principles and
+%     Practice" (ML/CV chapters); scikit-learn TimeSeriesSplit docs; Nixtla
+%     mlforecast / statsforecast docs; M4/M5 competition write-ups (M5: LightGBM
+%     on engineered features won). Foundation-model facts (TimesFM, Chronos-2,
+%     Moirai-2, TimeGPT, Time-MoE, zero-shot forecasting) from a 2026 web search
+%     -- MachineLearningMastery "2026 Time Series Toolkit" + TSFM benchmarking
+%     survey (arXiv 2510.13654). Verify names/vendors before re-lecturing as the
+%     field moves fast.
+%   Figures -- all Python-generated by py_src/ml_figs.py (seed 509) on the same
+%     synthetic monthly series as lecture 07: supervised_reframe, time_aware_split,
+%     ts_cv, gbm_forecast (extrapolation pitfall + differenced fix),
+%     feature_importance, model_comparison, deep_ts_timeline. No external images.
+%   Pedagogical decisions -- two predict-first frames (random split is leakage;
+%     GBM flat-lines on a trend), both counter-intuitive per SLIDE_STYLE. The GBM
+%     is shown LOSING at raw levels then FIXED by differencing -- honest numbers
+%     (MAE 19 -> 6.7, MASE 0.39) rather than a staged ML victory. "When ML vs
+%     classical wins" framed via M3/M4 vs M5 so students don't over-generalize
+%     from one toy series. Foundation models kept awareness-level with a
+%     "try the simple thing first" reality check.
+%   Back pointer -- 07_classical_time_series.tex (handed off at time-aware
+%     validation). Forward -- ties into the RNN (ch7) and attention chapters.
