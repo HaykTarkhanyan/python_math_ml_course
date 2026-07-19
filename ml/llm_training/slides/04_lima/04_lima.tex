@@ -1,0 +1,327 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-4] LIMA: Less Is More for Alignment}
+\subtitle{1,000 examples, no RLHF, competitive with GPT-4 (Zhou et al., 2023)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{How much alignment data do you actually need?}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    The 2023 alignment playbook: \emph{millions} of instruction examples plus RLHF over
+    millions of human interactions.
+    \vskip 8pt
+    LIMA fine-tunes LLaMa 65B on \textbf{1,000} curated examples -- plain supervised loss,
+    \textbf{zero} RLHF, \textbf{zero} preference data -- and comes out competitive with
+    RLHF-trained products.
+    \vskip 8pt
+    Alpaca was trained on \textbf{52$\times$ more} data and \emph{loses} to LIMA. Even GPT-4
+    prefers LIMA's answer to its own 19\% of the time.
+    \vskip 8pt
+    \emph{What does that tell us about where a model's ability really comes from?}
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.5cm,
+              align=center] (a) {\textbf{Standard alignment}\\ millions of examples\\ + RLHF};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.5cm, align=center, below=0.8cm of a] (b)
+              {\textbf{LIMA}\\ \textbf{1,000} examples\\ plain SFT};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b)
+          node[midway,right,font=\scriptsize]{same league};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Two stages, and the standard pipeline}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Where does ``capability'' come from?}\\[4pt]
+    \small Pretraining vs alignment -- and what the standard pipeline assumes.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The two-stage view of an LLM}
+  \begin{center}
+    \begin{tikzpicture}[node distance=1.4cm, font=\small]
+      \node[draw, rounded corners, fill=armblue!12, text width=3.6cm, align=center] (pt)
+        {\textbf{Pretraining}\\ trillions of tokens\\ \emph{knowledge \& capability}};
+      \node[draw, rounded corners, fill=paramgreen!12, text width=3.6cm, align=center,
+            right=2.2cm of pt] (al)
+        {\textbf{Alignment}\\ instruction tuning + RLHF\\ \emph{format \& interaction}};
+      \draw[-{Latex}, thick] (pt) -- (al);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 8pt
+  The usual assumption: alignment needs \textbf{large scale} -- millions of instruction
+  examples (FLAN, OpenAssistant) plus RLHF collected over millions of human interactions.
+  ``ChatGPT-level'' is thought to require significant compute and specialized data.
+  \vskip 4pt
+  \keybox{LIMA's counter-position: given a \emph{strong pretrained model}, a \textbf{small,
+    carefully curated} set is enough -- \emph{no RL, no reward model, no preference data}.}
+\end{frame}
+
+% ================================================================
+\section{The Superficial Alignment Hypothesis}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The Superficial Alignment Hypothesis}\\[4pt]
+    \small The thesis the whole paper is built to test.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The hypothesis}
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.9\linewidth}{\centering
+      \textbf{Superficial Alignment Hypothesis:} a model's knowledge and capabilities are
+      learnt \emph{almost entirely} during pretraining, while alignment teaches it \emph{which
+      subdistribution of formats} to use when interacting with users.}}
+  \end{center}
+  \vskip 8pt
+  \textbf{Corollary:} if alignment is largely about \emph{style}, then one could tune a
+  pretrained model to high quality with a \emph{rather small} set of examples.
+  \vskip 6pt
+  \textbf{Design consequence:} collect 1,000 examples whose \emph{outputs} share a uniform,
+  helpful-assistant voice, but whose \emph{inputs} (prompts) are as \emph{diverse} as
+  possible.
+  \vskip 4pt
+  \watchbox{``Superficial'' means \emph{operating on the surface} (format/style selection) --
+    \textbf{not} trivial, and \textbf{not} that curation is easy.}
+\end{frame}
+
+% ================================================================
+\section{The recipe: 1,000 curated examples}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The recipe}\\[4pt]
+    \small 1,000 examples -- and how much work went into choosing them.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{What is in the 1,000?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \includegraphics[width=\linewidth]{fig/composition.pdf}
+    \column{0.54\textwidth}
+    \small
+    \begin{itemize}
+      \item \textbf{750} mined from community Q\&A -- Stack Exchange, wikiHow,
+        Reddit WritingPrompts.
+      \item \textbf{250} hand-written by the authors in a uniform assistant tone
+        (200 used for training).
+      \item 50 Super-Natural-Instructions NLG tasks.
+      \item Includes \textbf{13 safety} examples (refuse malicious prompts).
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize $\sim$750k tokens over exactly 1,000 sequences. Diverse prompts,
+    stylistically uniform answers.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{These 1,000 were heavily engineered}
+  Not random samples -- aggressive filtering and hand-curation:
+  \begin{itemize}\small
+    \item \textbf{Stack Exchange:} keep top answers with score $\ge 10$; drop answers
+      $<1200$ or $>4096$ chars, first-person, or cross-referencing; strip links/HTML,
+      keep code blocks. Sample across domains at \emph{temperature 3} for coverage.
+    \item \textbf{wikiHow:} sample category-first for diversity; title $\to$ prompt,
+      body $\to$ response.
+    \item \textbf{Reddit:} manually curated (top answers skew jokey/trolling).
+    \item \textbf{Hand-written:} uniform ``acknowledge, then answer'' format -- hypothesized
+      to act like light chain-of-thought scaffolding.
+  \end{itemize}
+  \vskip 4pt
+  \warnbox{The lesson is \textbf{not} ``1,000 random examples work.'' It is that a
+    \emph{small, diverse, high-quality} set works -- and quality here took real effort.}
+\end{frame}
+
+\begin{frame}{Training LIMA}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{itemize}\small
+      \item Base: \textbf{LLaMa 65B}, plain supervised fine-tuning.
+      \item 15 epochs, AdamW, lr $10^{-5}\!\to\!10^{-6}$, batch 32.
+      \item Special \textbf{end-of-turn} token to separate speakers.
+      \item \textbf{Residual dropout} ramped $0\to0.3$ over the layers.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \keybox{\small \textbf{Perplexity does not track quality} -- it even
+      \emph{anti}-correlates. Checkpoints were picked \emph{by hand} on a 50-example dev
+      set, not by validation loss.}
+  \end{columns}
+  \vskip 6pt
+  \footnotesize A caution worth remembering: standard LM metrics can point the wrong way for
+  alignment -- which is why the evaluation below is human / model-judged.
+\end{frame}
+
+% ================================================================
+\section{Does it work?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small Human and GPT-4 preference against the strongest 2023 systems.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Human preference: 1,000 examples vs the field}
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/human_pref.pdf}
+  \end{center}
+  \vskip -2pt
+  \small LIMA is equal-or-better than \textbf{DaVinci003} (RLHF) 65\% of the time and
+  \textbf{Alpaca 65B} (52k examples) 74\% -- and holds its own against Bard, Claude, and
+  GPT-4.
+\end{frame}
+
+\begin{frame}{The trend replicates with a GPT-4 judge}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\linewidth]{fig/gpt4_pref.pdf}
+    \column{0.36\textwidth}
+    Swapping human raters for a GPT-4 judge gives the \emph{same} ordering.
+    \vskip 6pt
+    Absolute quality (50 prompts): \textbf{50\% excellent}, 38\% pass, 12\% fail -- and it
+    holds up out-of-distribution (45\% excellent).
+    \vskip 6pt
+    \footnotesize Inter-annotator agreement: human-human $\approx$ human-GPT-4, so GPT-4 is
+    a reasonable proxy judge.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Why is less more?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Why is less more?}\\[4pt]
+    \small The ablations are the heart of the argument.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Diversity and quality beat quantity}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/diversity_quality.pdf}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/quantity.pdf}
+  \end{columns}
+  \vskip 2pt
+  \small \textbf{Left:} filtering Stack Exchange for quality lifts helpfulness
+  $3.33\!\to\!3.83$; a diverse source beats a homogeneous one. \textbf{Right:} scaling
+  \emph{quantity} $2\text{K}\!\to\!32\text{K}$ (16$\times$) \emph{without} adding diversity
+  gives essentially \textbf{no} improvement.
+\end{frame}
+
+\begin{frame}{Predict-first: unlocking multi-turn dialogue}
+  The 1,000-example model was trained on \emph{single-turn} data. How many dialogue
+  examples to make it a coherent chat model?
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \includegraphics[width=\linewidth]{fig/dialogue.pdf}
+    \column{0.54\textwidth}
+    \small Just \textbf{30} dialogue chains take Excellent responses from
+    \textbf{45\%$\to$76\%} and cut the failure rate from 15/42 turns to \textbf{1/46}.
+    \vskip 6pt
+    \nextbox{\small Dialogue ability was \emph{latent} from pretraining -- 30 examples merely
+      \textbf{invoked} it. Strong evidence for the hypothesis.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{What it means}
+
+\begin{frame}{What this implies -- and what it does not}
+  \textbf{The conceptual payload:}
+  \begin{itemize}\small
+    \item \textbf{Capability lives in pretraining}; alignment is a thin layer that selects
+      \emph{which} latent response format to emit.
+    \item Instruction tuning may teach \emph{format}, not new skills -- so millions of
+      examples are largely redundant once diversity is covered.
+    \item LIMA (plain SFT) beats RLHF-trained DaVinci003 on this eval -- RLHF's marginal
+      value may be more about \emph{robustness/safety} than core capability.
+  \end{itemize}
+  \vskip 4pt
+  \warnbox{\small \textbf{Misreadings to avoid:} this is \emph{not} ``data doesn't matter''
+    (quality+diversity matter enormously) and \emph{not} ``RLHF is useless'' (LIMA concedes
+    robustness/safety gaps). It is a \emph{hypothesis}, argued via one 65B model and one
+    eval suite.}
+\end{frame}
+
+\begin{frame}{Limitations}
+  \begin{itemize}
+    \item Building high-quality examples takes \textbf{significant mental effort} and is
+      \textbf{hard to scale} -- the curation \emph{is} the cost.
+    \item \textbf{Not as robust} as product models: an unlucky sample or an adversarial
+      prompt can still produce a weak or unsafe answer.
+    \item Comparisons are against moving April-2023 products exposed to millions of real
+      prompts -- indicative, not definitive.
+    \item The base model (LLaMa 65B) is doing heavy lifting; results may not transfer to
+      weaker bases.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{1,000} curated examples + plain SFT on LLaMa 65B $\approx$ RLHF products;
+      no reward model, no RL.
+    \item \textbf{Superficial Alignment Hypothesis:} capability from pretraining, alignment
+      selects format/style.
+    \item \textbf{Quality + diversity beat quantity} -- 16$\times$ more data, no gain;
+      filtering for quality, a clear gain.
+    \item \textbf{30} dialogue examples unlock multi-turn chat -- latent ability, invoked.
+    \item Guardrails: data matters (a lot), RLHF still helps robustness, and curation is the
+      real expense.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{The series in one line:} pretraining builds the ability (\emph{LIMA});
+    a thin, well-chosen layer aligns it -- cheaply (\emph{LoRA}), from preferences
+    (\emph{DPO}), or with RL (\emph{GRPO}).}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Zhou et al., "LIMA: Less Is More for Alignment" (2023), arXiv:2305.11206.
+%   Extracted from ml/llm_training/materials_md/papers/07_lima_*.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py): human_pref (5a, exact),
+%   gpt4_pref (5b, exact), diversity_quality (Fig 5, exact 3.49/3.33/3.83),
+%   quantity (Fig 6 -- y-axis qualitative, exact values not reported, drawn as plateau),
+%   dialogue (Fig 7, exact 45.2/76.1), composition (Table 1 counts).
+% Pedagogical decisions: state the hypothesis verbatim as the thesis slide; ablations
+%   framed as "why is less more"; predict-first on the 30-dialogue-examples result;
+%   an explicit misconceptions guardrail ("not: data doesn't matter / RLHF useless").
+% Prior deck: 03_lora. This closes the LLM-training mini-series; recap ties all four decks.

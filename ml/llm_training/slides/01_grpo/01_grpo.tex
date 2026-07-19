@@ -1,0 +1,442 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-1] GRPO: Group Relative Policy Optimization}
+\subtitle{Critic-free RL for LLMs \quad(DeepSeekMath, 2024)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{A 7B model that does competition math}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \textbf{DeepSeekMath-RL 7B} scores \textbf{51.7\%} on the MATH benchmark and
+    \textbf{88.2\%} on GSM8K -- with chain-of-thought only, no external tools.
+    \vskip 4pt
+    That beats every open 7B--70B model of its time and approaches
+    GPT-4 (52.9\%) and Gemini-Ultra (53.2\%).
+    \vskip 8pt
+    The last training stage that got it there was \textbf{reinforcement learning}.
+    The RL algorithm they introduced -- \textbf{GRPO} -- is now the workhorse behind
+    DeepSeek-R1 and much of the ``reasoning model'' wave.
+    \vskip 8pt
+    Today: \emph{what GRPO is, why it drops PPO's most expensive piece, and why it works.}
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}
+        \node[draw=armblue, very thick, rounded corners=3pt, fill=armblue!8,
+              text width=3.5cm, align=center, font=\small] (a)
+          {\textbf{Base} 7B\\GSM8K 64.2\\MATH 36.2};
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.5cm, align=center, font=\small, below=0.35cm of a] (b)
+          {\textbf{+ SFT} (Instruct)\\GSM8K 82.9\\MATH 46.8};
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!12,
+              text width=3.5cm, align=center, font=\small, below=0.35cm of b] (c)
+          {\textbf{+ GRPO} (RL)\\GSM8K \textbf{88.2}\\MATH \textbf{51.7}};
+        \draw[-{Latex}, thick] (a) -- (b);
+        \draw[-{Latex}, thick, paramgreen] (b) -- (c);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Background: RLHF and PPO}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Background: how do we RL-tune an LLM?}\\[4pt]
+    \small Before GRPO can look clever, we need PPO and its price tag.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Where RL sits in the pipeline}
+  The alignment recipe (Ouyang et al., 2022) has three stages after pretraining:
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[node distance=0.5cm and 1.0cm, font=\small]
+      \node[draw, rounded corners, fill=gray!10, text width=2.2cm, align=center] (sft)
+        {\textbf{SFT}\\ imitate demos};
+      \node[draw, rounded corners, fill=paramgreen!12, text width=2.6cm, align=center,
+            right=of sft] (rm) {\textbf{Reward model}\\ learn human prefs};
+      \node[draw, rounded corners, fill=armblue!12, text width=2.6cm, align=center,
+            right=of rm] (rl) {\textbf{RL}\\ optimize policy vs reward};
+      \draw[-{Latex}] (sft) -- (rm);
+      \draw[-{Latex}] (rm) -- (rl);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  DeepSeekMath plugs in at the \textbf{last} stage: start from the SFT model
+  (DeepSeekMath-Instruct), then RL against a reward model.
+  \vskip 4pt
+  \keybox{The policy is a language model. An ``action'' is emitting the next token;
+    a ``trajectory'' is a full generated answer $o$ to a question $q$.}
+\end{frame}
+
+\begin{frame}{PPO: the standard RL objective}
+  PPO maximizes reward while staying close to the sampling policy via a
+  \textbf{clipped} importance ratio:
+  \vskip 2pt
+  {\small
+  \[
+    \mathcal{J}_{\text{PPO}}(\theta)=\E_{q,\,o\sim\pi_{\theta_{\text{old}}}}
+    \frac{1}{|o|}\sum_{t=1}^{|o|}\min\!\left[
+      \rho_t\,A_t,\;\operatorname{clip}(\rho_t,\,1-\eps,\,1+\eps)\,A_t\right],
+    \qquad \rho_t=\frac{\pi_\theta(o_t\mid q,o_{<t})}{\pi_{\theta_{\text{old}}}(o_t\mid q,o_{<t})}
+  \]}
+  \begin{itemize}\small
+    \item $\rho_t$ -- how much more likely token $o_t$ is under the new vs old policy.
+    \item $A_t$ -- the \textbf{advantage}: was this token better or worse than expected?
+    \item clip -- forbid steps that move the ratio too far, for stability.
+  \end{itemize}
+  \vskip 2pt
+  \warnbox{Everything hinges on $A_t$. Where does the ``expected'' baseline come from?
+    That is the job of a second network -- the \textbf{critic}.}
+\end{frame}
+
+\begin{frame}{The critic (value network) and its cost}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    To estimate $A_t$, PPO trains a \textbf{value model} $V_\psi$ that predicts expected
+    return, and computes $A_t$ by \textbf{GAE} from per-token rewards and $V_\psi$.
+    \vskip 6pt
+    Subtracting a baseline reduces gradient \emph{variance} without adding bias --
+    that is why we want $V_\psi$.
+    \vskip 6pt
+    \textbf{But the price is steep:}
+    \begin{itemize}\small
+      \item $V_\psi$ is ``another model of comparable size to the policy'' -- a second
+        7B network, trained \emph{and} stored.
+      \item The reward usually lands \textbf{only on the last token}, yet $V_\psi$ must be
+        accurate at \emph{every} token.
+    \end{itemize}
+    \column{0.43\textwidth}
+    \keybox{\small PPO keeps \textbf{four} models live:
+      \begin{enumerate}\small
+        \item Policy $\pi_\theta$ (trained)
+        \item Reference $\pi_{\text{ref}}$ (frozen)
+        \item Reward $r_\varphi$
+        \item \textcolor{armred}{\textbf{Value $V_\psi$ (trained, big)}}
+      \end{enumerate}}
+    \vskip 2pt
+    \footnotesize The value net is the expensive one we would love to delete.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The GRPO idea}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries What if the baseline came from a \emph{group},
+      not a critic?}\\[4pt]
+    \small Sample several answers to the same question; judge each against their average.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Group sampling replaces the value net}
+  For each question $q$, sample a \textbf{group} of $G$ outputs
+  $\{o_1,\dots,o_G\}\sim\pi_{\theta_{\text{old}}}$, score them with the reward model,
+  and use the group's own statistics as the baseline.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/ppo_vs_grpo.pdf}
+  \end{center}
+  \vskip 2pt
+  \nextbox{No value network. The baseline is the group mean -- and this matches how
+    reward models are trained: on \textbf{comparisons} between answers to the same prompt.}
+\end{frame}
+
+\begin{frame}{Group-relative advantage (outcome supervision)}
+  Reward model returns one score per output, $\mathbf{r}=\{r_1,\dots,r_G\}$.
+  Normalize within the group, then hand that scalar to \emph{every} token of the output:
+  \vskip 2pt
+  \[
+    \boxed{\;\tilde r_i=\frac{r_i-\operatorname{mean}(\mathbf r)}{\operatorname{std}(\mathbf r)},
+      \qquad \hat A_{i,t}=\tilde r_i \ \ \text{for all } t\;}
+  \]
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/group_advantage.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize Positive advantage = ``better than the group average, push these tokens up.''
+  Negative = ``worse, push down.'' \emph{(rewards shown are illustrative.)}
+\end{frame}
+
+\begin{frame}{The GRPO objective}
+  {\small
+  \begin{align*}
+    \mathcal{J}_{\text{GRPO}}(\theta)=\E_{q,\,\{o_i\}\sim\pi_{\theta_{\text{old}}}}
+    \frac{1}{G}\sum_{i=1}^{G}\frac{1}{|o_i|}\sum_{t=1}^{|o_i|}
+    \Big\{ &\min\!\left[\rho_{i,t}\hat A_{i,t},\,
+      \operatorname{clip}(\rho_{i,t},1-\eps,1+\eps)\hat A_{i,t}\right] \\[-2pt]
+    &-\ \beta\,\mathbb{D}_{\text{KL}}\!\left[\pi_\theta\,\|\,\pi_{\text{ref}}\right]\Big\}
+  \end{align*}}
+  \vskip -4pt
+  Two changes vs PPO -- both worth saying out loud:
+  \begin{itemize}\small
+    \item $\hat A_{i,t}$ comes from the \textbf{group}, not from $V_\psi$. The critic is gone.
+    \item The KL term is added \textbf{directly to the loss} (coefficient $\beta$), not folded
+      into the per-token reward as PPO does. This keeps the advantage clean.
+  \end{itemize}
+  \watchbox{$\pi_{\theta_{\text{old}}}$ (behavior policy, generated the samples) and
+    $\pi_{\text{ref}}$ (frozen KL anchor) are \emph{different} models. Don't merge them.}
+\end{frame}
+
+% ================================================================
+\section{The math details}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Two details that matter}\\[4pt]
+    \small The KL estimator, and per-step credit assignment.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The unbiased KL estimator}
+  GRPO does \emph{not} use the naive $\log(\pi_\theta/\pi_{\text{ref}})$. It uses
+  Schulman's estimator (with $x=\pi_{\text{ref}}/\pi_\theta$):
+  \[
+    \boxed{\;\mathbb{D}_{\text{KL}}\!\left[\pi_\theta\,\|\,\pi_{\text{ref}}\right]
+      \approx \frac{\pi_{\text{ref}}}{\pi_\theta}
+      -\log\frac{\pi_{\text{ref}}}{\pi_\theta}-1 \;=\; x-\log x-1\;}
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{itemize}\small
+      \item \textbf{Unbiased}: its expectation is the true KL.
+      \item \textbf{Always $\ge 0$}: since $x-\log x-1\ge 0$.
+      \item Lower variance than the naive log-ratio, which can go \emph{negative} on a
+        single sample.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/kl_estimator.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Process supervision: per-step credit}
+  Outcome supervision gives one reward per answer. \textbf{Process supervision} scores each
+  reasoning \emph{step}, so a token's advantage sums the normalized rewards of all
+  \emph{later} steps:
+  \[
+    \tilde r_i^{\,\text{idx}(j)}=\frac{r_i^{\,\text{idx}(j)}-\operatorname{mean}(R)}{\operatorname{std}(R)},
+    \qquad
+    \hat A_{i,t}=\!\!\sum_{\text{idx}(j)\ge t}\!\! \tilde r_i^{\,\text{idx}(j)}
+  \]
+  \begin{itemize}\small
+    \item $\text{idx}(j)$ = end-token index of step $j$; a token is credited by every step
+      that finishes at or after it.
+    \item Turns a single end-of-answer signal into \textbf{localized} feedback -- the model
+      learns \emph{which} step was good.
+  \end{itemize}
+  \keybox{Outcome vs process is just \emph{how finely} the group-normalized reward is spread
+    over the tokens. Same idea, finer granularity.}
+\end{frame}
+
+% ================================================================
+\section{The algorithm}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Putting it together}\\[4pt]
+    \small One iteration of GRPO, end to end.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Algorithm: iterative GRPO}
+  \textbf{For each step:}
+  \begin{enumerate}\small
+    \item Set the behavior policy $\pi_{\theta_{\text{old}}}\leftarrow\pi_\theta$.
+    \item For each question $q$ in the batch, \textbf{sample $G$ outputs}
+      $\{o_i\}\sim\pi_{\theta_{\text{old}}}$.
+    \item \textbf{Score} each output with the reward model: $r_i=r_\varphi(q,o_i)$.
+    \item \textbf{Normalize} within the group $\rightarrow \hat A_{i,t}$
+      (group mean/std).
+    \item \textbf{Update} $\pi_\theta$ by ascending the GRPO objective (clipped ratio $+$
+      direct KL).
+  \end{enumerate}
+  \vskip 4pt
+  \textbf{Outer loop (what makes it \emph{iterative}):} periodically reset the reference
+  model to the current policy, and \textbf{continually retrain the reward model} on fresh
+  policy samples using a replay buffer (10\% history).
+  \vskip 2pt
+  \footnotesize Their production run does a \emph{single} policy update per exploration
+  step ($\mu=1$), so $\pi_\theta \approx \pi_{\theta_{\text{old}}}$. Hyperparameters:
+  $G=64$, $\beta=0.04$, policy lr $10^{-6}$.
+\end{frame}
+
+\begin{frame}{GRPO vs PPO, side by side}
+  \small
+  \renewcommand{\arraystretch}{1.25}
+  \begin{center}
+  \begin{tabular}{p{3.4cm} p{4.3cm} p{4.3cm}}
+    \toprule
+     & \textbf{PPO} & \textbf{GRPO}\\
+    \midrule
+    Baseline for $A$ & learned value net $V_\psi$ (big) & group mean / std\\
+    Models in memory & \textcolor{armred}{4} (incl.\ value) & \textcolor{paramgreen}{3} (no value)\\
+    KL regularization & folded into the reward & direct in loss, unbiased estimator\\
+    Sampling & one output / prompt & \textbf{group of $G$} / prompt\\
+    Fit to reward model & -- & matches its \emph{comparative} training\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \nextbox{\textbf{Dropped:} the value network + GAE. \textbf{Gained:} lower memory, a baseline
+    matched to the reward model. \textbf{Cost:} you now generate $G$ samples per prompt --
+    critic-free is not compute-free.}
+\end{frame}
+
+% ================================================================
+\section{Does it work?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small The numbers, and a surprising diagnosis of \emph{why}.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{RL gains across benchmarks}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/benchmark_gains.pdf}
+  \end{center}
+  \vskip -2pt
+  RL used \textbf{only} GSM8K + MATH chain-of-thought questions -- yet \emph{every}
+  benchmark improved, including out-of-domain CMATH (+4.2). Self-consistency over 64
+  samples pushes MATH to \textbf{60.9\%}.
+\end{frame}
+
+\begin{frame}{Predict-first: did RL make the model smarter?}
+  Natural guess: RL taught the model \emph{new} math it could not do before.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.66\textwidth]{fig/majk_passk.pdf}
+  \end{center}
+  \vskip -2pt
+  \warnbox{The paper's own analysis says \textbf{no}. RL lifts \textbf{Maj@K} but barely
+    moves \textbf{Pass@K} (can \emph{any} of K samples solve it). RL \textbf{sharpens} the
+    distribution to surface answers the base model already had -- it adds no new capability.}
+\end{frame}
+
+% ================================================================
+\section{One equation to rule them all}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries SFT, RFT, DPO, PPO, GRPO: one gradient}\\[4pt]
+    \small They differ only in \emph{where data comes from} and \emph{how reward becomes a coefficient}.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{A unified view of LLM training}
+  Every method the paper considers has the \emph{same} gradient shape:
+  \[
+    \nabla_\theta\mathcal{J}_{\mathcal A}(\theta)=\E_{(q,o)\sim\mathcal D}
+    \frac{1}{|o|}\sum_{t=1}^{|o|}
+    \underbrace{GC_{\mathcal A}(q,o,t)}_{\text{gradient coefficient}}\,
+    \nabla_\theta\log\pi_\theta(o_t\mid q,o_{<t})
+  \]
+  Three knobs fully characterize a method:
+  \vskip 2pt
+  \small
+  \begin{center}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{l l l l}
+    \toprule
+    \textbf{Method} & \textbf{Data source} & \textbf{Reward} & \textbf{Grad.\ coefficient}\\
+    \midrule
+    SFT & demos & -- & $1$ (push every token up)\\
+    RFT & offline, from $\pi_{\text{sft}}$ & rule & $\mathbb{I}(\text{correct})$\\
+    Online RFT & online, from $\pi_\theta$ & rule & $\mathbb{I}(\text{correct})$\\
+    PPO & online & model & $A_t$ (GAE)\\
+    GRPO & online, \emph{group} & model & $\hat A_{i,t}$ (group-relative)\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \nextbox{Two axes explain the ranking: \textbf{online $>$ offline} data, and \textbf{richer
+    gradient coefficients} (real-valued reward, penalize wrong) beat binary correct/incorrect.}
+\end{frame}
+
+\begin{frame}{Why GRPO beats plain online RFT}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/method_ladder.pdf}
+    \end{center}
+    \column{0.46\textwidth}
+    \begin{itemize}\small
+      \item \textbf{RFT}: reinforce correct answers, offline. Never penalizes wrong ones.
+      \item \textbf{Online RFT}: same, but sample from the live policy. Online helps.
+      \item \textbf{GRPO}: scale each gradient by \emph{how much better/worse than the group}
+        -- differentially reward \emph{and} penalize.
+      \item \textbf{+Process}: localize the credit to the good steps.
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  \footnotesize Ordering reproduces the paper's ablation; exact values are schematic.
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{GRPO = PPO without the critic.} Sample $G$ answers per question; the group
+      mean/std is the baseline.
+    \item Advantage $\hat A_{i,t}=(r_i-\text{mean})/\text{std}$ -- outcome or per-step
+      (process) supervision.
+    \item KL is added \emph{directly to the loss} with an unbiased, non-negative estimator.
+    \item Result: \textbf{4 models $\rightarrow$ 3}, a baseline matched to the reward model,
+      and state-of-the-art open math reasoning.
+    \item RL here \textbf{sharpens} an existing distribution (Maj@K up, Pass@K flat) rather
+      than adding new skills.
+    \item All of SFT/RFT/DPO/PPO/GRPO are one gradient -- differing in data source and
+      gradient coefficient.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} \emph{DPO} -- skip the RL loop and the reward model entirely, and
+    optimize preferences with a single classification-style loss.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: DeepSeekMath (Shao et al., 2024), arXiv:2402.03300 -- the paper that
+%   introduces GRPO. Extracted from ml/llm_training/materials_md/papers/09_grpo_*.txt.
+% Figures (fig/, all matplotlib via py_src/make_figures.py):
+%   ppo_vs_grpo (schematic, 4->3 models), group_advantage (worked normalization),
+%   benchmark_gains (Table 5 real numbers), majk_passk (Fig 7 trend, schematic),
+%   method_ladder (Fig 5 ablation ordering, schematic), kl_estimator (k1 vs k3, exact).
+% Pedagogical decisions: lead with the PPO critic cost so GRPO reads as "delete the
+%   expensive model"; predict-first on "did RL make it smarter?" (Maj@K vs Pass@K);
+%   close with the unified-gradient table linking to DPO (next deck).
+% Next deck: 02_dpo (offline preference optimization, no reward model, no RL loop).
