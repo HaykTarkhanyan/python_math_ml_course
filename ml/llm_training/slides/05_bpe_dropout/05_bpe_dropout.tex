@@ -1,0 +1,356 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-5] BPE-Dropout: Subword Regularization}
+\subtitle{Randomly skip merges to turn one BPE tokenizer into many (Provilkov et al., 2020)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{One word, always the same split}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    Before a model sees any text, a \textbf{tokenizer} chops each word into subword units.
+    Byte Pair Encoding (BPE) is the standard choice.
+    \vskip 6pt
+    But BPE is \textbf{deterministic}: a word gets \emph{exactly one} segmentation, every
+    time. \texttt{unrelated} is always \texttt{un}+\texttt{related} -- the model never sees
+    \texttt{un}+\texttt{rel}+\texttt{ated} or any other split.
+    \vskip 6pt
+    So it never learns that these are \emph{the same word}, barely learns word
+    \textbf{composition}, and shatters on a single typo.
+    \vskip 8pt
+    \textbf{BPE-dropout:} at training time, randomly \emph{skip} some merges -- the same
+    tokenizer now emits \emph{many} segmentations. No new model, up to \textbf{+2.3 BLEU}.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.7cm,
+              align=center] (a) {\textbf{Standard BPE}\\ one split per word\\
+              \scriptsize brittle, weak composition};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.7cm, align=center, below=0.8cm of a] (b)
+              {\textbf{BPE-dropout}\\ many splits per word\\
+              \scriptsize same merge table, more robust};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b)
+          node[midway,right,font=\scriptsize]{drop merges};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The problem: BPE is deterministic}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries One segmentation per word}\\[4pt]
+    \small How BPE splits text -- and why "always the same split" hurts.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{How BPE segments a word}
+  BPE learns two things from a corpus: a \textbf{vocabulary} of subwords and a \textbf{merge
+  table} -- an ordered list of pair-merges by priority.
+  \vskip 6pt
+  To segment a word: start from characters, then \textbf{greedily apply the
+  highest-priority merge available}, and repeat until none is left.
+  \vskip 6pt
+  \begin{center}\small
+    \texttt{l o w e s t} \;$\to$\; \texttt{lo w e s t} \;$\to$\; \texttt{low e s t}
+    \;$\to$\; \texttt{low es t} \;$\to$\; \texttt{low est}
+  \end{center}
+  \vskip 6pt
+  \keybox{The merge table is fixed and the rule is greedy, so the output is a
+    \textbf{deterministic} function of the word: one word $\to$ one segmentation. Every
+    time.}
+\end{frame}
+
+\begin{frame}{Why "always the same split" is a problem}
+  A model trained on one fixed segmentation per word:
+  \begin{itemize}\small
+    \item \textbf{Underuses morphology / composition.} It sees \texttt{un}+\texttt{related}
+      but never the pieces \texttt{rel}, \texttt{ated}, so it does not connect
+      \texttt{unrelated}, \texttt{relate}, \texttt{related} through shared units.
+    \item \textbf{Rare subwords are poorly understood.} Frequent character sequences almost
+      always hide \emph{inside} bigger tokens; as standalone tokens they are rare and get
+      weak embeddings (we return to this in the analysis).
+    \item \textbf{Brittle to segmentation errors.} One inserted / deleted character can
+      re-route the whole greedy merge path, giving a segmentation the model has never seen.
+  \end{itemize}
+  \vskip 4pt
+  \warnbox{A single deterministic split throws away free supervision: the many \emph{other}
+    valid ways to cut the same word.}
+\end{frame}
+
+% ================================================================
+\section{Subword regularization (Kudo, 2018)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The known fix, and its price}\\[4pt]
+    \small Multiple segmentations help -- but the 2018 recipe needs a whole new segmenter.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Subword regularization: sample the split}
+  \textbf{Idea (Kudo, 2018):} instead of one fixed split, treat the segmentation as
+  \emph{random} and marginalize the loss over segmentation candidates:
+  \[
+    \mathcal{L}=\!\!\sum_{(X,Y)\in\D}\;
+      \E_{\substack{x\sim P(x\mid X)\\ y\sim P(y\mid Y)}}
+      \big[\log P(y\mid x,\theta)\big]
+  \]
+  \begin{itemize}\small
+    \item At each training step, \textbf{sample one} segmentation $x$ of the sentence.
+    \item The model sees the same word cut many different ways over training -- a
+      regularizer / data augmentation \emph{at the subword level}. It is not NMT-specific.
+    \item Consistently beats using a single fixed segmentation.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The catch: it abandons BPE}
+  Standard BPE is deterministic, so to \emph{sample} segmentations Kudo (2018) had to build a
+  different segmenter from scratch:
+  \begin{itemize}\small
+    \item Train a separate \textbf{unigram language model} over subwords.
+    \item Optimize the vocabulary with the \textbf{EM} algorithm.
+    \item Sample segmentations at train time with \textbf{Viterbi} / $n$-best.
+  \end{itemize}
+  \vskip 6pt
+  It works, but it is a heavier, separate pipeline that \textbf{forbids conventional BPE} --
+  friction that keeps many practitioners from adopting it.
+  \vskip 4pt
+  \keybox{Open question: do we \emph{really} need a new segmentation algorithm to get
+    multiple segmentations? Or can plain BPE already do it?}
+\end{frame}
+
+% ================================================================
+\section{BPE-Dropout: stochastic BPE}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The whole method in one line}\\[4pt]
+    \small At each merge step, drop each candidate merge with probability $p$.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The method: drop merges at random}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Keep BPE's \emph{exact} vocabulary and merge table. Change only \textbf{one line} of the
+    segmentation loop:
+    \vskip 4pt
+    \fcolorbox{armblue}{lightbg}{\parbox{0.95\linewidth}{\footnotesize
+    split $\gets$ characters of the word\\
+    \textbf{repeat}\\
+    \hspace*{1.2em}merges $\gets$ all applicable merges\\
+    \hspace*{1.2em}\textcolor{armred}{\textbf{drop each merge w.p.\ }$p$}
+      \emph{(the only change)}\\
+    \hspace*{1.2em}\textbf{if} merges left: apply the highest-priority one\\
+    \textbf{until} no merges left}}
+    \vskip 4pt
+    \small A dropped high-priority merge forces a \emph{lower} one (or none), so the word
+    breaks at different places each pass.
+    \column{0.44\textwidth}
+    \vskip 10pt
+    \keybox{\small\textbf{$p=0$:} no drops $\Rightarrow$ exactly standard BPE.\\[3pt]
+      \textbf{$p=1$:} drop everything $\Rightarrow$ pure characters.\\[3pt]
+      \textbf{$0<p<1$:} a knob on segmentation \emph{granularity}.}
+    \vskip 6pt
+    \watchbox{\small No unigram LM, no EM, no Viterbi -- just a coin flip on top of the BPE
+      you already have.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One merge table, many segmentations}
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/seg_example.pdf}
+  \end{center}
+  \vskip 2pt
+  \keybox{\small All of these come from the \emph{same} BPE merge table -- randomness in
+    \emph{which} merges are skipped produces the variety. The model now sees \texttt{un},
+    \texttt{rel}, \texttt{ated}, \texttt{lat}, \texttt{ed}\dots\ as real tokens, not only
+    buried inside \texttt{related}.}
+\end{frame}
+
+\begin{frame}{Train stochastic, infer deterministic}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Training:} use $p>0$ (typically $p=0.1$). Each epoch re-segments words on the
+    fly, exposing the model to many splits -- augmentation for free.
+    \vskip 8pt
+    \textbf{Inference:} set $p=0$, i.e.\ ordinary deterministic BPE. No sampling, no
+    rescoring, standard decoding.
+    \column{0.5\textwidth}
+    \keybox{\small It is regularization / data augmentation \emph{inside the tokenizer}: same
+      model, same vocabulary, same test-time pipeline -- only the \emph{training}
+      segmentation is randomized.}
+    \vskip 6pt
+    \nextbox{\small So adoption cost is near zero: keep your BPE, flip on dropout during
+      training, and turn it off to deploy.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Results}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does a coin flip actually help?}\\[4pt]
+    \small Translation quality across languages, the effect of $p$, and of data size.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Consistent BLEU gains across language pairs}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\linewidth]{fig/bleu_gains.pdf}
+    \column{0.38\textwidth}
+    \small On \textbf{every} one of 12 IWSLT / WMT / ASPEC pairs, BPE-dropout beats standard
+    BPE -- up to \textbf{+2.36} BLEU (En-Zh).
+    \vskip 6pt
+    It also matches or beats Kudo's costlier subword regularization on \textbf{8 of 12}
+    pairs (grey diamonds), while staying inside plain BPE.
+    \vskip 6pt
+    \footnotesize Gains are biggest for morphologically rich / lower-resource pairs; Chinese
+    and Japanese, which need language-specific segmentation, benefit least.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict first: what is the best dropout rate $p$?}
+  If a little randomness helps, does more help more? What happens as $p\to 1$?
+  \pause
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \includegraphics[width=\linewidth]{fig/dropout_p.pdf}
+    \column{0.4\textwidth}
+    \small A \textbf{moderate} $p\approx 0.1$ is best. Push $p$ too high and training
+    segmentation drifts toward \textbf{characters} -- far from the deterministic BPE used at
+    inference -- and quality \textbf{collapses}.
+    \vskip 6pt
+    \watchbox{\small More noise is not better: BPE-dropout is a regularizer, and like any
+      regularizer it has a sweet spot. ($p=0.6$ for Chinese/Japanese, to match length.)}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The gain is largest when data is scarce}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \includegraphics[width=\linewidth]{fig/corpus_size.pdf}
+    \column{0.4\textwidth}
+    \small BPE-dropout wins at every corpus size, but the margin \textbf{shrinks as data
+      grows} -- expected of any regularizer: less overfitting to fight when data is
+    plentiful.
+    \vskip 6pt
+    \keybox{\small Most valuable for \textbf{low-resource} settings. For very large corpora,
+      apply dropout to the \emph{source} side only (both sides can start to hurt).}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Why it works: embeddings and robustness}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Why does it work?}\\[4pt]
+    \small Better subword embeddings, and robustness to noise -- at no inference cost.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Better embeddings, essentially free at inference}
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{fig/analysis.pdf}
+  \end{center}
+  \vskip 2pt
+  \small \textbf{Left:} because frequent substrings now surface as standalone tokens, their
+  embeddings improve -- nearest neighbours share more character 4-grams
+  (\textbf{0.29} vs \textbf{0.18}), so rare tokens are no longer stranded in embedding space.
+  \textbf{Right:} generated sequences are not longer in practice, so inference time is
+  \textbf{basically unchanged} (Table 4).
+\end{frame}
+
+\begin{frame}{Robustness to misspelled input}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \includegraphics[width=\linewidth]{fig/robustness.pdf}
+    \column{0.4\textwidth}
+    \small Corrupt 10\% of source words with random edits at test time. Standard BPE loses
+    $\sim$\textbf{3} BLEU; BPE-dropout loses about \textbf{half} that.
+    \vskip 6pt
+    \nextbox{\small Striking because the models were \textbf{never trained on
+      misspellings} -- seeing many segmentations alone teaches robustness. Gains reach
+      \textbf{+1.6 to +2.3} BLEU on noisy input \emph{even for large corpora}, where clean
+      gains had nearly vanished.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap and practical notes}
+  \begin{itemize}\small
+    \item Standard BPE is \textbf{deterministic}: one split per word, so the model never sees
+      alternatives and is brittle.
+    \item Kudo's subword regularization fixes this but needs a \textbf{separate unigram-LM
+      segmenter}; BPE-dropout gets the same benefit from \emph{plain} BPE.
+    \item \textbf{BPE-dropout} = at each merge step, skip each merge with probability $p$.
+      Same merge table, \emph{many} segmentations, \textbf{no new model}.
+    \item \textbf{Train with $p\approx 0.1$, infer with $p=0$} -- subword-level regularization;
+      too-high $p$ collapses to characters.
+    \item Up to \textbf{+2.3} BLEU over BPE (\textbf{+0.9} over Kudo); biggest gains on
+      \textbf{small / low-resource} data and \textbf{noisy} input; near-zero inference cost.
+    \item \textbf{Not} a new tokenizer and \textbf{not} used at test time -- it changes only
+      \emph{how training data is segmented}.
+  \end{itemize}
+  \vfill
+  \nextbox{\small \textbf{Takeaway:} the multiplicity of segmentations was hiding inside plain
+    BPE all along -- BPE-dropout just stops forcing a single one.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Provilkov, Emelianenko, Voita, "BPE-Dropout: Simple and Effective Subword
+%   Regularization" (ACL 2020), arXiv:1910.13267. Extracted from
+%   ml/llm_training/materials_md/papers/04_bpe_dropout_1910.13267.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py):
+%   - bleu_gains  : REAL, Table 2 (BPE-dropout & Kudo gains over BPE, 12 pairs).
+%   - robustness  : REAL, Table 5 (BLEU lost to 10% misspellings, 4 datasets).
+%   - corpus_size : REAL, Table 3 (WMT14 En-Fr subsets; best BPE-dropout config per size).
+%   - analysis    : REAL, Sec 6.2 (4-gram precision 0.18 vs 0.29) + Table 4 (inference time).
+%   - dropout_p   : SCHEMATIC shape (Figure 2 gives no numbers in text); p=0 and p~0.1
+%                   endpoints anchored to Table 3 (500k En-Fr); labelled "schematic" on slide.
+%   - seg_example : SCHEMATIC / illustrative splits of "unrelated" (Figure 1 concept),
+%                   labelled "illustrative" on the slide.
+% TikZ: only the cold-open 2-box comparison and the algorithm pseudocode box (small
+%   throwaway visuals, per SLIDE_STYLE exception).
+% Pedagogical decisions: lead with "one word, always the same split" as the concrete pain;
+%   contrast Kudo's heavy separate segmenter to motivate BPE-dropout's one-line change;
+%   predict-first on the optimal-p curve; misconception guardrails in the recap
+%   (not a new tokenizer, not used at inference, too-high p -> characters).
+% Prior deck: 04_lima. This deck is a standalone tokenization/subword-regularization topic
+%   appended to the LLM-training series.

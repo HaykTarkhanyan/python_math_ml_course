@@ -1,0 +1,392 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-6] Don't Stop Pretraining}
+\subtitle{A little continued in-domain pretraining is cheap and reliably helps (Gururangan et al., 2020)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{A pretrained LM is general. Your data is not.}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    RoBERTa was pretrained on \textbf{160 GB} of broad English text -- encyclopedias,
+    news, books, web. Strong across many tasks, so we treat it as a finished foundation.
+    \vskip 8pt
+    But your target is a \emph{slice} of language: chemical-protein abstracts, ACL
+    citations, Amazon reviews. That slice may be \textbf{far} from anything RoBERTa saw
+    much of.
+    \vskip 8pt
+    You have a pile of \emph{unlabeled} in-domain text and the usual fine-tuning recipe.
+    \emph{Before} you fine-tune -- should you keep \textbf{pretraining} on that pile first?
+    \vskip 8pt
+    \emph{When is a second phase of pretraining worth it, and how little of it do you need?}
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armblue, thick, rounded corners, fill=armblue!8, text width=3.6cm,
+              align=center] (a) {\textbf{Pretrained LM}\\ 160 GB, general\\ \scriptsize
+              knows a bit of everything};
+        \node[draw=armred, very thick, rounded corners, fill=armred!8,
+              text width=3.6cm, align=center, below=0.9cm of a] (b)
+              {\textbf{Your domain / task}\\ narrow, specialized\\ \scriptsize maybe far
+              from pretraining};
+        \draw[-{Latex}, thick, armred] (a) -- (b) node[midway,right,font=\scriptsize]{gap?};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Setup: one general model, many specific worlds}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries One general model, many specific worlds}\\[4pt]
+    \small RoBERTa, four domains, eight tasks -- and how far each domain sits from pretraining.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The question: is ``domain'' still relevant?}
+  Modern NLP is two stages: \textbf{pretrain} a big LM on massive unlabeled text, then
+  \textbf{fine-tune} it on a labeled task.
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[node distance=1.2cm, font=\small]
+      \node[draw, rounded corners, fill=armblue!12, text width=3.7cm, align=center] (pt)
+        {\textbf{Pretraining}\\ 160 GB broad text\\ \emph{general language}};
+      \node[draw, rounded corners, fill=paramgreen!12, text width=3.7cm, align=center,
+            right=2.4cm of pt] (ft)
+        {\textbf{Fine-tuning}\\ labeled task data\\ \emph{the actual task}};
+      \draw[-{Latex}, thick] (pt) -- (ft);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  With models this broad, is a task's \emph{textual domain} still worth caring about? Or do
+  big pretrained LMs already cover everything?
+  \vskip 4pt
+  \keybox{The paper inserts a \textbf{second phase of pretraining} -- on unlabeled
+    in-domain or in-task text -- \emph{between} the two stages, and measures what it buys.}
+\end{frame}
+
+\begin{frame}{The experimental grid: 4 domains $\times$ 2 tasks}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{l l}
+      \toprule
+      \textbf{Domain} & \textbf{Tasks (8 total)}\\
+      \midrule
+      BioMed  & CHEMPROT, RCT\\
+      CS      & ACL-ARC, SCIERC\\
+      News    & HYPERPARTISAN, AGNEWS\\
+      Reviews & HELPFULNESS, IMDB\\
+      \bottomrule
+    \end{tabular}
+    \vskip 8pt
+    \footnotesize Classification tasks spanning \textbf{high-} and \textbf{low-resource}
+    settings (some under 2K labeled examples). One shared baseline: off-the-shelf
+    \textbf{RoBERTa-base}, fine-tuned per task.
+    \column{0.48\textwidth}
+    Each domain also comes with a \textbf{large unlabeled corpus} for continued pretraining:
+    \begin{itemize}\small
+      \item BioMed: 7.6B tokens (47 GB)
+      \item CS: 8.1B tokens (48 GB)
+      \item News: 6.7B tokens (39 GB)
+      \item Reviews: 2.1B tokens (11 GB)
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize These feed the ``don't stop pretraining'' phase we are about to test.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How far is each domain from pretraining?}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \includegraphics[width=\linewidth]{fig/vocab_overlap.pdf}
+    \column{0.48\textwidth}
+    Overlap of the top-10K words with a sample of RoBERTa's pretraining corpus
+    (\textbf{PT}):
+    \begin{itemize}\small
+      \item News \textbf{54\%}, Reviews \textbf{35\%} -- close to PT.
+      \item BioMed \textbf{27\%}, CS \textbf{19\%} -- far.
+    \end{itemize}
+    \vskip 6pt
+    \keybox{\small A cheap predictor: \textbf{the more dissimilar the domain, the more room
+      a second pretraining phase has to help.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{DAPT: keep pretraining on the domain}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries DAPT -- Domain-Adaptive PreTraining}\\[4pt]
+    \small Continue masked-LM pretraining on a big in-domain corpus, \emph{then} fine-tune.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{What DAPT is}
+  \textbf{Domain-Adaptive PreTraining:} take off-the-shelf RoBERTa and \emph{continue} its
+  masked-language-modeling training on a large \textbf{unlabeled} domain corpus -- one pass,
+  12.5K steps -- \emph{before} the usual supervised fine-tuning.
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[node distance=0.9cm, font=\footnotesize]
+      \node[draw, rounded corners, fill=armblue!12, text width=2.7cm, align=center] (a)
+        {RoBERTa\\ \scriptsize (general)};
+      \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+            text width=3.0cm, align=center, right=1.3cm of a] (b)
+        {\textbf{DAPT}\\ \scriptsize +MLM on domain corpus};
+      \node[draw, rounded corners, fill=armorange!15, text width=2.7cm, align=center,
+            right=1.3cm of b] (c) {Fine-tune\\ \scriptsize labeled task};
+      \draw[-{Latex}, thick] (a) -- (b);
+      \draw[-{Latex}, thick] (b) -- (c);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  \textbf{Evidence it fits the domain:} masked-LM loss drops after DAPT -- BioMed
+  $1.32\!\to\!0.99$, CS $1.63\!\to\!1.34$, Reviews $2.10\!\to\!1.93$. (News barely moves,
+  $1.08\!\to\!1.16$ -- it was already in-domain for RoBERTa.)
+\end{frame}
+
+\begin{frame}{DAPT consistently helps -- most where the domain is far}
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{fig/dapt_gains.pdf}
+  \end{center}
+  \vskip -2pt
+  \small DAPT beats or ties the baseline on \textbf{all 8} tasks. The gains are biggest in
+  the \textbf{far} domains (CS, BioMed) -- e.g. ACL-ARC \textbf{+12.4} F1 -- and small where
+  the domain already overlaps PT (News: AGNEWS unchanged).
+\end{frame}
+
+% ================================================================
+\section{Relevance matters: the wrong domain can hurt}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Is it the domain, or just more data?}\\[4pt]
+    \small A control that separates ``relevant'' from ``simply more text.''
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Predict first: does any extra pretraining help?}
+  DAPT works. But \emph{why}? Maybe RoBERTa just benefits from seeing \textbf{more text},
+  regardless of what it is.
+  \vskip 8pt
+  Control (the paper calls it $\lnot$DAPT): adapt each task to an \textbf{irrelevant}
+  domain instead -- News$\to$adapt on CS, Reviews$\to$adapt on BioMed, etc. Same amount of
+  extra pretraining, wrong content.
+  \vskip 10pt
+  \begin{center}
+    \emph{Prediction: does adapting to an irrelevant domain still help, do nothing, or
+    \textbf{hurt}?}
+  \end{center}
+  \pause
+  \vskip 8pt
+  \warnbox{It often \textbf{hurts} -- irrelevant adaptation drops \emph{below} the plain
+    baseline. More data is not the mechanism; \textbf{domain relevance} is.}
+\end{frame}
+
+\begin{frame}{The wrong domain drags you below baseline}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \includegraphics[width=\linewidth]{fig/irrelevant.pdf}
+    \column{0.4\textwidth}
+    \small
+    Relevant DAPT (green) beats the baseline; the \textbf{irrelevant} domain (red) usually
+    lands \emph{under} it.
+    \vskip 6pt
+    The extreme case: HYPERPARTISAN drops \textbf{86.6 $\to$ 76.4} when adapted on the wrong
+    (CS) domain.
+    \vskip 6pt
+    \keybox{\small Exposure to \emph{more} data without domain relevance is, in most
+      settings, \textbf{detrimental}.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Caveat: domain boundaries are fuzzy}
+  Our labels (``News,'' ``Reviews'') are convenient, not sharp. Figure 2 already showed
+  \textbf{40\%} vocabulary overlap between Reviews and News.
+  \vskip 6pt
+  The paper finds actual cross-domain look-alikes: an IMDB review of a 1940 film and a
+  REALNEWS article discussing the same film share vocabulary and phrasing.
+  \vskip 6pt
+  Consequence: adapting Reviews tasks on \emph{News} is \textbf{not} very harmful (it is a
+  near neighbor), whereas adapting them on BioMed is.
+  \vskip 4pt
+  \watchbox{``Relevant'' is a \textbf{spectrum}, not a binary. The vocabulary-overlap map is
+    a cheap first guess at where a domain sits.}
+\end{frame}
+
+% ================================================================
+\section{TAPT: keep pretraining on the task's own text}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries TAPT -- Task-Adaptive PreTraining}\\[4pt]
+    \small Forget the huge corpus -- just keep pretraining on the task's \emph{own}
+    unlabeled text.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{What TAPT is}
+  A task's dataset is a \emph{narrow slice} of its domain (CHEMPROT is a few hand-picked
+  PubMed categories, not all of biomedicine). So pretrain on \textbf{exactly that slice}.
+  \vskip 6pt
+  \textbf{Task-Adaptive PreTraining:} continue masked-LM pretraining on the task's
+  \textbf{own unlabeled training text} (the same sentences, labels removed), for 100 epochs
+  with fresh random masks each pass -- then fine-tune.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \keybox{\small A \textbf{different trade-off} from DAPT: a \emph{far smaller} corpus, but
+      one that is \emph{maximally} task-relevant.}
+    \column{0.5\textwidth}
+    \watchbox{\small Cheap enough to run per-task -- no giant domain corpus, no extra
+      labeling. It reuses text you already have.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{TAPT is strong; DAPT + TAPT is best}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/tapt_combined.pdf}
+  \end{center}
+  \vskip -2pt
+  \small TAPT (orange) beats the baseline on every task and sometimes \emph{matches or beats}
+  DAPT (e.g. HYPERPARTISAN, HELPFULNESS) using a fraction of the data. Doing \textbf{DAPT
+  then TAPT} (green) gets the best of both -- the top score on all 8 tasks in the paper.
+\end{frame}
+
+\begin{frame}{How TAPT is so cheap}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\linewidth]{fig/compute.pdf}
+    \column{0.42\textwidth}
+    On RCT-500, TAPT pretrains on \textbf{500 documents} ($\sim$80 KB) in 0.2K steps --
+    DAPT uses \textbf{25M documents} (47 GB) in 12.5K steps.
+    \vskip 6pt
+    That is roughly \textbf{60$\times$ fewer steps} and \emph{orders of magnitude} less
+    storage, for an F1 within about \textbf{3 points} of DAPT.
+    \vskip 6pt
+    \nextbox{\small Reuse: adapt the domain \emph{once} (DAPT), then add a tiny TAPT phase
+      per task.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Augmenting TAPT, and cross-task limits}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries More task-relevant text, and where TAPT stops}\\[4pt]
+    \small Feeding TAPT extra in-domain text -- and why it does not transfer across tasks.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Augmenting TAPT with more in-domain text}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\linewidth]{fig/augment_tapt.pdf}
+    \column{0.42\textwidth}
+    \small
+    TAPT's corpus is small -- so give it \textbf{more} text from the task distribution:
+    \begin{itemize}\small
+      \item \textbf{Curated:} a large human-collected pool of unlabeled task data
+        (Curated-TAPT).
+      \item \textbf{Retrieved:} pull nearest-neighbor sentences from the domain corpus
+        (kNN-TAPT) when no curated pool exists.
+    \end{itemize}
+    \vskip 4pt
+    Both lift TAPT further; \textbf{DAPT + Curated-TAPT} is strongest.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{TAPT is task-specific -- it does not transfer}
+  Because TAPT fits the \emph{task's} distribution so tightly, a model TAPT-ed on one task
+  and fine-tuned on \emph{another} task in the same domain does \textbf{worse} (Transfer-TAPT):
+  \vskip 4pt
+  \begin{center}
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{l r r r}
+      \toprule
+      Task & TAPT & Transfer-TAPT & $\Delta$\\
+      \midrule
+      HYPERPARTISAN & 89.9 & 82.2 & $-7.7$\\
+      HELPFULNESS   & 68.5 & 65.0 & $-3.5$\\
+      ACL-ARC       & 67.4 & 64.1 & $-3.3$\\
+      CHEMPROT      & 82.6 & 80.4 & $-2.2$\\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \keybox{\small Tasks within one domain have \emph{different} distributions. This is exactly
+    why a broad domain alone is not enough -- and why \textbf{DAPT then TAPT} is
+    complementary, not redundant.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Don't stop pretraining:} a second phase of masked-LM pretraining, on
+      unlabeled text, \emph{before} fine-tuning -- reliably helps.
+    \item \textbf{DAPT} (big in-domain corpus) helps on all 8 tasks, \textbf{most when the
+      domain is far} from pretraining (vocabulary overlap predicts this).
+    \item \textbf{Relevance is the mechanism, not data volume:} adapting to an
+      \emph{irrelevant} domain can drop you \emph{below} the baseline.
+    \item \textbf{TAPT} (the task's own unlabeled text) is tiny and $\sim$60$\times$ cheaper,
+      yet strong; \textbf{DAPT + TAPT} is best.
+    \item Augmenting TAPT with curated / retrieved in-domain text helps more; TAPT itself is
+      task-specific and does not transfer across tasks.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{The takeaway:} a strong pretrained LM is not the finish line. A little
+    continued in-domain pretraining is \emph{cheap} and \emph{reliably} pays off -- so don't
+    stop pretraining.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Gururangan et al., "Don't Stop Pretraining: Adapt Language Models to Domains and
+%   Tasks" (ACL 2020), arXiv:2004.10964. Extracted from
+%   ml/llm_training/materials_md/papers/05_dont_stop_pretraining_2004.10964.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py, all real numbers from the paper):
+%   vocab_overlap (Figure 2, exact overlap matrix), dapt_gains (Table 5, RoBERTa vs DAPT),
+%   irrelevant (Table 3, RoBERTa/DAPT/not-DAPT), tapt_combined (Table 5, all four phases,
+%   readable 4-task subset), compute (Table 9, storage/steps/F1 for RCT-500),
+%   augment_tapt (Table 7, Curated-TAPT). Pipeline schematics are small TikZ (SLIDE_STYLE
+%   exception for throwaway boxes-and-arrows).
+% Pedagogical decisions: cold-open framed as "general LM vs your narrow data"; vocabulary
+%   overlap introduced early as the cheap predictor of DAPT benefit; predict-first on the
+%   irrelevant-domain (not-DAPT) result; DAPT/TAPT contrasted as a data-size-vs-relevance
+%   trade-off; Transfer-TAPT (Table 6) used to motivate why DAPT+TAPT is complementary.
+% Part of the ml/llm_training slide series (empirical-paper decks: LIMA, LoRA, ...).

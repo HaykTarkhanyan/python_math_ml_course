@@ -258,6 +258,33 @@ def fig_exp_smoothing(series: pd.Series, log: logging.Logger) -> None:
     save(fig, "exp_smoothing.pdf", log)
 
 
+def fig_ar_vs_ma(log: logging.Logger) -> None:
+    """Sample paths of AR(1) vs MA(1) so students see 'persistence' vs 'echo'."""
+    n = 140
+    ar1 = ArmaProcess(ar=[1, -0.8], ma=[1]).generate_sample(
+        n, distrvs=np.random.default_rng(SEED).standard_normal)
+    ma1 = ArmaProcess(ar=[1], ma=[1, 0.8]).generate_sample(
+        n, distrvs=np.random.default_rng(SEED + 1).standard_normal)
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.4), sharey=True)
+    axes[0].plot(ar1, color=ARM_BLUE, lw=1.4)
+    axes[0].axhline(0, color=GREY, lw=1, ls=":")
+    axes[0].set_title(r"AR(1), $\phi=0.8$: today $\approx 0.8\cdot$yesterday $+$ shock",
+                      fontsize=11, loc="left")
+    axes[0].set_xlabel("time"); axes[0].set_ylabel("value")
+    axes[0].text(0.03, 0.05, "persistent - wanders, slow to revert",
+                 transform=axes[0].transAxes, fontsize=9.5, color=ARM_BLUE, style="italic")
+    axes[1].plot(ma1, color=ARM_RED, lw=1.4)
+    axes[1].axhline(0, color=GREY, lw=1, ls=":")
+    axes[1].set_title(r"MA(1), $\theta=0.8$: today $=$ shock $+\,0.8\cdot$last shock",
+                      fontsize=11, loc="left")
+    axes[1].set_xlabel("time")
+    axes[1].text(0.03, 0.05, "brief echo - reverts almost at once",
+                 transform=axes[1].transAxes, fontsize=9.5, color=ARM_RED, style="italic")
+    fig.tight_layout()
+    save(fig, "ar_vs_ma.pdf", log)
+
+
 def main() -> None:
     log = setup_logging()
     np.random.seed(SEED)
@@ -269,6 +296,7 @@ def main() -> None:
     fig_stationarity(log)
     fig_differencing(series, log)
     fig_acf_pacf(log)
+    fig_ar_vs_ma(log)
     fig_arima_forecast(series, log)
     fig_exp_smoothing(series, log)
     log.info("classical figures done")

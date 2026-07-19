@@ -125,6 +125,85 @@ def fig_amplification():
     save(fig, "amplification.pdf")
 
 
+def fig_low_rank_intuition():
+    # "what low rank means": a rank-3 matrix = sum of 3 rank-1 outer products
+    rng = np.random.default_rng(0)
+    d = 12
+    scales = [1.0, 0.7, 0.5]
+    terms = [scales[i] * np.outer(rng.standard_normal(d), rng.standard_normal(d))
+             for i in range(3)]
+    total = sum(terms)
+    mats = terms + [total]
+    titles = [r"$b_1 a_1^{\top}$", r"$b_2 a_2^{\top}$", r"$b_3 a_3^{\top}$",
+              r"$\Delta W=\sum_i b_i a_i^{\top}$"]
+    vmax = np.abs(total).max()
+    fig, axes = plt.subplots(1, 7, figsize=(11, 3.0),
+                             gridspec_kw={"width_ratios": [1, 0.28, 1, 0.28, 1, 0.42, 1]})
+    mat_axes = [axes[0], axes[2], axes[4], axes[6]]
+    for ax, op in zip((axes[1], axes[3], axes[5]), ("+", "+", "=")):
+        ax.axis("off"); ax.text(0.5, 0.5, op, ha="center", va="center", fontsize=22)
+    for i, (ax, M, t) in enumerate(zip(mat_axes, mats, titles)):
+        ax.imshow(M, cmap="RdBu_r", vmin=-vmax, vmax=vmax, aspect="equal")
+        ax.set_title(t, fontsize=12.5, color=(ARM_BLUE if i == 3 else "#333"))
+        ax.set_xticks([]); ax.set_yticks([])
+        for s in ax.spines.values():
+            s.set_edgecolor("#cccccc")
+        if i < 3:
+            ax.set_xlabel("rank 1", fontsize=9.5, color=GREY)
+        else:
+            ax.set_xlabel("rank 3", fontsize=9.5, color=ARM_BLUE)
+    fig.suptitle(r"A rank-$r$ update = a sum of $r$ rank-1 blocks $\Rightarrow$ store the thin "
+                 r"factors $B\,(d\times r)$, $A\,(r\times k)$, not the full grid",
+                 fontsize=12, y=1.04)
+    save(fig, "low_rank_intuition.pdf")
+
+
+def fig_singular_decay():
+    # "how we get the low rank": the update's singular values collapse, so the
+    # best rank-r approx (truncated SVD, Eckart-Young) is nearly lossless.
+    rng = np.random.default_rng(0)
+    d, r_true = 64, 6
+    W0 = rng.standard_normal((d, d)) / np.sqrt(d)          # full-rank pretrained weight
+    U = rng.standard_normal((d, r_true))
+    V = rng.standard_normal((r_true, d))
+    signal = U @ np.diag(np.array([1.0, 0.72, 0.52, 0.38, 0.26, 0.17])) @ V
+    dW = signal / np.linalg.norm(signal) + 0.0022 * rng.standard_normal((d, d))  # ~low-rank update
+    s0 = np.linalg.svd(W0, compute_uv=False)
+    sd = np.linalg.svd(dW, compute_uv=False)
+    s0n, sdn = s0 / s0[0], sd / sd[0]
+    energy = np.cumsum(sd ** 2) / np.sum(sd ** 2)
+    r95 = int(np.searchsorted(energy, 0.95) + 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.9))
+    ax = axes[0]
+    k = np.arange(1, 25)
+    ax.plot(k, s0n[:24], "-o", color=GREY, ms=4, lw=1.8, label=r"$W_0$ (pretrained)")
+    ax.plot(k, sdn[:24], "-o", color=ARM_BLUE, ms=4, lw=2.3, label=r"$\Delta W$ (the update)")
+    ax.set_yscale("log")
+    ax.axvspan(0.5, r_true + 0.5, color=ARM_ORANGE, alpha=0.13)
+    ax.text(r_true + 1.0, sdn[0] * 0.35, "top few\ncarry it all", color="#B77A00",
+            fontsize=9.5, weight="bold")
+    ax.set_xlabel("singular value index")
+    ax.set_ylabel("magnitude (norm., log)")
+    ax.set_title(r"$\Delta W$'s singular values fall off a cliff")
+    ax.legend(frameon=False)
+
+    ax = axes[1]
+    rr = np.arange(1, 25)
+    ax.plot(rr, energy[:24], "-o", color=ARM_BLUE, ms=4, lw=2.3)
+    ax.axhline(0.95, color=GREY, ls=":", lw=1.2)
+    ax.axvline(r95, color=ARM_RED, ls="--", lw=1.6)
+    ax.text(r95 + 0.5, 0.55, f"rank {r95} rebuilds\n95% of $\\Delta W$",
+            color=ARM_RED, fontsize=10, weight="bold")
+    ax.set_xlabel(r"rank $r$ kept (top-$r$ SVD)")
+    ax.set_ylabel(r"fraction of $\Delta W$ rebuilt")
+    ax.set_title("Best rank-$r$ approx (Eckart--Young) is near-lossless")
+    ax.set_ylim(0, 1.03)
+    fig.tight_layout()
+    save(fig, "singular_decay.pdf")
+
+
 if __name__ == "__main__":
     fig_param_count(); fig_rank(); fig_which_matrices(); fig_latency(); fig_amplification()
+    fig_low_rank_intuition(); fig_singular_decay()
     print("all LoRA figures done")

@@ -1,0 +1,442 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-10] InstructGPT: RLHF for Instruction Following}
+\subtitle{aligning language models with human feedback \quad(Ouyang et al., 2022)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Your model does not do what you ask}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    A pretrained LM is trained on one objective only: \textbf{predict the next token}
+    on a web page. Prompt GPT-3 with an instruction and you get:
+    \vskip 4pt
+    \begin{itemize}\small
+      \item \textbf{Prompt:} ``Explain the moon landing to a 6 year old.''
+      \item \textbf{GPT-3:} ``Explain the theory of gravity to a 6 year old.
+        Explain the big bang theory to a 6 year old. Explain evolution\dots''
+    \end{itemize}
+    \vskip 4pt
+    It just \emph{continues the pattern}. It is not being unhelpful on purpose --
+    following instructions was never its training objective.
+    \vskip 8pt
+    \textbf{Alignment} is the gap between ``predict the next token'' and ``do what the
+    user meant.'' Today: the recipe -- \textbf{RLHF} -- that first closed it at scale.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.9cm,
+              align=center] (a) {\textbf{Pretraining objective}\\ predict the next token\\
+              \scriptsize on internet text};
+        \node[draw=gray!60, thick, rounded corners, fill=gray!8, text width=3.9cm,
+              align=center, below=0.55cm of a] (gap) {\textbf{?} the alignment gap \textbf{?}};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.9cm, align=center, below=0.55cm of gap] (b)
+              {\textbf{What we want}\\ helpful, honest, harmless};
+        \draw[-{Latex}, thick, gray] (a) -- (gap);
+        \draw[-{Latex}, thick, paramgreen] (gap) -- (b);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The misalignment problem}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Why a bigger model is not a better assistant}\\[4pt]
+    \small The training objective and the goal are two different things.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Next-token prediction $\neq$ following instructions}
+  Scaling up the language-modelling objective makes models more \emph{fluent}, not more
+  \emph{obedient}. The same 175B model that writes beautiful prose will happily:
+  \vskip 4pt
+  \begin{itemize}\small
+    \item make up facts that sound authoritative (\textbf{hallucinate}),
+    \item produce biased or \textbf{toxic} text,
+    \item ignore an explicit constraint, or answer a different question entirely.
+  \end{itemize}
+  \vskip 6pt
+  The fix is not more data or more parameters -- it is a \textbf{different objective}.
+  We want to optimize for what Askell et al.\ (2021) call the three H's:
+  \vskip 4pt
+  \begin{center}\small
+    \textbf{Helpful} (solve the user's task) \quad$\cdot$\quad
+    \textbf{Honest} (do not fabricate) \quad$\cdot$\quad
+    \textbf{Harmless} (do no harm)
+  \end{center}
+  \vskip 4pt
+  \keybox{The problem: ``helpful, honest, harmless'' has \textbf{no loss function}. You
+    cannot write it down and differentiate it. So we \emph{learn} it -- from human judgement.}
+\end{frame}
+
+\begin{frame}{The idea: turn human preference into a reward}
+  We cannot specify good behaviour, but a human can \textbf{recognize} it: shown two
+  answers, they can say which is better. RLHF turns that ability into a training signal.
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[node distance=0.6cm and 1.1cm, font=\small]
+      \node[draw, rounded corners, fill=armblue!10, text width=2.5cm, align=center] (demo)
+        {\textbf{Demonstrate}\\ show good answers};
+      \node[draw, rounded corners, fill=paramgreen!12, text width=2.6cm, align=center,
+            right=of demo] (rank) {\textbf{Rank}\\ compare model outputs};
+      \node[draw, rounded corners, fill=armorange!18, text width=2.6cm, align=center,
+            right=of rank] (opt) {\textbf{Optimize}\\ RL against the learned reward};
+      \draw[-{Latex}] (demo) -- (rank);
+      \draw[-{Latex}] (rank) -- (opt);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  This is the three-step pipeline of InstructGPT -- \textbf{SFT}, a \textbf{reward model},
+  and \textbf{PPO}. It is the \emph{foundational} alignment recipe: later methods (GRPO, DPO)
+  are best understood as \emph{simplifications} of exactly this pipeline.
+\end{frame}
+
+% ================================================================
+\section{The three-step RLHF pipeline}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The three-step pipeline}\\[4pt]
+    \small SFT $\rightarrow$ reward model $\rightarrow$ PPO. Learn each stage once.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The whole recipe on one slide}
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{fig/rlhf_pipeline.pdf}
+  \end{center}
+  \vskip 2pt
+  \keybox{\small Each stage consumes a \textbf{different kind of human input}:
+    demonstrations (step 1), rankings (step 2), and then \emph{no} labels at all in step 3 --
+    the reward model stands in for the human.}
+\end{frame}
+
+\begin{frame}{Step 1: supervised fine-tuning (SFT)}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    Labelers \textbf{write the ideal response} to each prompt. Fine-tune GPT-3 on these
+    demonstrations with ordinary supervised learning (maximize log-likelihood of the target):
+    \[
+      \max_{\thetav}\ \E_{(x,y)\sim\D_{\text{demo}}}\ \sum_t \log \pi_{\thetav}(y_t\mid x,y_{<t})
+    \]
+    \begin{itemize}\small
+      \item $\sim$13k demonstration prompts, 16 epochs.
+      \item Teaches the \emph{format}: ``respond to instructions'' instead of ``continue text.''
+    \end{itemize}
+    \column{0.42\textwidth}
+    \keybox{\small SFT alone already helps a lot -- but it can only imitate the answers
+      labelers \emph{wrote}. It cannot learn from answers the \emph{model} produced that
+      turned out good or bad.}
+    \vskip 4pt
+    \nextbox{\small That is exactly what steps 2--3 add: judge the model's \emph{own}
+      outputs.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 2: a reward model from rankings}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Show a labeler $K=4$--$9$ model outputs for one prompt; they \textbf{rank} them. Each pair
+    $(y_w \succ y_l)$ is a training example for a reward model $r_\theta(x,y)$, via the
+    \textbf{Bradley--Terry} pairwise loss:
+    \vskip 2pt
+    {\small
+    \[
+      \mathcal{L}(\theta)=-\,\E_{(x,y_w,y_l)}\Big[\log\ \sigma\big(r_\theta(x,y_w)-r_\theta(x,y_l)\big)\Big]
+    \]}
+    \begin{itemize}\small
+      \item Output: one \textbf{scalar} reward per (prompt, answer).
+      \item Rank, don't score: humans compare reliably, absolute scores drift.
+      \item A single 6B RM (the 175B RM was unstable).
+    \end{itemize}
+    \column{0.45\textwidth}
+    \includegraphics[width=\linewidth]{fig/rm_vs_human.pdf}
+    \vskip -2pt
+    \footnotesize The RM predicts a held-out preference nearly as well as two humans agree
+    with each other -- a genuine, if imperfect, stand-in for the labeler.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 3: optimize the policy with PPO}
+  Now treat generation as a one-step RL problem: the prompt is the state, the whole answer is
+  the action, and the reward model scores it. Fine-tune the SFT policy to \textbf{maximize
+  reward}, with a \textbf{KL penalty} that keeps it near the SFT model:
+  \vskip 2pt
+  {\small
+  \[
+    \text{objective}(\phi)=\E_{(x,y)\sim\pi_\phi^{RL}}
+      \Big[\underbrace{r_\theta(x,y)}_{\text{reward}}
+      -\ \beta\,\underbrace{\log\tfrac{\pi_\phi^{RL}(y\mid x)}{\pi^{SFT}(y\mid x)}}_{\text{KL to SFT}}\Big]
+      +\ \gamma\,\underbrace{\E_{x\sim\D_{\text{pretrain}}}\big[\log\pi_\phi^{RL}(x)\big]}_{\text{pretraining mix (ptx)}}
+  \]}
+  \begin{itemize}\small
+    \item \textbf{KL penalty} ($\beta$): stops the policy from drifting into gibberish that
+      games the reward model (reward hacking).
+    \item \textbf{Pretraining mix} ($\gamma$): the ``ptx'' term -- fixes regressions on public
+      NLP tasks (more on this in results). Plain PPO sets $\gamma=0$.
+  \end{itemize}
+  \vskip 2pt
+  \warnbox{Everything here rides on \textbf{PPO}. Next section: what PPO actually is, and why
+    it clips.}
+\end{frame}
+
+% ================================================================
+\section{A PPO primer}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries A PPO primer}\\[4pt]
+    \small Just enough reinforcement learning to understand step 3.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Why not just ascend the reward?}
+  The policy-gradient update pushes up the probability of actions with positive
+  \textbf{advantage} $A_t$ (better than expected) and down for negative:
+  \[
+    \nabla_{\thetav}\,\mathcal{J}=\E_t\big[\,A_t\,\nabla_{\thetav}\log\pi_{\thetav}(a_t\mid s_t)\big]
+  \]
+  \begin{itemize}\small
+    \item We estimate $A_t$ from samples, so it is \textbf{noisy}.
+    \item A big step in a noisy direction can \textbf{destroy} the policy -- and unlike
+      supervised learning, the next batch is generated \emph{by that broken policy}. No recovery.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{We want the biggest improving step that still \textbf{stays close} to the current
+    policy -- a \textbf{trust region}. PPO enforces one cheaply, with a clip.}
+\end{frame}
+
+\begin{frame}{The importance ratio and the clipped surrogate}
+  Let $r(\thetav)=\dfrac{\pi_{\thetav}(a_t\mid s_t)}{\pi_{\thetav_{old}}(a_t\mid s_t)}$ be the
+  \textbf{importance ratio}: how much more likely the new policy makes an action the old one
+  took. PPO maximizes the \textbf{clipped surrogate}:
+  \vskip 2pt
+  \[
+    \boxed{\;L^{\text{CLIP}}(\thetav)=\E_t\Big[\min\big(r(\thetav)\,A_t,\
+      \operatorname{clip}(r(\thetav),\,1-\eps,\,1+\eps)\,A_t\big)\Big]\;}
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{itemize}\small
+      \item $r=1$ at the start (new $=$ old policy).
+      \item The $\min$ makes it a \textbf{pessimistic lower bound}: you only get credit for
+        moving $r$ inside $[1-\eps,1+\eps]$.
+      \item Typical $\eps=0.2$.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \keybox{\footnotesize Past the clip edge the objective goes \textbf{flat}: zero gradient,
+      so no incentive to keep moving the ratio. That is the trust region.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why clipping keeps you in the trust region}
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/ppo_clip.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{itemize}\small
+    \item \textbf{Good action ($A>0$):} increasing $r$ helps -- but only up to $1+\eps$, then
+      it flattens. No reward for over-committing.
+    \item \textbf{Bad action ($A<0$):} decreasing $r$ helps -- but only down to $1-\eps$. The
+      clip removes the incentive for a giant destructive step in either direction.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Where does $A_t$ come from? The critic}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    The advantage needs a \textbf{baseline}: ``better than \emph{what}?'' PPO learns a second
+    network, the \textbf{value model} (critic) $V_\psi(s)$, predicting expected reward, and sets
+    \[
+      A_t \approx r_\theta - V_\psi(s)\quad(\text{via GAE}).
+    \]
+    Subtracting a baseline cuts gradient \emph{variance} without adding bias.
+    \vskip 6pt
+    In InstructGPT the critic is \textbf{initialized from the reward model}. So RLHF-PPO keeps
+    several models live at once.
+    \column{0.44\textwidth}
+    \keybox{\small PPO for RLHF juggles \textbf{four} models:
+      \begin{enumerate}\small
+        \item Policy $\pi_\phi$ (trained)
+        \item Reference $\pi^{SFT}$ (frozen, KL anchor)
+        \item Reward $r_\theta$ (frozen)
+        \item \textcolor{armred}{\textbf{Value $V_\psi$ (trained, big)}}
+      \end{enumerate}}
+    \vskip 2pt
+    \footnotesize Remember the critic -- the later decks delete it.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Does it work?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small The headline result, and the honesty / harmlessness numbers.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The headline: 1.3B beats 175B}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \includegraphics[width=\linewidth]{fig/win_rate.pdf}
+    \column{0.4\textwidth}
+    Win rate $=$ how often labelers prefer a model's output to the 175B SFT baseline.
+    \vskip 6pt
+    The striking result: the \textbf{1.3B} InstructGPT is preferred to the \textbf{175B}
+    GPT-3 -- a model \textbf{100$\times$} larger.
+    \vskip 6pt
+    Head to head, 175B InstructGPT beats 175B GPT-3 \textbf{85\%} of the time, and beats
+    few-shot-prompted GPT-3 \textbf{71\%} of the time.
+    \vskip 4pt
+    \nextbox{\small Alignment bought more preference than a 100$\times$ scale-up.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Honesty and harmlessness improve too}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/honesty_harm.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{itemize}\small
+    \item \textbf{Truthfulness:} on TruthfulQA, InstructGPT is truthful \emph{and} informative
+      about \textbf{twice} as often as GPT-3 -- and it does this by default, without being told to.
+    \item \textbf{Honesty / harm:} it hallucinates half as often on closed-domain tasks
+      (21\% vs 41\%) and, when asked to be respectful, emits \textbf{25\%} fewer toxic outputs.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The alignment tax -- and how to pay it back}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \includegraphics[width=\linewidth]{fig/alignment_tax.pdf}
+    \column{0.48\textwidth}
+    Plain PPO buys alignment at a price: it \textbf{regresses} on public NLP benchmarks
+    (SQuAD, DROP, HellaSwag, translation). That gap is the \textbf{alignment tax}.
+    \vskip 6pt
+    Mixing pretraining gradients back into PPO (the \textbf{ptx} term, $\gamma>0$) recovers
+    almost all of it \emph{without} hurting labeler preference -- and beats simply raising
+    the KL coefficient.
+    \vskip 4pt
+    \watchbox{\small A high alignment tax is dangerous: it tempts people to deploy the
+      \emph{unaligned} but more capable model. Low-tax alignment is the goal.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{It generalizes beyond the training signal}
+  Two encouraging kinds of generalization -- alignment ``sticks'' where we never supervised it:
+  \vskip 4pt
+  \begin{itemize}\small
+    \item \textbf{Held-out labelers.} Workers who produced \emph{none} of the training data
+      prefer InstructGPT over GPT-3 at about the same rate -- so it is not just overfitting to
+      the 40 training labelers.
+    \item \textbf{Held-out instruction types.} Though the fine-tuning data is $>$96\% English
+      and barely any code, InstructGPT follows instructions in \textbf{other languages} and
+      \textbf{answers questions about code} -- GPT-3 needs careful prompting and usually will not.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{The model seems to learn the \emph{notion} of ``follow the instruction,'' not just
+    the specific instructions it was trained on. Alignment is cheap, too: the 175B RLHF run was
+    $\sim$60 petaflop/s-days vs 3{,}640 to pretrain GPT-3.}
+\end{frame}
+
+% ================================================================
+\section{Limitations and what came next}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Limitations, and why this pipeline got simplified}\\[4pt]
+    \small A foundational recipe -- and a heavy one.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{InstructGPT is aligned, not solved}
+  \begin{itemize}\small
+    \item \textbf{Still makes simple mistakes:} follows \emph{false premises}, over-hedges
+      simple questions, and breaks under multiple explicit constraints.
+    \item \textbf{Still not safe:} it will follow a \emph{harmful} instruction; told to be
+      maximally biased, it is \emph{more} toxic than GPT-3. It optimizes helpfulness, and that
+      can conflict with harmlessness.
+    \item \textbf{Aligned to whom?} To $\sim$40 mostly English-speaking contractors and the
+      researchers' instructions -- not ``humanity.'' Labelers agree only $\sim$73\% of the time.
+  \end{itemize}
+  \vskip 4pt
+  \warnbox{And the \emph{machinery} is heavy: a separate reward model, an RL loop, and PPO's
+    extra \textbf{value network} -- up to four models in memory. That cost is exactly what the
+    next papers attack.}
+\end{frame}
+
+\begin{frame}{Recap: the pipeline everything else simplifies}
+  \begin{itemize}
+    \item Pretraining optimizes next-token prediction; \textbf{alignment} is the gap to
+      ``helpful, honest, harmless,'' and RLHF closes it by \textbf{learning a reward from
+      human preference}.
+    \item \textbf{Three steps:} SFT on demonstrations $\rightarrow$ a Bradley--Terry
+      \textbf{reward model} from rankings $\rightarrow$ \textbf{PPO} against that reward with a
+      KL penalty to SFT.
+    \item \textbf{PPO} keeps updates in a trust region via the clipped surrogate, and needs a
+      \textbf{value network} (critic) for the advantage baseline.
+    \item \textbf{Results:} 1.3B InstructGPT $\succ$ 175B GPT-3; more truthful, less toxic; the
+      alignment tax is paid back by the pretraining mix.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} the field spent years \emph{deleting pieces of this pipeline.}
+    \emph{GRPO} (\textbf{[LLM-1]}) throws out PPO's value network, replacing the critic with a
+    group-relative baseline. \emph{DPO} (\textbf{[LLM-2]}) throws out the reward model \emph{and}
+    the RL loop entirely, folding preference optimization into one classification-style loss.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Ouyang et al., "Training language models to follow instructions with human
+%   feedback" (2022), arXiv:2203.02155 -- the InstructGPT / RLHF paper (main source).
+%   PPO primer from Schulman et al., "Proximal Policy Optimization Algorithms" (2017),
+%   arXiv:1707.06347 (clipped surrogate objective, Section 3 / Figure 1).
+%   Extracted from ml/llm_training/materials_md/papers/13_instructgpt_*.txt and 14_ppo_*.txt.
+% Figures (fig/, all matplotlib via py_src/make_figures.py):
+%   rlhf_pipeline (schematic 3-step SFT->RM->PPO box flow, the centerpiece),
+%   win_rate (Fig 1 trend reconstructed; exact plotted values approximate, the 85%/71%
+%     head-to-head numbers exact from text),
+%   ppo_clip (schematic, standard PPO Fig 1 shape for A>0 and A<0, labeled schematic),
+%   rm_vs_human (real: RM 5-fold CV 69.6% / train 72.4% vs labeler agreement 72.6%),
+%   honesty_harm (real: hallucination 41% vs 21%; toxicity -25% respectful, shown as index),
+%   alignment_tax (schematic bars: GPT-3 / PPO / PPO-ptx, labeled schematic).
+% Pedagogical decisions: frame InstructGPT as THE foundational RLHF pipeline that later
+%   decks simplify; PPO primer kept minimal (ratio + clip + critic) to serve step 3;
+%   lead results with "1.3B beats 175B"; carry the four-models cost through to the recap
+%   so the GRPO/DPO cross-references land.
+% Cross-refs: GRPO [LLM-1] removes PPO's value net (group baseline); DPO [LLM-2] removes
+%   the reward model and the RL loop. Stated in step-3/critic frames and the recap nextbox.

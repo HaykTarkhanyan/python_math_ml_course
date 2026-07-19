@@ -1,0 +1,495 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helpers (verbatim from 03_lora.tex) ----------------
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-8] Qwen3 Technical Report}
+\subtitle{One model, two modes: think slowly or answer fast -- with a dial for how
+  long to think (Qwen Team, 2025)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{One model that can both think and answer fast}
+  \begin{columns}[T]
+    \column{0.57\textwidth}
+    Until now the field split into \textbf{two kinds} of model: chat models that answer
+    fast (GPT-4o), and dedicated \emph{reasoning} models that think in long chains (o1, QwQ,
+    DeepSeek-R1). You picked one \emph{per request}.
+    \vskip 6pt
+    \textbf{Qwen3} folds both into \emph{one} model. A flag in the prompt switches between
+    \textbf{thinking} and \textbf{non-thinking} mode -- and a \textbf{thinking budget} lets
+    you dial \emph{how many} tokens it may spend reasoning before it must answer.
+    \vskip 4pt
+    More budget $\rightarrow$ higher accuracy, until it plateaus. A clean
+    \textbf{compute-vs-quality knob}, exposed to the user.
+    \vskip 3pt
+    Today: the family, the training, and how one model learns to do both.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.9cm, align=center] (a)
+          {\textbf{Non-thinking mode}\\ \scriptsize answer now, few tokens};
+        \node[draw=armblue, very thick, rounded corners=3pt, fill=armblue!10,
+              text width=3.9cm, align=center, below=0.28cm of a] (b)
+          {\textbf{Thinking mode}\\ \scriptsize long chain-of-thought};
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!12,
+              text width=3.9cm, align=center, below=0.28cm of b] (c)
+          {\textbf{Thinking \emph{budget}}\\ \scriptsize dial how long to think};
+        \draw[-{Latex}, thick] (a) -- (b);
+        \draw[-{Latex}, thick, paramgreen] (b) -- (c);
+      \end{tikzpicture}
+      \\[2pt]
+      {\scriptsize one model, chosen at inference}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The Qwen3 family}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries A family, not a model}\\[4pt]
+    \small Eight models from a phone-sized 0.6B to a 235B flagship -- dense and MoE.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Eight models: dense 0.6B--32B, plus two MoE}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \includegraphics[width=\linewidth]{fig/model_lineup.pdf}
+    \column{0.40\textwidth}
+    \textbf{6 dense} models (0.6B, 1.7B, 4B, 8B, 14B, 32B) -- every parameter runs on every
+    token.
+    \vskip 6pt
+    \textbf{2 Mixture-of-Experts} models:
+    \begin{itemize}\small
+      \item \textbf{30B-A3B}: 30B total, only \textbf{3B active} per token.
+      \item \textbf{235B-A22B} (flagship): 235B total, only \textbf{22B active}.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize Same base architecture across the family; the MoE models just add
+      the expert routing. One recipe, many sizes.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Mixture-of-Experts in one minute}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Replace one big feed-forward block with \textbf{128 expert} blocks plus a small
+    \textbf{router}. For each token the router picks the \textbf{top 8} experts; the rest
+    stay idle.
+    \vskip 6pt
+    \begin{itemize}\small
+      \item You \emph{store} 235B parameters but only \emph{compute} with 22B per token.
+      \item Capacity of a huge model, inference cost of a small one.
+      \item Qwen3-MoE: fine-grained experts, \textbf{no} shared expert, global-batch
+        load-balancing to push experts to specialize.
+    \end{itemize}
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, node distance=0.32cm]
+        \node (tok) {token};
+        \node[draw=armblue, thick, fill=armblue!10, rounded corners,
+              below=0.35cm of tok] (r) {router};
+        \node[draw=paramgreen, very thick, fill=paramgreen!14, below left=0.7cm and -0.1cm of r] (e1) {E$_3$};
+        \node[draw=paramgreen, very thick, fill=paramgreen!14, right=0.15cm of e1] (e2) {E$_7$};
+        \node[draw=gray, fill=gray!8, right=0.15cm of e2] (e3) {E$_{9}$};
+        \node[draw=gray, fill=gray!8, right=0.15cm of e3] (e4) {\dots};
+        \node[draw=gray, fill=gray!8, right=0.15cm of e4] (e5) {E$_{128}$};
+        \draw[-{Latex}] (tok) -- (r);
+        \draw[-{Latex}, paramgreen, thick] (r) -- (e1);
+        \draw[-{Latex}, paramgreen, thick] (r) -- (e2);
+        \draw[-{Latex}, gray, dashed] (r) -- (e3);
+        \draw[-{Latex}, gray, dashed] (r) -- (e5);
+      \end{tikzpicture}
+      \\[3pt]
+      {\scriptsize 8 of 128 experts fire (green); the rest are skipped.}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \nextbox{\footnotesize \textbf{Many experts, few active} -- that is how a 235B model can
+    serve at 22B-model cost.}
+\end{frame}
+
+\begin{frame}{The MoE payoff, in base-model scores}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \includegraphics[width=\linewidth]{fig/base_efficiency.pdf}
+    \column{0.40\textwidth}
+    Before any alignment, the \textbf{pre-trained base} of Qwen3-235B-A22B already tops
+    strong open peers:
+    \begin{itemize}\small
+      \item Beats \textbf{DeepSeek-V3-Base} on 14 of 15 benchmarks with $\approx$\textbf{1/3}
+        the total and \textbf{2/3} the active parameters.
+      \item Beats \textbf{Llama-4-Maverick} (about $2\times$ the parameters) on most tasks.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize Fewer active parameters, higher scores -- the MoE design pays off
+      in both quality and inference cost.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Pretraining: 36T tokens, 119 languages}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Where the raw ability comes from}\\[4pt]
+    \small 36 trillion tokens, 119 languages, learned in three staged passes.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The pretraining data}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    Qwen3 is pre-trained on \textbf{$\approx$36 trillion tokens} across
+    \textbf{119 languages and dialects} -- twice the tokens and three times the languages of
+    Qwen2.5 (which covered 29).
+    \vskip 6pt
+    Where the extra data comes from:
+    \begin{itemize}\small
+      \item \textbf{PDF text}: Qwen2.5-VL reads scanned documents; Qwen2.5 cleans the text --
+        trillions of new tokens.
+      \item \textbf{Synthetic}: Qwen2.5-Math and Qwen2.5-Coder generate textbooks, Q\&A, and
+        code.
+      \item Instance-level data mixing, tuned on small proxy models.
+    \end{itemize}
+    \column{0.44\textwidth}
+    \keybox{\footnotesize \textbf{Models teaching models.} Earlier Qwen models are the data
+      pipeline for the next one -- OCR, cleanup, and synthetic generation are all done by
+      Qwen2.5 variants.}
+    \vskip 6pt
+    \watchbox{\footnotesize Expanding \textbf{29 $\rightarrow$ 119} languages is the headline
+      multilingual jump over Qwen2.5.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Three pretraining stages}
+  \begin{center}
+    \begin{tikzpicture}[font=\small, node distance=0.7cm]
+      \node[draw=gray, thick, rounded corners, fill=gray!10, text width=3.2cm,
+            align=center] (s1) {\textbf{S1 -- General}\\ \scriptsize $>$30T tokens\\
+            \scriptsize seq len 4{,}096\\ \scriptsize language + world knowledge};
+      \node[draw=armblue, thick, rounded corners, fill=armblue!10, text width=3.2cm,
+            align=center, right=of s1] (s2) {\textbf{S2 -- Reasoning}\\ \scriptsize $\approx$5T tokens\\
+            \scriptsize more STEM / code\\ \scriptsize faster LR decay};
+      \node[draw=paramgreen, thick, rounded corners, fill=paramgreen!12, text width=3.2cm,
+            align=center, right=of s2] (s3) {\textbf{S3 -- Long context}\\ \scriptsize 100s of B tokens\\
+            \scriptsize seq len 32{,}768\\ \scriptsize 4K $\rightarrow$ 32K};
+      \draw[-{Latex}, thick] (s1) -- (s2);
+      \draw[-{Latex}, thick] (s2) -- (s3);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  \begin{itemize}\small
+    \item \textbf{S1} builds broad competence; \textbf{S2} sharpens reasoning by
+      up-weighting STEM, coding, and synthetic data; \textbf{S3} stretches the context window.
+    \item Long context uses \textbf{RoPE base $10^4\!\rightarrow\!10^6$} (ABF), plus
+      \textbf{YARN + Dual Chunk Attention} for a $4\times$ length boost at inference.
+  \end{itemize}
+  \vskip 2pt
+  \nextbox{\footnotesize Curriculum idea: learn to \emph{speak} first, then to \emph{reason},
+    then to \emph{read long}.}
+\end{frame}
+
+% ================================================================
+\section{The headline idea: thinking control}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries One model, two modes -- and a budget}\\[4pt]
+    \small Stop switching models. Switch a flag, and dial the thinking.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Unified thinking and non-thinking modes}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    A single Qwen3 model answers in \textbf{two} ways, chosen \emph{at inference} by a flag in
+    the prompt (or chat template):
+    \begin{itemize}\small
+      \item \texttt{/think} -- emit a \texttt{<think>}\ldots\texttt{</think>} chain, then the
+        answer. Default.
+      \item \texttt{/no\_think} -- leave the think block \emph{empty}, answer immediately.
+    \end{itemize}
+    \vskip 4pt
+    No more shipping a chat model \emph{and} a separate reasoning model; no more routing
+    requests between them.
+    \column{0.45\textwidth}
+    \keybox{\footnotesize \textbf{Thinking mode}\\
+      \texttt{user: {\{q\}} /think}\\
+      \texttt{assistant: <think> \emph{reasoning} </think>}\\
+      \texttt{\{answer\}}}
+    \vskip 2pt
+    \keybox{\footnotesize \textbf{Non-thinking mode}\\
+      \texttt{user: {\{q\}} /no\_think}\\
+      \texttt{assistant: <think></think>}\\
+      \texttt{\{answer\}}}
+  \end{columns}
+  \vskip 4pt
+  \watchbox{\footnotesize The \emph{empty} think block is deliberate -- it keeps one output
+    format for both modes, so the same weights serve both.}
+\end{frame}
+
+\begin{frame}{The thinking budget: a compute-vs-quality dial}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\linewidth]{fig/thinking_budget.pdf}
+    \column{0.42\textwidth}
+    Cap the thinking at $N$ tokens. When the model hits the cap, it is \textbf{told to stop}
+    (``\emph{I have to give the solution now}'') and answers from whatever reasoning it has so
+    far.
+    \vskip 5pt
+    \begin{itemize}\small
+      \item More budget $\rightarrow$ steadily higher accuracy, \textbf{then a plateau}.
+      \item Cheap questions: small budget. Hard questions: spend more.
+    \end{itemize}
+    \vskip 4pt
+    \watchbox{\footnotesize This budget behavior was \textbf{never explicitly trained} -- it
+      \emph{emerges} from the mode-fusion stage (coming up).}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Post-training: the four-stage pipeline}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries How the flagship learns both modes}\\[4pt]
+    \small Four stages: first build thinking, then fuse in non-thinking.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The four-stage post-training pipeline}
+  \begin{center}
+    \includegraphics[width=0.98\textwidth]{fig/pipeline.pdf}
+  \end{center}
+  \vskip 2pt
+  \begin{itemize}\small
+    \item \textbf{Stages 1--2} grow reasoning (thinking) ability; \textbf{stages 3--4} add the
+      non-thinking mode and generalize.
+    \item Only the \textbf{flagship} models run all four stages. Small models take a cheaper
+      route (distillation) -- next section.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Stages 1--2: build the thinking}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Stage 1 -- Long-CoT cold start.}
+    \begin{itemize}\small
+      \item Curate hard, \emph{verifiable} problems (math, code, logic, STEM).
+      \item QwQ-32B generates long chains of thought; heavy filtering keeps only clean ones.
+      \item Light SFT: \emph{instil} reasoning patterns, do not over-optimize -- leave room
+        for RL.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Stage 2 -- Reasoning RL.}
+    \begin{itemize}\small
+      \item 3{,}995 query--verifier pairs; reward = is the answer correct.
+      \item Optimized with \textbf{GRPO} (RL as in \textbf{[LLM-1]}), big batches, many
+        rollouts.
+      \item One stable run lifts \textbf{AIME'24 from 70.1 $\rightarrow$ 85.1}.
+    \end{itemize}
+  \end{columns}
+  \vskip 6pt
+  \keybox{\footnotesize Cold start gives the model the \emph{habit} of reasoning; RL makes
+    the reasoning actually \emph{correct}. Verifiable rewards mean no reward model to hack.}
+\end{frame}
+
+\begin{frame}{Stages 3--4: fuse non-thinking, then generalize}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Stage 3 -- Thinking Mode Fusion.}
+    \begin{itemize}\small
+      \item Continue SFT on a \emph{mix} of thinking and non-thinking data.
+      \item The thinking data is \textbf{self-generated} by the Stage-2 model (rejection
+        sampling) so its reasoning is not degraded.
+      \item Teaches the \texttt{/think} vs \texttt{/no\_think} switch -- and unlocks the
+        \textbf{thinking budget}.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Stage 4 -- General RL.}
+    \begin{itemize}\small
+      \item RL over \textbf{20+ task types}: instruction following, format, tool use / agents,
+        RAG, preference.
+      \item Three reward kinds: \textbf{rule-based}, model-based \emph{with} reference,
+        model-based \emph{without} reference.
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  \watchbox{\footnotesize Honest trade-off: fusion + general RL boost versatility (mode
+    switching 88.7 $\rightarrow$ 98.9) but \emph{slightly} dent peak AIME / code scores. The
+    team accepts it for a more usable model.}
+\end{frame}
+
+% ================================================================
+\section{Strong-to-weak distillation}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Making the small models cheaply}\\[4pt]
+    \small Do not RL every small model from scratch -- let a big one teach it.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Big Qwen3 models teach the small ones}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Running the full four-stage pipeline for every small model is wasteful. Instead, the 5
+    dense small models and the 30B-A3B MoE are built by \textbf{distillation} from
+    Qwen3-32B / 235B-A22B:
+    \begin{itemize}\small
+      \item \textbf{Off-policy}: student imitates teacher outputs in \emph{both} modes -- gets
+        basic reasoning + mode switching.
+      \item \textbf{On-policy}: student generates, then aligns its \textbf{logits} to the
+        teacher's by minimizing \textbf{KL divergence}.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small, node distance=0.55cm]
+        \node[draw=violet1, very thick, rounded corners, fill=violet1!12,
+              text width=3.4cm, align=center] (t) {\textbf{Teacher}\\
+              \scriptsize Qwen3-32B / 235B-A22B};
+        \node[draw=paramgreen, thick, rounded corners, fill=paramgreen!12,
+              text width=3.4cm, align=center, below=1.0cm of t] (s)
+              {\textbf{Student}\\ \scriptsize small Qwen3};
+        \draw[-{Latex}, very thick, violet1] (t) -- (s)
+          node[midway, right, font=\scriptsize, align=left]{match\\ logits\\ (min KL)};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vskip 4pt
+  \keybox{\footnotesize The teacher's full output distribution carries far more signal than a
+    0/1 ``correct'' reward -- so the student learns faster \emph{and} better.}
+\end{frame}
+
+\begin{frame}{Predict-first: distillation vs RL for a small model}
+  For an 8B model starting from the \emph{same} checkpoint: is it better to run reinforcement
+  learning on it, or to distill from a bigger Qwen3? And which is cheaper?
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{fig/distill_vs_rl.pdf}
+  \end{center}
+  \vskip -2pt
+  \warnbox{\footnotesize Distillation \textbf{wins on every benchmark} \emph{and} costs
+    \textbf{$\approx$1/10 the GPU hours} (1{,}800 vs 17{,}920). It even lifts \textbf{Pass@64}
+    (more exploration), which RL does not. For small models, copy the big sibling.}
+\end{frame}
+
+% ================================================================
+\section{Results}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it hold up?}\\[4pt]
+    \small Flagship vs the strongest open and closed reasoning models.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Competitive with the strongest reasoners}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \includegraphics[width=\linewidth]{fig/headline_bench.pdf}
+    \column{0.40\textwidth}
+    \textbf{Qwen3-235B-A22B (Thinking)}:
+    \begin{itemize}\small
+      \item AIME'24 \textbf{85.7}, AIME'25 \textbf{81.5}, LiveCodeBench v5 \textbf{70.7},
+        BFCL v3 \textbf{70.8}.
+      \item Beats DeepSeek-R1 on 17 of 23 benchmarks with far fewer parameters; competitive
+        with OpenAI-o1 and Gemini2.5-Pro.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize Open weights, \textbf{Apache 2.0} -- state-of-the-art open reasoning
+      that anyone can run.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Where Qwen3 lands}
+  \begin{itemize}
+    \item \textbf{Both modes are strong.} The flagship is SOTA-among-open in \emph{thinking}
+      mode and beats DeepSeek-V3 / GPT-4o-class models in \emph{non-thinking} mode.
+    \item \textbf{Small models punch up.} Thanks to distillation, the lightweight models beat
+      similarly-sized -- and often larger -- open models.
+    \item \textbf{Multilingual.} 119 languages; strong on multilingual math and knowledge
+      benchmarks.
+    \item \textbf{Efficient.} MoE means flagship quality at a fraction of the active-parameter
+      cost.
+  \end{itemize}
+  \vskip 4pt
+  \nextbox{\footnotesize The practical win: one open model family that covers phone-to-server,
+    thinks on demand, and lets you \emph{pay for reasoning only when you need it}.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Family:} 6 dense (0.6B--32B) + 2 MoE (30B-A3B, 235B-A22B); MoE fires
+      \textbf{8 of 128} experts, so it computes with a small fraction of its parameters.
+    \item \textbf{Pretraining:} $\approx$36T tokens, 119 languages, three stages -- general
+      $\rightarrow$ reasoning $\rightarrow$ long context (up to 32K).
+    \item \textbf{Headline idea:} \emph{one} model with \texttt{/think} and \texttt{/no\_think}
+      modes plus a \textbf{thinking budget} -- a compute-vs-quality dial that emerges from
+      training, not a hand-coded rule.
+    \item \textbf{Post-training:} 4 stages -- long-CoT cold start $\rightarrow$ reasoning RL
+      (GRPO, \textbf{[LLM-1]}) $\rightarrow$ thinking-mode fusion $\rightarrow$ general RL.
+    \item \textbf{Small models:} strong-to-weak \textbf{distillation} beats RL-from-scratch --
+      better \emph{and} $\approx$10$\times$ cheaper.
+    \item \textbf{Result:} competitive with o1 / R1 / Gemini2.5-Pro; open under Apache 2.0.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Takeaway:} the frontier is no longer just ``bigger'' -- it is
+    \emph{controllable inference-time compute} inside a single open model.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Qwen Team (Alibaba), "Qwen3 Technical Report" (2025), arXiv:2505.09388.
+%   Extracted from ml/llm_training/materials_md/papers/10_qwen3_2505.09388.txt and the
+%   source PDF (Figure 2 read from the rendered page 20).
+% Figures (fig/, matplotlib via py_src/make_figures.py):
+%   model_lineup (Tables 1-2, real total/active params, log scale);
+%   base_efficiency (Table 3, real base-model scores vs DeepSeek-V3 / Llama-4-Maverick /
+%     Qwen2.5-72B);
+%   thinking_budget (Figure 2, values read off the plot -> LABELED approximate);
+%   pipeline (Figure 1 schematic, matplotlib flow, per SLIDE_STYLE "Python preferred");
+%   distill_vs_rl (Table 21, real numbers + GPU hours, Qwen3-8B);
+%   headline_bench (Table 11, real AIME'24/'25 vs o1 / R1 / Grok-3 / Gemini2.5-Pro).
+%   The MoE routing sketch and teacher->student sketch are small TikZ (SLIDE_STYLE exception).
+% Pedagogical choices: lead with the two-modes-plus-budget hook (the paper's key novelty);
+%   teach MoE briefly ("many experts, few active") before using its params; predict-first on
+%   distillation-vs-RL for small models (the counter-intuitive "copy the big sibling, don't
+%   RL" result, which is also ~10x cheaper); keep an honest note that fusion/general RL trade
+%   a little peak reasoning for versatility. Cross-references [LLM-1] GRPO for the RL stages.
+% Prior deck: 07_llama3. This is the final report deck in the LLM-training set.

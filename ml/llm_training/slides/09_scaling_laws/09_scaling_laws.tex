@@ -1,0 +1,355 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-9] Scaling Laws: Kaplan and Chinchilla}
+\subtitle{How big a model, how much data, for a given compute budget? (Kaplan 2020; Hoffmann et al.\ 2022)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{You have 1,000 GPUs for a month. Now what?}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    A fixed compute budget $C$ is the real constraint: so many accelerators, for so many
+    weeks. You get \emph{one} training run. Two knobs to set:
+    \vskip 6pt
+    \begin{itemize}\small
+      \item model size $N$ -- how many parameters,
+      \item data $D$ -- how many training tokens.
+    \end{itemize}
+    \vskip 6pt
+    They trade off, because $C \approx 6ND$. Spend it all on a \textbf{huge} model trained
+    briefly? Or a \textbf{smaller} model trained on far more tokens?
+    \vskip 8pt
+    Two papers, two answers, two years apart -- and the second overturned how the whole
+    field was training its models.
+    \column{0.40\textwidth}
+    \begin{center}
+      \resizebox{0.98\linewidth}{!}{%
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armblue, thick, rounded corners, fill=armblue!8, text width=3.7cm,
+              align=center] (c) {\textbf{compute budget } $C$\\ \scriptsize fixed: GPUs $\times$ time};
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=1.85cm,
+              align=center, below left=0.9cm and -0.7cm of c] (n)
+              {\textbf{big } $N$?\\ \scriptsize little data};
+        \node[draw=paramgreen, thick, rounded corners, fill=paramgreen!12, text width=1.85cm,
+              align=center, below right=0.9cm and -0.7cm of c] (d)
+              {small $N$?\\ \scriptsize \textbf{more } $D$};
+        \draw[-{Latex}, thick] (c) -- (n);
+        \draw[-{Latex}, thick] (c) -- (d);
+      \end{tikzpicture}%
+      }
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The question: how to spend a compute budget}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries One budget, two knobs}\\[4pt]
+    \small Loss is a function of model size $N$, data $D$, and compute $C$.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The problem, stated precisely}
+  We treat the final pretraining loss as a function of two numbers: model size $N$ and
+  training tokens $D$. Compute ties them together:
+  \[
+     C \approx 6\,N\,D \qquad\text{($\sim$6 FLOPs per parameter per token, forward + backward).}
+  \]
+  Given a fixed budget $C$, find the allocation that minimizes loss:
+  \[
+     \boxed{\;N_{opt}(C),\; D_{opt}(C) \;=\; \argmin_{6ND \,=\, C}\; L(N, D)\;}
+  \]
+  \begin{itemize}\small
+    \item Bigger $N$ at fixed $C$ $\Rightarrow$ fewer tokens $D$ (train briefly).
+    \item Bigger $D$ at fixed $C$ $\Rightarrow$ smaller $N$ (train a small model longer).
+  \end{itemize}
+  \keybox{Everything below is one question: for a given $C$, where is the sweet spot on the
+    $N$ versus $D$ trade-off?}
+\end{frame}
+
+% ================================================================
+\section{Kaplan 2020: smooth power laws}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Kaplan 2020: performance is predictable}\\[4pt]
+    \small Loss follows clean power laws across seven orders of magnitude.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Loss is a power law in $N$, $D$, and $C$}
+  \begin{center}
+    \includegraphics[width=0.99\textwidth]{fig/power_laws.pdf}
+  \end{center}
+  \vskip 2pt
+  \small Vary one factor -- with the other two not bottlenecking -- and the loss falls as a
+  \textbf{straight line on a log-log plot}: a power law, holding over \emph{seven} orders of
+  magnitude. Model \emph{shape} (depth vs width) barely matters; only scale does.
+\end{frame}
+
+\begin{frame}{Three power laws, one combined form}
+  \[
+    L(N) = \Big(\tfrac{N_c}{N}\Big)^{\alpha_N}, \quad
+    L(D) = \Big(\tfrac{D_c}{D}\Big)^{\alpha_D}, \quad
+    L(C_{\min}) = \Big(\tfrac{C_c}{C_{\min}}\Big)^{\alpha_C}
+  \]
+  with tiny exponents $\alpha_N \approx 0.076$, $\alpha_D \approx 0.095$,
+  $\alpha_C \approx 0.050$. Doubling $N$ cuts loss by only $2^{-0.076} \approx 5\%$ --
+  diminishing returns, but \emph{predictable} ones.
+  \vskip 6pt
+  A single fit captures $N$ and $D$ together:
+  \[
+    L(N,D) = \Big[\big(\tfrac{N_c}{N}\big)^{\alpha_N / \alpha_D} + \tfrac{D_c}{D}\Big]^{\alpha_D}
+  \]
+  \keybox{These fits are smooth enough to \textbf{extrapolate}: predict the loss of a model
+    far bigger than any you have trained. That is what makes them "laws."}
+\end{frame}
+
+\begin{frame}{Kaplan's verdict: big models, stop early}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Two empirical findings drive the conclusion:
+    \begin{itemize}\small
+      \item \textbf{Bigger models are more sample-efficient} -- they hit a target loss in
+        fewer tokens and fewer optimization steps.
+      \item So at fixed $C$, the optimum is a \textbf{very large} model trained \emph{well
+        short of convergence}.
+    \end{itemize}
+    \vskip 6pt
+    The allocation exponents:
+    \[
+       N_{opt} \propto C^{0.73}, \qquad D_{opt} \propto C^{0.27}
+    \]
+    \column{0.46\textwidth}
+    \watchbox{\small Read the exponents: a $10\times$ bigger budget $\Rightarrow$ model
+      $\times 5.5$, data only $\times 1.8$. \textbf{Almost all new compute should buy
+      parameters, not tokens.} "Big models may be more important than big data."}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Chinchilla 2022: the correction}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Chinchilla 2022: they were under-training}\\[4pt]
+    \small Re-derive the frontier carefully, and the advice flips.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Predict first: $10\times$ the compute -- how much bigger a model?}
+  You get $10\times$ more compute than last time. By how much should you grow the
+  \textbf{model}, and by how much the \textbf{data}?
+  \vskip 8pt
+  \pause
+  \textbf{Kaplan (2020):} model $\times\mathbf{5.5}$, data $\times 1.8$ -- almost all into size.
+  \vskip 8pt
+  \pause
+  \textbf{Chinchilla (2022):} model $\times\mathbf{3.2}$, data $\times\mathbf{3.2}$ -- split
+  evenly ($\sqrt{10} \approx 3.2$).
+  \vskip 8pt
+  \pause
+  \keybox{Same $10\times$, a very different model. Kaplan's rule builds models too big for
+    the data they see. Chinchilla says: grow both together.}
+\end{frame}
+
+\begin{frame}{Re-deriving the frontier three ways}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Hoffmann et al.\ train \textbf{400+} models (70M--16B params, 5B--500B tokens) and
+    estimate $N_{opt}(C), D_{opt}(C)$ \emph{three independent ways}:
+    \begin{enumerate}\small
+      \item minimum over training curves,
+      \item \textbf{IsoFLOP} profiles (vary $N$ at fixed $C$),
+      \item a parametric fit $L(N,D) = E + \tfrac{A}{N^\alpha} + \tfrac{B}{D^\beta}$.
+    \end{enumerate}
+    \vskip 4pt
+    \warnbox{\footnotesize Why Kaplan differed: he used \emph{one} fixed learning-rate
+      schedule and mostly small ($<$100M) models -- both bias the estimate toward
+      \emph{oversized} models.}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/isoflop.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Scale $N$ and $D$ equally, not $N$ alone}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/kaplan_vs_chinchilla.pdf}
+    \column{0.44\textwidth}
+    \small All three approaches agree:
+    \[
+       N_{opt} \propto C^{\approx 0.50}, \quad D_{opt} \propto C^{\approx 0.50}
+    \]
+    versus Kaplan's $0.73 / 0.27$.
+    \vskip 6pt
+    \keybox{\small \textbf{Equal scaling:} every doubling of model size should come with a
+      doubling of training tokens. The two lines diverge fast -- at the Gopher budget,
+      Kaplan says 280B, Chinchilla says $\sim$70B.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The rule of thumb: $\sim$20 tokens per parameter}
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{fig/tokens_per_param.pdf}
+  \end{center}
+  \vskip 2pt
+  \small Turn the frontier into a number: across every scale, compute-optimal training wants
+  $D/N \approx 20$. A 1B model wants $\sim$20B tokens; a 70B model wants $\sim$1.4T.
+\end{frame}
+
+% ================================================================
+\section{The evidence: Chinchilla vs Gopher}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The proof: Chinchilla vs Gopher}\\[4pt]
+    \small Same compute, opposite bets -- and the smaller model wins.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The clean experiment: equal compute, opposite bets}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small Same FLOP budget, two designs:
+    \renewcommand{\arraystretch}{1.25}
+    \begin{center}\footnotesize
+    \begin{tabular}{lrr}
+      \toprule
+       & \textbf{Gopher} & \textbf{Chinchilla}\\
+      \midrule
+      Params  & 280B & \textbf{70B}\\
+      Tokens  & 300B & \textbf{1.4T}\\
+      Compute & \multicolumn{2}{c}{\emph{equal}}\\
+      \bottomrule
+    \end{tabular}
+    \end{center}
+    \vskip 6pt
+    Chinchilla is $4\times$ smaller, trained on $\sim$$4\times$ more data -- exactly what the
+    frontier predicts.
+    \column{0.58\textwidth}
+    \includegraphics[width=\linewidth]{fig/chinchilla_vs_gopher.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Chinchilla wins almost everywhere}
+  \begin{itemize}\small
+    \item \textbf{MMLU:} 67.6\% vs Gopher's 60.0\% ($+7.6\%$) -- beating expert forecasters'
+      own June-2023 prediction.
+    \item Uniformly better on The Pile, BIG-bench ($+10.7\%$), common-sense, and
+      question-answering benchmarks.
+    \item RACE-h $+10.7$, TruthfulQA $+14.1$ (0-shot) -- large jumps from better use of the
+      same compute.
+  \end{itemize}
+  \vskip 6pt
+  \nextbox{\small And because it is $4\times$ smaller, Chinchilla is far \textbf{cheaper to
+    fine-tune and to serve} -- the win compounds at inference time.}
+\end{frame}
+
+% ================================================================
+\section{Implications}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries What it means for everyone else}\\[4pt]
+    \small Most models of the era were simply the wrong shape.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The whole field had been under-training}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/undertrained.pdf}
+    \column{0.44\textwidth}
+    \small Following Kaplan and GPT-3, everyone trained to $\sim$300B tokens \emph{regardless}
+    of model size -- GPT-3, Jurassic-1, Gopher, and MT-NLG all cluster there.
+    \vskip 6pt
+    \warnbox{\small Against the 20:1 line they are all \textbf{oversized and under-trained}:
+      compute went into parameters that more tokens would have used better.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Beyond compute-optimal: the inference argument}
+  Chinchilla optimizes \emph{training} compute. But a deployed model is trained \emph{once}
+  and served \emph{billions} of times -- and inference cost scales with $N$, not $D$.
+  \vskip 8pt
+  So it pays to push \textbf{even past} 20:1: take a \emph{smaller} model and train it on
+  \emph{far more} tokens than compute-optimal. You spend more at training to save forever at
+  inference.
+  \vskip 6pt
+  \keybox{\small This is the \textbf{Llama philosophy}: Llama's 7B was trained on
+    $\sim$1T tokens ($\sim$140:1), well beyond Chinchilla-optimal, precisely because
+    inference -- not training -- dominates the real-world cost.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item Loss is a smooth \textbf{power law} in model size $N$, data $D$, and compute $C$
+      (Kaplan 2020) -- so allocation is an optimization: $\argmin_{6ND=C} L(N,D)$.
+    \item \textbf{Kaplan:} spend new compute mostly on \emph{size} --
+      $N \propto C^{0.73}$, $D \propto C^{0.27}$.
+    \item \textbf{Chinchilla:} that under-trains. Scale $N$ and $D$ \textbf{equally}
+      ($\approx C^{0.5}$ each) -- about \textbf{20 tokens per parameter}.
+    \item \textbf{Proof:} Chinchilla 70B / 1.4T beats Gopher 280B / 300B at \emph{equal
+      compute} (MMLU $+7.6\%$).
+    \item Most 2020--2022 LLMs were oversized and under-trained; inference cost pushes the
+      optimum even \emph{smaller and longer} (Llama).
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{The one line:} for a fixed budget, do not just go bigger -- balance
+    parameters and tokens, then bias toward more tokens if you have to serve the model.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Sources: Kaplan et al., "Scaling Laws for Neural Language Models" (2020),
+%   arXiv:2001.08361; Hoffmann et al., "Training Compute-Optimal Large Language Models"
+%   (Chinchilla, 2022), arXiv:2203.15556. Extracted from
+%   ml/llm_training/materials_md/papers/11_kaplan_scaling_2001.08361.txt and
+%   12_chinchilla_2203.15556.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py):
+%   REAL numbers -- tokens_per_param (Chinchilla Table 3: D/N ratios ~20),
+%     chinchilla_vs_gopher (Table 1 + Table 6: 280B/300B/60.0 vs 70B/1.4T/67.6),
+%     undertrained (Table 1: LaMDA/GPT-3/Jurassic/Gopher/MT-NLG/Chinchilla N,D vs 20:1 line).
+%   LABELED SCHEMATICS -- power_laws (Kaplan Fig 1 shape, drawn with the paper's exponents
+%     alpha_N=0.076, alpha_D=0.095, alpha_C=0.050), isoflop (Chinchilla Fig 3 Approach-2
+%     valley shape), kaplan_vs_chinchilla (N~C^0.73 vs N~C^0.50, anchored at the Gopher
+%     FLOP budget with the real Gopher 280B / Chinchilla 70B points).
+%   The cold-open budget diagram is TikZ (small boxes-and-arrows, per SLIDE_STYLE exception).
+% Pedagogical decisions: frame the whole deck as one constrained optimization
+%   (argmin L(N,D) s.t. 6ND=C); predict-first frame on the counter-intuitive 10x-compute
+%   allocation (Kaplan 5.5x vs Chinchilla 3.2x); the Kaplan-vs-Chinchilla slope figure as
+%   the money slide; close with the inference/Llama "beyond compute-optimal" argument.
+%   The Llama 7B ~1T-token (~140:1) figure is external context, not from these two papers.
+% Prior deck: 08_qwen3. Companion training-series decks: 03_lora, 04_lima.

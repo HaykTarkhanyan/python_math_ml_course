@@ -228,6 +228,43 @@ def fig_kl_estimator():
     save(fig, "kl_estimator.pdf")
 
 
+# ---- Fig G: process supervision (per-step credit assignment) -----------
+def fig_process_supervision():
+    fig, ax = plt.subplots(figsize=(10.4, 4.0))
+    steps = [(ARM_BLUE, 0.8), (ARM_ORANGE, -0.3), (GREEN, 0.5)]
+    ytok, width = 2.7, 2.2
+    x0s = [0.3, 3.5, 6.7]
+    centers = []
+    for k, (col, rew) in enumerate(steps):
+        x0 = x0s[k]; x1 = x0 + width; c = (x0 + x1) / 2; centers.append(c)
+        ax.add_patch(FancyBboxPatch((x0, ytok - 0.32), width, 0.64,
+                     boxstyle="round,pad=0.02,rounding_size=0.05",
+                     fc="#f4f6fb", ec=col, lw=1.8, zorder=2))
+        for xi in np.linspace(x0 + 0.4, x1 - 0.4, 3):
+            ax.add_patch(FancyBboxPatch((xi - 0.15, ytok - 0.17), 0.3, 0.34,
+                         boxstyle="round,pad=0.01,rounding_size=0.03",
+                         fc="white", ec=col, lw=1.0, zorder=3))
+        ax.text(c, ytok + 0.52, f"Step {k + 1}", ha="center", fontsize=11,
+                weight="bold", color=col)
+        rcol = GREEN if rew >= 0 else ARM_RED
+        ax.text(c, ytok + 1.02, rf"$\tilde r_{k + 1}={rew:+.1f}$", ha="center",
+                fontsize=12, weight="bold", color=rcol)
+    xend = x0s[2] + width
+    ax.add_patch(FancyArrowPatch((centers[0], 1.7), (xend + 0.1, 1.7), arrowstyle="-|>",
+                 mutation_scale=13, color=ARM_BLUE, lw=2.4, zorder=2))
+    ax.text(0.3, 1.28, r"token in Step 1  $\Rightarrow\ \hat A=\tilde r_1+\tilde r_2+\tilde r_3=+1.0$",
+            fontsize=10.5, color=ARM_BLUE, weight="bold", va="top")
+    ax.add_patch(FancyArrowPatch((centers[2], 0.75), (xend + 0.1, 0.75), arrowstyle="-|>",
+                 mutation_scale=13, color=GREEN, lw=2.4, zorder=2))
+    ax.text(0.3, 0.33, r"token in Step 3  $\Rightarrow\ \hat A=\tilde r_3=+0.5$   "
+            r"(only steps at or after it count)", fontsize=10.5, color=GREEN,
+            weight="bold", va="top")
+    ax.set_title("Process supervision: each token is credited with the rewards of the "
+                 "steps ending at or after it", fontsize=11.5)
+    ax.set_xlim(-0.2, 10.4); ax.set_ylim(-0.1, 4.2); ax.axis("off")
+    save(fig, "process_supervision.pdf")
+
+
 if __name__ == "__main__":
     fig_ppo_vs_grpo()
     fig_group_advantage()
@@ -235,4 +272,5 @@ if __name__ == "__main__":
     fig_majk_passk()
     fig_method_ladder()
     fig_kl_estimator()
+    fig_process_supervision()
     print("all GRPO figures done")

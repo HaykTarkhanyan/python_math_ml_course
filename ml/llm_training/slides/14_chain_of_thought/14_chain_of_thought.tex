@@ -1,0 +1,362 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-14] Chain-of-Thought \& Process Supervision}
+\subtitle{reason step by step, and reward the steps \quad(Wei 2022; Lightman et al.\ 2023)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Make the model show its work}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Ask a large model a math word problem and demand a bare answer -- it often
+    guesses wrong. Ask the \emph{same} model to \textbf{think step by step} first,
+    and the answer flips to correct.
+    \vskip 6pt
+    No new weights, no finetuning: the ability was latent, and a few words of
+    prompt \textbf{elicited} it. But there is a catch -- it only works once the
+    model is \textbf{big enough}.
+    \vskip 6pt
+    And a second catch: a model can reach the right answer through \emph{wrong}
+    steps. If we only reward the final answer, we reward \textbf{luck}.
+    \vskip 6pt
+    Today: \emph{elicit} the reasoning (Wei 2022), then \emph{reward the steps}
+    (Lightman et al.\ 2023).
+    \column{0.45\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize]
+        \node[draw=armred, thick, rounded corners, fill=armred!8,
+              text width=4.0cm, align=left] (a)
+          {\textbf{Standard prompt}\\[2pt] Q: 23 apples, use 20, buy 6 more$\ldots$\\
+           A: \textcolor{armred}{The answer is 27.} \ding{55}};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=4.0cm, align=left, below=0.5cm of a] (b)
+          {\textbf{Chain-of-thought prompt}\\[2pt] A: 23 $-$ 20 $=$ 3; \ 3 $+$ 6 $=$ 9.\\
+           \textcolor{paramgreen}{The answer is 9.} \ding{51}};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b) node[midway,right]{step by step};
+      \end{tikzpicture}
+    \end{center}
+    \vskip 4pt
+    \footnotesize \centering (Wei et al.\ Fig.\ 1, the canonical example.)
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Chain-of-thought prompting}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Chain-of-thought prompting}\\[4pt]
+    \small Show the model a few worked examples -- and it starts working things out.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{What chain-of-thought prompting is}
+  A \textbf{chain of thought} is a series of intermediate natural-language reasoning
+  steps that lead to the final answer. Two ways to elicit it, no finetuning:
+  \begin{itemize}\small
+    \item \textbf{Few-shot:} put a handful of exemplars in the prompt as triples
+      $\langle$input, \emph{chain of thought}, output$\rangle$ -- eight, hand-written,
+      no prompt engineering.
+    \item \textbf{Zero-shot:} just append \emph{``Let's think step by step''}
+      (Kojima et al.\ 2022).
+  \end{itemize}
+  \vskip 4pt
+  \keybox{The model is off-the-shelf and \textbf{frozen}. CoT changes only the
+    \emph{prompt}, so a single checkpoint gains reasoning on many tasks at once --
+    no per-task training set.}
+  \vskip 4pt
+  \footnotesize Why it should help: it lets the model \emph{decompose} a hard
+  problem, \emph{spend more compute} on harder inputs, and leaves an
+  \emph{interpretable} trace you can debug.
+\end{frame}
+
+\begin{frame}{Big gains on arithmetic, commonsense, symbolic}
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{fig/benchmark_gains.pdf}
+  \end{center}
+  \vskip -4pt
+  \small On \textbf{PaLM 540B}, CoT lifts GSM8K $17.9\!\to\!56.9$ (+39.0) and sets a
+  new state of the art. Gains are largest on the \emph{hardest} multi-step sets and
+  small on easy one-step ones (ASDiv +1.8). It also carries to commonsense
+  (StrategyQA $69.4\!\to\!75.6$) and symbolic tasks.
+\end{frame}
+
+\begin{frame}{Predict first: does CoT help a \emph{small} model?}
+  A 4-year-old learns to ``show their work'' and improves. Give the same
+  step-by-step prompt to a \textbf{small} language model -- better, same, or worse?
+  \pause
+  \begin{center}
+    \includegraphics[width=0.58\textwidth]{fig/emergence.pdf}
+  \end{center}
+  \vskip -6pt
+  \warnbox{\small At \textbf{8B}, CoT is \emph{worse} than a bare answer
+    ($4.1<4.9$): small models write fluent but illogical chains. The benefit
+    \textbf{emerges} with scale -- it appears only past $\sim$100B parameters.}
+\end{frame}
+
+\begin{frame}{Why it works: it is the reasoning, not a side effect}
+  Ablations rule out the ``easy'' explanations (LaMDA 137B, PaLM 540B):
+  \vskip 2pt
+  \begin{itemize}\small
+    \item \textbf{Equation only} (emit just the formula, no words): little help on
+      GSM8K -- the language matters.
+    \item \textbf{Variable compute only} (emit ``$\ldots$'' dots of equal length):
+      no gain -- extra tokens alone are not it.
+    \item \textbf{Reasoning after the answer:} no gain -- the model must reason
+      \emph{before} committing, not rationalize afterwards.
+  \end{itemize}
+  \vskip 4pt
+  \nextbox{The sequential, \emph{natural-language} reasoning is what carries the
+    gain -- robust across annotators, exemplars, and model families.}
+\end{frame}
+
+% ================================================================
+\section{Self-consistency}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Self-consistency}\\[4pt]
+    \small One chain can go wrong. Sample many, and let them vote.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Sample many chains, take the majority answer}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \includegraphics[width=\linewidth]{fig/self_consistency.pdf}
+    \column{0.40\textwidth}
+    \small Instead of one greedy chain, \textbf{sample} many diverse chains at
+    temperature and \textbf{marginalize} over the reasoning: keep the
+    \emph{most frequent final answer} (Wang et al.\ 2022).
+    \vskip 6pt
+    Different correct paths tend to agree on the answer; wrong paths scatter. On
+    PaLM 540B GSM8K this alone lifts $56.5\!\to\!\mathbf{74.4}$.
+    \vskip 6pt
+    \keybox{\footnotesize No training, no verifier -- just more samples at
+      inference. Gains saturate after a few dozen chains.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The reliability gap}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The reliability gap}\\[4pt]
+    \small A right answer is not a right \emph{reasoning}.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Right answer, wrong steps}
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/step_scoring.pdf}
+  \end{center}
+  \vskip -2pt
+  \small A model can reach the correct final answer through a flawed chain. An
+  \textbf{outcome} signal (grade the final answer) marks both solutions
+  ``correct'' -- and rewards the lucky-but-wrong one. Even a single logical slip
+  can derail a long solution, so this matters more as problems get harder.
+  \vskip 2pt
+  \footnotesize In Wei's own audit, some correct-answer chains were logically
+  wrong -- and among wrong answers, $\sim$54\% had major reasoning errors.
+\end{frame}
+
+% ================================================================
+\section{Let's Verify Step by Step}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Let's Verify Step by Step}\\[4pt]
+    \small If wrong steps are the problem, score the steps (Lightman et al.\ 2023).
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Outcome vs process reward models}
+  Two ways to train a reward model that ranks solutions:
+  \vskip 4pt
+  \begin{center}
+  \small
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{p{2.4cm} p{5.0cm} p{4.6cm}}
+    \toprule
+     & \textbf{ORM} (outcome) & \textbf{PRM} (process)\\
+    \midrule
+    Feedback on & the \emph{final answer} only & \emph{every reasoning step}\\
+    Signal & 1 label per solution & 1 label per step (pos/neg/neutral)\\
+    Supervision & auto (check final answer) & humans label each step\\
+    Credit assign.\ & must guess \emph{where} it failed & knows exactly where\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \keybox{Both score solutions for \textbf{best-of-N} search: sample $N$ chains from
+    a fixed generator, keep the one the reward model ranks highest, grade its answer.}
+\end{frame}
+
+\begin{frame}{The result: PRM wins on MATH}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \includegraphics[width=\linewidth]{fig/orm_prm_bestofn.pdf}
+    \column{0.40\textwidth}
+    \small Best-of-1860 on a MATH test subset:
+    \vskip 2pt
+    \begin{itemize}\small
+      \item \textbf{PRM 78.2\%}
+      \item ORM 72.4\%
+      \item majority vote 69.6\%
+    \end{itemize}
+    \vskip 4pt
+    The PRM leads at every $N$, and the \textbf{gap widens} as $N$ grows -- it is a
+    better filter over many candidate solutions.
+    \vskip 4pt
+    \nextbox{\footnotesize Same generator, same test set -- only the
+      \emph{reward signal} differs.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{PRM800K: the human step-labels}
+  To train the PRM, humans labelled each step of model-generated MATH solutions:
+  \begin{itemize}\small
+    \item \textbf{800K} step-level labels over \textbf{75K} solutions to
+      \textbf{12K} problems -- released as \textbf{PRM800K}.
+    \item Each step: \emph{positive} / \emph{negative} / \emph{neutral};
+      supervise only \emph{up to the first mistake} (keeps ORM/PRM comparable).
+    \item \textbf{Active learning:} surface ``convincing wrong-answer'' solutions
+      (rated high by the current PRM but actually wrong) -- $\mathbf{2.6\times}$
+      more data-efficient than uniform labelling.
+  \end{itemize}
+  \vskip 4pt
+  \watchbox{\small Process labels are expensive -- there is no auto-grader for a
+    \emph{step}. The active-learning trick is what makes the human budget go far.}
+\end{frame}
+
+\begin{frame}{More performant \emph{and} more aligned}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\linewidth]{fig/ood_generalization.pdf}
+    \column{0.42\textwidth}
+    \small On \emph{fresh} STEM exams (AP, AMC -- released after pretraining), the
+    PRM still wins: \textbf{72.9\%} aggregate vs ORM 63.8\%, majority 61.3\%.
+    \vskip 6pt
+    And process supervision is \textbf{more aligned}:
+    \begin{itemize}\small
+      \item rewards a human-endorsed chain, not just the outcome;
+      \item errors are \emph{located} $\Rightarrow$ interpretable;
+      \item here it is \emph{more} capable too -- a \textbf{negative alignment tax}.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The through-line to RL}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The through-line to RL}\\[4pt]
+    \small Elicit the reasoning, reward the steps -- then optimize with RL.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Where this feeds the reasoning-model wave}
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize, node distance=0.55cm and 0.5cm]
+      \node[draw, rounded corners, fill=armblue!12, text width=2.6cm, align=center]
+        (cot) {\textbf{CoT}\\ elicit step-by-step\\ reasoning};
+      \node[draw, rounded corners, fill=paramgreen!10, text width=2.6cm,
+            align=center, right=of cot] (sc) {\textbf{Self-consistency}\\ vote over
+            many chains};
+      \node[draw, rounded corners, fill=armorange!18, text width=2.6cm,
+            align=center, right=of sc] (prm) {\textbf{PRM}\\ score each step\\
+            (process reward)};
+      \node[draw, very thick, rounded corners, fill=violet1!12, text width=2.8cm,
+            align=center, right=of prm] (rl) {\textbf{RL on process}\\ GRPO / R1 /
+            Qwen3};
+      \draw[-{Latex}, thick] (cot) -- (sc);
+      \draw[-{Latex}, thick] (sc) -- (prm);
+      \draw[-{Latex}, thick, violet1] (prm) -- (rl);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  \begin{itemize}\small
+    \item The step-scored reward is exactly the \textbf{process supervision} in
+      GRPO (\textbf{[LLM-1]}): spread the group-normalized reward over \emph{steps},
+      not just the final token.
+    \item \textbf{DeepSeek-R1} (\textbf{[LLM-11]}) and \textbf{Qwen3}
+      (\textbf{[LLM-8]}) use RL to \emph{elicit} long chains of thought -- the very
+      behavior Wei showed was latent.
+  \end{itemize}
+  \vskip 2pt
+  \keybox{\footnotesize CoT gives the reasoning to reward; the PRM says
+    \emph{which steps} deserve it; RL turns that signal into a better policy.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Chain-of-thought} prompting elicits reasoning from a frozen model
+      -- big gains on arithmetic/commonsense/symbolic tasks.
+    \item The benefit is \textbf{emergent with scale}: small models get no help (or
+      worse); large models jump (GSM8K $17.9\!\to\!56.9$).
+    \item \textbf{Self-consistency}: sample many chains, majority-vote the answer
+      ($56.5\!\to\!74.4$), no training.
+    \item \textbf{Reliability gap}: right answer via wrong steps -- outcome-only
+      rewards luck.
+    \item \textbf{PRM} $>$ \textbf{ORM} $>$ majority on MATH (78.2 / 72.4 / 69.6);
+      process supervision is more performant \emph{and} more aligned; PRM800K
+      released.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} this process signal is the reward RL optimizes --
+    GRPO (\textbf{[LLM-1]}), and the reasoning models DeepSeek-R1
+    (\textbf{[LLM-11]}) / Qwen3 (\textbf{[LLM-8]}) build on it.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Sources: Wei et al., "Chain-of-Thought Prompting Elicits Reasoning in LLMs"
+%   (2022), arXiv:2201.11903; Lightman et al., "Let's Verify Step by Step" (2023),
+%   arXiv:2305.20050. Extracted from ml/llm_training/materials_md/papers/
+%   19_chain_of_thought_2201.11903.txt and 20_lets_verify_2305.20050.txt.
+%   Self-consistency numbers: Wang et al. (2022), arXiv:2203.11171.
+% Figures (fig/, all matplotlib via py_src/make_figures.py):
+%   emergence (Wei Table 2, PaLM GSM8K 8B/62B/540B, EXACT -- signature result),
+%   benchmark_gains (Wei Table 2, PaLM 540B standard vs CoT, EXACT),
+%   self_consistency (Wang 2022 endpoints 56.5->74.4 REAL; saturating shape schematic),
+%   orm_prm_bestofn (Lightman Fig 3, best-of-1860 endpoints 78.2/72.4/69.6 EXACT; N-shape schematic),
+%   step_scoring (illustrative/schematic -- right-answer-wrong-steps, ORM vs PRM),
+%   ood_generalization (Lightman Table 1, fresh STEM exams, EXACT).
+% Pedagogical decisions: cold-open on the canonical apples example; predict-first on
+%   "does CoT help a small model?" (the emergent-scale surprise: CoT hurts at 8B);
+%   reliability gap (step_scoring) motivates process supervision; close by tying the
+%   PRM's process signal to GRPO [LLM-1] and the RL-elicited reasoning of R1/Qwen3.
+% Cross-refs: [LLM-1] GRPO (process supervision), [LLM-11] DeepSeek-R1, [LLM-8] Qwen3.

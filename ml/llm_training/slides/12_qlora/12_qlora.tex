@@ -1,0 +1,370 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-12] QLoRA: Efficient Finetuning of Quantized LLMs}
+\subtitle{Fine-tune a 65B model on a single GPU (Dettmers et al., 2023)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{LoRA saved the adapters -- but not the base model}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \textbf{LoRA} (\emph{[LLM-3]}) froze $W_0$ and trained a tiny $BA$ -- the \emph{adapters}
+    shrank to megabytes. But the frozen base still sits in GPU memory in \textbf{16-bit}:
+    \vskip 6pt
+    \begin{itemize}\small
+      \item A 65B model in fp16 is $65\text{B}\times2\text{B}\approx\textbf{130 GB}$ -- just
+        to \emph{hold} the frozen weights.
+      \item Full 16-bit fine-tuning of LLaMA 65B needs \textbf{$>$780 GB} -- a rack of GPUs.
+      \item So LoRA cut the \emph{trainable} cost, not the \textbf{memory floor}.
+    \end{itemize}
+    \vskip 6pt
+    \textbf{QLoRA:} store the frozen base in \textbf{4-bit}, dequantize on the fly, backprop
+    into 16-bit LoRA adapters. 65B finetuning drops onto \textbf{one 48 GB GPU} with
+    \emph{no} loss in quality.
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/memory_wall.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The memory wall}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Where does the memory go?}\\[4pt]
+    \small With tiny adapters, the frozen base weights become the whole bill.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{LoRA's memory floor is the frozen base}
+  Recall LoRA (\emph{[LLM-3]}): $Y=XW_0+s\,X L_1 L_2$, with $W_0$ frozen and only
+  $L_1,L_2$ trained. The paper measures a 7B LoRA run (batch 1, gradient checkpointing):
+  \begin{itemize}\small
+    \item LoRA \textbf{parameters}: 26 MB. LoRA \textbf{input gradients}: 18 MB/seq.
+    \item The frozen \textbf{4-bit base model}: \textbf{5{,}048 MB} -- everything else is
+      rounding error.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{Aggressively shrinking the \emph{adapter} barely moves the needle. The lever that
+    matters is the \textbf{precision of the frozen base}. Drop it from 16-bit to 4-bit and the
+    whole footprint collapses.}
+\end{frame}
+
+\begin{frame}{The base weights ARE the wall}
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/where_memory.pdf}
+  \end{center}
+  \vskip 2pt
+  \small So the plan writes itself: keep the base frozen (as LoRA does) but \textbf{quantize
+    it to 4-bit}, and keep gradients only for the small 16-bit adapters. The rest of the deck
+  is \emph{how to quantize to 4-bit without losing accuracy}.
+\end{frame}
+
+% ================================================================
+\section{4-bit NormalFloat (NF4)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries A better 4-bit number}\\[4pt]
+    \small Weights are normal-shaped -- so build a datatype that knows that.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Block-wise quantization, and its weakness}
+  \textbf{Absmax quantization} rescales a tensor into the low-bit range:
+  \[
+    X_{\text{Int8}}=\text{round}\!\left(\frac{127}{\text{absmax}(X)}\,X\right)
+      =\text{round}(c\cdot X),\qquad c=\text{quantization constant}.
+  \]
+  \begin{itemize}\small
+    \item A single \textbf{outlier} inflates absmax, so most values pile into a few bins --
+      wasted precision. Fix: chunk into \textbf{blocks} (e.g. size 64), one constant $c$ each.
+    \item That helps the outlier problem, but \textbf{Int4/FP4 space their levels uniformly}
+      -- and weights are \emph{not} uniform.
+  \end{itemize}
+  \vskip 2pt
+  \keybox{Pretrained weights are $\approx$ zero-centered \textbf{normal}. A datatype whose
+    levels match a normal will spend its 16 codes far more wisely than a uniform grid.}
+\end{frame}
+
+\begin{frame}{NF4: equal-mass quantiles of a normal}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{NormalFloat (NF4)} is built from \emph{quantile quantization}: pick the 16 levels
+    so each bin holds an \textbf{equal number of weights} (equal probability mass under
+    $\mathcal N(0,1)$), not equal width.
+    \begin{itemize}\small
+      \item Information-theoretically \textbf{optimal} for normally-distributed data.
+      \item Levels cluster near 0 (where the mass is), sparse in the tails.
+      \item An \textbf{exact 0} is kept (for padding / zero weights).
+    \end{itemize}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/nf4_buckets.pdf}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize Because every block is normalized by its own absmax into $[-1,1]$, all blocks
+  share the \emph{same} quantiles -- so the level set is computed once, not per block.
+\end{frame}
+
+\begin{frame}{NF4 beats FP4 and Int4 -- empirically}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/nf4_perplexity.pdf}
+    \column{0.44\textwidth}
+    The optimality is not just theory. Across OPT / BLOOM / Pythia / LLaMA (125M--13B),
+    at the \emph{same} 4 bits:
+    \begin{itemize}\small
+      \item NF4 gives the \textbf{lowest perplexity} of any 4-bit type.
+      \item It also lifts zero-shot accuracy over FP4 and Int4 (paper Fig.~3).
+    \end{itemize}
+    \vskip 4pt
+    \nextbox{\small Same bit budget, better numbers: NF4 is a free lunch over the naive
+      4-bit formats.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Two more memory savers}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Squeezing the last bytes}\\[4pt]
+    \small Double Quantization and Paged Optimizers.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Double Quantization: quantize the quantizers}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Small blocks give precise 4-bit -- but each block needs a 32-bit constant $c$. At
+    blocksize 64 that is $32/64=\textbf{0.5}$ bits \emph{per parameter}, pure overhead.
+    \vskip 6pt
+    \textbf{Double Quantization (DQ):} treat the constants $c_2$ as a new tensor and quantize
+    \emph{them} (FP8, blocksize 256):
+    \[
+      \tfrac{32}{64}=0.5 \;\longrightarrow\; \tfrac{8}{64}+\tfrac{32}{64\cdot256}\approx
+      \textbf{0.127}\ \text{bits/param}.
+    \]
+    \keybox{\small Saves $\approx$\textbf{0.37 bits/param} -- about \textbf{3 GB} on a 65B
+      model -- with \emph{no} measured quality loss.}
+    \column{0.48\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\footnotesize, node distance=0.55cm]
+        \node[draw=armblue, thick, fill=armblue!8, rounded corners, text width=3.4cm,
+              align=center] (w) {\textbf{Weights} $W$\\ \scriptsize NF4, blocksize 64};
+        \node[draw=armorange, thick, fill=armorange!12, rounded corners, text width=3.4cm,
+              align=center, below=0.5cm of w] (c2)
+              {constants $c_2$\\ \scriptsize FP32, one per block};
+        \node[draw=paramgreen, very thick, fill=paramgreen!12, rounded corners,
+              text width=3.4cm, align=center, below=0.5cm of c2] (c1)
+              {\textbf{quantized} $c_2$\\ \scriptsize FP8, blocksize 256\\ + tiny $c_1$};
+        \draw[-{Latex}, thick] (w) -- (c2) node[midway,right,font=\tiny]{needs};
+        \draw[-{Latex}, thick, paramgreen] (c2) -- (c1)
+          node[midway,right,font=\tiny]{quantize again};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Paged Optimizers: survive the memory spikes}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Gradient checkpointing keeps average memory low, but a \textbf{long sequence} can spike
+    the optimizer state and trigger an \textbf{out-of-memory} crash mid-run.
+    \vskip 6pt
+    \textbf{Paged Optimizers} use NVIDIA \emph{unified memory}: optimizer states are paged
+    out to CPU RAM on a spike and paged back for the update step -- like OS memory paging to
+    disk. The run survives instead of crashing.
+    \vskip 4pt
+    \watchbox{\small This is exactly what lets 33B fit a 24 GB card and 65B fit a 48 GB card
+      -- the peak, not the average, is what OOMs you.}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/gpu_fit.pdf}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The QLoRA mechanism}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Putting it together}\\[4pt]
+    \small 4-bit storage, 16-bit compute -- gradients only into the adapters.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{One storage type, one compute type}
+  For a single linear layer with one LoRA adapter, QLoRA computes:
+  \[
+    Y^{\text{BF16}}=X^{\text{BF16}}\,\text{doubleDequant}\!\big(c_1^{\text{FP32}},
+      c_2^{\text{k-bit}},W^{\text{NF4}}\big)\;+\;X^{\text{BF16}}L_1^{\text{BF16}}L_2^{\text{BF16}}
+  \]
+  \begin{itemize}\small
+    \item \textbf{Storage} datatype: 4-bit NF4 for the frozen base $W$ (+ FP8 constants via DQ).
+    \item \textbf{Compute} datatype: BFloat16. On every use, $W^{\text{NF4}}$ is
+      \textbf{dequantized to bf16} for the matmul, then discarded.
+    \item Gradients flow \emph{through} $W$ but are computed \textbf{only for the adapters}
+      $L_1,L_2$ -- never for the 4-bit weights.
+  \end{itemize}
+  \vskip 2pt
+  \keybox{The base is 4-bit \emph{at rest} and 16-bit \emph{in flight}. You pay 16-bit compute
+    briefly, block by block, but never store 16-bit weights -- so accuracy is 16-bit while
+    memory is 4-bit.}
+\end{frame}
+
+\begin{frame}{The tuning detail that makes it match: adapters everywhere}
+  Default LoRA adapts only $\{W_q,W_v\}$. At 4-bit that is \textbf{not enough} to recover full
+  quality.
+  \begin{itemize}\small
+    \item QLoRA puts LoRA adapters on \textbf{every linear layer} (attention \emph{and} MLP).
+    \item Because adapters are nearly free in memory (previous section), using \emph{many} of
+      them costs almost nothing.
+    \item The rank $r$ barely matters; the \textbf{number of adapted layers} is the critical
+      knob (paper Fig.~2).
+  \end{itemize}
+  \vskip 2pt
+  \warnbox{\small This is the fix for the accuracy trade-offs seen in earlier PEFT work: cheap
+    adapters mean you can afford to adapt \emph{all} layers, and that closes the gap to 16-bit.}
+\end{frame}
+
+% ================================================================
+\section{Does 4-bit cost anything?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does 4-bit cost anything?}\\[4pt]
+    \small The headline: no measurable drop -- and a state-of-the-art chatbot on one GPU.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Predict-first: 4 bits vs 16 bits}
+  You are about to compress the frozen base to a \textbf{quarter} of its bits.
+  \vskip 6pt
+  \textbf{Guess:} how much MMLU accuracy does 4-bit QLoRA lose versus 16-bit fine-tuning at
+  7B / 13B / 33B / 65B?
+  \pause
+  \vskip 8pt
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{fig/parity.pdf}
+  \end{center}
+\end{frame}
+
+\begin{frame}{No gap: QLoRA (4-bit) matches 16-bit}
+  \small
+  \renewcommand{\arraystretch}{1.15}
+  \begin{center}
+  \begin{tabular}{l r r r r r}
+    \toprule
+    \textbf{Data type} & T5-80M & T5-250M & T5-780M & T5-3B & \textbf{Mean (all)}\\
+    \midrule
+    BF16 full FT & 40.1 & 42.1 & 48.0 & 54.3 & 53.0\\
+    LoRA BF16    & 40.5 & 42.6 & 47.1 & 55.4 & --\\
+    QLoRA FP4    & 40.3 & 42.4 & 47.5 & 55.6 & 52.2\\
+    \textbf{QLoRA NF4 + DQ} & \textbf{40.4} & \textbf{42.7} & \textbf{47.7} & 55.3 & \textbf{53.1}\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \begin{itemize}\small
+    \item On GLUE / Super-NaturalInstructions and on MMLU (7B--65B), \textbf{4-bit NF4+DQ
+      recovers full 16-bit performance}.
+    \item FP4 trails NF4 by $\approx$\textbf{1 point} -- the NF4 datatype is doing real work.
+  \end{itemize}
+  \vskip 2pt
+  \keybox{\small ``Lost'' precision is fully \textbf{recovered by the adapters}: quantize to
+    4-bit, then let 16-bit LoRA finetuning heal the damage.}
+\end{frame}
+
+\begin{frame}{Guanaco: a ChatGPT-class chatbot on one GPU}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    \includegraphics[width=\linewidth]{fig/guanaco_vicuna.pdf}
+    \column{0.4\textwidth}
+    \textbf{Guanaco} = QLoRA on LLaMA + OASST1.
+    \begin{itemize}\small
+      \item \textbf{65B}: \textbf{99.3\%} of ChatGPT on Vicuna -- best open model, trained in
+        \textbf{24 h} on \emph{one} GPU.
+      \item \textbf{33B}: 97.8\%, trainable in $<$12 h on a 24 GB consumer card.
+      \item \textbf{7B}: 5 GB, beats a 13B Alpaca by $\sim$20 points.
+    \end{itemize}
+    \vskip 4pt
+    \nextbox{\small Efficiency turned into capability: cheaper finetuning let them train
+      1{,}000+ models and find the best recipe.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{The problem:} LoRA freezes the base but still holds it in 16-bit -- 65B is
+      $\sim$130 GB, so many GPUs. The base weights are the memory wall.
+    \item \textbf{NF4:} a 4-bit datatype with \emph{equal-mass} levels, optimal for
+      normal-shaped weights -- beats FP4/Int4 at the same bits.
+    \item \textbf{Double Quantization:} quantize the constants too -- $-0.37$ bits/param.
+    \item \textbf{Paged Optimizers:} unified memory absorbs checkpointing spikes so long
+      sequences do not OOM.
+    \item \textbf{Mechanism:} store base in 4-bit NF4, dequantize to bf16 per matmul, backprop
+      only into 16-bit LoRA adapters on \emph{every} layer.
+    \item \textbf{Result:} 4-bit \emph{matches} 16-bit with no drop; Guanaco 65B hits
+      \textbf{99.3\%} of ChatGPT, trained in a day on a single 48 GB GPU.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{In one line:} QLoRA = quantized LoRA -- it keeps LoRA's tiny adapters and
+    adds a lossless 4-bit base, so \emph{one} GPU now finetunes the largest open models.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Dettmers, Pagnoni, Holtzman, Zettlemoyer, "QLoRA: Efficient Finetuning of
+%   Quantized LLMs" (2023), arXiv:2305.14314. Extracted from
+%   ml/llm_training/materials_md/papers/16_qlora_2305.14314.txt (read fully).
+% Figures (fig/, matplotlib via py_src/make_figures.py):
+%   memory_wall  -- REAL: full 16-bit FT of 65B >780 GB (intro), QLoRA 65B 45.0 GB (App. G,
+%                   Fig. 6); 16-bit LoRA 130 GB is a computed floor (65B x 2 bytes, frozen
+%                   base only) and is labelled as such.
+%   where_memory -- REAL: 7B breakdown, 4-bit base 5,048 MB vs LoRA grads 18 MB vs params
+%                   26 MB (Background sec.).
+%   nf4_buckets  -- SCHEMATIC (labelled): uniform vs equal-mass quantile levels over a normal;
+%                   8 bins shown for clarity, real NF4 = 16 levels.
+%   nf4_perplexity -- REAL: Table 2 Pile CC mean PPL (Int4 34.34, FP4 E2M1 31.07, FP4 E3M0
+%                   29.48, NF4+DQ 27.41).
+%   gpu_fit      -- REAL: App. G / Fig. 6 QLoRA finetuning memory 6.9/11.3/24.7/45.0 GB.
+%   parity       -- REAL: Table 4 mean 5-shot MMLU (mean of Alpaca+FLANv2), BF16 vs NF4+DQ.
+%   guanaco_vicuna -- REAL: Table 6 Vicuna score as % of ChatGPT (GPT-4 judge, mean of orders).
+%   Double-Quant nesting diagram is small TikZ (per SLIDE_STYLE throwaway-schematic exception).
+% Pedagogical decisions: cold-open bridges from [LLM-3] LoRA (QLoRA = quantized LoRA) and
+%   frames the 16-bit base as the memory wall; NF4 built up from block-wise absmax -> quantile
+%   quantization -> equal-mass levels; DQ + paged optimizers grouped as "two more memory
+%   savers"; predict-first on the 4-bit vs 16-bit parity (the money shot); Guanaco as the
+%   capability payoff. Cross-references [LLM-3] LoRA throughout.
+% Prior deck: 11_deepseek_r1. Paper pairs directly with 03_lora (QLoRA extends LoRA).

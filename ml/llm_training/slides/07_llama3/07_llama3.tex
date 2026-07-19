@@ -1,0 +1,399 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+\newcommand{\callout}[3]{%
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-7] The Llama 3 Herd of Models}
+\subtitle{A boring recipe done well beats architectural cleverness -- quality data + scale + straightforward post-training (Meta AI, 2024)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}{An open model in the GPT-4 league -- built the boring way}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    In 2024 Meta released \textbf{Llama 3.1 405B}: an \emph{openly available} model that
+    performs on par with GPT-4 / GPT-4o / Claude 3.5 Sonnet.
+    \vskip 8pt
+    You might expect an exotic architecture behind it. It is the opposite:
+    \begin{itemize}\small
+      \item A \textbf{standard dense Transformer} -- deliberately \emph{not} mixture-of-experts.
+      \item Alignment by \textbf{SFT + DPO} -- deliberately \emph{not} PPO / complex RL.
+    \end{itemize}
+    \vskip 8pt
+    The bet: at this scale, \textbf{managing complexity} matters more than cleverness.
+    Pour the effort into \emph{data} and \emph{scale}, keep everything else simple and stable.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.6cm,
+              align=center] (a) {\textbf{Tempting}\\ MoE, novel objectives,\\ complex RL};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.6cm, align=center, below=0.8cm of a] (b)
+              {\textbf{Llama 3}\\ dense Transformer\\ SFT + DPO};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b)
+          node[midway,right,font=\scriptsize]{stable at scale};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The herd and the philosophy}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The herd and the philosophy}\\[4pt]
+    \small Three sizes, one recipe, and three levers that drive quality.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Three members, one recipe}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \includegraphics[width=\linewidth]{fig/herd.pdf}
+    \column{0.48\textwidth}
+    \small
+    \begin{itemize}
+      \item \textbf{8B} and \textbf{70B}: efficient, best-in-class for their size.
+      \item \textbf{405B}: the flagship, $\approx$ compute-optimal for the training budget.
+      \item All three are \textbf{dense Transformers} trained with the \emph{same} pipeline.
+      \item Smaller models are trained \emph{well past} compute-optimal -- worse per FLOP of
+        training, but cheaper to \emph{serve} at a given quality.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize The flagship is also used to \textbf{improve the small models}
+      during post-training (synthetic data, rejection sampling).}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Three levers: data, scale, managing complexity}
+  The paper's own framing of what makes a high-quality foundation model:
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.33\textwidth}
+    \begin{center}\textbf{\color{armblue}Data}\end{center}
+    \footnotesize More \emph{and} cleaner. 15.6T curated tokens vs 1.8T for Llama 2 --
+    heavy de-duplication and quality filtering.
+    \column{0.33\textwidth}
+    \begin{center}\textbf{\color{sampred}Scale}\end{center}
+    \footnotesize $3.8\times10^{25}$ FLOPs, $\approx$50$\times$ Llama 2. Scaling laws pick the
+    size \emph{and} forecast accuracy.
+    \column{0.33\textwidth}
+    \begin{center}\textbf{\color{paramgreen}Complexity}\end{center}
+    \footnotesize Choose the \emph{stable} option every time: dense over MoE, SFT+DPO over
+    PPO. Fewer ways to fail at scale.
+  \end{columns}
+  \vskip 8pt
+  \watchbox{\small ``Managing complexity'' is a real design principle here: every choice is
+    made to \textbf{maximize training stability} and keep the process scalable, even at the
+    cost of a possibly-fancier alternative.}
+\end{frame}
+
+% ================================================================
+\section{Data: the real workhorse}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Data: the real workhorse}\\[4pt]
+    \small 15.6T tokens -- and most of the effort is in cleaning, not collecting.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{From raw web to high-quality tokens}
+  Llama 3 is pre-trained on $\sim$\textbf{15.6T} tokens (knowledge through end of 2023).
+  The pipeline is a stack of filters, not a single scrape:
+  \begin{itemize}\small
+    \item \textbf{De-duplication} at three levels: URL, document (global MinHash),
+      and line (drop lines seen $>6$ times per 30M-doc bucket).
+    \item \textbf{Heuristic filtering:} duplicated-$n$-gram removal, dirty-word lists,
+      KL-divergence outlier-token filtering.
+    \item \textbf{Model-based quality classifiers:} fastText and DistilRoBERTa scorers,
+      trained on \emph{Llama 2} judgments of document quality.
+    \item \textbf{Domain pipelines} for code and math (custom HTML extraction, since their
+      token distribution differs from prose).
+  \end{itemize}
+  \vskip 2pt
+  \keybox{\footnotesize A better tokenizer helps too: 128K vocab lifts English compression
+    from \textbf{3.17 to 3.94} characters/token -- more text ``read'' per unit of compute.}
+\end{frame}
+
+\begin{frame}{The data mix -- and annealing at the finish}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/data_mix.pdf}
+    \column{0.44\textwidth}
+    \small The mix is \textbf{chosen}, not inherited: a knowledge classifier
+    \emph{downsamples} over-represented web topics (arts, entertainment), and
+    small-scale scaling-law runs compare candidate mixes.
+    \vskip 6pt
+    \textbf{Annealing.} On the \emph{final} tokens, upsample very-high-quality math and code
+    while decaying the learning rate to 0.
+    \vskip 4pt
+    \nextbox{\footnotesize Annealing on quality data lifted 8B by \textbf{+24\%} on GSM8K --
+      but barely moved 405B. Scale can absorb what small models need spoon-fed.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Scale and scaling laws}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Scale and scaling laws}\\[4pt]
+    \small How they chose 405B -- and predicted its benchmark scores before training it.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Choosing the size with a scaling law}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \includegraphics[width=\linewidth]{fig/scaling_law.pdf}
+    \column{0.45\textwidth}
+    \small
+    \begin{enumerate}
+      \item Train many small models across compute budgets ($6{\times}10^{18}$ to
+        $10^{22}$ FLOPs); read off the \textbf{compute-optimal} point at each budget.
+      \item Fit a power law $N(C)=A\,C^{\alpha}$, with $(\alpha,A)=(0.53,0.29)$.
+      \item \textbf{Extrapolate} to the flagship budget $3.8\times10^{25}$ FLOPs.
+    \end{enumerate}
+    \vskip 4pt
+    \keybox{\footnotesize The law says $\approx$402B params on $\approx$16.5T tokens.
+      Near the optimum the curve is \emph{flat}, so \textbf{405B} was a safe, round choice.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The teachable trick: predict accuracy, not just loss}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \includegraphics[width=\linewidth]{fig/downstream_pred.pdf}
+    \column{0.46\textwidth}
+    \small A raw scaling law predicts \emph{loss}. Meta wanted \emph{benchmark accuracy}, via
+    two chained fits:
+    \begin{itemize}
+      \item[1.] compute FLOPs $\to$ \textbf{negative log-likelihood} of the correct answer;
+      \item[2.] that log-likelihood $\to$ \textbf{task accuracy} (a sigmoid, anchored with
+        Llama 2 runs).
+    \end{itemize}
+    \vskip 4pt
+    \watchbox{\footnotesize Extrapolating \textbf{4 orders of magnitude}, the forecast for the
+      405B model landed almost exactly on the real score (it only slightly \emph{under}shot).}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Architecture: modest by design}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Architecture: modest by design}\\[4pt]
+    \small Small tweaks to a familiar Transformer -- stability over novelty.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{What actually changed vs Llama 2}
+  A \textbf{standard dense Transformer}. The gains come from data and scale, not the
+  architecture. The handful of deliberate changes:
+  \begin{itemize}\small
+    \item \textbf{Grouped-Query Attention (GQA)}, 8 key-value heads -- shrinks the KV cache
+      and speeds up inference/decoding at scale.
+    \item \textbf{128K-token vocabulary} (100K tiktoken + 28K for non-English) -- better
+      compression, better multilingual behavior.
+    \item \textbf{RoPE base frequency $\theta = 500{,}000$} -- rotary positions that stay
+      well-behaved out to very long contexts.
+    \item \textbf{Context window 8K $\to$ 128K}, extended gradually in \emph{six} stages
+      ($\sim$800B tokens) at the end of pre-training.
+    \item Cross-document attention masking; SwiGLU activation.
+  \end{itemize}
+  \vskip 2pt
+  \warnbox{\footnotesize Notably \emph{absent}: mixture-of-experts. A dense model is easier
+    to train stably -- exactly the ``managing complexity'' lever.}
+\end{frame}
+
+\begin{frame}{The three sizes, side by side}
+  \small
+  \renewcommand{\arraystretch}{1.2}
+  \begin{center}
+  \begin{tabular}{l r r r}
+    \toprule
+    & \textbf{8B} & \textbf{70B} & \textbf{405B}\\
+    \midrule
+    Layers                & 32 & 80 & 126\\
+    Model dimension       & 4{,}096 & 8{,}192 & 16{,}384\\
+    FFN dimension         & 14{,}336 & 28{,}672 & 53{,}248\\
+    Attention heads       & 32 & 64 & 128\\
+    Key/Value heads (GQA) & 8 & 8 & 8\\
+    Peak learning rate    & $3{\times}10^{-4}$ & $1.5{\times}10^{-4}$ & $8{\times}10^{-5}$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \footnotesize Shared across all three: SwiGLU activation, 128K vocabulary, RoPE
+  ($\theta = 500{,}000$), and up to 128K context. Same recipe, scaled up. (Table 3.)
+\end{frame}
+
+% ================================================================
+\section{Post-training: SFT, rejection sampling, DPO}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Post-training: the simple alignment loop}\\[4pt]
+    \small SFT + rejection sampling + DPO, repeated -- and pointedly no PPO.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The alignment loop}
+  \begin{center}
+    \includegraphics[width=0.84\textwidth]{fig/posttrain_pipeline.pdf}
+  \end{center}
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}
+      \item Train a \textbf{reward model} on human preference pairs.
+      \item \textbf{Rejection sampling}: draw $K{=}10$--$30$ answers from the best current
+        model, keep the RM's top pick.
+      \item \textbf{SFT} on that curated + synthetic data, then \textbf{DPO}.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}
+      \item Run the whole thing for \textbf{6 rounds}; each round's model generates the
+        \emph{next} round's data.
+      \item \textbf{Model averaging} across RM / SFT / DPO runs.
+      \item Most SFT targets are \emph{model-generated}, then filtered.
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{DPO, not PPO -- and why}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    For preference alignment Llama 3 uses \textbf{Direct Preference Optimization}, the same
+    objective from our \emph{[LLM-2] DPO} deck -- optimize preferences directly, \emph{no}
+    reward-model-in-the-loop RL rollouts.
+    \vskip 6pt
+    They \emph{tried} PPO, but found DPO:
+    \begin{itemize}\small
+      \item needs \textbf{less compute} at 405B scale;
+      \item is \textbf{more stable}, and better on instruction-following (IFEval).
+    \end{itemize}
+    \column{0.44\textwidth}
+    \keybox{\footnotesize Two small but important DPO tweaks:
+      \begin{itemize}\scriptsize
+        \item \textbf{mask formatting tokens} (headers / end-of-turn) out of the loss --
+          otherwise the contrastive objective destabilizes;
+        \item add a small \textbf{NLL regularizer} ($0.2$) on the chosen response.
+      \end{itemize}}
+  \end{columns}
+  \vskip 4pt
+  \nextbox{\footnotesize The whole alignment stack is intentionally the \emph{simple} one --
+    consistent with the ``managing complexity'' philosophy. (See \emph{[LLM-2] DPO}.)}
+\end{frame}
+
+% ================================================================
+\section{Results}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does the boring recipe work?}\\[4pt]
+    \small An open 405B against the strongest closed frontier models.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{On par with the frontier}
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{fig/benchmarks.pdf}
+  \end{center}
+  \vskip -2pt
+  \small \textbf{Llama 3 405B} trades wins with GPT-4o and Claude 3.5 Sonnet: ahead on GSM8K
+  and IFEval, essentially tied on MMLU, a touch behind on HumanEval and the hardest reasoning
+  (GPQA). The point is not that it wins -- it is that an \textbf{open} model is \emph{in the
+  conversation}. (Table 2, exact numbers.)
+\end{frame}
+
+\begin{frame}{One awareness note: multimodal is bolted on}
+  \begin{columns}[T]
+    \column{0.6\textwidth}
+    The paper also reports \emph{early} image, video, and speech experiments -- built with a
+    deliberately \textbf{compositional} approach:
+    \begin{itemize}\small
+      \item Keep the language model largely fixed.
+      \item Attach separate \textbf{vision} and \textbf{speech} encoders/adapters via
+        cross-attention.
+      \item Train the adapters, not a single joint model from scratch.
+    \end{itemize}
+    \column{0.4\textwidth}
+    \watchbox{\footnotesize These multimodal models were \textbf{not released} with Llama 3
+      and were still under development. Same philosophy though: add capability with a
+      \emph{modular, stable} extension, not a ground-up redesign.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Llama 3.1 405B}: an open, dense-Transformer model on par with GPT-4o /
+      Claude 3.5 Sonnet -- built with a deliberately \emph{simple} recipe.
+    \item \textbf{Three levers:} data, scale, and \emph{managing complexity} (stability first:
+      dense over MoE, SFT+DPO over PPO).
+    \item \textbf{Data} is the workhorse: 15.6T tokens, aggressive de-duplication + quality
+      filtering, a chosen mix ($\approx$50/25/17/8), quality annealing at the end.
+    \item \textbf{Scaling laws} picked 405B \emph{and} forecast downstream accuracy across
+      four orders of magnitude of compute.
+    \item \textbf{Architecture} changed little: GQA, 128K vocab, RoPE $\theta{=}500$k,
+      context to 128K.
+    \item \textbf{Post-training} = SFT + rejection sampling + DPO, six iterative rounds.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{The lesson:} at frontier scale, a \emph{well-executed simple recipe} --
+    great data, honest scaling laws, stable training -- beats architectural cleverness.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Grattafiori et al. (Llama Team, AI @ Meta), "The Llama 3 Herd of Models" (2024),
+%   arXiv:2407.21783. Extracted from ml/llm_training/materials_md/papers/03_llama3_2407.21783.txt.
+% This deck deliberately ABSTRACTS a ~90-page report down to one through-line -- "a simple,
+%   well-executed recipe at scale beats architectural cleverness." The long infrastructure,
+%   safety, and full multimodal sections are intentionally skipped (one awareness slide only).
+% Figures (fig/, matplotlib via py_src/make_figures.py):
+%   - herd.pdf: REAL param counts 8B/70B/405B (Table 3), log bar.
+%   - data_mix.pdf: REAL approximate data-mix shares 50/25/17/8 (Section 3.1.2).
+%   - scaling_law.pdf: SCHEMATIC of the compute-optimal token power law, calibrated to the
+%     paper's reported fit (alpha,A)=(0.53,0.29) and endpoint (402B / 16.55T @ 3.8e25 FLOPs).
+%   - downstream_pred.pdf: SCHEMATIC of the two-stage FLOPs->NLL->accuracy forecast (Fig 4,
+%     ARC Challenge); illustrative sigmoid, not reproduced datapoints.
+%   - posttrain_pipeline.pdf: clean matplotlib box flow of RM -> RS -> SFT -> DPO x6 (Fig 7).
+%   - benchmarks.pdf: REAL Table 2 numbers, Llama 3 405B vs GPT-4o vs Claude 3.5 Sonnet
+%     (MMLU 0-shot CoT, IFEval, HumanEval, GSM8K, MATH, GPQA).
+% The cold-open TikZ box (tempting-vs-Llama-3) is a small throwaway schematic per SLIDE_STYLE.
+% Numbers cross-checked against the ar5iv HTML (Table 2) since the txt extract is OCR-scrambled.
+% Prior deck: 04_lima. Cross-references [LLM-2] DPO for the DPO objective.

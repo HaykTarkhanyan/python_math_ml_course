@@ -141,6 +141,39 @@ def fig_winrate():
     save(fig, "winrate.pdf")
 
 
+def fig_roadmap():
+    # the 4-step derivation as one horizontal flow (shown before the step slides)
+    steps = [
+        ("RLHF objective", r"$\max\ \mathbb{E}[r]-\beta\,\mathrm{KL}$", ARM_RED, "start"),
+        ("closed-form optimum", r"$\pi_r\propto\pi_{ref}\,e^{r/\beta}$", ARM_ORANGE, "step 1"),
+        ("invert for reward", r"$r=\beta\log\frac{\pi_r}{\pi_{ref}}+\beta\log Z$", ARM_BLUE, "step 2"),
+        (r"$Z(x)$ cancels", "differences kill $\\log Z$", VIOLET, "step 3"),
+        ("DPO loss", r"$-\log\sigma(\beta\,\Delta\!\log\text{-ratio})$", GREEN, "step 4"),
+    ]
+    xw, gap, y = 2.05, 0.28, 0.5
+    fig, ax = plt.subplots(figsize=(11.4, 2.4))
+    x = 0.1; edges = []
+    for title, eq, col, tag in steps:
+        ax.add_patch(FancyBboxPatch((x, y - 0.55), xw, 1.1,
+                     boxstyle="round,pad=0.02,rounding_size=0.06",
+                     fc=col, ec="none", alpha=0.13, zorder=2))
+        ax.add_patch(FancyBboxPatch((x, y - 0.55), xw, 1.1,
+                     boxstyle="round,pad=0.02,rounding_size=0.06",
+                     fc="none", ec=col, lw=1.6, zorder=3))
+        ax.text(x + xw / 2, y + 0.3, title, ha="center", va="center",
+                fontsize=9.3, weight="bold", color=col)
+        ax.text(x + xw / 2, y - 0.16, eq, ha="center", va="center", fontsize=8.3, color="#222")
+        ax.text(x + xw / 2, y - 0.8, tag, ha="center", fontsize=8, color=GREY, style="italic")
+        edges.append((x, x + xw))
+        x += xw + gap
+    for i in range(len(steps) - 1):
+        ax.add_patch(FancyArrowPatch((edges[i][1], y), (edges[i + 1][0], y),
+                     arrowstyle="-|>", mutation_scale=13, color="#555", lw=1.6, zorder=1))
+    ax.set_xlim(0, x); ax.set_ylim(-0.95, 1.1); ax.axis("off")
+    save(fig, "roadmap.pdf")
+
+
 if __name__ == "__main__":
     fig_pipeline(); fig_frontier(); fig_loss_shape(); fig_temperature(); fig_winrate()
+    fig_roadmap()
     print("all DPO figures done")

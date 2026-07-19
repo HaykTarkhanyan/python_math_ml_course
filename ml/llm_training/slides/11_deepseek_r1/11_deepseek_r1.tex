@@ -1,0 +1,391 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-11] DeepSeek-R1: Reasoning via RL}
+\subtitle{reasoning that emerges from large-scale RL \quad(DeepSeek-AI, 2025)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{An open model reaches o1-level -- and nobody taught it to reason}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \textbf{DeepSeek-R1} matches OpenAI's \textbf{o1} on competition math
+    (AIME 79.8 vs 79.2) and coding (Codeforces 96th percentile) -- open weights,
+    published recipe.
+    \vskip 2pt
+    The striking part is \emph{how} it got there. The reasoning was \textbf{not
+    demonstrated in training data}. Starting from a base model and a simple
+    ``is the answer correct?'' reward, the model \textbf{taught itself} to think
+    longer, check its work, and backtrack.
+    \vskip 2pt
+    Advanced reasoning \textbf{emerged} from reinforcement learning -- no
+    human reasoning traces required.
+    \vskip 2pt
+    Today: \emph{how pure RL incentivizes reasoning, the full R1 pipeline, and
+    why distilling R1 beats running RL on a small model.}
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners, fill=gray!8, text width=3.6cm,
+              align=center] (a) {\textbf{DeepSeek-V3-Base}\\ pretrained, no reasoning SFT};
+        \node[draw=armorange, very thick, rounded corners, fill=armorange!14,
+              text width=3.6cm, align=center, below=0.4cm of a] (b)
+              {\textbf{+ large-scale RL}\\ reward = answer correct?};
+        \node[draw=paramgreen, very thick, rounded corners, fill=paramgreen!12,
+              text width=3.6cm, align=center, below=0.4cm of b] (c)
+              {\textbf{R1}\\ o1-level reasoning\\ \emph{emergent}};
+        \draw[-{Latex}, thick] (a) -- (b);
+        \draw[-{Latex}, thick, paramgreen] (b) -- (c);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The setup: base model, correctness reward, GRPO}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The setup}\\[4pt]
+    \small A pretrained base, a reward that only checks the answer, and one RL algorithm.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The starting point and the target}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \textbf{Start from} DeepSeek-V3-Base -- a strong pretrained model, but \emph{not}
+    fine-tuned to reason.
+    \vskip 6pt
+    \textbf{Target:} strong reasoning on \emph{verifiable} tasks -- math, code,
+    STEM -- where an answer can be checked automatically.
+    \vskip 6pt
+    \textbf{The bet:} do \textbf{not} start with supervised reasoning traces. The
+    authors hypothesize that imitating human-written chains \emph{caps} the model at
+    human-like reasoning and blocks it from discovering its own.
+    \column{0.44\textwidth}
+    \keybox{\small Instead of teaching \emph{how} to reason (SFT on chains), give the
+      model a goal (\emph{get the answer right}) and let RL find the reasoning that
+      achieves it.}
+    \vskip 4pt
+    \nextbox{\small First experiment -- \textbf{R1-Zero} -- is the extreme version:
+      \textbf{pure RL, zero SFT}.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The reward is rule-based, not a neural model}
+  For verifiable tasks, the reward is computed by \textbf{rules}, not a learned network:
+  \vskip 4pt
+  \[
+    R_{\text{rule}} = R_{\text{accuracy}} + R_{\text{format}}
+  \]
+  \begin{itemize}\small
+    \item \textbf{Accuracy:} is the final answer correct? Math answers go in a box and
+      are checked; code is run against test cases.
+    \item \textbf{Format:} did the model wrap its thinking in
+      \texttt{<think>...</think>} then give \texttt{<answer>...</answer>}? A tiny
+      template -- the \emph{only} structural constraint imposed.
+  \end{itemize}
+  \vskip 4pt
+  \watchbox{\small \textbf{No neural reward model} for reasoning. A learned RM invites
+    \emph{reward hacking} at scale -- the policy games the scorer instead of solving
+    the problem. A rule you cannot fool is safer.}
+\end{frame}
+
+\begin{frame}{The RL algorithm: GRPO (recall from [LLM-1])}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    R1 optimizes the reward with \textbf{GRPO} -- the critic-free algorithm from
+    the GRPO deck. We just \emph{recall} it here:
+    \begin{itemize}\small
+      \item Sample a \textbf{group} of $G$ answers to each question.
+      \item Score each with the rule-based reward.
+      \item Advantage = how far each answer's reward is from the \textbf{group
+        mean}, in std units:
+        \[
+          \hat A_i=\frac{r_i-\operatorname{mean}(\mathbf r)}{\operatorname{std}(\mathbf r)}
+        \]
+      \item Push up better-than-average answers, push down the rest. \textbf{No value
+        network.}
+    \end{itemize}
+    \column{0.46\textwidth}
+    \keybox{\small The group mean \emph{is} the baseline -- so a reward that only
+      fires on correct answers still gives a usable learning signal: "better than
+      the other $G-1$ tries."}
+    \vskip 4pt
+    \footnotesize Config: $G=16$ samples/question, lr $3\!\times\!10^{-6}$,
+    KL coef $0.001$, up to 32k--64k tokens/answer, $\sim$10.4k steps.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{R1-Zero: reasoning from pure RL}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries R1-Zero: pure RL, no SFT}\\[4pt]
+    \small The paper's most striking result -- watch reasoning appear on its own.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Accuracy climbs from base toward o1 over RL steps}
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{fig/aime_emergence.pdf}
+  \end{center}
+  \vskip -2pt
+  \small Pure RL on V3-Base lifts AIME pass@1 from \textbf{15.6\%} to \textbf{77.9\%};
+  majority vote over 16 samples reaches \textbf{86.7\%}, past the human-participant
+  average -- \textbf{with no supervised reasoning data at all.}
+\end{frame}
+
+\begin{frame}{The model learns to think longer -- on its own}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\linewidth]{fig/response_length.pdf}
+    \column{0.36\textwidth}
+    Nobody set a target length. As RL proceeds, the model \emph{chooses} to
+    generate more -- from a few hundred to thousands of tokens per answer.
+    \vskip 6pt
+    Extra tokens are spent \textbf{exploring alternatives, re-deriving, and
+    verifying} -- the model buys accuracy with test-time thinking.
+    \vskip 6pt
+    \footnotesize Curve schematic; the trend and the $\sim$8.2k-step jump are from
+    the paper's Figure 1.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: what behaviors emerge from just a correctness reward?}
+  The reward says \emph{nothing} about \emph{how} to reason -- only whether the final
+  answer is right. So what does the model develop?
+  \vskip 6pt
+  \pause
+  \keybox{\small It spontaneously learns to \textbf{self-verify} ("let me check"),
+    \textbf{explore alternative approaches}, and \textbf{backtrack} when a path fails --
+    behaviors never demonstrated in any training example.}
+  \vskip 4pt
+  \warnbox{\small \textbf{The "aha moment":} mid-training, an intermediate R1-Zero
+    interrupts its own derivation --
+    \emph{"Wait, wait. Wait. That's an aha moment I can flag here. Let's reevaluate
+    this step-by-step..."} -- and restarts with a better method. Reflection, learned
+    from reward alone.}
+\end{frame}
+
+\begin{frame}{But R1-Zero is rough to read}
+  Pure RL bought reasoning power at the cost of \textbf{presentation}:
+  \begin{itemize}\small
+    \item \textbf{Poor readability:} chains are optimized to reach the answer, not to
+      be read -- messy, unformatted, hard to follow.
+    \item \textbf{Language mixing:} a single chain-of-thought can switch between
+      English and Chinese mid-thought (the base model is bilingual, and nothing
+      penalized the mixing).
+    \item \textbf{Narrow:} rule rewards only cover verifiable domains -- weak at
+      general writing and open-domain Q\&A.
+  \end{itemize}
+  \vskip 4pt
+  \nextbox{\small The capability is there; the \emph{package} is not. That gap
+    motivates the full \textbf{R1} pipeline -- keep the reasoning, fix the delivery.}
+\end{frame}
+
+% ================================================================
+\section{The full R1 pipeline}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The full R1 pipeline}\\[4pt]
+    \small Four stages that keep R1-Zero's reasoning but make it readable and general.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Four stages: SFT and RL, alternating}
+  \begin{center}
+    \includegraphics[width=0.98\textwidth]{fig/r1_pipeline.pdf}
+  \end{center}
+  \vskip 2pt
+  \small A small \textbf{cold-start SFT} makes chains readable; \textbf{reasoning RL}
+  re-grows the skill (now with a language-consistency reward); \textbf{reject-sample
+  + SFT} folds the RL model's own best outputs plus non-reasoning data back in; a
+  \textbf{final RL} stage aligns all scenarios.
+\end{frame}
+
+\begin{frame}{What each stage does}
+  \small
+  \begin{enumerate}
+    \item \textbf{Cold-start SFT.} Fine-tune V3-Base on a \emph{few thousand} curated
+      long-CoT examples in a clean, conversational format. Just enough to fix
+      readability before RL -- \emph{not} enough to teach reasoning.
+    \item \textbf{Reasoning-oriented RL.} GRPO with rule rewards (as R1-Zero), plus a
+      \textbf{language-consistency} reward = fraction of the CoT in the target
+      language. Slightly lowers scores but removes the mixing.
+    \item \textbf{Rejection sampling + SFT.} Sample the RL model, \emph{keep the good
+      answers} ($\sim$600k reasoning), add $\sim$200k non-reasoning (writing, QA,
+      code) $\to$ $\sim$800k examples, and SFT on them.
+    \item \textbf{Final RL for all scenarios.} A last RL pass: rule rewards for
+      reasoning \emph{and} a preference reward model for helpfulness/harmlessness.
+  \end{enumerate}
+  \vskip 2pt
+  \nextbox{\footnotesize The two ideas: \textbf{SFT for style, RL for capability} --
+    and \textbf{bootstrap} off the model's own best generations.}
+\end{frame}
+
+% ================================================================
+\section{Distillation into small models}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Distillation}\\[4pt]
+    \small Move R1's reasoning into small dense models -- with plain SFT.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Distill R1's reasoning into small dense models}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Generate \textbf{$\sim$800k} reasoning examples with R1, then \textbf{SFT} open
+    base models on them -- \emph{no RL stage for the students}.
+    \vskip 6pt
+    Students: \textbf{Qwen} and \textbf{Llama} bases, \textbf{1.5B $\to$ 70B}.
+    \vskip 6pt
+    A pure knowledge-transfer move: the small model learns to imitate R1's long
+    chains-of-thought.
+    \column{0.45\textwidth}
+    \keybox{\small The teacher's reasoning is written down as text. Any model that
+      can be fine-tuned on text can \emph{inherit} it -- cheaply, with standard SFT.}
+    \vskip 4pt
+    \footnotesize 2--3 epochs of SFT on the 800k set; the same data used in R1's own
+    stage-3 SFT.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Distilled small models beat big non-reasoning models on math}
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{fig/distill_sizes.pdf}
+  \end{center}
+  \vskip -2pt
+  \small Even \textbf{Distill-Qwen-1.5B} (28.9 on AIME) clears GPT-4o (9.3) and
+  Claude-3.5 (16.0); quality \textbf{scales with student size} up to
+  \textbf{Distill-Qwen-32B} at 72.6.
+\end{frame}
+
+\begin{frame}{Predict-first: distill R1, or run RL on the small model directly?}
+  You have a 32B base. To make it reason, is it better to \textbf{distill from R1}, or
+  to run the same \textbf{large-scale RL} on the 32B itself?
+  \vskip 4pt
+  \pause
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{fig/distill_vs_rl.pdf}
+  \end{center}
+  \vskip -2pt
+  \warnbox{\small \textbf{Distillation wins, and not by a little} (AIME 72.6 vs 47.0).
+    RL from scratch on a small model needs enormous compute and still trails
+    imitating a stronger teacher's reasoning.}
+\end{frame}
+
+% ================================================================
+\section{Results and caveats}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Results and caveats}\\[4pt]
+    \small Where R1 lands against o1 -- and where it still falls short.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{R1 vs o1-1217, head to head}
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/headline_bench.pdf}
+  \end{center}
+  \vskip -2pt
+  \small On math, R1 is \textbf{on par} with o1-1217 (AIME 79.8 vs 79.2, MATH-500 97.3
+  vs 96.4) and far above the base V3. o1 still leads on GPQA; the two trade blows on
+  code.
+\end{frame}
+
+\begin{frame}{Caveats and limitations}
+  \begin{itemize}\small
+    \item \textbf{Only where a verifier exists.} Pure RL needs a reliable reward.
+      For open-ended tasks (writing) there is no rule to check, so a learned RM is
+      used -- and it can be \textbf{reward-hacked}.
+    \item \textbf{Language mixing} persists for non-English/Chinese queries.
+    \item \textbf{Prompt-sensitive:} few-shot prompting \emph{hurts} R1 -- zero-shot,
+      just-state-the-problem works best.
+    \item \textbf{No tools} (no calculator/search) and weaker structured output;
+      overthinks easy questions.
+    \item \textbf{One report, one lab.} An 86-page technical report; this deck
+      abstracts its headline story, not every ablation.
+  \end{itemize}
+  \vskip 2pt
+  \nextbox{\small Still: pure RL from a correctness reward produced frontier
+    reasoning -- capability that was \emph{latent in the base model} and \textbf{drawn
+    out}, not injected.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{R1-Zero:} pure RL (GRPO) on V3-Base with a \textbf{rule-based}
+      reward -- reasoning \textbf{emerges}: longer thinking, self-verification,
+      backtracking, the "aha moment." No SFT, no reasoning traces.
+    \item R1-Zero is capable but \textbf{unreadable} and mixes languages.
+    \item \textbf{R1 pipeline:} cold-start SFT $\to$ reasoning RL $\to$ reject-sample
+      + SFT $\to$ final RL. \emph{SFT for style, RL for capability.}
+    \item \textbf{R1 $\approx$ o1} on math/code; well ahead of the base V3.
+    \item \textbf{Distillation} of R1's chains into 1.5B--70B models \textbf{beats}
+      running RL on those small models directly.
+    \item Reward = correctness; the RL \textbf{draws out} latent ability rather than
+      injecting new skills.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} \emph{[LLM-8] Qwen3} -- the same reasoning-RL family, with a
+    single model that can \emph{switch} between slow thinking and fast answering.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: DeepSeek-AI, "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via
+%   Reinforcement Learning" (2025), arXiv:2501.12948. Extracted from
+%   ml/llm_training/materials_md/papers/15_deepseek_r1_2501.12948.txt.
+%   This deck abstracts an ~86-page technical report down to its headline arc; it
+%   omits most ablations, the reward-model details, and the full benchmark suite.
+% Figures (fig/, all matplotlib via py_src/make_figures.py):
+%   aime_emergence  -- Fig 1a: pass@1 15.6->77.9, cons@16 ->86.7 REAL endpoints,
+%                      curve shape schematic (per-step values not tabulated).
+%   response_length -- Fig 1b: growth + ~8.2k-step jump, schematic (labeled).
+%   r1_pipeline     -- Fig 2: 4-stage box flow, schematic diagram.
+%   headline_bench  -- Table 8: R1 vs o1-1217 vs V3, REAL numbers.
+%   distill_sizes   -- Table 15: R1-distilled models AIME by size, REAL numbers.
+%   distill_vs_rl   -- Table 16: distill vs RL-from-scratch on 32B, REAL numbers.
+% Cross-references: [LLM-1] GRPO (the RL algorithm -- recalled, not re-derived);
+%   recap points to [LLM-8] Qwen3 (same reasoning-RL family, hybrid think/no-think).
+% Pedagogical decisions: lead with "reasoning was not taught, it emerged"; two
+%   predict-first frames (what behaviors emerge from a correctness reward; distill
+%   vs RL-on-small-model); keep GRPO a recall, not a re-derivation.
+% Prior deck: 08_qwen3. Next in the reasoning-RL thread: revisit Qwen3 / o1-style TTC.

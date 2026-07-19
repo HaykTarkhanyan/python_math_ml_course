@@ -1,0 +1,422 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-13] Mixture of Experts}
+\subtitle{Scale parameters without scaling compute-per-token \quad(Switch Transformer 2021; Mixtral 2024)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{What if a model had 10x the parameters at the same cost?}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    A bigger model is a better model -- but every extra parameter costs FLOPs on
+    \emph{every} token. That is the wall dense scaling hits.
+    \vskip 8pt
+    \textbf{Mixture of Experts (MoE)} breaks the link. Give a layer $N$ specialist
+    sub-networks (``experts'') and a tiny \textbf{router} that sends each token to only
+    \textbf{$k$} of them.
+    \vskip 8pt
+    Parameters grow with $N$; compute-per-token is fixed by $k$. So you get a
+    \textbf{much bigger} model for \emph{roughly the same} cost per token.
+    \vskip 8pt
+    Today: the core idea, the \textbf{Switch Transformer} (2021, scaled to 1.6T params),
+    and \textbf{Mixtral 8x7B} (2024) -- a 47B model that runs like a 13B one.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.7cm, align=center] (a)
+          {\textbf{Dense} 70B\\ 70B params \emph{active}\\ every token};
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!12,
+              text width=3.7cm, align=center, below=0.6cm of a] (b)
+          {\textbf{MoE} 47B (Mixtral)\\ only \textbf{13B} active\\ matches the 70B};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b);
+      \end{tikzpicture}
+      \\[4pt]
+      {\scriptsize same quality, a fraction of the compute}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The core idea: experts + a router}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Decouple capacity from compute}\\[4pt]
+    \small Most of a Transformer's parameters live in the FFN. Split it into experts.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Replace the FFN with $N$ experts and a router}
+  A Transformer block's FFN holds \textbf{most of its parameters}. MoE swaps that one FFN for
+  \textbf{$N$ parallel experts} plus a small \textbf{router} that sends each token to only a few.
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/dense_vs_moe.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{\footnotesize A dense block runs \emph{every} token through \emph{all} the params;
+    an MoE block runs each token through only its \textbf{top-$k$} experts -- so total params
+    can be huge while compute-per-token stays small.}
+\end{frame}
+
+\begin{frame}{The routing math}
+  A router $W_r$ turns token $x$ into a distribution over the $N$ experts; keep the
+  \textbf{top-$k$}:
+  \[
+    p_i(x)=\frac{e^{(W_r x)_i}}{\sum_{j=1}^{N} e^{(W_r x)_j}},
+    \qquad
+    \boxed{\;y=\sum_{i\in\mathcal{T}} p_i(x)\,E_i(x)\;}
+  \]
+  \vskip -2pt
+  with $\mathcal{T}=\operatorname{top\text{-}}k$ indices and $E_i$ expert $i$'s FFN.
+  \begin{itemize}\small
+    \item \textbf{Total params} $\approx N\times|\text{expert}| + \text{shared}$ -- grows with $N$.
+    \item \textbf{Compute/token:} only $k$ experts fire, FLOPs $\approx k\times|\text{expert}|$
+      -- \emph{independent of $N$}.
+    \item The gate $p_i(x)$ keeps the router \textbf{differentiable}, so it is learned.
+  \end{itemize}
+  \nextbox{\footnotesize Switch Transformer uses $k=1$; Mixtral uses $k=2$. Same equation,
+    different $k$ and $N$.}
+\end{frame}
+
+\begin{frame}{Two parameter counts: total vs active}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/total_vs_active.pdf}
+    \column{0.44\textwidth}
+    MoE forces a distinction the dense world never needed:
+    \begin{itemize}\small
+      \item \textbf{Total (sparse) params} -- everything stored; grows with $N$. Sets the
+        \emph{memory} cost.
+      \item \textbf{Active params} -- what actually fires per token; set by $k$. Sets the
+        \emph{compute} cost.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\small The whole trick in one line: \textbf{total $\gg$ active}. Buy quality with
+      params, pay compute only for $k$ of them.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Switch Transformer (2021)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Switch Transformer}\\[4pt]
+    \small Make sparse routing \emph{simple} and \emph{stable} -- then scale it to a trillion.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Top-1 routing: the radical simplification}
+  Earlier MoE work (Shazeer et al., 2017) assumed you \emph{must} route to $k\ge 2$ experts
+  -- otherwise the router has no way to compare and get a gradient. Switch says: route to
+  \textbf{exactly one} expert ($k=1$).
+  \vskip 6pt
+  \textbf{Why top-1 is a good deal:}
+  \begin{itemize}\small
+    \item \textbf{Router compute drops} -- pick a single argmax, not a top-$k$ set.
+    \item \textbf{Expert capacity halves} -- each token lands in one place, so buffers shrink.
+    \item \textbf{Communication is simpler} -- less data shuffled between devices.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{The gate value $p_i(x)$ still multiplies the chosen expert's output, so the router
+    stays differentiable even at $k=1$. Quality holds; everything else gets cheaper.}
+\end{frame}
+
+\begin{frame}{The load-balancing auxiliary loss}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Left alone, the router collapses onto a \textbf{few favourite experts}; the rest go
+    \textbf{dead}. Switch adds a differentiable auxiliary loss per layer:
+    \[
+      \text{loss}=\alpha\cdot N\cdot\sum_{i=1}^{N} f_i\, P_i
+    \]
+    \begin{itemize}\footnotesize
+      \item $f_i$ = fraction of tokens \emph{dispatched} to expert $i$; $P_i$ = its mean
+        router \emph{probability}.
+      \item Minimized when both are $1/N$: \textbf{uniform} use.
+      \item $\alpha=10^{-2}$ -- enough to balance, not enough to drown the main loss.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \includegraphics[width=\linewidth]{fig/load_balancing.pdf}
+  \end{columns}
+  \watchbox{\footnotesize Balancing is not optional polish -- without it, capacity is wasted
+    on dead experts and the model trains far worse.}
+\end{frame}
+
+\begin{frame}{Expert capacity and token dropping}
+  Hardware wants \textbf{fixed} tensor shapes, so each expert gets a fixed number of slots:
+  \[
+    \text{expert capacity}=\left(\frac{\text{tokens per batch}}{\text{number of experts}}\right)
+      \times \text{capacity factor}
+  \]
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{fig/capacity_factor.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{\footnotesize Capacity factor $>1$ buys slack against uneven routing. Too low
+    $\rightarrow$ \textbf{dropped tokens} (skip the layer via the residual). Too high
+    $\rightarrow$ \textbf{padding} (wasted compute). Good balancing lets you keep it near 1.}
+\end{frame}
+
+\begin{frame}{Expert parallelism and stable training}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Expert parallelism.} Put different experts on different devices. Adding devices
+    adds experts -- so \textbf{parameters scale with your hardware} while per-device memory
+    and compute stay bounded.
+    \vskip 4pt
+    The price: an \textbf{all-to-all} shuffle each layer to send every token to its expert's
+    device and bring the result back.
+    \column{0.48\textwidth}
+    \textbf{Keeping it stable.} Sparse hard-routing is twitchy. Switch's fixes:
+    \begin{itemize}\small
+      \item \textbf{Selective precision} -- cast just the router to float32. bfloat16
+        everywhere else diverged; this kept full speed.
+      \item \textbf{Smaller init} -- shrink the init scale $10\times$: better quality,
+        much lower variance across seeds.
+      \item \textbf{Expert dropout} -- higher dropout \emph{inside} experts when
+        fine-tuning (they overfit small data).
+    \end{itemize}
+  \end{columns}
+  \vskip 2pt
+  \nextbox{\footnotesize Parameters now live \emph{across} the cluster -- more devices,
+    more experts, same FLOPs per token.}
+\end{frame}
+
+\begin{frame}{Does it pay off? Faster pretraining at equal compute}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/flop_speedup.pdf}
+    \column{0.44\textwidth}
+    At a \textbf{fixed compute budget} (same FLOPs/token, same hardware, same wall-clock):
+    \begin{itemize}\small
+      \item Switch-Base reaches T5-Base quality \textbf{7x} faster.
+      \item Still \textbf{2.5x} faster than T5-Large -- which spends 3.5x more FLOPs/token.
+      \item Scaled to \textbf{Switch-C, 1.6T params} (2048 experts): \textbf{4x} faster than
+        T5-XXL.
+    \end{itemize}
+    \vskip 4pt
+    \nextbox{\small More experts = more parameters = faster learning per FLOP. A new axis to
+      scale on.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The hard parts}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The costs nobody puts on the headline}\\[4pt]
+    \small Sparsity is not free -- it moves the cost from compute to memory and plumbing.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Where MoE bites back}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Training / routing troubles}
+    \begin{itemize}\small
+      \item \textbf{Load balancing} -- needs the aux loss or experts die; still a tuning knob.
+      \item \textbf{Routing instability} -- hard argmax decisions make big models diverge
+        (Switch-XXL was unstable even with the fixes).
+      \item \textbf{All-to-all communication} -- every layer shuffles tokens across devices;
+        can dominate wall-clock at scale.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{The memory asymmetry}
+    \begin{itemize}\small
+      \item Only $k$ experts \emph{compute}, but \textbf{all $N$ must be stored} and loaded.
+      \item Serving Mixtral costs memory for its \textbf{full 47B}, even though 13B run.
+      \item So MoE saves \emph{compute}, not \emph{memory} -- the opposite of what a
+        newcomer expects.
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  \warnbox{\footnotesize ``Cheaper'' means cheaper \textbf{FLOPs per token}. You still pay
+    full \textbf{memory}, extra \textbf{communication}, and real \textbf{engineering
+    complexity}.}
+\end{frame}
+
+% ================================================================
+\section{Mixtral 8x7B (2024)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Mixtral 8x7B}\\[4pt]
+    \small The idea, three years later, as a concrete open-weights model.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Mixtral: a modern sparse MoE}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Same backbone as Mistral 7B, but each layer's FFN is replaced by a MoE layer:
+    \begin{itemize}\small
+      \item \textbf{8 experts} per layer, \textbf{top-2} routing ($N=8$, $k=2$).
+      \item Experts are standard \textbf{SwiGLU} FFN blocks.
+      \item \textbf{47B total} params, but only \textbf{13B active} per token.
+      \item 32 layers, 32k-token context, released under Apache 2.0.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\small The router can pick a \emph{different} pair of experts at every token and
+      every layer -- so 13B of compute draws on all 47B of stored knowledge.}
+    \column{0.46\textwidth}
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \begin{center}
+    \begin{tabular}{l r}
+      \toprule
+      \textbf{Mixtral 8x7B} & \textbf{value}\\
+      \midrule
+      dim & 4096\\
+      layers & 32\\
+      hidden dim (FFN) & 14336\\
+      context length & 32768\\
+      num.\ experts $N$ & 8\\
+      top-$k$ & 2\\
+      total params & 47B\\
+      \textbf{active params} & \textbf{13B}\\
+      \bottomrule
+    \end{tabular}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Mixtral vs the dense heavyweights}
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/mixtral_benchmarks.pdf}
+  \end{center}
+  \vskip -2pt
+  With \textbf{13B active} params, Mixtral matches or beats \textbf{Llama-2 70B}
+  (5x more active) and \textbf{GPT-3.5} across the board -- and is \emph{far} ahead on code
+  (MBPP) and math (GSM8K). Mixtral 8x7B-Instruct then out-scored GPT-3.5 Turbo, Claude-2.1,
+  and Gemini Pro on human evals.
+\end{frame}
+
+\begin{frame}{What do the experts actually specialize in?}
+  Natural guess: expert 3 is ``the math expert,'' expert 5 is ``the code expert.'' The paper
+  checked -- and found \textbf{no clear topic specialization}.
+  \vskip 6pt
+  \begin{itemize}\small
+    \item Across ArXiv, biology, and philosophy text, the expert-usage histograms look
+      \textbf{almost identical} -- routing is not by domain.
+    \item Instead it tracks \textbf{syntax}: indentation tokens in code, or a repeated word
+      like \texttt{self}, keep hitting the same expert.
+    \item Strong \textbf{temporal locality} -- consecutive tokens often share an expert
+      (useful for caching, but risks over-subscribing a device).
+  \end{itemize}
+  \vskip 4pt
+  \watchbox{\footnotesize ``Experts'' is a misnomer: they are not human-interpretable topic
+    specialists. The router learns a low-level, syntactic partition -- whatever helps the loss.}
+\end{frame}
+
+% ================================================================
+\section{When to reach for MoE}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries So when does MoE win?}\\[4pt]
+    \small It is a compute-vs-memory trade, not a free lunch.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{MoE wins vs MoE costs}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Reach for MoE when\dots}
+    \begin{itemize}\small
+      \item You are \textbf{compute-bound} at scale and want more quality per FLOP/token.
+      \item You serve \textbf{batched / high-throughput} traffic, where all-to-all overhead
+        amortizes.
+      \item You have the \textbf{memory} to store all experts (many devices).
+      \item You want faster pretraining at a fixed compute budget.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Think twice when\dots}
+    \begin{itemize}\small
+      \item You are \textbf{memory-bound} -- you pay for all $N$ experts, not $k$.
+      \item You need \textbf{single-request, low-latency} inference (routing + all-to-all
+        overhead).
+      \item You cannot afford the \textbf{engineering complexity} (balancing, sharding,
+        capacity tuning).
+      \item A distilled \textbf{dense} model would fit your box (Switch distills, keeping
+        $\sim$30\% of the gain).
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  \nextbox{\footnotesize Rule of thumb: MoE trades \textbf{memory + complexity} for
+    \textbf{quality at a fixed compute-per-token}.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{MoE = experts + a router.} Replace a block's FFN with $N$ experts; a router
+      sends each token to its \textbf{top-$k$}. Total params grow with $N$; FLOPs/token set
+      by $k$: $y=\sum_{i\in\mathcal{T}} p_i(x)E_i(x)$.
+    \item \textbf{Switch Transformer}: top-1 routing, a load-balancing aux loss
+      ($\alpha N\sum_i f_iP_i$), expert capacity / token dropping, expert parallelism --
+      scaled to \textbf{1.6T} params and \textbf{7x} faster pretraining at equal compute.
+    \item \textbf{Hard parts}: load balancing / dead experts, routing instability, all-to-all
+      cost, and the memory asymmetry -- \textbf{all} experts stored though only $k$ run.
+    \item \textbf{Mixtral 8x7B}: 8 experts, top-2, \textbf{47B total / 13B active}; matches or
+      beats Llama-2 70B and GPT-3.5 at 5x fewer active params. Experts specialize by
+      \textbf{syntax}, not topic.
+    \item \textbf{The trade}: MoE buys quality-per-FLOP with memory and complexity.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Seen already:} \emph{[LLM-8] Qwen3} is a modern MoE in production -- the
+    same router + top-$k$ experts you just met, at frontier scale.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Sources: (1) Fedus, Zoph, Shazeer, "Switch Transformers" (2021), arXiv:2101.03961 --
+%   the foundational sparse-routing mechanism. (2) Jiang et al., "Mixtral of Experts"
+%   (2024), arXiv:2401.04088 -- the modern concrete example. Extracted from
+%   ml/llm_training/materials_md/papers/17_switch_transformer_*.txt and 18_mixtral_*.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py):
+%   dense_vs_moe    -- CENTERPIECE box diagram (schematic): dense FFN vs router->top-k experts.
+%   total_vs_active -- bar, log (REAL totals; Switch active = FLOP-matched dense baseline
+%                      T5-Base/Large 0.2B/0.7B, Mixtral 13B is the reported active count).
+%   flop_speedup    -- bar (REAL: 7x vs T5-Base, 2.5x vs T5-Large, Switch-C 4x vs T5-XXL).
+%   load_balancing  -- bar (SCHEMATIC, labeled): expert utilization with vs without aux loss.
+%   capacity_factor -- slot diagram (SCHEMATIC, labeled): dropped tokens vs padding.
+%   mixtral_benchmarks -- grouped bar (REAL, Mixtral Table 3): MMLU/HellaSwag/ARC-C/MBPP/GSM8K
+%                      vs Llama-2 70B and GPT-3.5, with active-param annotations.
+% Pedagogical decisions: lead with total-vs-active decoupling; Switch as the mechanism
+%   (top-1, aux loss, capacity, expert parallelism); a dedicated "hard parts" section so the
+%   memory/compute asymmetry lands; Mixtral as the concrete modern model + the "experts are
+%   syntactic, not topical" misconception guardrail; close on the compute-vs-memory trade.
+% Cross-reference: [LLM-8] Qwen3 (MoE in production) in the recap.
