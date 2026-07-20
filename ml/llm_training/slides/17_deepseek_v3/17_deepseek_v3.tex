@@ -1,0 +1,408 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-17] DeepSeek-V3: A Frontier MoE Trained Cheaply}
+\subtitle{671B params, 37B active -- MLA, auxiliary-loss-free MoE, FP8 training, multi-token prediction \quad(DeepSeek-AI, 2024)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{A frontier model for the price of a house}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    A \textbf{671B-parameter MoE} (only \textbf{37B active} per token) that stands on
+    par with \textbf{GPT-4o} and \textbf{Claude-3.5-Sonnet} -- yet its full training cost
+    about \textbf{\$5.6M} (\textbf{2.79M H800 GPU-hours}). An order of magnitude cheaper
+    than you would expect for this tier.
+    \vskip 6pt
+    And it is the base model that \textbf{DeepSeek-R1}'s reasoning (\textbf{[LLM-11]}) was
+    trained on top of.
+    \vskip 6pt
+    The trick is \emph{not} brute scale. It is a stack of \textbf{efficiency levers} --
+    \textbf{two carried over} from DeepSeek-V2 and re-validated, \textbf{three new} in V3.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.8cm, align=center] (a)
+          {\textbf{Brute force}\\ just make it bigger\\ (pay FLOPs on every param)};
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!12,
+              text width=3.8cm, align=center, below=0.7cm of a] (b)
+          {\textbf{Clever levers}\\ MLA, aux-free MoE,\\ FP8, MTP + DualPipe};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b);
+      \end{tikzpicture}
+      \\[4pt]
+      {\scriptsize frontier quality, a fraction of the bill}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Setup: total vs active, inherited vs new}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Total vs active, inherited vs new}\\[4pt]
+    \small Name the pieces first -- and be honest about which ones V3 actually invented.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{671B total, 37B active per token}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Recall the MoE distinction from \textbf{[LLM-13]}: \textbf{total} params (everything
+    stored, sets memory) vs \textbf{active} params (what fires per token, sets compute).
+    \vskip 6pt
+    DeepSeek-V3 pushes it hard:
+    \begin{itemize}\small
+      \item \textbf{671B total} / \textbf{37B active} -- about \textbf{18x} more stored
+        than fires.
+      \item Each MoE layer: \textbf{1 shared expert} + \textbf{256 routed experts},
+        \textbf{top-8} routed per token.
+      \item Pre-trained on \textbf{14.8T} tokens.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \keybox{\small The whole design question: how do you get \textbf{frontier quality}
+      out of those 37B active params -- and train the 671B \textbf{cheaply}? V3's answer
+      is a stack of \textbf{five efficiency levers}.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Five levers -- two inherited, three new (do not conflate them)}
+  \begin{center}
+    \includegraphics[width=0.70\textwidth]{fig/four_levers.pdf}
+  \end{center}
+  \vskip -9pt
+  \warnbox{\footnotesize \textbf{Attribution matters.} \textbf{MLA} and \textbf{DeepSeekMoE}
+    are \emph{inherited from DeepSeek-V2} and re-validated here -- not V3 inventions. V3's
+    own contributions are \textbf{auxiliary-loss-free balancing}, \textbf{large-scale FP8},
+    and \textbf{MTP}. \textbf{DualPipe} co-design is a big reason it was cheap.}
+\end{frame}
+
+% ================================================================
+\section{MLA: shrink the KV cache (from V2)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries MLA -- shrink the KV cache}\\[4pt]
+    \small Inherited from DeepSeek-V2, thoroughly re-validated in V3.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The KV-cache problem}
+  To generate one token, attention needs the \textbf{keys and values of every past token}.
+  So we \textbf{cache} them -- and that cache is the memory wall at long context.
+  \begin{itemize}\small
+    \item The KV cache grows with \textbf{sequence length $\times$ layers $\times$ heads}.
+    \item At long context it can \textbf{dwarf the model weights} in memory, and it is what
+      you must hold per concurrent request when serving.
+    \item Shrinking it directly buys \textbf{longer context} and \textbf{cheaper serving}.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{\footnotesize This is a \emph{memory} problem, not a compute one: the arithmetic
+    is cheap, but you cannot afford to \textbf{store} full K and V for every head of every
+    past token.}
+\end{frame}
+
+\begin{frame}{MLA: cache one low-rank latent, rebuild per head}
+  \begin{center}
+    \includegraphics[width=0.90\textwidth]{fig/mla_diagram.pdf}
+  \end{center}
+  \vskip -4pt
+  \keybox{\footnotesize \textbf{Multi-head Latent Attention} (from DeepSeek-V2): project
+    K,V down to a shared \textbf{low-rank latent $c_t$}, cache \emph{only} $c_t$, then
+    up-project per head when needed. Big memory cut, quality stays near-lossless. The
+    \emph{why} matters more than the matrices here.}
+\end{frame}
+
+\begin{frame}{The two halves of attention's memory bill}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{FlashAttention (\textbf{[LLM-15]})} attacked the \textbf{attention-matrix}
+    memory: never materialize the full $n \times n$ scores, stream them tile by tile.
+    \vskip 6pt
+    \textbf{MLA} attacks the \textbf{KV-cache} memory: never store full per-head K,V, keep
+    a small shared latent instead.
+    \column{0.5\textwidth}
+    \keybox{\small Two different memory costs, two different fixes:
+      \begin{itemize}\footnotesize
+        \item FA -- the \textbf{scores} you compute \emph{now}.
+        \item MLA -- the \textbf{K,V} you cached from the \emph{past}.
+      \end{itemize}
+      Together they are why long-context attention is affordable at all.}
+  \end{columns}
+  \vskip 4pt
+  \nextbox{\footnotesize Both are \emph{efficiency} plays -- the theme running through this
+    stretch of the course.}
+\end{frame}
+
+% ================================================================
+\section{DeepSeekMoE + auxiliary-loss-free balancing}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Balancing experts without a quality tax}\\[4pt]
+    \small DeepSeekMoE is from V2. The auxiliary-loss-free fix is V3's own.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The balancing tension (recall [LLM-13])}
+  MoE only works if tokens \textbf{spread across experts}. Left alone, the router
+  \textbf{collapses} onto a few favourites and the rest go \textbf{dead}.
+  \vskip 6pt
+  The standard fix from \textbf{[LLM-13]} is an \textbf{auxiliary balancing loss} added to
+  the objective. But it is a real tension:
+  \begin{itemize}\small
+    \item Too weak -- experts still collapse.
+    \item Too strong -- it \textbf{fights the main loss} and \textbf{costs quality}.
+  \end{itemize}
+  \vskip 4pt
+  \warnbox{\footnotesize The aux loss pays for balance with a \textbf{gradient that is not
+    about the task}. You are always trading model quality against load balance.}
+\end{frame}
+
+\begin{frame}{V3's fix: a routing bias, nudged online -- no aux-loss tax}
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{fig/aux_free_balancing.pdf}
+  \end{center}
+  \vskip -4pt
+  \keybox{\footnotesize Add a per-expert \textbf{bias $b_i$} to the affinity \emph{for
+    routing only} (top-$K$ uses $s_i+b_i$; the gate weight still uses the original $s_i$).
+    Each step, nudge $b_i$: \textbf{$-\gamma$} if the expert is overloaded, \textbf{$+\gamma$}
+    if underloaded. Load evens out with \textbf{no extra gradient, no quality tax}.}
+\end{frame}
+
+\begin{frame}{Shared + fine-grained experts, plus a light safety net}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    DeepSeekMoE's structure (from V2):
+    \begin{itemize}\small
+      \item \textbf{Fine-grained routed experts} (256 of them) -- smaller experts, more
+        specialization per FLOP.
+      \item \textbf{Shared expert(s)} always on -- absorb the common, general computation
+        so routed experts can specialize.
+    \end{itemize}
+    \column{0.44\textwidth}
+    On top, V3 keeps one guardrail:
+    \begin{itemize}\small
+      \item A \textbf{light complementary sequence-wise balance loss} with a \emph{tiny}
+        weight -- just to stop any single sequence from going extremely unbalanced.
+    \end{itemize}
+  \end{columns}
+  \vskip 4pt
+  \nextbox{\footnotesize The heavy lifting is the \textbf{bias trick}; the tiny sequence-wise
+    loss is only a safety net, not the old quality-costing aux loss.}
+\end{frame}
+
+% ================================================================
+\section{FP8 training at large scale}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries FP8 training}\\[4pt]
+    \small 8-bit for the forward \emph{and} backward pass -- at frontier scale.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Why 8-bit training is hard}
+  \textbf{QLoRA (\textbf{[LLM-12]})} taught the quantization intuition: fewer bits, less
+  memory -- but a tiny dynamic range struggles with \textbf{outliers}. There it was for
+  \emph{frozen storage}. FP8 training pushes low precision into the \textbf{live forward
+  and backward pass}.
+  \begin{itemize}\small
+    \item FP8's dynamic range is \textbf{tiny}; activation and gradient \textbf{outliers
+      overflow}.
+    \item Naive FP8 training \textbf{diverges} -- errors compound across every layer and step.
+  \end{itemize}
+  \vskip 4pt
+  \warnbox{\footnotesize Quantizing a \emph{frozen} weight for storage is one thing.
+    Training \emph{in} 8-bit -- where every rounding error feeds the next gradient -- is a
+    much harder problem.}
+\end{frame}
+
+\begin{frame}{FP8 in one picture: use the range you have}
+  \begin{columns}[T]
+    \column{0.4\textwidth}
+    FP8 has \textbf{very few} representable values over a \textbf{small} range.
+    \begin{itemize}\small
+      \item A tile of tiny weights \textbf{collapses} onto 1-2 levels -- most of the
+        precision is wasted, information lost.
+      \item Multiply the tile by a \textbf{per-tile scale} first: the same values now
+        \textbf{spread across many levels}. Divide it back out afterwards.
+    \end{itemize}
+    \column{0.6\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/fp8_numberline.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \keybox{\footnotesize That is \textbf{fine-grained (per-tile / per-block) scaling}: choose a
+    scale for each small block so it fills the FP8 range -- the fix that keeps 8-bit
+    \emph{training} from losing the small values or overflowing on the big ones.}
+\end{frame}
+
+\begin{frame}{V3's recipe: 8-bit where it is safe, precision where it matters}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/fp8_map.pdf}
+  \end{center}
+  \vskip -8pt
+  \keybox{\footnotesize \textbf{Fine-grained scaling} (per-tile $1\times128$ activations,
+    per-block $128\times128$ weights) keeps outliers in range; \textbf{FP32 accumulation}
+    fixes FP8's $\sim$14-bit accumulate; sensitive parts stay in \textbf{BF16/FP32}. Result:
+    $\sim$\textbf{2x} throughput, less memory, \textbf{loss error $<0.25\%$} vs BF16.}
+\end{frame}
+
+% ================================================================
+\section{Multi-Token Prediction (MTP)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Multi-Token Prediction}\\[4pt]
+    \small A denser learning signal -- and a speed-up at inference time.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Predict-first: does predicting extra tokens help the main model?}
+  Standard language-model training predicts only the \textbf{next} token at each position.
+  \vskip 6pt
+  What if we also asked the model to predict the token \emph{after} that, and the one after
+  that?
+  \vskip 8pt
+  \pause
+  \textbf{It helps.} A prediction target at \emph{every} future depth is a \textbf{denser
+  training signal} per position -- better sample efficiency -- and it forces the model to
+  \textbf{pre-plan} its representations.
+  \vskip 4pt
+  \nextbox{\footnotesize The extra targets are a training aid. At inference you can keep just
+    the main next-token model -- or reuse the extra heads to go \emph{faster} (next slide).}
+\end{frame}
+
+\begin{frame}{MTP: sequential modules that keep the full causal chain}
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{fig/mtp_diagram.pdf}
+  \end{center}
+  \vskip -4pt
+  \keybox{\footnotesize V3 adds \textbf{sequential} lightweight modules that each reuse the
+    previous depth's representation -- keeping the \textbf{full causal chain} (distinct from
+    Gloeckle et al.'s \emph{parallel independent heads}). Bonus: those modules enable
+    \textbf{speculative decoding} -- the 2nd-token prediction is accepted \textbf{85--90\%}
+    of the time, so inference gets faster.}
+\end{frame}
+
+% ================================================================
+\section{Does it work? And the R1 link}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small Best open model, competitive with frontier closed -- for a fraction of the cost.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Benchmarks: best open, competitive with closed}
+  \begin{center}
+    \includegraphics[width=0.84\textwidth]{fig/benchmarks.pdf}
+  \end{center}
+  \vskip -8pt
+  \keybox{\footnotesize With \textbf{37B active} params, V3 is the \textbf{strongest open}
+    model and holds its own against \textbf{GPT-4o} and \textbf{Claude-3.5-Sonnet} --
+    \emph{dominant} on math (MATH-500, AIME) and competition code (Codeforces), a step
+    behind Claude on GPQA. It beats Qwen2.5-72B and Llama-3.1-405B across the board.}
+\end{frame}
+
+\begin{frame}{The cost, and what it made possible}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \includegraphics[width=\linewidth]{fig/cost.pdf}
+    \column{0.40\textwidth}
+    Full training: \textbf{2.788M H800-hours}, \textbf{\$5.576M}; pre-training alone
+    \textbf{2.664M}. Frontier quality without a frontier budget.
+    \vskip 6pt
+    \nextbox{\small \textbf{[LLM-11] R1} took \emph{this} base model and added reasoning
+      RL. The efficiency here is exactly what made that next step \textbf{affordable}.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Frontier MoE, cheaply:} \textbf{671B total / 37B active}, 14.8T tokens,
+      full training \textbf{2.788M H800-hours ($\approx$\$5.6M)} -- efficiency, not scale.
+    \item \textbf{Inherited from DeepSeek-V2 (re-validated):} \textbf{MLA} (cache a low-rank
+      KV latent) and \textbf{DeepSeekMoE} (fine-grained + shared experts).
+    \item \textbf{New in V3:} \textbf{auxiliary-loss-free balancing} (a routing bias nudged
+      online, no quality tax), \textbf{large-scale FP8 training} (loss error $<0.25\%$), and
+      \textbf{MTP} (denser signal + speculative decoding). \textbf{DualPipe} co-design made
+      it cheap.
+    \item \textbf{Results:} best open model, competitive with GPT-4o / Claude-3.5; the base
+      \textbf{[LLM-11] R1} was built on.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} \emph{[LLM-11] R1} adds reasoning RL on top of this base;
+    \emph{[LLM-13] MoE} and \emph{[LLM-12] QLoRA} are the roots of its balancing and
+    quantization ideas. The frontier is now \textbf{efficient training}, not just bigger.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: DeepSeek-AI, "DeepSeek-V3 Technical Report" (Dec 2024), arXiv:2412.19437.
+%   Extracted from ml/llm_training/materials_md/papers/23_deepseek_v3_2412.19437.txt.
+%   Numbers verified against the report: 671B total / 37B active; 14.8T tokens;
+%   full training 2.788M H800-hrs / $5.576M (Table 1: pre-train 2.664M/$5.328M,
+%   context ext. 119K/$0.238M, post-train 5K/$0.01M); FP8 loss error < 0.25% (Sec 3.3);
+%   1 shared + 256 routed experts, top-8 routed; FP8 tile 1x128 / block 128x128;
+%   MTP 2nd-token acceptance 85-90%; benchmarks from Table 6.
+% ATTRIBUTION (review-flagged, load-bearing): MLA and DeepSeekMoE are INHERITED from
+%   DeepSeek-V2 and re-validated in V3 ("thoroughly validated in DeepSeek-V2"), NOT V3
+%   innovations. V3's own contributions: auxiliary-loss-free load balancing, large-scale
+%   FP8 training, and Multi-Token Prediction (MTP). DualPipe / computation-communication
+%   co-design is presented as a major reason training was cheap. four_levers.pdf marks the
+%   inherited-vs-new split explicitly.
+% Figures (fig/, matplotlib via py_src/make_figures.py, SEED=509):
+%   four_levers        -- CENTERPIECE (schematic): 5 levers, inherited (MLA, MoE) vs V3-new.
+%   mla_diagram        -- schematic: KV -> low-rank latent -> per-head + cache-size contrast.
+%   aux_free_balancing -- schematic: routing bias steers top-K only; load converges to uniform.
+%   fp8_map            -- schematic: FP8 GEMMs vs BF16/FP32 sensitive parts + scaling note.
+%   mtp_diagram        -- schematic: standard next-1 vs sequential MTP modules (causal chain).
+%   benchmarks         -- REAL (Table 6): V3 vs Qwen2.5-72B / Llama-3.1-405B / GPT-4o / Claude-3.5.
+%   cost               -- REAL (Table 1): V3 training-cost breakdown by phase (H800-hrs, $).
+% Pedagogical decisions: abstract the 53-page report to five levers (a la the Llama3 deck);
+%   lead by splitting inherited vs new so attribution lands; MLA paired with FlashAttention
+%   ([LLM-15]) as the two halves of attention's memory bill; aux-loss-free framed against the
+%   [LLM-13] balancing tension; FP8 framed against [LLM-12] QLoRA quantization intuition;
+%   predict-first for MTP; close on cost + the [LLM-11] R1 link. MLA/FP8 math kept conceptual.
+% Deviation: cost.pdf shows V3's own phase breakdown (fully verified, Table 1) rather than
+%   peer cost bars -- the report gives no peer GPU-hour figures, so peer bars would be
+%   unverifiable / cross-hardware. The "order of magnitude cheaper" point lives in prose.
+% Cross-references: [LLM-11] R1 (base model), [LLM-12] QLoRA (quantization), [LLM-13] MoE
+%   (balancing), [LLM-15] FlashAttention (KV-cache vs attention-matrix memory).

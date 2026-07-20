@@ -1,0 +1,414 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-15] FlashAttention: Fast, Memory-Efficient Exact Attention}
+\subtitle{Make attention IO-aware - tile it, and never write the $N\times N$ matrix to HBM \quad(Dao et al., 2022)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Attention got the FLOPs right and the memory wrong}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    Self-attention is \textbf{$O(N^2)$ in both time and memory}. As context $N$ grows,
+    the $N\times N$ attention matrix dominates.
+    \vskip 6pt
+    The surprise: profiling shows the bottleneck is \textbf{HBM memory bandwidth},
+    \emph{not} arithmetic. The matmuls are cheap; you wait on memory traffic.
+    \vskip 6pt
+    \textbf{FlashAttention} makes attention \textbf{exact} and much \textbf{faster} by
+    attacking the memory, not the math -- tile the computation so the $N\times N$ matrix
+    \textbf{never touches slow memory}.
+    \vskip 6pt
+    Today: why attention is memory-bound, the \textbf{tiling + online-softmax} trick,
+    \textbf{recompute-in-backward}, and the payoff (up to $\sim$3x end-to-end, up to 20x
+    less memory).
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.9cm, align=center] (a)
+          {\textbf{What we assumed}\\ compute-bound\\ \emph{cut the FLOPs}};
+        \node[draw=armred, very thick, rounded corners=3pt, fill=armred!10,
+              text width=3.9cm, align=center, below=0.7cm of a] (b)
+          {\textbf{What it actually is}\\ memory-bound\\ \emph{cut the HBM traffic}};
+        \draw[-{Latex}, thick, armred] (a) -- (b);
+      \end{tikzpicture}
+      \\[4pt]
+      {\scriptsize exact result, a fraction of the wall-clock}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The problem: attention is memory-bound}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Attention is memory-bound, not compute-bound}\\[4pt]
+    \small The fast memory is tiny; the big memory is slow. That gap is the whole story.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The GPU memory hierarchy: fast is small, big is slow}
+  A GPU has a few tiers of memory. Smaller means faster -- by orders of magnitude.
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{fig/gpu_memory_hierarchy.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{\footnotesize On an A100, on-chip \textbf{SRAM} is $\sim$10x the bandwidth of \textbf{HBM}
+    but $\sim$2000x smaller. If an operation reads/writes a lot of HBM relative to its
+    arithmetic, HBM is what you \textbf{wait on}. The trick is to keep work in SRAM.}
+\end{frame}
+
+\begin{frame}{Why ``memory-bound''? A kitchen analogy}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Think of computing as \textbf{cooking}:
+    \begin{itemize}\small
+      \item \textbf{SRAM} = your \textbf{countertop} -- tiny, but everything on it is instantly
+        in reach.
+      \item \textbf{HBM} = the \textbf{pantry down the hall} -- huge, but every trip costs time.
+    \end{itemize}
+    \vskip 4pt
+    Standard attention writes the giant $N\times N$ tray to the pantry and walks back for it at
+    \emph{every} step. The chopping (FLOPs) is quick; the \textbf{walking} (HBM traffic) is the
+    wall-clock.
+    \vskip 4pt
+    FlashAttention brings one \textbf{block} to the counter, finishes all the work on it there,
+    and carries only the finished dish ($O$) back.
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\footnotesize]
+        \node[draw=armred, thick, rounded corners, fill=armred!8, text width=3.2cm,
+              align=center, minimum height=1.3cm] (p) {\textbf{Pantry = HBM}\\ huge, far\\
+              \scriptsize a trip every step};
+        \node[draw=armblue, very thick, rounded corners, fill=armblue!10, text width=3.2cm,
+              align=center, below=1.2cm of p, minimum height=1.0cm] (c)
+              {\textbf{Counter = SRAM}\\ tiny, instant};
+        \draw[-{Latex}, thick, armred] ([xshift=-4mm]p.south) --
+              node[left, font=\scriptsize]{walk} ([xshift=-4mm]c.north);
+        \draw[-{Latex}, thick, armred] ([xshift=4mm]c.north) --
+              node[right, font=\scriptsize]{back} ([xshift=4mm]p.south);
+      \end{tikzpicture}
+      \\[3pt]
+      {\scriptsize fewer trips = faster, even if you chop a bit more}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \keybox{\footnotesize The lever: minimize \textbf{trips to the pantry} (HBM traffic), not the
+    amount of \textbf{chopping} (FLOPs). That is the whole design.}
+\end{frame}
+
+\begin{frame}{Standard attention round-trips the $N\times N$ through HBM}
+  The textbook implementation materializes the full $N\times N$ matrices $S$ and $P$ in HBM:
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/standard_attention.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{\footnotesize $S=QK^{\top}$, $P=\mathrm{softmax}(S)$, $O=PV$: several full $N\times N$
+    \textbf{reads and writes} to slow HBM. Softmax, masking, and dropout add almost no FLOPs
+    -- but each is another memory-bound pass over the $N\times N$ matrix.}
+\end{frame}
+
+\begin{frame}{Predict first: which is the real bottleneck?}
+  Self-attention is $O(N^2)$ \textbf{FLOPs} \emph{and} $O(N^2)$ \textbf{memory}. For GPT-2 sizes
+  ($N=1024$, $d=64$), which one dominates the wall-clock?
+  \vskip 6pt
+  \begin{itemize}\small
+    \item[(a)] the arithmetic -- the $QK^{\top}$ and $PV$ matrix multiplies
+    \item[(b)] the memory traffic -- moving the $N\times N$ matrix in and out of HBM
+  \end{itemize}
+  \pause
+  \vskip 4pt
+  \keybox{\footnotesize \textbf{(b) memory.} On GPT-2 medium, standard attention runs
+    \textbf{66.6 GFLOPs} but moves \textbf{40.3 GB} through HBM, taking \textbf{41.7 ms}.
+    The arithmetic is a small slice; the HBM traffic is the wall-clock. Attention is a
+    \textbf{memory-bound} operation, so cutting FLOPs barely helps -- you have to cut HBM
+    accesses.}
+\end{frame}
+
+% ================================================================
+\section{The idea: tiling and online softmax}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Tile it, and never materialize the $N\times N$}\\[4pt]
+    \small Compute the output block by block, carrying a small running summary.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Intuition: compute the output block by block}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    Think of a \textbf{running average or max} over a stream: you never store the whole list --
+    you keep a small summary and update it as each value arrives.
+    \vskip 6pt
+    FlashAttention does the same with attention. Split $Q,K,V$ into \textbf{blocks} that fit in
+    fast SRAM, and combine them while carrying a running summary $(m,\ell,o)$.
+    \vskip 6pt
+    You \textbf{never hold the whole $N\times N$} matrix at once -- only three small vectors.
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/online_softmax.pdf}
+  \end{columns}
+  \vskip 2pt
+  \keybox{\footnotesize $m$ = running max, $\ell$ = running normalizer (sum), $o$ = partial output.
+    One block at a time; the result is the same attention, computed with tiny memory.}
+\end{frame}
+
+\begin{frame}{The one hurdle: the online (running) softmax}
+  \small
+  Softmax needs the \textbf{max} and \textbf{sum} over a \emph{whole} row -- but tiling only shows
+  us \textbf{one block at a time}. Keep running stats and \textbf{rescale} when the max shifts.
+  \vskip 1pt
+  Numerically-stable softmax of a row, with $m=\max_j x_j$:
+  \vskip -7pt
+  \[
+    \mathrm{softmax}(x)_i = \frac{e^{\,x_i-m}}{\ell},
+    \qquad \ell = \sum_j e^{\,x_j - m}.
+  \]
+  \vskip -5pt
+  Carry state $(m,\ell,o)$. A new block $b$ has local max $m_b$, local sum $\ell_b$, and
+  partial output $P_bV_b$:
+  \vskip -7pt
+  \[
+    m' = \max(m,\, m_b),\qquad
+    \alpha = e^{\,m-m'},\qquad
+    \beta  = e^{\,m_b-m'}
+  \]
+  \vskip -11pt
+  \[
+    \ell' = \alpha\,\ell + \beta\,\ell_b,\qquad
+    o' = \alpha\,o + \beta\,(P_bV_b),\qquad
+    \boxed{\,O = o/\ell \text{ at the end}\,}
+  \]
+  \vskip -3pt
+  \keybox{\scriptsize The correction factor $e^{\,m-m'}$ is the whole trick: when a later block
+    reveals a bigger max, rescale everything so far by \textbf{one scalar}. The output is
+    \textbf{bit-exact} softmax attention -- not an approximation.}
+\end{frame}
+
+\begin{frame}{Online softmax, by hand}
+  \small
+  One attention row, scores $x=[\,0,\,2\;\;|\;\;3,\,1\,]$, split into two blocks. Watch the
+  running normalizer $\ell$ land on \textbf{exactly} the full-row denominator.
+  \vskip 3pt
+  \textbf{Block 1} $=[0,2]$:\quad $m_1=2$,\quad
+    $\ell_1=e^{0-2}+e^{2-2}=0.135+1=1.135$.\quad State: $m=2,\ \ell=1.135$.
+  \vskip 4pt
+  \textbf{Block 2} $=[3,1]$:\quad $m_2=3$, so the new max is $m'=\max(2,3)=3$.
+  \vskip -8pt
+  \[
+    \alpha=e^{m-m'}=e^{-1}=0.368,\qquad
+    \ell_{\text{blk}}=e^{3-3}+e^{1-3}=1+0.135=1.135
+  \]
+  \vskip -10pt
+  \[
+    \ell' \;=\; \underbrace{\alpha\,\ell}_{\text{rescaled block 1}} + \ell_{\text{blk}}
+      \;=\; 0.368(1.135) + 1.135 \;=\; \mathbf{1.553}
+  \]
+  \vskip -2pt
+  \textbf{Direct check:} full-row softmax denominator (max $=3$):
+  $\;e^{-3}+e^{-1}+e^{0}+e^{-2}=\mathbf{1.553}$. \checkmark
+  \vskip 3pt
+  \nextbox{\footnotesize The single scalar $\alpha=e^{m-m'}$ retro-corrects block 1 the instant
+    block 2 reveals a larger max. Two blocks, \textbf{exact} full-row softmax -- no full row ever
+    held at once.}
+\end{frame}
+
+\begin{frame}{The tiling algorithm (Algorithm 1)}
+  Outer loop over $K,V$ blocks; inner loop over $Q$ blocks. Each tile lives in SRAM; only the
+  final $O$ is written back.
+  \begin{center}
+    \includegraphics[width=0.76\textwidth]{fig/tiling_diagram.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{\footnotesize Load a $Q_i$ / $K_j,V_j$ tile into SRAM, compute the block $S_{ij}$,
+    update $(m,\ell,O_i)$ with the rescaling, move on. \textbf{$S$ and $P$ are never written to HBM}
+    -- only $O$ ($N\times d$) is. One fused CUDA kernel does the whole thing.}
+\end{frame}
+
+% ================================================================
+\section{The backward pass: recompute, don't store}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Backward pass: recompute, don't store}\\[4pt]
+    \small Storing the $N\times N$ for backprop would undo everything. So don't store it.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Recompute the attention matrix instead of storing it}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    Backprop normally needs $S$ and $P$ (the $N\times N$) to form the gradients. Storing them
+    would defeat the whole purpose.
+    \vskip 4pt
+    FlashAttention instead stores \textbf{only the softmax stats} $(m,\ell)$ -- size $N$ -- and
+    \textbf{recomputes} the blocks of $S,P$ on the fly in SRAM during the backward pass.
+    \vskip 4pt
+    That is \emph{more} FLOPs. But attention is memory-bound, so trading arithmetic for far
+    fewer HBM accesses is still a \textbf{net win}.
+    \column{0.44\textwidth}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{center}
+    \begin{tabular}{lrr}
+      \toprule
+      GPT-2 medium & standard & flash \\
+      \midrule
+      GFLOPs & 66.6 & \textbf{75.2} \\
+      HBM R/W (GB) & 40.3 & \textbf{4.4} \\
+      runtime (ms) & 41.7 & \textbf{7.3} \\
+      \bottomrule
+    \end{tabular}
+    \end{center}
+    \vskip 2pt
+    {\footnotesize More FLOPs, $\sim$9x less HBM traffic, $\sim$5.7x faster.}
+  \end{columns}
+  \vskip 4pt
+  \keybox{\footnotesize Recomputation is usually a \textbf{bad} trade -- here it \textbf{wins},
+    because we are bound by memory, not compute. (A form of selective gradient checkpointing.)}
+\end{frame}
+
+% ================================================================
+\section{Does it work?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small Faster training, less memory, longer context -- and the same exact numbers.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Faster training, exact result}
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{fig/speedup_bar.pdf}
+  \end{center}
+  \vskip -6pt
+  \keybox{\footnotesize BERT-large \textbf{15\%} faster than the MLPerf 1.1 record
+    (17.4 vs 20.0 min); GPT-2 up to \textbf{3x} vs HuggingFace, $\sim$1.7x vs Megatron;
+    LRA \textbf{2.4x}. The \textbf{7.6x} is the \textbf{attention kernel alone}, not
+    end-to-end. Same perplexity: \emph{exact} attention, not an approximation.}
+\end{frame}
+
+\begin{frame}{Linear memory unlocks long context}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/memory_scaling.pdf}
+    \column{0.44\textwidth}
+    Standard attention's memory grows \textbf{quadratically} -- the $N\times N$ matrix. Never
+    materializing it makes FlashAttention's memory grow \textbf{linearly} in $N$.
+    \vskip 6pt
+    \begin{itemize}\small
+      \item Up to \textbf{20x} less memory than exact-attention baselines.
+      \item Memory now scales with $N$, not $N^2$.
+      \item So you can afford sequences that used to run out of memory.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize Less memory is not just cheaper -- it is what makes
+      \textbf{long-context} training possible at all.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{New capability: Path-X and Path-256}
+  Long, exact context enables the \textbf{first} Transformers to beat chance on two extreme
+  long-range tasks (images fed one pixel at a time):
+  \vskip 2pt
+  \begin{center}
+  \small
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{lcc}
+    \toprule
+    Model & Path-X (16K) & Path-256 (64K) \\
+    \midrule
+    prior Transformers & {\color{armred}\ding{55}} & {\color{armred}\ding{55}} \\
+    \textbf{FlashAttention} (dense) & \textbf{61.4\%} & {\color{armred}\ding{55}} \\
+    \textbf{block-sparse} FlashAttention & 56.0\% & \textbf{63.1\%} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \watchbox{\footnotesize Two \emph{distinct} results. \textbf{Dense} FlashAttention is exact and
+    first to solve \textbf{Path-X} (16K). It cannot reach 64K -- \textbf{block-sparse}
+    FlashAttention (an \emph{approximate} variant that skips zero blocks) is what solves
+    \textbf{Path-256} (64K).}
+  \vskip 2pt
+  {\footnotesize This is the ``long context'' thread the report decks (Llama3, Qwen3) build on.}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Memory-bound, not compute-bound.} Attention's wall-clock is dominated by HBM
+      traffic, not FLOPs -- so the win is in \emph{memory access}, not arithmetic.
+    \item \textbf{Tiling + online softmax.} Compute the output block by block, carry $(m,\ell,o)$,
+      and rescale by $e^{\,m-m'}$ on a new max -- so the $N\times N$ matrix is \textbf{never
+      materialized}. Exact, not approximate.
+    \item \textbf{Recompute in backward.} Store only $(m,\ell)$; recompute $S,P$ on-chip. More
+      FLOPs, far less IO, still a net speedup.
+    \item \textbf{The payoff.} Up to $\sim$\textbf{3x} end-to-end (\textbf{7.6x} on the attention
+      op alone), up to \textbf{20x} less memory, linear in $N$.
+    \item \textbf{You already use this.} \texttt{torch.nn.functional.scaled\_dot\_product\_attention}
+      dispatches to FlashAttention kernels under the hood.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} long context everywhere -- \emph{Llama3 (07)} at 128k,
+    \emph{Qwen3 (08)} at 32k. The efficiency mindset continues in \emph{DeepSeek-V3 (17)},
+    where \textbf{MLA} shrinks the \textbf{KV cache} -- the other half of the attention-memory story.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Dao, Fu, Ermon, Rudra, Re, "FlashAttention: Fast and Memory-Efficient Exact
+%   Attention with IO-Awareness" (NeurIPS 2022), arXiv:2205.14135. Text extracted to
+%   ml/llm_training/materials_md/papers/21_flash_attention_2205.14135.txt.
+% Numbers (all verified against the paper):
+%   A100 memory hierarchy: SRAM 19 TB/s / ~20 MB (192 KB per SM x 108 SMs), HBM 1.5-2.0 TB/s /
+%     40-80 GB, DRAM 12.8 GB/s / >1 TB (Sec 2.1, Fig 1 left).
+%   IO table (GPT-2 medium, Fig 2 left): standard 66.6 GFLOPs / 40.3 GB HBM / 41.7 ms;
+%     flash 75.2 GFLOPs / 4.4 GB HBM / 7.3 ms (more FLOPs, ~9x less HBM, ~5.7x faster).
+%   7.6x = attention KERNEL alone (Fig 1 right), NOT end-to-end. End-to-end: BERT-large 15%
+%     (17.4 vs 20.0 min, Table 1), GPT-2 small 3.5x / medium 3.0x vs HuggingFace (Table 2),
+%     ~1.7x vs Megatron, LRA 2.4x (Table 3). Memory up to 20x less, linear in N (Fig 3).
+%   Path-X 61.4% by dense FlashAttention; Path-256 63.1% by block-sparse FlashAttention;
+%     dense FA fails Path-256 (Table 6) -- kept DISTINCT per the outline.
+% Figures (fig/, matplotlib via py_src/make_figures.py, SEED=509):
+%   gpu_memory_hierarchy -- REAL (A100 bandwidth vs size, log bandwidth bars).
+%   standard_attention   -- SCHEMATIC (labeled): the N x N HBM round-trips of Algorithm 0.
+%   online_softmax       -- SCHEMATIC (labeled): running max/sum combining blocks.
+%   tiling_diagram       -- SCHEMATIC centerpiece (labeled): Q/K/V blocks, one S_ij tile in SRAM.
+%   speedup_bar          -- REAL: BERT/GPT-2/LRA end-to-end; 7.6x kernel-only as a separate bar.
+%   memory_scaling       -- shapes REAL (N^2 vs N asymptotics), magnitudes illustrative, 20x labeled.
+% Pedagogical decisions: lead with the compute-vs-memory framing (hook + predict-first); one
+%   real derivation only (the online-softmax rescaling), everything else conceptual; intuition
+%   (running-summary analogy) before the math; a dedicated backward-pass section so the
+%   recompute-vs-store trade lands with concrete IO numbers; close on the long-context thread.
+% Cross-references: forward to [LLM-07] Llama3 / [LLM-08] Qwen3 (long context) and
+%   [LLM-17] DeepSeek-V3 (MLA / KV-cache) in the Next box.

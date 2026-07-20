@@ -1,0 +1,390 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-18] FLAN: Instruction Tuning at Scale}
+\subtitle{Finetune on many tasks phrased as instructions $\to$ zero-shot generalization to unseen tasks \quad(Wei et al., 2021)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Great at examples, clumsy at instructions}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    A large LM like GPT-3 is a strong \textbf{few-shot} learner: show it a couple of
+    examples and it plays along. But hand it a bare \textbf{zero-shot} instruction -- ``Does
+    this premise entail this hypothesis?'' -- and it often flubs it.
+    \vskip 3pt
+    Why? Next-token pretraining never rewarded ``\emph{do what this instruction says}.'' The
+    model saw text, not tasks. (Same framing as InstructGPT, LLM-10.)
+    \vskip 3pt
+    \textbf{FLAN's question:} can we make a model good at \textbf{brand-new tasks with zero
+    examples}, just by teaching it the \emph{habit} of following instructions?
+    \vskip 3pt
+    {\footnotesize Matched pair to watch: \textbf{LIMA (LLM-4)} answers ``curate 1{,}000
+    examples''; FLAN answers ``\textbf{scale up} the number of tasks.''}
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.9cm, align=center] (a)
+          {\textbf{Plain LM}\\ few-shot: ok\\ zero-shot: \textcolor{armred}{poor}};
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!12,
+              text width=3.9cm, align=center, below=0.7cm of a] (b)
+          {\textbf{Instruction-tuned}\\ zero-shot: \textcolor{paramgreen}{strong}\\ on \emph{unseen} tasks};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b)
+          node[midway, right=1pt, font=\scriptsize] {teach the habit};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The idea: teach the habit, not the tasks}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Teach the habit, not the tasks}\\[4pt]
+    \small You are not teaching 60 tasks. You are teaching one skill: read an instruction, do what it asks.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Intuition: the new hire who learns to take a ticket}
+  Picture a support agent on their first week. They handle password resets, refund requests,
+  shipping questions -- \textbf{60 kinds of ticket}. Then a \textbf{61st kind} they have never
+  seen lands in the queue, and they handle it fine.
+  \vskip 8pt
+  Why? They did not memorize 60 scripts. They learned the \textbf{format of the job}:
+  \emph{read the request, figure out what is being asked, produce the answer.}
+  \vskip 8pt
+  \keybox{FLAN's bet in one line: finetune on enough tasks phrased as instructions, and the
+    model stops learning \emph{those tasks} and starts learning \textbf{``follow an
+    instruction''} -- a skill that transfers to instructions it never trained on.}
+  \vskip 6pt
+  {\footnotesize This is the opposite failure mode from overfitting: the win is
+  \emph{generalization to new task types}, not memorizing the training tasks.}
+\end{frame}
+
+\begin{frame}{Instruction tuning, defined}
+  \textbf{Instruction tuning} sits between pretraining and use: a round of \textbf{multitask
+  finetuning} where every example is reformatted as
+  \[
+    (\text{instruction},\ \text{input}) \ \longrightarrow\ \text{output}.
+  \]
+  \begin{center}
+    \includegraphics[width=0.68\textwidth]{fig/instruction_tuning.pdf}
+  \end{center}
+  \vskip -4pt
+  \keybox{\footnotesize It borrows from both worlds: the \textbf{supervision} of
+    pretrain--finetune and the \textbf{instruction interface} of prompting. The payoff is
+    measured on a \textbf{held-out cluster} the model was never tuned on.}
+\end{frame}
+
+\begin{frame}{One task, two framings}
+  Take an NLI example. Instruction tuning is just \textbf{rewriting} it as a natural-language
+  instruction -- then training on many such rewrites.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}\footnotesize\textbf{\color{armred}Raw dataset row}\end{center}
+    \fcolorbox{armred}{armred!6}{\parbox{0.93\linewidth}{\footnotesize
+      \texttt{premise:} a dog runs in the park\\
+      \texttt{hypothesis:} an animal moves\\
+      \texttt{label:} entailment}}
+    \vskip 3pt
+    {\footnotesize The model just learns this \emph{schema} -- it never learns to \emph{obey}
+    a request.}
+    \column{0.5\textwidth}
+    \begin{center}\footnotesize\textbf{\color{paramgreen}Rewritten as an instruction}\end{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.93\linewidth}{\footnotesize
+      ``A dog runs in the park.'' Using only this, is ``an animal moves'' \textbf{true},
+      \textbf{false}, or \textbf{undetermined}?\\[2pt]
+      $\rightarrow$ \textbf{true}}}
+    \vskip 3pt
+    {\footnotesize $\sim$10 templates like this per dataset, across 62 datasets.}
+  \end{columns}
+  \vskip 4pt
+  \keybox{\footnotesize Same data, rephrased. Do this across \emph{many} task types and the
+    model learns the meta-skill ``\textbf{read the instruction, do what it asks}'' -- which
+    then transfers to instructions it never saw.}
+\end{frame}
+
+% ================================================================
+\section{The method}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The method}\\[4pt]
+    \small 62 datasets, 12 clusters, hand-written templates -- and one strict rule for ``unseen.''
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{62 datasets, 12 clusters, $\sim$10 templates each}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \textbf{The data recipe:}
+    \begin{itemize}\small
+      \item \textbf{62} public NLP datasets, grouped into \textbf{12 task clusters} (NLI, QA,
+        summarization, translation, sentiment, \dots).
+      \item Each dataset gets \textbf{$\sim$10 hand-written instruction templates}; up to
+        \textbf{3} ``turn the task around'' (e.g. \emph{generate} a review from its label).
+      \item Base model: \textbf{137B LaMDA-PT} (dense, decoder-only, LM-only pretrained).
+    \end{itemize}
+    \vskip 2pt
+    \keybox{\footnotesize No new labels are collected. Existing datasets are re-\emph{verbalized}
+      as natural-language instructions.}
+    \column{0.54\textwidth}
+    \includegraphics[width=0.78\linewidth]{fig/task_clusters.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The rigorous eval: hold out the whole cluster}
+  How do you prove ``zero-shot on an unseen task'' when you finetuned on 60 tasks? FLAN uses a
+  \textbf{conservative} definition of unseen.
+  \vskip 6pt
+  \begin{itemize}\small
+    \item To score cluster $c$ (say NLI), \textbf{drop every dataset in $c$'s cluster} from
+      finetuning, tune on the rest, then evaluate on $c$.
+    \item So ``unseen NLI'' means \emph{no} NLI dataset -- not just a different NLI dataset --
+      was ever seen. Each evaluated cluster uses its \textbf{own} checkpoint.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{This held-out-\textbf{cluster} design (stricter than held-out-dataset) is what makes
+    the zero-shot claim honest: the model truly never met that task type.}
+  \vskip 4pt
+  \watchbox{\footnotesize Cost of the honesty: you train a \emph{separate} model per held-out
+    cluster. The number in a results table is really an average over several tuned models.}
+\end{frame}
+
+% ================================================================
+\section{Results}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Does it work?}\\[4pt]
+    \small Zero-shot FLAN vs a 175B model that is 1.3x larger.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{FLAN 137B beats GPT-3 175B -- zero-shot, and often few-shot}
+  \begin{center}
+    \includegraphics[width=0.7\textwidth]{fig/flan_vs_gpt3.pdf}
+  \end{center}
+  \vskip -4pt
+  Zero-shot FLAN outperforms \textbf{zero-shot} GPT-3 on \textbf{20 of 25 datasets}, and beats
+  \textbf{few-shot} GPT-3 on \textbf{10} -- by a large margin on ANLI, RTE, BoolQ, AI2-ARC,
+  OpenbookQA, and StoryCloze. All from a \emph{smaller} base model.
+\end{frame}
+
+\begin{frame}{The honest caveat: it does not help everything}
+  Instruction tuning does \textbf{not} help tasks that are \emph{already} phrased like the LM
+  objective. Commonsense reasoning and coreference posed as \textbf{sentence completions}
+  (``finish this sentence'') are basically next-token prediction already.
+  \vskip 6pt
+  \begin{itemize}\small
+    \item On \textbf{7} such commonsense / coreference tasks, FLAN beat the untuned LaMDA-PT
+      on only \textbf{3 of 7}.
+    \item There the instruction is \textbf{redundant} -- it adds nothing the model was not
+      already doing, so there is no habit to gain.
+  \end{itemize}
+  \vskip 4pt
+  \keybox{This sharpens the thesis: the win comes from the \textbf{instructions}, not from
+    ``more data.'' Where the instruction carries real information (NLI, QA, translation), FLAN
+    surges; where it is redundant, it does not.}
+\end{frame}
+
+% ================================================================
+\section{What makes it work: the ablations}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries What actually makes it work}\\[4pt]
+    \small Three knobs: number of clusters, model scale, and the instructions themselves.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Knob 1: more task clusters $\to$ better generalization}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/num_clusters.pdf}
+    \column{0.44\textwidth}
+    Hold out NLI, closed-book QA, and commonsense; add the other clusters to finetuning
+    \textbf{one at a time}.
+    \begin{itemize}\small
+      \item Held-out zero-shot accuracy \textbf{keeps climbing} with each cluster added.
+      \item At 7 clusters it \textbf{still has not saturated} -- more diversity would likely
+        help further.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize The driver is instruction \textbf{diversity}: many \emph{kinds} of
+      task teach ``follow instructions'' better than more data of one kind.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Knob 2: predict first -- does this help a \emph{small} model?}
+  We tune models of \textbf{422M, 2B, 8B, 68B, 137B} the same way. Instruction tuning clearly
+  helps the 137B. \textbf{Before the next slide: what happens to the 422M model?}
+  \vskip 6pt
+  \begin{itemize}\small
+    \item[(a)] Helps, just less -- smaller model, smaller boost.
+    \item[(b)] No effect -- too small to notice.
+    \item[(c)] It \textbf{hurts} -- the small model gets \emph{worse} at unseen tasks.
+  \end{itemize}
+  \vskip 4pt
+  \pause
+  \nextbox{\footnotesize Answer: \textbf{(c)}. Below a threshold, instruction tuning
+    \textbf{hurts} zero-shot generalization. The benefit is an \textbf{emergent ability of
+    scale} -- the same shape as chain-of-thought's emergence (LLM-14).}
+\end{frame}
+
+\begin{frame}{Knob 2: instruction tuning is emergent with scale}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\linewidth]{fig/scale_emergence.pdf}
+    \column{0.42\textwidth}
+    \begin{itemize}\small
+      \item \textbf{68B and 137B:} instruction tuning \textbf{helps} -- big gains on held-out
+        tasks.
+      \item \textbf{8B and below:} it \textbf{hurts} -- the tuned model does \emph{worse} than
+        the untuned one.
+      \item The \textbf{crossover is between 8B and 68B}.
+    \end{itemize}
+    \vskip 4pt
+    \keybox{\footnotesize Likely why: a small model spends its \emph{whole} capacity just
+      fitting the $\sim$40 finetuning tasks, leaving nothing for a transferable ``follow
+      instructions'' skill. A big model fits them \emph{and} has room to spare.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Knob 3: are the instructions actually necessary?}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \includegraphics[width=\linewidth]{fig/instructions_ablation.pdf}
+    \column{0.44\textwidth}
+    Maybe the gain is just \textbf{multitask exposure} and the instructions are decoration?
+    Test it: finetune on the same datasets but \textbf{strip the templates}.
+    \begin{itemize}\footnotesize
+      \item \textbf{FLAN} (real instructions): \textbf{55.2}
+      \item Dataset-name tag only: \textbf{46.6 / 47.0}
+      \item \textbf{No template} (plain input$\to$output): \textbf{37.3}
+    \end{itemize}
+    \vskip 4pt
+    \warnbox{\footnotesize Remove the instructions and the gain \textbf{collapses}. It is the
+      \emph{instructions}, not merely multitask finetuning, that teaches the skill.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Wrapping up}\\[4pt]
+    \small Two theses about SFT data, and where FLAN sits in the post-training story.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{FLAN vs LIMA: the matched pair}
+  Both take a pretrained LM and do \textbf{supervised finetuning} to make it usable. They
+  disagree on \emph{what data}.
+  \vskip 4pt
+  \begin{center}
+  \small
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{l l l}
+    \toprule
+     & \textbf{FLAN (LLM-18)} & \textbf{LIMA (LLM-4)}\\
+    \midrule
+    Thesis & scale up the \emph{tasks} & curate a few \emph{examples}\\
+    Data & 62 datasets, 12 clusters & 1{,}000 hand-picked prompts\\
+    Goal & zero-shot on \textbf{unseen task types} & helpful, well-formatted answers\\
+    Bet & instruction \textbf{diversity} & example \textbf{quality}\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \keybox{\footnotesize Not a contradiction: FLAN maximizes \emph{task coverage} for
+    cross-task generalization; LIMA argues the \emph{format/quality} of a small set is enough
+    once the base model is strong. Different questions, different answers.}
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Instruction tuning} = multitask finetuning where every example is phrased as
+      an instruction: $(\text{instruction}, \text{input})\to\text{output}$. It teaches a
+      transferable \textbf{``follow instructions''} skill.
+    \item \textbf{Setup}: 137B LaMDA-PT, \textbf{62 datasets / 12 clusters}, $\sim$10 templates
+      each; ``unseen'' means the \textbf{whole cluster} is held out.
+    \item \textbf{Result}: zero-shot FLAN $>$ zero-shot GPT-3 175B on \textbf{20/25 datasets},
+      $>$ few-shot GPT-3 on \textbf{10}. But it does \emph{not} help tasks already close to the
+      LM objective (\textbf{3 of 7} commonsense/coreference).
+    \item \textbf{What matters}: many clusters (diversity), \textbf{scale} (helps $\geq$68B,
+      \textbf{hurts} $\leq$8B), and the \textbf{instructions themselves} (strip them, gain
+      collapses: 55.2 $\to$ 37.3).
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} \emph{[LLM-4] LIMA} is the deliberate counterpoint -- quality over
+    quantity. And FLAN's ``instructions as SFT data'' is the engine behind step 1 of
+    \emph{[LLM-10] InstructGPT} and modern post-training. (Follow-up, do not conflate:
+    \emph{FLAN-T5} / ``Scaling Instruction-Finetuned LMs,'' 2022 -- same idea, bigger and
+    with CoT data.)}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Wei, Bosma, Zhao, Guu, Yu, Lester, Du, Dai, Le, "Finetuned Language Models
+%   Are Zero-Shot Learners" (ICLR 2022), arXiv:2109.01652. Extracted text:
+%   ml/llm_training/materials_md/papers/24_flan_2109.01652.txt
+% Locked numbers (independent review): 137B LaMDA-PT base (decoder-only, LM-only pretrain);
+%   62 datasets in 12 task clusters; ~10 templates each (up to 3 "turned around"); FLAN
+%   zero-shot > zero-shot GPT-3 175B on 20/25 DATASETS, > few-shot GPT-3 on 10 (large margin:
+%   ANLI, RTE, BoolQ, AI2-ARC, OpenbookQA, StoryCloze); held-out-CLUSTER evaluation;
+%   emergence sizes 422M/2B/8B/68B/137B, helps 68B/137B, hurts <=8B, crossover 8B-68B;
+%   instructions ablation 4-cluster avg FLAN 55.2 / dataset-name 46.6-47.0 / no-template 37.3;
+%   honest caveat: only 3 of 7 commonsense/coreference tasks improved (instruction redundant).
+% Figures (fig/, matplotlib via py_src/make_figures.py, SEED=509):
+%   instruction_tuning   -- SCHEMATIC box diagram: pretrain -> instruction-tune (11 clusters)
+%                           -> zero-shot on held-out NLI cluster.
+%   task_clusters        -- REAL horizontal bar: 12 clusters, dataset counts (Fig. 3, sum=62),
+%                           NLI marked as the held-out cluster.
+%   flan_vs_gpt3         -- REAL grouped bar (Fig. 1 averages): NLI/read.comp/closed-book QA,
+%                           GPT-3 zero/few-shot vs FLAN zero-shot; 20/25 + 10 headline in note.
+%   num_clusters         -- REAL line (Fig. 6 "Average"): 49.9..63.5 over 1-7 clusters,
+%                           #datasets annotated, "still rising" callout.
+%   scale_emergence      -- SIGNATURE predict-first, RECONSTRUCTED: Fig. 7 has no per-point
+%                           numbers; values approximated off the plot (labelled on the figure).
+%                           Qualitative pattern is locked: hurts <=8B, helps 68B/137B.
+%   instructions_ablation-- REAL horizontal bar (Fig. 8): 55.2 / 47.0 / 46.6 / 37.3.
+% Pedagogical decisions: intuition-before-method ("new hire / take a ticket"); predict-first on
+%   the scale-emergence result; explicit LIMA (LLM-4) matched-pair contrast at hook and recap;
+%   honest caveat frame (3 of 7) to isolate that it's the instructions, not just multitask
+%   exposure; minimal/no code (a data+method paper).
+% Cross-references: InstructGPT (LLM-10, SFT step 1), CoT emergence (LLM-14, same scale shape),
+%   LIMA (LLM-4, the counter-thesis).
+% NOTE: this is the ORIGINAL FLAN (Wei 2021, LaMDA-PT). Do NOT conflate with FLAN-T5 / the
+%   FLAN Collection (2022/2023) -- mentioned only as a one-line forward pointer in the recap.

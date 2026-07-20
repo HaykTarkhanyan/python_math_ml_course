@@ -1,0 +1,427 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+
+\title{[LLM-16] RoPE: Rotary Position Embeddings}
+\subtitle{Encode position by rotating queries and keys -- relative distance falls out of the dot product \quad(Su et al., 2021)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Shuffle the words, same answer}
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    Self-attention has \textbf{no built-in sense of order}. Feed it the same tokens in a
+    different order and the outputs just come back in that same permuted order:
+    \vskip 4pt
+    \begin{center}
+      \begin{tikzpicture}[font=\small, node distance=3pt]
+        \node[draw=armblue, rounded corners=2pt, fill=armblue!8, inner sep=3pt]
+          (a) {\texttt{the cat sat}};
+        \node[right=1.1cm of a] (eq) {$\equiv$};
+        \node[draw=armred, rounded corners=2pt, fill=armred!8, inner sep=3pt,
+              right=1.1cm of eq] (b) {\texttt{sat cat the}};
+      \end{tikzpicture}
+    \end{center}
+    \vskip 4pt
+    To a bag-of-tokens attention layer these are the \emph{same} input. Every LLM has to
+    \textbf{break this symmetry} and inject position somehow.
+    \vskip 8pt
+    The classic answer: \textbf{add} a position vector to each token. RoPE's answer is
+    unusually elegant: \textbf{rotate}, do not \textbf{add}. Position becomes an angle, and
+    relative distance falls straight out of the query-key dot product.
+    \column{0.40\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!10,
+              text width=3.9cm, align=center] (r)
+          {\textbf{RoPE in one line}\\[3pt]
+           rotate $q$ by $m\theta$, $k$ by $n\theta$\\[3pt]
+           $\Rightarrow$ score depends only on\\ the \textbf{relative} position $m-n$};
+      \end{tikzpicture}
+      \\[6pt]
+      {\scriptsize touches only $Q$ and $K$, nothing else}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The problem: attention has no sense of order}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Attention is permutation-invariant}\\[4pt]
+    \small Position is not free -- it has to be injected. The question is \emph{how}.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Permutation invariance, concretely}
+  Strip out position and self-attention treats a sentence as a \textbf{set}: permute the
+  inputs and the outputs simply permute the same way.
+  \begin{center}
+    \includegraphics[width=0.66\textwidth]{fig/permutation_invariance.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{\footnotesize The attention score is built from dot products $q_m^\top k_n$, which
+    know \emph{which} tokens are involved but not \emph{where} they sit. Some position signal
+    must be added, or the model is order-blind.}
+\end{frame}
+
+\begin{frame}{The classic fix: absolute position embeddings}
+  Add a position vector $p_i$ to each token embedding before projecting to $q,k,v$:
+  \[
+    f_{q,k,v}(x_i, i) = W_{q,k,v}\,(x_i + p_i).
+  \]
+  Two flavors, with \textbf{different} failure modes:
+  \begin{itemize}\small
+    \item \textbf{Learned} $p_i \in \{p_1,\dots,p_L\}$: one trainable vector per index up to a
+      \textbf{max length $L$}. Simple, but there is \emph{no vector at all} for positions
+      $> L$ -- the model cannot run past its trained length.
+    \item \textbf{Sinusoidal} $p_{i,2t}=\sin(i/10000^{2t/d})$, $p_{i,2t+1}=\cos(\cdot)$: defined
+      for \emph{every} position, so length is not hard-capped -- but in practice it still
+      \textbf{extrapolates poorly} past the lengths seen in training.
+  \end{itemize}
+  \vskip 2pt
+  \warnbox{\footnotesize Both encode an \textbf{absolute} index. Neither makes the score a clean
+    function of the \textbf{distance} $m-n$ -- that relation only appears indirectly, if at all.}
+\end{frame}
+
+\begin{frame}{What we actually want}
+  Intuitively, attention between two tokens should care about \textbf{how far apart} they are,
+  not their absolute slots, and should \textbf{taper} at long range.
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[font=\small]
+      \node[draw=armblue, thick, rounded corners=3pt, fill=armblue!8,
+            text width=10.5cm, align=center]
+        {We want the query-key score to depend \textbf{only} on the relative position:\\[4pt]
+         $\displaystyle \langle f_q(x_m,m),\, f_k(x_n,n)\rangle = g(x_m, x_n,\; m-n)$
+         \hfill {\footnotesize (paper Eq. 11)}};
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  \begin{itemize}\small
+    \item Depend on $m-n$, not on $m$ and $n$ separately.
+    \item Decay as $|m-n|$ grows (far tokens matter less).
+    \item Ideally \textbf{cheap}: no new terms in the attention block, defined at any position.
+  \end{itemize}
+  \nextbox{\footnotesize RoPE is engineered to hit exactly this target -- and it does it by
+    \emph{rotation}.}
+\end{frame}
+
+% ================================================================
+\section{The idea: rotate, do not add}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Position as an angle}\\[4pt]
+    \small Intuition first (clock hands), then the two-line derivation, then numbers by hand.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Intuition: each 2-D slice is a clock hand}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+    Take a coordinate pair of $q$ and treat it as a hand on a clock. \textbf{Position = how
+    far you rotate the hand}: token at position $m$ rotates by $m\theta$, token at position $n$
+    by $n\theta$.
+    \vskip 3pt
+    A dot product of two vectors depends on the \textbf{angle between them}. Here that angle is
+    \[
+      n\theta - m\theta = (n-m)\theta,
+    \]
+    the \textbf{difference} of the two rotations. So the score sees only the \textbf{relative}
+    position, never the absolute one.
+    \column{0.50\textwidth}
+    \begin{center}
+      \includegraphics[width=0.78\linewidth]{fig/rotation_2d.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 0pt
+  \keybox{\footnotesize Rotating both hands by the same extra amount does not change the angle
+    between them -- which is exactly why absolute position cancels and only $m-n$ survives.}
+\end{frame}
+
+\begin{frame}{Why rotate instead of add?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Both inject position -- but they do very different things to the vector:
+    \begin{itemize}\small
+      \item \textbf{Adding} $p_i$ changes the token's \emph{length and direction} -- position
+        \textbf{leaks into the content}. The score $(x_m{+}p_m)\!\cdot\!(x_n{+}p_n)$ has
+        cross-terms that never reduce cleanly to $m-n$.
+      \item \textbf{Rotating} is \emph{length-preserving}: the content is untouched, position
+        becomes a pure \textbf{phase}. Two rotated vectors' score depends \emph{only} on the
+        angle gap $(n-m)\theta$.
+    \end{itemize}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/add_vs_rotate.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \keybox{\footnotesize Rotation fixes \emph{what} the token means and moves only \emph{where}
+    it sits -- which is exactly why the dot product can isolate relative position.}
+\end{frame}
+
+\begin{frame}{The 2-D case: relative distance falls out}
+  Rotate $q$ by $m\theta$ and $k$ by $n\theta$ with the $2\times2$ rotation matrix
+  $R(\alpha)=\left(\begin{smallmatrix}\cos\alpha & -\sin\alpha\\ \sin\alpha & \cos\alpha\end{smallmatrix}\right)$:
+  \[
+    q_m = R(m\theta)\,q, \qquad k_n = R(n\theta)\,k .
+  \]
+  Two facts about rotations: $R(\alpha)^\top = R(-\alpha)$ and $R(\alpha)R(\beta)=R(\alpha+\beta)$. So
+  \[
+    q_m^\top k_n
+      = \big(R(m\theta)q\big)^\top R(n\theta)k
+      = q^\top R(-m\theta)R(n\theta)\, k
+      = \boxed{\,q^\top R\big((n-m)\theta\big)\,k\,}.
+  \]
+  \vskip -2pt
+  \begin{center}
+    The score depends \textbf{only} on $n-m$. \hfill {\footnotesize (paper Eq. 12--16)}
+  \end{center}
+  \nextbox{\footnotesize Absolute angles $m\theta$ and $n\theta$ went in; only their
+    \textbf{difference} $(n-m)\theta$ comes out. Relative encoding, for free, inside the dot
+    product.}
+\end{frame}
+
+\begin{frame}{Generalize to $d$ dimensions: one frequency per pair}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Pair up the $d$ coordinates into $d/2$ 2-D slices and rotate slice $i$ at its \textbf{own}
+    frequency:
+    \[
+      \theta_i = 10000^{-2i/d}, \quad i = 0,\dots,\tfrac{d}{2}-1
+    \]
+    \begin{itemize}\footnotesize
+      \item \textbf{High-frequency} pairs (small $i$) spin fast: they track \emph{local}
+        position.
+      \item \textbf{Low-frequency} pairs (large $i$) spin slowly: they track \emph{global}
+        position.
+    \end{itemize}
+    \vskip 4pt
+    Same spirit as the sinusoidal frequencies -- but applied by \textbf{rotation}, not addition.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=0.9\linewidth]{fig/frequencies.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 0pt
+  \keybox{\footnotesize The convention $\theta_i = 10000^{-2i/d}$ is straight from the paper
+    (\S 3.3). The base is fixed at \textbf{10000} throughout RoFormer.}
+\end{frame}
+
+\begin{frame}{By hand: same distance, same score}
+  Take $q=(1,0)$, $k=(0,1)$, base angle $\theta = 30^\circ$. Positions $m=2$, $n=5$
+  (so $m\theta=60^\circ$, $n\theta=150^\circ$):
+  \[
+    q_m = R(60^\circ)q = (0.50,\; 0.87), \qquad
+    k_n = R(150^\circ)k = (-0.50,\; -0.87).
+  \]
+  \[
+    \text{score} = q_m^\top k_n = (0.50)(-0.50) + (0.87)(-0.87) = -0.25 - 0.75 = \mathbf{-1.0}.
+  \]
+  Check with the boxed formula, $n-m=3$ so the relative angle is $3\theta = 90^\circ$:
+  \[
+    q^\top R(90^\circ)k = (1,0)^\top(-1,0) = \mathbf{-1.0}. \quad\checkmark
+  \]
+  \watchbox{\footnotesize Now try $m=0,\,n=3$ (same $n-m=3$): $q^\top R(90^\circ)k = -1.0$
+    \emph{again}. Different absolute positions, \textbf{identical} score -- because only $m-n$
+    enters.}
+\end{frame}
+
+% ================================================================
+\section{Why it works}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Three properties that made RoPE win}\\[4pt]
+    \small Relative-in-absolute-clothing, proven long-term decay, and defined at any position.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Relative encoding in absolute clothing}
+  RoPE applies the rotation \textbf{elementwise to $Q$ and $K$ only}, one position-dependent
+  rotation per token. Yet the \emph{score} it produces is purely relative.
+  \begin{itemize}\small
+    \item \textbf{$V$ is untouched}, and so is the rest of the block -- no extra attention
+      terms, no learned relative-position table.
+    \item Each token is rotated \textbf{once} by its own absolute angle; the relative structure
+      emerges only when two rotated vectors meet in the dot product.
+    \item Cheap and per-layer: a couple of elementwise sine/cosine multiplies
+      (\texttt{apply\_rotary\_emb}), applied before attention.
+  \end{itemize}
+  \vskip 2pt
+  \keybox{\footnotesize That is the trick in the name: \textbf{absolute} rotations applied to
+    each token, giving a \textbf{relative} score -- with none of the machinery earlier
+    relative-position schemes needed.}
+\end{frame}
+
+\begin{frame}{Long-term decay is proved, not just hoped for}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Summing over the $d/2$ frequencies, the paper bounds the score by a quantity that
+    \textbf{shrinks as $|m-n|$ grows} (\S 3.4.3, via an Abel transformation):
+    {\footnotesize\[
+      \Big|\textstyle\sum_i h_i\, e^{i(m-n)\theta_i}\Big|
+        \le \big(\max_i |h_{i+1}-h_i|\big)\textstyle\sum_i |S_{i+1}|.
+    \]}
+    The multi-frequency sum makes far-apart tokens interfere and cancel, so their attention
+    \textbf{decays}. This matches the intuition that distant tokens should matter less.
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/decay.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \keybox{\footnotesize A single 2-D pair only gives $\cos((m-n)\theta)$, which oscillates. The
+    \textbf{decay} comes from summing many frequencies at once (paper Fig. 2).}
+\end{frame}
+
+\begin{frame}{Sequence-length flexibility vs. context extension}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+    \small
+    \textbf{What the paper claims.} RoPE is defined by a formula at \emph{any} position $m$, so
+    unlike \textbf{learned} absolute embeddings it is not capped at a trained length $L$. The
+    paper calls this \textbf{sequence-length flexibility}.
+    \vskip 3pt
+    \textbf{What the paper does NOT claim.} It shows \emph{no} zero-shot length extrapolation,
+    and it fixes base $\theta = 10000$ throughout.
+    \vskip 3pt
+    The trick that actually \emph{extends} usable context -- rescaling the base
+    ($10000 \to 500000$) -- is \textbf{later work}: Llama-3, NTK-aware scaling, YaRN (2023+).
+    \column{0.50\textwidth}
+    \begin{center}
+      \includegraphics[width=0.82\linewidth]{fig/theta_scaling.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 0pt
+  \watchbox{\footnotesize Llama-3's $\theta = 500{,}000$ (deck 07) and Qwen3's
+    $1\mathrm{e}4 \to 1\mathrm{e}6$ (deck 08) come from \textbf{after} this paper.
+    ``Flexibility'' (defined everywhere) $\neq$ demonstrated \textbf{extrapolation}.}
+\end{frame}
+
+% ================================================================
+\section{Adoption}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Modest paper, enormous adoption}\\[4pt]
+    \small The RoFormer benchmarks are small wins. The real story is what happened next.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The numbers are modest; the adoption is not}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    RoFormer's own gains are \textbf{incremental}:
+    \vskip 4pt
+    \small
+    \begin{tabular}{l r}
+      \toprule
+      \textbf{WMT14 En-De} & \textbf{BLEU}\\
+      \midrule
+      Transformer-base & 27.3\\
+      RoFormer & \textbf{27.5}\\
+      \bottomrule
+    \end{tabular}
+    \vskip 6pt
+    On GLUE, RoFormer beats BERT on \textbf{3 of 6} tasks (big jump on QQP, smaller on MRPC and
+    STS-B), and is behind on the rest. A solid result, not a landslide.
+    \vskip 4pt
+    The lasting impact is that RoPE became the \textbf{default} position encoding across the
+    field.
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/adoption.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \nextbox{\footnotesize GPT-NeoX, PaLM, LLaMA / Llama-2 / Llama-3, Qwen, Mistral, DeepSeek all
+    ship RoPE. (Adoption list is curated context, not from the 2021 paper.)}
+\end{frame}
+
+% ================================================================
+\section{Recap}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Why position at all:} self-attention is \textbf{permutation-invariant}; the
+      score $q_m^\top k_n$ knows the tokens, not their places.
+    \item \textbf{Why not just add:} absolute embeddings (learned or sinusoidal) encode an index,
+      not a clean function of the distance $m-n$.
+    \item \textbf{The idea:} rotate $q$ by $m\theta$ and $k$ by $n\theta$; then
+      $q_m^\top k_n = q^\top R((n-m)\theta)k$ -- depends \textbf{only} on $m-n$, touching only
+      $Q,K$.
+    \item \textbf{Multi-frequency} $\theta_i = 10000^{-2i/d}$: local and global pairs; long-term
+      decay is \textbf{proved} (Abel transform, Fig. 2).
+    \item \textbf{Flexibility:} defined at any position. Base-$\theta$ rescaling for long context
+      ($10000 \to 500{,}000$) is \textbf{downstream} (Llama-3 / NTK / YaRN), not this paper.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} this is the position encoding inside \emph{[LLM-7] Llama-3}
+    ($\theta=500\mathrm{k}$) and \emph{[LLM-8] Qwen3} ($1\mathrm{e}4\to1\mathrm{e}6$); pushing
+    context far also needs the efficient attention of \emph{[LLM-15] FlashAttention}.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Su, Lu, Pan, Murtadha, Wen, Liu, "RoFormer: Enhanced Transformer with Rotary
+%   Position Embedding" (2021, rev. 2023), arXiv:2104.09864. Extracted text:
+%   ml/llm_training/materials_md/papers/22_rope_roformer_2104.09864.txt.
+% Figures (fig/, matplotlib via py_src/make_figures.py, SEED=509):
+%   permutation_invariance -- SCHEMATIC (labeled): shuffle inputs -> outputs just permute.
+%   rotation_2d            -- CENTERPIECE intuition (schematic): clock-hand 2-D rotation,
+%                             angle-between = (n-m)theta.
+%   frequencies            -- cos(m*theta_i) bands for high/mid/low freq pairs;
+%                             theta_i = 10000^{-2i/d} verbatim from paper Sec 3.3.
+%   decay                  -- REAL computation reproducing paper Fig. 2 shape: mean|S_j| vs
+%                             |m-n| with theta_i = 10000^{-2i/d}, d=128 (long-term decay,
+%                             proved Sec 3.4.3 via Abel transform).
+%   theta_scaling          -- ATTRIBUTION-CRITICAL, labeled DOWNSTREAM (Llama-3 / NTK / YaRN),
+%                             NOT RoFormer. RoFormer fixes base theta = 10000. The 500k / 1e6
+%                             values are forward pointers sourced from decks 07 (Llama-3) and
+%                             08 (Qwen3), NOT verifiable in this paper (by design).
+%   adoption               -- curated timeline of RoPE-adopting models; NOT from the paper.
+% Verified numbers (all from the paper): WMT14 En-De BLEU 27.3 -> 27.5 (Table 1); GLUE better
+%   on 3 of 6 (Table 2: MRPC 89.5>88.9, STS-B 87.0>85.8, QQP 86.4>71.2); theta_i = 10000^{-2i/d}
+%   (Sec 3.3 / 3.4.3); 2-D solution and q^T R((n-m)theta) k (Eq. 12-16); long-term decay via
+%   Abel transformation (Sec 3.4.3, Fig. 2).
+% ATTRIBUTION CAVEAT (top priority): base-theta rescaling (theta 10000 -> 500000), NTK-aware
+%   scaling, YaRN, and zero-shot long-context EXTRAPOLATION are DOWNSTREAM work (Llama-3 /
+%   2023+), NOT in the RoFormer paper. The paper's own claim is "sequence-length flexibility"
+%   (RoPE is defined at any position), which is distinct from demonstrated length extrapolation.
+%   Presented in the deck ONLY as a labeled forward pointer (theta_scaling.pdf + watchbox).
+% Pedagogical decisions: hook on permutation invariance ("shuffle = same"); intuition (clock
+%   hands) BEFORE the boxed 2-D derivation; a by-hand worked example (m=2,n=5) showing same
+%   distance -> same score; long-term decay as a proved property; adoption section that keeps
+%   RoFormer's real (modest) BLEU/GLUE gains honest while crediting the field-wide adoption.
+% Cross-references: [LLM-7] Llama-3, [LLM-8] Qwen3 (both cite RoPE base-theta with no
+%   explanation -- this deck fills that gap), [LLM-15] FlashAttention (long-context thread).
+% Note: dl4nlp teaches attention generally; per instructor we did not verify whether it already
+%   covers RoPE specifically.
