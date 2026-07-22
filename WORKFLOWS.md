@@ -19,9 +19,10 @@ matches a row below, follow the referenced workflow - do not improvise a new one
 | Solutions package (LaTeX PDF + ipynb) | `generate-solutions` skill | `math/SOLUTIONS_STATUS.md` |
 | Collapsible solutions inside a `.qmd` | `add-inline-solutions` skill | `math/SOLUTIONS_STATUS.md` |
 | Add YouTube / video links after a session | `update-youtube` skill | `_meta/youtube_channel.md` |
+| Pull reference material from a video link (transcript, screenshots, borrow visuals into slides) | `youtube-reference` skill (yt-dlp + ffmpeg pipeline -> `_reference_<slug>/`) | `.claude/skills/youtube-reference/SKILL.md` |
 | Build a quiz Google Form | `google-forms-builder` skill | - |
 | Delete LaTeX build junk | `clean-tex` skill or `clean_latex.py` | - |
-| End of session / commit the day's work | `wrap-session` skill | `PROGRESS.md` |
+| End of session / commit the day's work | `wrap-session` skill | `_work_sessions/*.toml` |
 
 ## Definition of done
 
@@ -49,7 +50,7 @@ matches a row below, follow the referenced workflow - do not improvise a new one
 | `homework_structure_guide.md` | homework `.qmd` format: YAML, difficulty, solution blocks |
 | `LEARNINGS.md` | dated gotchas and incidents that have bitten before |
 | `CONVENTIONS.md` | codified recurring decisions (naming, style, structure) |
-| `PROGRESS.md` | session log: done / pending / next |
+| `_work_sessions/*.toml` | per-session logs (one TOML each); `PROGRESS.md` is the old read-only archive |
 | `DEFERRED_TODO.md` | deferred-topics parking lot (older scratch list: `debt.md`) |
 | `notes.md` | misc commands (Quarto solutions render, armtex header, deployment) |
 | `ml/00_plan.md`, `ml/plan_manual.md` | ML course plan |

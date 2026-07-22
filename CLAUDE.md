@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`WORKFLOWS.md`** - maps every recurring task type to its workflow, skill, and source-of-truth file, plus definition-of-done tables and hard rules. **Read the matching row before improvising a workflow.**
 - `LEARNINGS.md` - dated gotchas and incidents (LaTeX, Quarto, Windows tooling, machine limits). Append when something non-obvious bites.
 - `CONVENTIONS.md` - course-specific naming and structure decisions (deck/notebook/folder naming, QMD template, YouTube link-text rule).
-- `PROGRESS.md` - session log (done / pending / next); update at session end via the `wrap-session` skill.
+- **`_work_sessions/`** - per-session logs (one TOML per session, newest filename last). Skim the last 2-3 at session start for context; write a new one at session end (`wrap-session` skill). Format: `_work_sessions/README.md`. (`PROGRESS.md` is the pre-2026-07-22 archive - read-only.)
 - `DEFERRED_TODO.md` - parked topics.
 
 ## Build & Deployment

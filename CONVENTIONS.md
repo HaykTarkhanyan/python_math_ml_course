@@ -117,7 +117,7 @@ gform/                     # Apps Script + question CSVs for the Google Form
 | `CONVENTIONS.md` | This file. Naming, structure, YouTube title rules. |
 | `DEFERRED_TODO.md` | Parked topics (bias-variance bits, GLMs, causal inference, etc.). |
 | `LEARNINGS.md` | Non-obvious lessons learned. |
-| `PROGRESS.md` | Session-by-session progress so next session can pick up. |
+| `_work_sessions/*.toml` | Per-session logs (one TOML per session); `PROGRESS.md` is the pre-2026-07-22 archive. |
 
 ---
 

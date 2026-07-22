@@ -1,8 +1,11 @@
 # PROGRESS.md
 
+> **Archived 2026-07-22.** Session logs now live in `_work_sessions/` (one TOML per
+> session). This file is kept read-only for history - do not add new entries here.
+
 Session log: what was done, what is in progress, what comes next. Newest entry first.
-Update at the end of every session (`wrap-session` skill). Entries are point-in-time
-snapshots - for anything old, verify against `git log` before acting on it.
+Entries are point-in-time snapshots - for anything old, verify against `git log`
+before acting on it.
 
 ## 2026-07-19 - New chapter: Time Series (ml/07_time_series)
 
