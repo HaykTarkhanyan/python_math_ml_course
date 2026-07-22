@@ -1,39 +1,8 @@
 \documentclass[aspectratio=169]{beamer}
-
-% Minimal theme
-\usetheme{default}
-\usecolortheme{dove}
-
-% Remove navigation symbols
-\setbeamertemplate{navigation symbols}{}
-\setbeamertemplate{footline}{%
-  \hfill{\large\insertframenumber\,/\,\inserttotalframenumber}\hspace{0.8em}\vspace{0.5em}%
-}
-
-% Colors
-\definecolor{popblue}{RGB}{52, 101, 164}
-\definecolor{sampred}{RGB}{204, 0, 0}
-\definecolor{paramgreen}{RGB}{0, 140, 70}
-\definecolor{lightbg}{RGB}{245, 245, 250}
-\definecolor{warnred}{RGB}{180, 40, 40}
-\definecolor{orange1}{RGB}{220, 120, 0}
-\definecolor{violet1}{RGB}{120, 50, 160}
-
-\setbeamercolor{frametitle}{fg=popblue}
-\setbeamercolor{title}{fg=popblue}
-
-% Packages
-\usepackage{pgfplots}
-\usepackage{tikz}
-\usetikzlibrary{shapes, arrows.meta, positioning, calc, decorations.pathreplacing, patterns}
-\pgfplotsset{compat=1.18}
-\usepgfplotslibrary{groupplots}
-\usepackage{amsmath, amssymb}
-\usepackage{array}
-\usepackage{fontenc}
+\input{preamble}
 
 \title{Decoding Strategies}
-\subtitle{Greedy $\cdot$ Beam Search $\cdot$ Temperature $\cdot$ Top-$k$ $\cdot$ Top-$p$ $\cdot$ Min-$p$ $\cdot$ Constrained}
+\subtitle{Greedy $\cdot$ Beam $\cdot$ Temperature $\cdot$ Top-$k$/$p$ $\cdot$ Min-$p$ $\cdot$ Contrastive $\cdot$ Constrained}
 \date{}
 
 \begin{document}
@@ -46,8 +15,17 @@
 \end{frame}
 
 % ============================================================
+% OUTLINE
+% ============================================================
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents
+\end{frame}
+
+% ============================================================
 % THE GENERATION PROBLEM
 % ============================================================
+\sectiontransition{The generation problem}{The model gives a distribution over the vocabulary. How do we turn it into text?}
 \begin{frame}
 \frametitle{The generation problem}
 
@@ -143,8 +121,69 @@ $$P(w_1, w_2, \ldots, w_T) = \prod_{t=1}^{T} P\bigl(w_t \mid w_1, \ldots, w_{t-1
 \end{frame}
 
 % ============================================================
+% STOPPING CRITERIA
+% ============================================================
+\begin{frame}
+\frametitle{When does generation stop?}
+
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape,
+  tok/.style={draw, rounded corners=3pt, minimum width=1.15cm, minimum height=0.7cm, font=\small, align=center},
+  arrow/.style={-{Stealth[length=5pt]}, thick}
+]
+  \node[tok, fill=popblue!12] (t1) at (0, 0) {Once};
+  \node[tok, fill=popblue!12] (t2) at (1.35, 0) {upon};
+  \node[tok, fill=popblue!12] (t3) at (2.7, 0) {a};
+  \node[tok, fill=popblue!12] (t4) at (4.05, 0) {time};
+  \node[tok, fill=popblue!12] (t5) at (5.4, 0) {\ldots};
+  \node[tok, fill=sampred!20, draw=sampred] (eos) at (6.95, 0) {\texttt{<EOS>}};
+
+  \draw[arrow] (t1) -- (t2);
+  \draw[arrow] (t2) -- (t3);
+  \draw[arrow] (t3) -- (t4);
+  \draw[arrow] (t4) -- (t5);
+  \draw[arrow] (t5) -- (eos);
+
+  \node[font=\small\bfseries, sampred] at (6.95, 1.0) {stop};
+  \draw[-{Stealth}, thick, sampred] (6.95, 0.75) -- (eos.north);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.35cm}
+\begin{center}
+\begin{tikzpicture}[
+  card/.style={draw, rounded corners=6pt, minimum height=2.2cm, text width=3.4cm, align=left, inner sep=8pt, font=\small}
+]
+  \node[card, fill=sampred!8, draw=sampred] at (-4.3, 0) {
+    \textbf{\textcolor{sampred}{\texttt{<EOS>} token}}\\[3pt]
+    The model emits the end-of-sequence token --- the natural, content-driven stop.
+  };
+  \node[card, fill=popblue!8, draw=popblue] at (0, 0) {
+    \textbf{\textcolor{popblue}{Length cap}}\\[3pt]
+    \texttt{max\_new\_tokens} / \texttt{max\_length} reached. Guards against runaway output.
+  };
+  \node[card, fill=orange1!10, draw=orange1] at (4.3, 0) {
+    \textbf{\textcolor{orange1}{Time budget}}\\[3pt]
+    \texttt{max\_time} exceeded --- finishes the current pass, then halts.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\fcolorbox{paramgreen}{paramgreen!5}{%
+  \parbox{12cm}{\centering\small
+    Also \texttt{min\_new\_tokens} (forbid \texttt{<EOS>} too early) and custom rules via
+    HuggingFace \texttt{StoppingCriteria} --- e.g.\ stop on a delimiter or a given stop-string.
+  }%
+}
+\end{center}
+\end{frame}
+
+% ============================================================
 % GREEDY SEARCH
 % ============================================================
+\sectiontransition{Deterministic decoding: greedy \& beam}{Always follow the most likely path, and why that is not enough.}
 \begin{frame}
 \frametitle{Greedy search}
 \vspace{-0.2cm}
@@ -187,13 +226,15 @@ $$w_t = \arg\max_{w} \; P(w \mid w_1, \ldots, w_{t-1})$$
   \draw[edge, popblue!40] (b) -- (b1) node[midway, left, font=\tiny] {.10};
   \draw[edge, popblue!40] (b) -- (b2) node[midway, right, font=\tiny] {.45};
 
-  % Greedy path highlight
-  \draw[line width=3pt, sampred!30, rounded corners]
-    (root.south west) -- (a.north) -- (a.south west) -- (a1.north);
-
-  % Best path highlight
-  \draw[line width=2pt, paramgreen!40, rounded corners, dashed]
-    (root.south) -- (b.north) -- (b.south east) -- (b2.north);
+  % Path highlights on the background layer so nodes/labels stay readable
+  \begin{scope}[on background layer]
+    % Greedy path highlight
+    \draw[line width=5pt, sampred!25, rounded corners]
+      (root.center) -- (a.center) -- (a1.center);
+    % Best path highlight
+    \draw[line width=5pt, paramgreen!25, rounded corners]
+      (root.center) -- (b.center) -- (b2.center);
+  \end{scope}
 
   % Annotations
   \node[font=\small, sampred, text width=3cm, align=center] at (-4.5, -5) {
@@ -206,6 +247,11 @@ $$w_t = \arg\max_{w} \; P(w \mid w_1, \ldots, w_{t-1})$$
   % Right side annotation
   \node[draw=warnred, fill=warnred!5, rounded corners=5pt, text width=4.2cm, align=center, font=\small, inner sep=6pt] at (6, -2.5) {
     Greedy picks the best token\\at each step, but can miss\\the \textbf{globally} best sequence.
+  };
+
+  % Note: shown probs don't sum to 1
+  \node[font=\scriptsize, gray, text width=4.4cm, align=center] at (6, -4.6) {
+    Only the top few tokens are drawn --- the rest of the vocabulary holds the remaining mass, so these do \textbf{not} sum to 1.
   };
 \end{tikzpicture}
 \end{center}
@@ -242,6 +288,44 @@ $$w_t = \arg\max_{w} \; P(w \mid w_1, \ldots, w_{t-1})$$
     };
   \end{scope}
 \end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WHY LOG-PROBABILITIES
+% ============================================================
+\begin{frame}
+\frametitle{Why log-probabilities?}
+
+\vspace{0.1cm}
+A sequence's probability is a \textbf{product} of per-token probabilities --- take the log to turn it into a sum:
+\begin{center}
+$\displaystyle P(w_1, \ldots, w_L) = \prod_{t=1}^{L} P(w_t \mid w_{<t}) \qquad\Longrightarrow\qquad \log P = \sum_{t=1}^{L} \log P(w_t \mid w_{<t})$
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}[
+  rbox/.style={draw, rounded corners=6pt, text width=3.7cm, align=left, inner sep=8pt, font=\small, minimum height=2.6cm}
+]
+  \node[rbox, fill=sampred!6, draw=sampred] at (-4.3, 0) {
+    \textbf{\textcolor{sampred}{1. No underflow}}\\[3pt]
+    {\footnotesize $0.1^{200}\!\approx\! 10^{-200}$ rounds to $0$ in floating point. A \emph{sum} of logs stays representable.}
+  };
+  \node[rbox, fill=popblue!7, draw=popblue] at (0, 0) {
+    \textbf{\textcolor{popblue}{2. Products $\to$ sums}}\\[3pt]
+    {\footnotesize $\log\!\big(\prod P\big) = \sum \log P$. Adding is cheaper and more stable than multiplying.}
+  };
+  \node[rbox, fill=paramgreen!8, draw=paramgreen] at (4.3, 0) {
+    \textbf{\textcolor{paramgreen}{3. Same ranking}}\\[3pt]
+    {\footnotesize $\log$ is monotonic, so the $\arg\max$ and the ordering are unchanged.}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\fcolorbox{gray}{gray!6}{\parbox{11.5cm}{\centering\small Since $P \le 1$, every $\log P \le 0$ --- so scores are \textbf{negative}, and ``higher'' means closer to $0$.}}
 \end{center}
 \end{frame}
 
@@ -295,8 +379,8 @@ $$w_t = \arg\max_{w} \; P(w \mid w_1, \ldots, w_{t-1})$$
   \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=5.5cm, align=left, inner sep=8pt, font=\small] at (6.5, -1.5) {
     \textbf{Beam search} keeps the $B$ most\\
     probable \textit{partial sequences}.\\[6pt]
-    Length-normalized score:\\[2pt]
-    $\displaystyle \text{score} = \frac{1}{T^\alpha}\sum_{t=1}^{T} \log P(w_t \mid w_{<t})$\\[6pt]
+    Length-normalized score\\($L$ = sequence length):\\[2pt]
+    $\displaystyle \text{score} = \frac{1}{L^\alpha}\sum_{t=1}^{L} \log P(w_t \mid w_{<t})$\\[6pt]
     {\footnotesize $\alpha \approx 0.6$--$0.7$ prevents\\preference for short sequences.}
   };
 \end{tikzpicture}
@@ -345,53 +429,147 @@ $$w_t = \arg\max_{w} \; P(w \mid w_1, \ldots, w_{t-1})$$
 \end{frame}
 
 % ============================================================
-% THE PROBABILITY TRAP
+% BEAM SEARCH: WIDTH VS DEPTH
 % ============================================================
 \begin{frame}
-\frametitle{The probability trap}
-\vspace{-0.3cm}
+\frametitle{Beam search: width vs depth}
 
 \begin{center}
+\small $B$ = how many hypotheses you keep \emph{per step} (width). Depth = how many steps you decode (length). Independent knobs.
+\end{center}
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}[
+  h/.style={draw, rounded corners=3pt, minimum width=1.25cm, minimum height=0.55cm, font=\scriptsize, align=center, fill=paramgreen!12, draw=paramgreen}
+]
+  \foreach \c/\t in {0/1, 1/2, 2/3, 3/4} \node[font=\scriptsize, gray] at (\c*1.85, 1.35) {step \t};
+  \foreach \c in {0,1,2,3} {
+    \node[h] at (\c*1.85, 0.55) {hyp 1};
+    \node[h] at (\c*1.85, -0.55) {hyp 2};
+  }
+  \foreach \c in {0,1,2} {
+    \draw[-{Stealth}, gray!60] (\c*1.85+0.7, 0.55) -- (\c*1.85+1.15, 0.55);
+    \draw[-{Stealth}, gray!60] (\c*1.85+0.7,-0.55) -- (\c*1.85+1.15,-0.55);
+  }
+  \draw[decorate, decoration={brace, amplitude=6pt}, popblue, thick]
+    (-1.15, 0.9) -- (-1.15, -0.9)
+    node[midway, left=7pt, font=\scriptsize\bfseries, popblue, align=center]{width\\$B=2$};
+  \draw[-{Stealth}, sampred, thick] (-0.35, -1.55) -- (6.05, -1.55)
+    node[midway, below, font=\scriptsize\bfseries, sampred]{depth = sequence length (keeps going until \texttt{<EOS>})};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.35cm}
+\begin{center}
+\fcolorbox{orange1}{orange1!7}{\parbox{12.4cm}{\centering\small
+  $B{=}3$ keeps \textbf{3 rows}, not 3 steps. At the end beam returns the single best full sequence (or the top-$n$ as an ``$n$-best list''). Chatbots rarely beam-search --- they \textbf{sample} for diversity; beam suits MT / summarization, where one most-likely answer is wanted.}}
+\end{center}
+\end{frame}
+
+% ============================================================
+% BEAM SEARCH: LENGTH NORMALIZATION
+% ============================================================
+\begin{frame}
+\frametitle{Beam search: why normalize by length}
+
+\begin{center}
+\small Each step adds a $\log P \le 0$, so the running score only \textbf{goes down}. A longer sequence scores lower --- even when it reads better.
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
 \begin{tikzpicture}[scale=0.92, transform shape]
+  \draw[-{Stealth}] (0,0) -- (7.8,0) node[right, font=\scriptsize]{position $t$};
+  \draw[-{Stealth}] (0,0.2) -- (0,-2.5);
+  \node[font=\scriptsize, anchor=east, rotate=90] at (-0.25,-1.2) {cumulative $\log P$};
+  % short sequence (3 tokens)
+  \draw[popblue, very thick] (0,0) -- (1,-0.4) -- (2,-0.8) -- (3,-1.2);
+  \fill[popblue] (3,-1.2) circle (2.6pt);
+  \node[popblue, font=\scriptsize, anchor=west] at (3.15,-1.15) {short: $-1.2$ (3 tok)};
+  % long sequence (7 tokens, better per-token)
+  \draw[sampred, very thick] (0,0) -- (1,-0.27) -- (2,-0.54) -- (3,-0.82) -- (4,-1.1) -- (5,-1.37) -- (6,-1.64) -- (7,-1.9);
+  \fill[sampred] (7,-1.9) circle (2.6pt);
+  \node[sampred, font=\scriptsize, anchor=west] at (6.0,-2.25) {long: $-1.9$ (7 tok)};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.05cm}
+\begin{center}
+\begin{tikzpicture}[box/.style={draw, rounded corners=6pt, text width=5.6cm, align=center, inner sep=7pt, font=\small, minimum height=1.7cm}]
+  \node[box, fill=warnred!6, draw=warnred] at (-3.2, 0) {
+    \textbf{\textcolor{warnred}{Raw score}}\\[2pt]
+    $-1.2 > -1.9 \Rightarrow$ \textbf{short} wins\\ just for being short (biased)
+  };
+  \node[box, fill=paramgreen!8, draw=paramgreen] at (3.2, 0) {
+    \textbf{\textcolor{paramgreen}{Divide by $L^\alpha$}} ($\alpha{=}0.6$)\\[2pt]
+    $\frac{-1.2}{3^{0.6}}{=}{-.62}$ \; vs \; $\frac{-1.9}{7^{0.6}}{=}{-.59}$\\ now the better \textbf{long} one wins (fair)
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% THE PROBABILITY TRAP
+% ============================================================
+\sectiontransition{Sampling \& temperature}{The most probable text is often the dullest. Add controlled randomness.}
+\begin{frame}
+\frametitle{The probability trap}
+\vspace{-0.25cm}
+
+\begin{center}
+\small Why not just maximize probability? Because \textbf{text quality vs.\ sequence probability is an inverted U}:
+\end{center}
+
+\vspace{-0.1cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
   \begin{axis}[
-    width=10cm, height=6cm,
-    xlabel={Sequence log-probability},
-    ylabel={Human quality rating},
+    width=10.5cm, height=4cm,
+    xlabel={Sequence log-probability \ (higher $\to$ ``more likely'' text)},
+    ylabel={Human quality},
     xmin=-12, xmax=-2,
-    ymin=0, ymax=5.5,
+    ymin=0, ymax=6,
     axis lines=left,
     grid=major,
     grid style={gray!15},
     every axis plot/.append style={line width=1.5pt},
     xtick={-12,-10,-8,-6,-4,-2},
-    ytick={1,2,3,4,5},
+    ytick=\empty,
     clip=false
   ]
     % Quality curve (inverted U)
     \addplot[popblue, domain=-12:-2, samples=80, smooth]
       {5*exp(-0.15*(\x+6)^2)};
 
-    % Annotations
-    \node[font=\small\bfseries, sampred] at (axis cs:-3, 2.5) {Beam search};
-    \draw[-{Stealth}, sampred, thick] (axis cs:-3, 2.2) -- (axis cs:-3, 0.8);
-    \node[font=\tiny, sampred, text width=2cm, align=center] at (axis cs:-3, 0.4) {high prob,\\low quality};
+    % Peak: human text
+    \node[font=\small\bfseries, paramgreen] at (axis cs:-6, 5.7) {Human text (sweet spot)};
+    \draw[-{Stealth}, paramgreen, thick] (axis cs:-6, 5.35) -- (axis cs:-6, 5.05);
 
-    \node[font=\small\bfseries, paramgreen] at (axis cs:-6, 5.5) {Human text};
-    \draw[-{Stealth}, paramgreen, thick] (axis cs:-6, 5.3) -- (axis cs:-6, 5.05);
+    % Right: beam / greedy
+    \node[font=\small\bfseries, sampred] at (axis cs:-3.2, 3.4) {Beam / greedy};
+    \node[font=\tiny, sampred, text width=2.7cm, align=center] at (axis cs:-3.2, 2.55) {maximize prob $\to$ \textbf{bland, repetitive}};
+    \draw[-{Stealth}, sampred, thick] (axis cs:-3.2, 1.95) -- (axis cs:-2.7, 0.7);
 
-    \node[font=\small\bfseries, orange1] at (axis cs:-10.5, 2.5) {Pure sampling};
-    \draw[-{Stealth}, orange1, thick] (axis cs:-10.5, 2.2) -- (axis cs:-10.5, 0.8);
-    \node[font=\tiny, orange1, text width=2cm, align=center] at (axis cs:-10.5, 0.4) {low prob,\\incoherent};
+    % Left: pure sampling
+    \node[font=\small\bfseries, orange1] at (axis cs:-9.8, 3.4) {Pure sampling};
+    \node[font=\tiny, orange1, text width=2.7cm, align=center] at (axis cs:-9.8, 2.55) {allow rare tokens $\to$ \textbf{derails}};
+    \draw[-{Stealth}, orange1, thick] (axis cs:-9.8, 1.95) -- (axis cs:-10.3, 0.7);
   \end{axis}
 \end{tikzpicture}
 \end{center}
 
-\vspace{0.1cm}
+\vspace{-0.05cm}
+\begin{center}
+{\footnotesize A sequence's log-prob $= \sum_t \log P(w_t \mid \cdot)$; each term is negative (probabilities $< 1$), so the total is negative --- near $0$ = high-probability text, more negative = rarer. The $-12$ to $-2$ scale is schematic.}
+\end{center}
+
+\vspace{0.05cm}
 \begin{center}
 \fcolorbox{warnred}{warnred!5}{%
-  \parbox{11cm}{\centering\small
-    The highest-probability text is \textbf{not} the best text.\\
-    Human language occupies a \textbf{sweet spot} of moderate probability.\\[2pt]
+  \parbox{12cm}{\centering\small
+    Maximizing overshoots into repetition; unrestricted sampling undershoots into nonsense.\\
+    \textbf{$\Rightarrow$ good decoding aims for the sweet spot: sample, but cut the unreliable tail} (top-$p$ / min-$p$).\\[2pt]
     {\footnotesize --- Holtzman et al., ``The Curious Case of Neural Text Degeneration'' (2019)}
   }%
 }
@@ -403,15 +581,22 @@ $$w_t = \arg\max_{w} \; P(w \mid w_1, \ldots, w_{t-1})$$
 % ============================================================
 \begin{frame}
 \frametitle{Temperature scaling}
-\vspace{-0.4cm}
-
-$$p_i = \frac{\exp(z_i \,/\, T)}{\displaystyle\sum_{j} \exp(z_j \,/\, T)}$$
-
 \vspace{-0.1cm}
+
 \begin{center}
-\begin{tikzpicture}[scale=0.82, transform shape]
+{\large $\displaystyle p_i = \frac{\exp(z_i \,/\, T)}{\sum_{j} \exp(z_j \,/\, T)}$}
+\end{center}
+
+\vspace{-0.15cm}
+\begin{center}
+{\small $z_i$: logits \quad$\cdot$\quad $T$: temperature \quad$\cdot$\quad divide logits by $T$ \emph{before} the softmax}
+\end{center}
+
+\vspace{-0.05cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.92, transform shape]
   % === T = 0.3 (sharp) ===
-  \begin{scope}[xshift=-5cm]
+  \begin{scope}[xshift=-5.3cm]
     \node[font=\normalsize\bfseries, sampred] at (1.2, 4) {$T = 0.3$ (sharp)};
     \fill[sampred!60] (0, 0) rectangle (0.35, 3.4);
     \fill[sampred!45] (0.5, 0) rectangle (0.85, 0.75);
@@ -428,6 +613,9 @@ $$p_i = \frac{\exp(z_i \,/\, T)}{\displaystyle\sum_{j} \exp(z_j \,/\, T)}$$
     \node[font=\tiny] at (2.17, -0.3) {her};
     \node[font=\tiny] at (2.67, -0.3) {its};
     \node[font=\scriptsize, sampred] at (0.17, 3.65) {.68};
+    \node[font=\tiny, sampred] at (0.67, 1.0) {.15};
+    \node[font=\tiny, sampred] at (1.17, 0.65) {.08};
+    \node[font=\tiny, sampred] at (1.67, 0.45) {.04};
     \node[font=\small, sampred] at (1.4, -0.8) {$T \to 0$: greedy};
   \end{scope}
 
@@ -449,11 +637,14 @@ $$p_i = \frac{\exp(z_i \,/\, T)}{\displaystyle\sum_{j} \exp(z_j \,/\, T)}$$
     \node[font=\tiny] at (2.17, -0.3) {her};
     \node[font=\tiny] at (2.67, -0.3) {its};
     \node[font=\scriptsize, popblue] at (0.17, 2.0) {.35};
+    \node[font=\tiny, popblue] at (0.67, 1.15) {.18};
+    \node[font=\tiny, popblue] at (1.17, 0.85) {.12};
+    \node[font=\tiny, popblue] at (1.67, 0.65) {.08};
     \node[font=\small, popblue] at (1.4, -0.8) {$T = 1$: unchanged};
   \end{scope}
 
   % === T = 2.0 (flat) ===
-  \begin{scope}[xshift=5cm]
+  \begin{scope}[xshift=5.3cm]
     \node[font=\normalsize\bfseries, paramgreen] at (1.2, 4) {$T = 2.0$ (flat)};
     \fill[paramgreen!50] (0, 0) rectangle (0.35, 1.1);
     \fill[paramgreen!45] (0.5, 0) rectangle (0.85, 0.85);
@@ -470,6 +661,9 @@ $$p_i = \frac{\exp(z_i \,/\, T)}{\displaystyle\sum_{j} \exp(z_j \,/\, T)}$$
     \node[font=\tiny] at (2.17, -0.3) {her};
     \node[font=\tiny] at (2.67, -0.3) {its};
     \node[font=\scriptsize, paramgreen] at (0.17, 1.35) {.22};
+    \node[font=\tiny, paramgreen] at (0.67, 1.1) {.17};
+    \node[font=\tiny, paramgreen] at (1.17, 1.0) {.15};
+    \node[font=\tiny, paramgreen] at (1.67, 0.95) {.14};
     \node[font=\small, paramgreen] at (1.4, -0.8) {$T \to \infty$: uniform};
   \end{scope}
 \end{tikzpicture}
@@ -478,6 +672,39 @@ $$p_i = \frac{\exp(z_i \,/\, T)}{\displaystyle\sum_{j} \exp(z_j \,/\, T)}$$
 \vspace{0.2cm}
 \begin{center}
 {\small Temperature \textbf{reshapes} the distribution --- lower $=$ more focused, higher $=$ more random.}
+\end{center}
+\end{frame}
+
+% ============================================================
+% TEMPERATURE: WORKED EXAMPLE
+% ============================================================
+\begin{frame}
+\frametitle{Temperature: worked example}
+
+\vspace{0.1cm}
+\begin{center}
+\small Three tokens (\textit{the}, \textit{a}, \textit{his}) with logits $z = (2,\ 1,\ 0)$. Plug into $p_i = \dfrac{e^{z_i/T}}{\sum_j e^{z_j/T}}$:
+\end{center}
+
+\vspace{0.15cm}
+\textcolor{popblue}{\textbf{$T = 1$ (unchanged):}}
+\vspace{-0.2cm}
+$$p = \frac{\big(e^{2},\, e^{1},\, e^{0}\big)}{e^{2}+e^{1}+e^{0}} = \frac{(7.39,\ 2.72,\ 1.00)}{11.11} = (\textbf{.66},\ .24,\ .09)$$
+
+\textcolor{orange1}{\textbf{$T = 10$ (hot} --- shrink the gaps\textbf{):}}
+\vspace{-0.2cm}
+$$p = \frac{\big(e^{0.2},\, e^{0.1},\, e^{0}\big)}{e^{0.2}+e^{0.1}+e^{0}} = \frac{(1.22,\ 1.11,\ 1.00)}{3.33} = (\textbf{.37},\ .33,\ .30) \approx \text{uniform}$$
+
+\textcolor{sampred}{\textbf{$T \to 0$ (greedy):}}
+\vspace{-0.2cm}
+$$\frac{z_i}{T} \to \infty\text{-sized gaps} \;\Rightarrow\; p = (\textbf{1},\ 0,\ 0) \quad(\text{all mass on } \arg\max)$$
+
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{paramgreen}{paramgreen!5}{%
+  \parbox{12cm}{\centering\small
+  Lower $T$ sharpens toward the top token; higher $T$ flattens toward uniform. $T$ is the same softmax --- only the logit gaps are rescaled.}%
+}
 \end{center}
 \end{frame}
 
@@ -545,7 +772,6 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 % ============================================================
 \begin{frame}
 \frametitle{Top-$k$ sampling}
-\vspace{-0.3cm}
 
 \textbf{Idea:} Keep only the $k$ most probable tokens, zero out the rest, renormalize.
 
@@ -585,6 +811,9 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
   \node[font=\tiny, popblue] at (0*\sp+\bw/2, 3.7) {.35};
   \node[font=\tiny, popblue] at (1*\sp+\bw/2, 2.0) {.18};
   \node[font=\tiny, popblue] at (2*\sp+\bw/2, 1.4) {.12};
+  \node[font=\tiny, popblue] at (3*\sp+\bw/2, 1.0) {.08};
+  \node[font=\tiny, popblue] at (4*\sp+\bw/2, 0.8) {.06};
+  \node[font=\tiny, gray]    at (5*\sp+\bw/2, 0.6) {.04};
 
   % Cutoff line
   \draw[very thick, sampred, dashed] (4*\sp+\bw+0.12, -0.3) -- (4*\sp+\bw+0.12, 4.0);
@@ -618,22 +847,28 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 % ============================================================
 \begin{frame}
 \frametitle{Top-$p$ (nucleus) sampling}
-\vspace{-0.4cm}
 
 \textbf{Idea:} Find the smallest set $V_p$ such that $\displaystyle\sum_{w \in V_p} P(w) \ge p$.
 
-\vspace{0.0cm}
+\vspace{0.15cm}
 \begin{center}
-\begin{tikzpicture}[scale=0.8, transform shape]
+\begin{tikzpicture}[scale=0.75, transform shape]
   % LEFT: Peaked distribution
   \begin{scope}[xshift=-4.5cm]
-    \node[font=\normalsize\bfseries, popblue] at (1.5, 3.8) {Confident model};
+    \node[font=\normalsize\bfseries, popblue] at (1.5, 4.4) {Confident model};
 
     \fill[paramgreen!40] (0, 0) rectangle (0.6, 3.2);
     \fill[paramgreen!30] (0.8, 0) rectangle (1.4, 1.2);
     \fill[gray!25] (1.6, 0) rectangle (2.2, 0.5);
     \fill[gray!15] (2.4, 0) rectangle (3.0, 0.25);
     \fill[gray!10] (3.2, 0) rectangle (3.8, 0.15);
+
+    % prob labels
+    \node[font=\tiny, paramgreen] at (0.3, 3.4) {.68};
+    \node[font=\tiny, paramgreen] at (1.1, 1.4) {.24};
+    \node[font=\tiny, gray] at (1.9, 0.7) {.05};
+    \node[font=\tiny, gray] at (2.7, 0.45) {.02};
+    \node[font=\tiny, gray] at (3.5, 0.35) {.01};
 
     \draw[thick, ->] (-0.2, 0) -- (4.2, 0);
     \draw[thick, ->] (0, -0.1) -- (0, 3.8);
@@ -656,7 +891,7 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 
   % RIGHT: Flat distribution
   \begin{scope}[xshift=4cm]
-    \node[font=\normalsize\bfseries, orange1] at (2, 3.8) {Uncertain model};
+    \node[font=\normalsize\bfseries, orange1] at (2, 4.4) {Uncertain model};
 
     \fill[paramgreen!40] (0, 0) rectangle (0.6, 1.4);
     \fill[paramgreen!35] (0.8, 0) rectangle (1.4, 1.2);
@@ -664,6 +899,14 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
     \fill[paramgreen!25] (2.4, 0) rectangle (3.0, 0.85);
     \fill[paramgreen!20] (3.2, 0) rectangle (3.8, 0.7);
     \fill[gray!15] (4.0, 0) rectangle (4.6, 0.5);
+
+    % prob labels
+    \node[font=\tiny, paramgreen] at (0.3, 1.6) {.25};
+    \node[font=\tiny, paramgreen] at (1.1, 1.4) {.21};
+    \node[font=\tiny, paramgreen] at (1.9, 1.2) {.18};
+    \node[font=\tiny, paramgreen] at (2.7, 1.05) {.15};
+    \node[font=\tiny, paramgreen] at (3.5, 0.9) {.12};
+    \node[font=\tiny, gray] at (4.3, 0.7) {.09};
 
     \draw[thick, ->] (-0.2, 0) -- (5, 0);
     \draw[thick, ->] (0, -0.1) -- (0, 3.8);
@@ -700,13 +943,12 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 % ============================================================
 \begin{frame}
 \frametitle{Min-$p$ sampling (2024)}
-\vspace{-0.4cm}
 
 \textbf{Idea:} Set a floor relative to the top token: keep token $w$ iff $P(w) \ge p_{\text{base}} \cdot P(w_{\text{top}})$.
 
-\vspace{0.1cm}
+\vspace{0.15cm}
 \begin{center}
-\begin{tikzpicture}[scale=0.8, transform shape]
+\begin{tikzpicture}[scale=0.76, transform shape]
   % LEFT: Peaked distribution
   \begin{scope}[xshift=-4.5cm]
     \node[font=\normalsize\bfseries, popblue] at (1.5, 3.8) {Confident model};
@@ -783,39 +1025,148 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \end{frame}
 
 % ============================================================
+% CONTRASTIVE SEARCH
+% ============================================================
+\sectiontransition{Contrastive search \& combining knobs}{Kill repetition without killing coherence.}
+\begin{frame}
+\frametitle{Contrastive search: the idea}
+
+\textbf{The dilemma so far:}
+\vspace{0.1cm}
+\begin{itemize}\setlength{\itemsep}{4pt}
+  \item \textcolor{popblue}{\textbf{Greedy / beam}} --- maximize probability $\Rightarrow$ coherent but \textbf{repetitive} (``the hill $\to$ the road $\to$ the hill \ldots'').
+  \item \textcolor{orange1}{\textbf{Sampling}} --- inject randomness $\Rightarrow$ diverse but sometimes \textbf{incoherent}.
+\end{itemize}
+
+\vspace{0.2cm}
+\begin{center}
+\fcolorbox{paramgreen}{paramgreen!6}{%
+  \parbox{12cm}{\centering\small
+    \textbf{Contrastive search:} get \emph{both}, \emph{deterministically}. At each step prefer a token that is
+    \textbf{likely} under the model \emph{but} \textbf{not too similar} to what was already generated.}%
+}
+\end{center}
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape]
+  \node[font=\scriptsize] at (1.9, 1.5) {hidden-state space};
+  % context cluster
+  \foreach \p in {(0,0),(0.45,0.3),(-0.3,0.28),(0.25,-0.3),(-0.22,-0.12)} \fill[gray!55] \p circle (2.6pt);
+  \draw[gray!40, dashed] (0.02,0.02) circle (0.75);
+  \node[font=\scriptsize, gray] at (0, -1.15) {past tokens};
+  % repeat candidate near
+  \fill[sampred] (1.05, 0.55) circle (3.2pt);
+  \node[font=\scriptsize, sampred, anchor=west] at (1.3, 0.55) {``hill'' --- near $\Rightarrow$ penalized};
+  % fresh candidate far
+  \fill[paramgreen] (3.9, -0.5) circle (3.2pt);
+  \node[font=\scriptsize, paramgreen, anchor=west] at (4.15, -0.5) {``ocean'' --- far $\Rightarrow$ preferred};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% CONTRASTIVE SEARCH: THE SCORE
+% ============================================================
+\begin{frame}
+\frametitle{Contrastive search: the score}
+
+\vspace{0.1cm}
+\begin{center}
+$\displaystyle x_t = \arg\max_{v \in V^{(k)}} \Big\{\, \underbrace{(1-\alpha)\,\textcolor{popblue}{p_\theta(v \mid x_{<t})}}_{\text{model confidence}} \;-\; \underbrace{\alpha\,\textcolor{sampred}{\max_{j<t}\, s(h_v, h_{x_j})}}_{\text{degeneration penalty}} \,\Big\}$
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=6pt, minimum height=2.7cm, text width=5.3cm, align=left, inner sep=9pt, font=\small}
+]
+  \node[box, fill=popblue!8, draw=popblue] at (-3.3, 0) {
+    \textbf{\textcolor{popblue}{Model confidence}}\\[3pt]
+    $p_\theta(v \mid x_{<t})$ over the \textbf{top-$k$} candidates $V^{(k)}$.\\[3pt]
+    Keeps the token likely, on-topic, grammatical.
+  };
+  \node[box, fill=sampred!7, draw=sampred] at (3.3, 0) {
+    \textbf{\textcolor{sampred}{Degeneration penalty}}\\[3pt]
+    $\max_j s(h_v, h_{x_j})$: largest \textbf{cosine similarity} of $v$'s hidden state to any past token's.\\[3pt]
+    High = echoes the context $\Rightarrow$ punished.
+  };
+  \node[font=\Large\bfseries, paramgreen] at (0, 0) {$-$};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+{\small $\alpha$ balances the two terms: $\alpha = 0$ recovers \textbf{greedy}; typical $\alpha \in \{0.4, 0.5, 0.6\}$, $k \in \{5, \ldots, 15\}$.}
+\end{center}
+\end{frame}
+
+% ============================================================
+% CONTRASTIVE SEARCH: WORKED EXAMPLE
+% ============================================================
+\begin{frame}
+\frametitle{Contrastive search: worked example}
+
+\vspace{0.1cm}
+\begin{center}
+\small The context already contains ``\textit{hill}''. Score the top-$k$ candidates with $\alpha = 0.6$:
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\small
+\begin{tabular}{l | c | c | c}
+\textbf{Candidate} & \textcolor{popblue}{confidence $p$} & \textcolor{sampred}{penalty (sim)} & \textbf{score} $= .4\,p - .6\,\mathrm{sim}$ \\
+\hline
+``hill'' (repeat)   & \textbf{.40} & .90 & $-.38$ \\
+``road''            & .30 & .60 & $-.24$ \\
+\textcolor{paramgreen}{\textbf{``ocean'' (fresh)}} & \textcolor{paramgreen}{.25} & \textcolor{paramgreen}{.15} & \textcolor{paramgreen}{$\mathbf{+.01}\ \leftarrow$ chosen} \\
+\end{tabular}
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\fcolorbox{violet1}{violet1!5}{%
+  \parbox{12.2cm}{\centering\small
+    The \emph{most probable} token (``hill'') loses --- the penalty kills the repeat; a fresh, still-plausible token wins.
+    \\[3pt]Sibling: \textbf{contrastive decoding} --- pick tokens maximizing a large ``expert'' $-$ small ``amateur'' log-prob gap.}%
+}
+\end{center}
+\end{frame}
+
+% ============================================================
 % COMBINING: TEMPERATURE + TOP-P
 % ============================================================
 \begin{frame}
 \frametitle{Combining the knobs}
 
 \begin{center}
-\begin{tikzpicture}[
-  box/.style={draw, rounded corners=6pt, minimum width=2.8cm, minimum height=1cm, align=center, font=\small, inner sep=5pt}
+\begin{tikzpicture}[scale=0.85, transform shape,
+  box/.style={draw, rounded corners=6pt, minimum width=2.5cm, minimum height=1.05cm, align=center, font=\small, inner sep=4pt}
 ]
-  % Pipeline
-  \node[box, fill=popblue!10] (logits) at (-5, 0) {\textbf{Raw logits}\\$z_1, \ldots, z_V$};
-  \node[box, fill=sampred!10] (temp) at (-1.5, 0) {\textbf{Temperature}\\$z_i / T$};
-  \node[box, fill=orange1!10] (softmax) at (2, 0) {\textbf{Softmax}\\$\to P(w)$};
-  \node[box, fill=paramgreen!10] (trunc) at (5.5, 0) {\textbf{Top-$p$/Top-$k$}\\truncate};
+  % Pipeline (5 steps, sampling inline)
+  \node[box, fill=popblue!10] (logits) at (-6, 0) {\textbf{Raw logits}\\$z_1, \ldots, z_V$};
+  \node[box, fill=sampred!10] (temp) at (-3, 0) {\textbf{Temperature}\\$z_i / T$};
+  \node[box, fill=orange1!10] (softmax) at (0, 0) {\textbf{Softmax}\\$\to P(w)$};
+  \node[box, fill=paramgreen!10] (trunc) at (3, 0) {\textbf{Top-$p$/$k$}\\truncate};
+  \node[box, fill=violet1!12, draw=violet1] (sample) at (6, 0) {\textbf{\textcolor{violet1}{Sample}}\\$w_t$};
 
   \draw[-{Stealth}, thick] (logits) -- (temp);
   \draw[-{Stealth}, thick] (temp) -- (softmax);
   \draw[-{Stealth}, thick] (softmax) -- (trunc);
-
-  % Sample
-  \node[draw=violet1, fill=violet1!10, rounded corners=8pt, minimum width=2cm, minimum height=1cm, font=\normalsize\bfseries] (sample) at (5.5, -2) {\color{violet1}Sample $w_t$};
   \draw[-{Stealth}, thick, violet1] (trunc) -- (sample);
 
   % Annotations
-  \node[font=\small, text=sampred] at (-1.5, -1.2) {controls randomness};
-  \node[font=\small, text=paramgreen] at (5.5, 1.2) {removes tail};
+  \node[font=\small, text=sampred] at (-3, -1.05) {controls randomness};
+  \node[font=\small, text=paramgreen] at (3, -1.05) {removes tail};
 
   % Common combos
-  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=12cm, align=left, inner sep=10pt, font=\small] at (0, -3.5) {
+  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=13.5cm, align=left, inner sep=10pt, font=\small] at (0, -2.9) {
     \textbf{Common combinations:}\\[4pt]
     \textbullet\ Temperature $T$ reshapes the distribution \textit{before} truncation\\
     \textbullet\ Top-$k$ and top-$p$ can be used \textit{together} (intersection of both filters)\\
-    \textbullet\ Greedy = $T \to 0$, or equivalently top-$k$ with $k{=}1$
+    \textbullet\ Greedy $= T \to 0$, or equivalently top-$k$ with $k{=}1$
   };
 \end{tikzpicture}
 \end{center}
@@ -824,62 +1175,236 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 % ============================================================
 % STRUCTURED / CONSTRAINED DECODING
 % ============================================================
+\sectiontransition{Constrained \& speculative decoding}{Force valid output, and make generation faster.}
 \begin{frame}
 \frametitle{Structured \& constrained decoding}
 
+\vspace{0.1cm}
+\begin{center}
+\fcolorbox{popblue}{popblue!5}{%
+  \parbox{12cm}{\centering\small
+    \textbf{Idea:} at each step, \textbf{mask out} tokens that would break a grammar or schema.
+    The output is \emph{guaranteed} to conform.}%
+}
+\end{center}
+
+\vspace{0.3cm}
 \begin{center}
 \begin{tikzpicture}[
-  cbox/.style={draw, rounded corners=6pt, minimum width=5.5cm, minimum height=3.5cm, text width=5cm, align=left, inner sep=8pt}
+  cbox/.style={draw, rounded corners=6pt, minimum width=5.6cm, minimum height=3.5cm, text width=5.1cm, align=left, inner sep=9pt, font=\small}
 ]
-  % The idea
-  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=12cm, align=center, inner sep=10pt, font=\normalsize] at (0, 2.8) {
-    \textbf{Idea:} At each decoding step, \textbf{mask out} tokens that would violate a grammar or schema.\\[2pt]
-    The LLM's output is \textit{guaranteed} to conform to the desired structure.
+  \node[cbox, fill=paramgreen!8, draw=paramgreen] at (-3.1, 0) {
+    \textbf{\textcolor{paramgreen}{JSON mode}}\\[5pt]
+    Force valid JSON: only allow tokens that keep it well-formed.\\[5pt]
+    \textbullet\ Native in OpenAI, Anthropic, vLLM\\[2pt]
+    \textbullet\ Backbone of tool / function calling
   };
-
-  % JSON mode
-  \node[cbox, fill=paramgreen!8] at (-4, -0.6) {
-    \textbf{\large\textcolor{paramgreen}{JSON mode}}\\[6pt]
-    \small
-    Force output to be valid JSON\\[2pt]
-    \textbullet\ At each step, only allow tokens\\
-    \quad that keep the JSON well-formed\\[2pt]
-    \textbullet\ OpenAI, Anthropic, vLLM all\\
-    \quad support this natively\\[2pt]
-    \textbullet\ Critical for tool use / function\\
-    \quad calling in LLM agents
-  };
-
-  % Grammar-guided
-  \node[cbox, fill=orange1!8] at (4, -0.6) {
-    \textbf{\large\textcolor{orange1}{Grammar-guided}}\\[6pt]
-    \small
-    Define a CFG or regex; decode\\
-    only tokens matching it\\[2pt]
-    \textbullet\ \textbf{Outlines} (2024): compile any\\
-    \quad regex/JSON schema to a mask\\[2pt]
-    \textbullet\ \textbf{Guidance} (Microsoft): interleave\\
-    \quad free generation \& constrained\\[2pt]
-    \textbullet\ Used for SQL, code, configs
-  };
-
-  % Bottom note
-  \node[draw=violet1, fill=violet1!5, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.4) {
-    Structured decoding is orthogonal to sampling strategy --- you can combine it with\\
-    temperature, top-$p$, min-$p$, etc.\ It only restricts \textit{which} tokens are candidates.
+  \node[cbox, fill=orange1!8, draw=orange1] at (3.1, 0) {
+    \textbf{\textcolor{orange1}{Grammar-guided}}\\[5pt]
+    Give a CFG or regex; decode only matching tokens.\\[5pt]
+    \textbullet\ \textbf{Outlines} (2024): regex/schema $\to$ mask\\[2pt]
+    \textbullet\ \textbf{Guidance} (Microsoft): mix free + constrained
   };
 \end{tikzpicture}
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+{\small Orthogonal to sampling --- stacks with temperature, top-$p$, min-$p$; it only restricts \emph{which} tokens are candidates.}
+\end{center}
+\end{frame}
+
+% ============================================================
+% CONSTRAINED DECODING: EXAMPLE
+% ============================================================
+\begin{frame}
+\frametitle{Constrained decoding: example}
+
+\vspace{0.1cm}
+\begin{center}
+\small Emitting JSON for schema \texttt{\char`\{"city": string, "year": integer\char`\}}. We are here:
+\end{center}
+
+\begin{center}
+\colorbox{gray!8}{\texttt{\{"city": "Yerevan", "year":\ }\rule[-2pt]{1pt}{11pt}}\quad{\footnotesize\textcolor{gray}{next token?}}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\small The grammar is now expecting an \textbf{integer}, so the decoder masks every token that would break it:
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}[
+  tok/.style={draw, rounded corners=3pt, minimum width=1.0cm, minimum height=0.75cm, font=\ttfamily\small, align=center},
+  ok/.style={tok, fill=paramgreen!15, draw=paramgreen},
+  no/.style={tok, fill=gray!10, draw=gray!45, text=gray!70}
+]
+  \node[font=\scriptsize, paramgreen] at (-2.4, 0.85) {allowed};
+  \node[ok] (a) at (-3.5, 0) {4};
+  \node[ok] (b) at (-2.4, 0) {2};
+  \node[ok] (c) at (-1.3, 0) {9};
+
+  \node[font=\scriptsize, gray] at (1.35, 0.85) {masked (would break JSON)};
+  \node[no] (d) at (0.1, 0) {"};
+  \node[no] (e) at (1.2, 0) {\{};
+  \node[no] (f) at (2.3, 0) {[};
+  \node[no] (g) at (3.5, 0) {null};
+  \foreach \n in {d,e,f,g} \draw[sampred!70, thick] (\n.south west) -- (\n.north east);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\fcolorbox{paramgreen}{paramgreen!6}{%
+  \parbox{12.6cm}{\centering\small
+    The mask covers the \textbf{whole vocabulary} (not just the few shown): every illegal token $\to -\infty$, then probability is renormalized over the legal ones and the best \emph{legal} token is sampled. A valid grammar always leaves $\ge 1$ legal token, so decoding never gets stuck --- even if the model ``wanted'' an illegal token.}%
+}
+\end{center}
+\end{frame}
+
+% ============================================================
+% SPECULATIVE DECODING
+% ============================================================
+\begin{frame}
+\frametitle{Speculative decoding}
+
+\vspace{0.1cm}
+\begin{center}
+\small A different axis: not \emph{which} token, but \emph{how fast}. Same output, pure speedup.
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape,
+  tok/.style={draw, rounded corners=3pt, minimum width=1.05cm, minimum height=0.65cm, font=\small, align=center}
+]
+  % Draft row
+  \node[font=\small\bfseries, popblue, anchor=east] at (-4.5, 1.3) {Draft (small, fast):};
+  \node[tok, fill=popblue!12] (d1) at (-3.2, 1.3) {the};
+  \node[tok, fill=popblue!12] (d2) at (-2.05, 1.3) {cat};
+  \node[tok, fill=popblue!12] (d3) at (-0.9, 1.3) {sat};
+  \node[tok, fill=popblue!12] (d4) at (0.25, 1.3) {on};
+  \node[tok, fill=popblue!12] (d5) at (1.4, 1.3) {moon};
+  \node[font=\scriptsize, gray, anchor=west] at (2.1, 1.3) {proposes $k$ tokens};
+
+  % Target row (verify in parallel)
+  \node[font=\small\bfseries, paramgreen, anchor=east] at (-4.5, -0.3) {Target (big) verifies:};
+  \node[tok, fill=paramgreen!18, draw=paramgreen] (v1) at (-3.2, -0.3) {the};
+  \node[tok, fill=paramgreen!18, draw=paramgreen] (v2) at (-2.05, -0.3) {cat};
+  \node[tok, fill=paramgreen!18, draw=paramgreen] (v3) at (-0.9, -0.3) {sat};
+  \node[tok, fill=paramgreen!18, draw=paramgreen] (v4) at (0.25, -0.3) {on};
+  \node[tok, fill=sampred!20, draw=sampred] (v5) at (1.4, -0.3) {moon};
+  \node[font=\scriptsize, sampred, anchor=west] at (2.1, -0.3) {reject $\to$ resample ``the''};
+
+  \foreach \a/\b in {d1/v1, d2/v2, d3/v3, d4/v4, d5/v5} \draw[-{Stealth}, gray!55] (\a) -- (\b);
+
+  % accept brace
+  \draw[thick, paramgreen, decorate, decoration={brace, amplitude=5pt, mirror}]
+    (-3.75, -0.85) -- (0.8, -0.85)
+    node[midway, below=6pt, font=\small, paramgreen] {4 tokens accepted in \textbf{one} forward pass};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.35cm}
+\begin{center}
+\fcolorbox{violet1}{violet1!5}{%
+  \parbox{12.3cm}{\centering\small
+    Verified in \textbf{parallel}: accept the longest matching prefix, resample at the first mismatch.
+    \textbf{Lossless} --- identical to sampling the target alone, but 2--3$\times$ faster (NVIDIA reports up to $3.6\times$ on H200). \emph{How does it verify $k$ tokens at once, and where does the draft come from? $\rightarrow$ next two slides.}}%
+}
+\end{center}
+\end{frame}
+
+% ============================================================
+% SPECULATIVE DECODING: VERIFICATION
+% ============================================================
+\begin{frame}
+\frametitle{Speculative decoding: how verification works}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.92, transform shape,
+  tok/.style={draw, rounded corners=3pt, minimum width=1.05cm, minimum height=0.6cm, font=\small, align=center}]
+  \foreach \i/\w/\f in {0/the/paramgreen, 1/cat/paramgreen, 2/sat/paramgreen, 3/on/paramgreen, 4/moon/sampred} {
+    \node[tok, fill=\f!14, draw=\f] (t\i) at (\i*1.4, 0) {\w};
+  }
+  \draw[decorate, decoration={brace, amplitude=6pt}, popblue, thick] (-0.6, 0.55) -- (6.2, 0.55)
+    node[midway, above=6pt, font=\small, popblue]{target scores all $k$ draft tokens in \textbf{one} forward pass};
+  \foreach \i in {0,1,2,3} \draw[paramgreen, line width=1.3pt] (\i*1.4-0.13,-0.72) -- (\i*1.4-0.02,-0.86) -- (\i*1.4+0.17,-0.56);
+  \draw[sampred, line width=1.3pt] (5.6-0.14,-0.56)--(5.6+0.14,-0.86);
+  \draw[sampred, line width=1.3pt] (5.6-0.14,-0.86)--(5.6+0.14,-0.56);
+  \node[font=\scriptsize, sampred, anchor=west] at (6.05,-0.72) {first mismatch: stop, resample here};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.25cm}
+{\small
+\textbf{\textcolor{popblue}{One parallel pass.}} Causal attention gives the target's next-token distribution at \emph{every} position at once --- the expensive step is paid once, not $k$ times.\\[6pt]
+\textbf{\textcolor{sampred}{Accept / reject, left to right.}} Greedy target: accept if the draft token $=$ target's $\arg\max$. Sampling target: accept $x$ with probability $\min\!\big(1,\, p_{\text{target}}(x)/p_{\text{draft}}(x)\big)$. Stop at the first reject, keep the matching prefix, and let the target fill the corrected token (plus a free bonus token if all $k$ pass).
+}
+
+\vspace{0.15cm}
+\begin{center}
+\fcolorbox{paramgreen}{paramgreen!6}{\parbox{12.4cm}{\centering\small
+  That accept/reject rule is exactly \textbf{rejection sampling} for the target distribution $\Rightarrow$ the output is distributed \emph{identically} to sampling the target alone. That is why it is \textbf{lossless}.}}
+\end{center}
+\end{frame}
+
+% ============================================================
+% SPECULATIVE DECODING: THE DRAFT
+% ============================================================
+\begin{frame}
+\frametitle{Speculative decoding: where the draft comes from}
+
+\vspace{0.05cm}
+\begin{center}
+\small If we only have one model, how do we get a fast ``draft''? Four common answers:
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}[
+  mbox/.style={draw, rounded corners=6pt, minimum width=6cm, minimum height=1.8cm, text width=5.6cm, align=left, inner sep=8pt, font=\small}
+]
+  \node[mbox, fill=popblue!7, draw=popblue] at (-3.15, 1.1) {
+    \textbf{\textcolor{popblue}{Smaller sibling model}}\\[2pt]
+    {\footnotesize A tiny model of the same family drafts (e.g.\ a 1B drafts for a 70B). The classic setup.}
+  };
+  \node[mbox, fill=paramgreen!8, draw=paramgreen] at (3.15, 1.1) {
+    \textbf{\textcolor{paramgreen}{Medusa}}\\[2pt]
+    {\footnotesize Bolt extra lightweight \textbf{heads} onto the same model to predict tokens $t{+}1, t{+}2, \ldots$ at once.}
+  };
+  \node[mbox, fill=orange1!8, draw=orange1] at (-3.15, -1.1) {
+    \textbf{\textcolor{orange1}{EAGLE / EAGLE-3}}\\[2pt]
+    {\footnotesize Draft at the \textbf{hidden-feature} level and extrapolate --- higher acceptance; the de facto standard.}
+  };
+  \node[mbox, fill=violet1!8, draw=violet1] at (3.15, -1.1) {
+    \textbf{\textcolor{violet1}{Self / $n$-gram}}\\[2pt]
+    {\footnotesize Early-exit a few of the model's \emph{own} layers, or copy $n$-grams from the prompt (no extra model).}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\fcolorbox{gray}{gray!6}{%
+  \parbox{12.6cm}{\centering\footnotesize
+    \textbf{In production (2026):} \textbf{EAGLE-3} is the de facto standard --- merged into \textbf{vLLM}, \textbf{SGLang}, and NVIDIA \textbf{TensorRT-LLM}, with draft heads trained for \textbf{Llama-4}, \textbf{Qwen-3}, and \textbf{DeepSeek}. Output unchanged, $2$--$4\times$ faster.}%
+}
 \end{center}
 \end{frame}
 
 % ============================================================
 % COMPARISON TABLE
 % ============================================================
+\sectiontransition{Comparison \& practice}{Which knob to turn, and what the API actually exposes.}
 \begin{frame}
 \frametitle{Comparison of decoding strategies}
 
-\vspace{-0.3cm}
-\renewcommand{\arraystretch}{1.4}
+\vspace{-0.2cm}
+\renewcommand{\arraystretch}{1.22}
 \begin{center}
 \small
 \begin{tabular}{>{\bfseries}l c c c}
@@ -887,6 +1412,7 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
   \hline
   \textcolor{popblue}{Greedy} & Yes & Quick baseline & Repetitive, local optima \\[2pt]
   \textcolor{popblue}{Beam search} & Yes & Translation, summary & ``Boring'' open-ended text \\[2pt]
+  \textcolor{popblue}{Contrastive search} & Yes & Coherent open-ended & Extra compute, tune $\alpha, k$ \\[2pt]
   \textcolor{sampred}{Temperature} & --- & \textit{Modifier, not standalone} & Just a knob \\[2pt]
   \textcolor{orange1}{Top-$k$} & No & Open-ended generation & Fixed $k$ doesn't adapt \\[2pt]
   \textcolor{paramgreen}{Top-$p$} & No & Open-ended generation & Slightly slower than top-$k$ \\[2pt]
@@ -896,15 +1422,12 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \end{tabular}
 \end{center}
 
-\vspace{0.4cm}
+\vspace{0.25cm}
 \begin{center}
-\begin{tikzpicture}
-  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, text width=11cm, align=center, inner sep=10pt, font=\small] {
-    \textbf{In practice}, most LLM APIs use \textbf{temperature + top-$p$} (min-$p$ gaining adoption).\\
-    Beam search is reserved for structured tasks (translation, summarization).\\
-    Greedy ($T{=}0$) for deterministic output; \textbf{constrained decoding} for structured formats.
-  };
-\end{tikzpicture}
+\fcolorbox{popblue}{popblue!5}{%
+  \parbox{11.5cm}{\centering\small
+    \textbf{In practice:} temperature $+$ top-$p$ is the default (min-$p$ gaining adoption); beam search for translation / summarization; greedy ($T{=}0$) when deterministic; constrained decoding for JSON / code.}%
+}
 \end{center}
 \end{frame}
 
@@ -914,10 +1437,11 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \begin{frame}
 \frametitle{Practical: typical API parameters}
 
+\vspace{-0.1cm}
 \begin{center}
 \begin{tikzpicture}
   % Code-like box
-  \node[draw=gray, fill=gray!5, rounded corners=4pt, text width=8.5cm, align=left, inner sep=12pt, font=\ttfamily\small] at (0, 1.5) {
+  \node[draw=gray, fill=gray!5, rounded corners=4pt, text width=7.6cm, align=left, inner sep=6pt, font=\ttfamily\footnotesize] at (0, 1.5) {
     response = client.generate(\\
     \quad prompt = "...",\\
     \quad \textcolor{sampred}{temperature} = 0.7,\\
@@ -930,10 +1454,10 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 \end{tikzpicture}
 \end{center}
 
-\vspace{0.2cm}
+\vspace{0.0cm}
 \begin{center}
 \begin{tikzpicture}[
-  recbox/.style={draw, rounded corners=6pt, minimum width=4cm, minimum height=1.5cm, text width=3.6cm, align=center, inner sep=6pt, font=\small}
+  recbox/.style={draw, rounded corners=6pt, minimum width=4cm, minimum height=1.15cm, text width=3.6cm, align=center, inner sep=6pt, font=\small}
 ]
   \node[recbox, fill=violet1!10] at (-5, 0) {
     \textbf{\textcolor{violet1}{Creative writing}}\\[3pt]
@@ -952,6 +1476,38 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
   };
 \end{tikzpicture}
 \end{center}
+
+\vspace{0.08cm}
+\begin{center}
+\fcolorbox{warnred}{warnred!5}{%
+  \parbox{13cm}{\footnotesize
+    \textbf{\textcolor{warnred}{Caveat:}} $T{=}0$ is \emph{reproducible} only if the backend is fixed too. On a router (e.g.\ OpenRouter) different providers / quantization give different $T{=}0$ outputs --- pin it: \texttt{provider:\char`\{order:[...], allow\_fallbacks:false\char`\}}. Even pinned, batched GPU kernels are not bit-exact --- expect \emph{near}-reproducibility, not a hard guarantee.}%
+}
+\end{center}
+\end{frame}
+
+% ============================================================
+% COMMON QUESTIONS
+% ============================================================
+\begin{frame}
+\frametitle{Common questions}
+
+{\small
+\textcolor{popblue}{\textbf{Q. Is $T = 0$ exactly greedy?}}\\
+Yes --- the softmax collapses onto the $\arg\max$. Libraries special-case $T{=}0$ so they don't divide by zero.\\[6pt]
+
+\textcolor{popblue}{\textbf{Q. If I set both top-$k$ and top-$p$, which wins?}}\\
+Both apply: you sample from their \emph{intersection}, after temperature has reshaped the distribution.\\[6pt]
+
+\textcolor{popblue}{\textbf{Q. Is temperature applied before or after top-$k$/top-$p$?}}\\
+Before. Temperature rescales the logits; truncation then cuts the tail of the reshaped distribution.\\[6pt]
+
+\textcolor{popblue}{\textbf{Q. Is contrastive search a kind of sampling?}}\\
+No --- it is deterministic. It takes the $\arg\max$ of a confidence-minus-penalty score, not a random draw.\\[6pt]
+
+\textcolor{popblue}{\textbf{Q. Does speculative decoding change the output?}}\\
+No. It is lossless: identical to sampling the target model alone, only faster.
+}
 \end{frame}
 
 % ============================================================
@@ -959,35 +1515,30 @@ $$w_t \sim P(\cdot \mid w_1, \ldots, w_{t-1})$$
 % ============================================================
 \begin{frame}
 \frametitle{Further reading}
-\vspace{-0.3cm}
-\begin{center}
-\begin{tikzpicture}[scale=0.88, transform shape]
-  \node[draw=popblue, fill=popblue!8, rounded corners=8pt, text width=13cm, align=left, inner sep=8pt] at (0, 2.5) {
-    \textbf{\textcolor{popblue}{Decoding Methods}}\\[4pt]
-    {\small
-    \textbullet~Holtzman et al.\ (2020), ``The Curious Case of Neural Text Degeneration'' (nucleus/top-$p$ sampling)\\[2pt]
-    \textbullet~Fan et al.\ (2018), ``Hierarchical Neural Story Generation'' (top-$k$ sampling)\\[2pt]
-    \textbullet~Vijayakumar et al.\ (2018), ``Diverse Beam Search'' (diverse decoding)
-    }
-  };
-  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=8pt, text width=13cm, align=left, inner sep=8pt] at (0, 0.3) {
-    \textbf{\textcolor{paramgreen}{Analysis \& Improvements}}\\[4pt]
-    {\small
-    \textbullet~Meister et al.\ (2020), ``If Beam Search is the Answer, What was the Question?''\\[2pt]
-    \textbullet~Su et al.\ (2022), ``A Contrastive Framework for Neural Text Generation'' (contrastive search)\\[2pt]
-    \textbullet~Nguyen et al.\ (2024), ``Turning up the Heat: Min-p Sampling'' (min-$p$)
-    }
-  };
-  \node[draw=orange1, fill=orange1!8, rounded corners=8pt, text width=13cm, align=left, inner sep=8pt] at (0, -1.9) {
-    \textbf{\textcolor{orange1}{Practical Guide \& Constrained Decoding}}\\[4pt]
-    {\small
-    \textbullet~HuggingFace blog, ``How to generate text: using different decoding methods''\\[2pt]
-    \textbullet~Willard \& Louf (2023), ``Efficient Guided Generation for Large Language Models'' (Outlines)\\[2pt]
-    \textbullet~Jurafsky \& Martin, \emph{Speech and Language Processing}, Ch.\,10 --- Language Model Decoding
-    }
-  };
-\end{tikzpicture}
-\end{center}
+\vspace{0.1cm}
+
+{\small
+\textcolor{popblue}{\textbf{Decoding methods}}
+\begin{itemize}\setlength{\itemsep}{2pt}
+  \item Holtzman et al.\ (2020), ``The Curious Case of Neural Text Degeneration'' (nucleus / top-$p$)
+  \item Fan et al.\ (2018), ``Hierarchical Neural Story Generation'' (top-$k$)
+  \item Su et al.\ (2022), ``A Contrastive Framework for Neural Text Generation'' (contrastive search)
+\end{itemize}
+
+\textcolor{paramgreen}{\textbf{Analysis \& newer methods}}
+\begin{itemize}\setlength{\itemsep}{2pt}
+  \item Meister et al.\ (2020), ``If Beam Search is the Answer, What was the Question?''
+  \item Nguyen et al.\ (2024), ``Turning up the Heat: Min-$p$ Sampling''
+  \item Leviathan et al.\ (2023), ``Fast Inference from Transformers via Speculative Decoding''
+\end{itemize}
+
+\textcolor{orange1}{\textbf{Constrained decoding \& practice}}
+\begin{itemize}\setlength{\itemsep}{2pt}
+  \item Willard \& Louf (2023), ``Efficient Guided Generation for LLMs'' (Outlines)
+  \item HuggingFace blog, ``How to generate text: using different decoding methods''
+  \item Jurafsky \& Martin, \emph{Speech and Language Processing}, Ch.\,10
+\end{itemize}
+}
 \end{frame}
 
 % ============================================================
