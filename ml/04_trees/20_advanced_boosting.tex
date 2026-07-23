@@ -31,6 +31,20 @@
     \vfill
   \end{frame}}
 
+% model-intro card: #1 name, #2 tagline, #3 year, #4 authors/company, #5 github owner/repo.
+% Convention: cite every method (paper year) and library (company + repo) on its transition slide.
+\newcommand{\modeltransition}[5]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[8pt]
+      {\normalsize #2}\\[16pt]
+      {\small \textbf{#3}\ \ $\cdot$\ \ #4\ \ $\cdot$\ \
+        \href{https://github.com/#5}{\texttt{github.com/#5}}}
+    \end{center}
+    \vfill
+  \end{frame}}
+
 \title{[20] Advanced Boosting}
 \subtitle{XGBoost $\cdot$ LightGBM $\cdot$ CatBoost $\cdot$ Stacking}
 \date{}
@@ -71,11 +85,11 @@
 
 % ================================================================
 \section{XGBoost: the regularized objective and the structure score}
-\sectiontransition{XGBoost}{A regularized objective, and a closed-form score for how good a tree is.}
+\modeltransition{XGBoost}{Extreme gradient boosting: a regularized objective $+$ a closed-form
+  structure score.}{2016}{Chen \& Guestrin (Univ.\ of Washington / DMLC)}{dmlc/xgboost}
 
 \begin{frame}{XGBoost: extreme gradient boosting}
-  A scalable tree-boosting system (Chen \& Guestrin, 2016;
-  \href{https://github.com/dmlc/xgboost}{github.com/dmlc/xgboost}):
+  A scalable tree-boosting system (Chen \& Guestrin, 2016):
   \begin{itemize}
     \item a \textbf{regularized objective} - penalties baked into the loss;
     \item \textbf{approximate / histogram} split finding for large data;
@@ -169,6 +183,31 @@
   \vskip 3pt
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
     \textbf{Numbers:} $G_t={-3},\ H_t=4,\ \lambda=1 \;\Rightarrow\; c_t^{*} = -({-3})/(4{+}1) = 0.6$.}}
+\end{frame}
+
+\begin{frame}{So how does the parabola become a tree?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    The Taylor step gave \textbf{each point} its own parabola in the correction $b$; its ideal
+    step is the Newton point $-g_i/h_i$ (the blue dots).
+    \vskip 3pt
+    But a tree \textbf{cannot} give each point its own value -- everyone in a leaf shares
+    \emph{one} number $c_t$. So we \textbf{add the leaf's parabolas} and jump to the bottom of
+    the sum:
+    \[
+      c_t^{*} = -\frac{G_t}{H_t + \lambda},
+    \]
+    the curvature-weighted \textbf{compromise} of what its points want (here $0.75$).
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/leaf_parabola.pdf}
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    So what do the \textbf{splits} do? They \textbf{group points that want similar steps into the
+    same leaf}, so each leaf's compromise is tight. The split-gain score (next) rewards exactly
+    that grouping -- the tree structure just decides \emph{who shares a parabola}.}}
 \end{frame}
 
 \begin{frame}{Worked bridge: the leaf value is [19]'s residual mean, braked}
@@ -294,7 +333,8 @@
 \end{frame}
 
 \begin{frame}{DART: dropout for trees}
-  Borrow \textbf{dropout} from deep learning. When adding a new tree, compute the update against a
+  \textbf{DART} (\emph{Dropouts meet Multiple Additive Regression Trees}) borrows \textbf{dropout}
+  from deep learning. When adding a new tree, compute the update against a
   \textbf{random subset} of the existing trees (drop the rest), then rescale so the ensemble does
   not overshoot.
   \vskip 2pt
@@ -321,6 +361,9 @@
 \section{The modern trio: LightGBM and CatBoost}
 \sectiontransition{The modern trio}{XGBoost is the baseline. LightGBM (the favorite) and CatBoost push it further.}
 
+\modeltransition{LightGBM~\textcolor{armred}{$\heartsuit$}}{Leaf-wise growth, gradient sampling
+  (GOSS), and feature bundling (EFB) -- blazing speed.}{2017}{Ke et al.\ (Microsoft)}{microsoft/LightGBM}
+
 \begin{frame}{LightGBM~\textcolor{armred}{$\heartsuit$}}
   \begin{columns}[T]
     \column{0.6\textwidth}
@@ -335,8 +378,6 @@
     \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
       A solid \textbf{default} first model on tabular data -- the next frames are why.}}
   \end{columns}
-  \vfill
-  \hfill {\scriptsize Ke et al.\ (2017); \href{https://github.com/microsoft/LightGBM}{github.com/microsoft/LightGBM}.}
 \end{frame}
 
 \begin{frame}{Predict-first: leaf-wise vs level-wise}
@@ -392,38 +433,54 @@
 \end{frame}
 
 \begin{frame}{Predict-first: GOSS throws away rows}
-  GOSS keeps all \textbf{large-gradient} rows but \textbf{randomly drops most small-gradient}
-  ones (the points the model already fits well). How much accuracy do you lose?
+  \textbf{Gradient-based One-Side Sampling (GOSS)} keeps all \textbf{large-gradient} rows but
+  \textbf{randomly drops most small-gradient} ones (the points the model already fits well).
+  How much accuracy do you lose?
   \pause
   \vfill
   \textbf{Almost none.} Well-fit rows carry little new signal, so dropping most of them (with a
   reweight to stay unbiased) speeds training a lot at negligible cost -- that is the whole point.
 \end{frame}
 
-\begin{frame}{GOSS: gradient-based one-side sampling}
+\begin{frame}{GOSS, part 1: what ``gradient'' means here}
   \begin{columns}[T]
     \column{0.52\textwidth}
-    Plain random subsampling wastes the \textbf{informative} rows. GOSS samples by gradient
-    -- a row's $|$gradient$|$ is \textbf{how wrong the model still is} on it:
+    The ``gradient'' is nothing new -- it is the \textbf{per-row gradient}
+    $g_i = \partial L / \partial F$ from [19], at the current model:
     \begin{itemize}\small
-      \item \textbf{keep} the top $a\!\cdot\!n$ rows with the \textbf{largest $|$gradient$|$}
-        (the still-hard cases);
-      \item \textbf{randomly sample} $b\!\cdot\!n$ of the small-gradient rest;
-      \item \textbf{up-weight} that sample by $\tfrac{1-a}{b}$ so the gain estimate stays
-        unbiased.
+      \item $|g_i|$ $=$ \textbf{how wrong the model still is} on row $i$.
+      \item For \textbf{squared loss} $g_i = -(y_i - F_i)$, so $|g_i|$ is just the
+        \textbf{residual size}; for log-loss it is $|p_i - y_i|$.
+      \item \textbf{Big} $|g_i|$: a still-misfit, \emph{informative} row. \textbf{Small}
+        $|g_i|$: already learned, little left to teach.
     \end{itemize}
-    {\footnotesize Defaults $a=0.2,\ b=0.1$: e.g.\ \textbf{1000 rows} $\to$ keep the 200
-    hardest $+$ a random 80 of the other 800 $=$ train on ${\sim}280$.}
+    \vskip 3pt
+    So sample rows \emph{by} $|g_i|$ instead of uniformly -- keep the hard ones.
     \column{0.48\textwidth}
     \begin{center}
-      \includegraphics[width=\linewidth]{fig/goss.pdf}
+      \includegraphics[width=\linewidth]{fig/goss.pdf}\\[1pt]
+      {\scriptsize Most rows have a small $|$gradient$|$ (already fit); a few are still hard.}
     \end{center}
   \end{columns}
+\end{frame}
+
+\begin{frame}{GOSS, part 2: the recipe}
+  \textbf{Gradient-based One-Side Sampling} keeps the informative rows and thins the rest:
+  \begin{enumerate}\small
+    \item \textbf{Keep} the top $a\!\cdot\!n$ rows with the \textbf{largest} $|g_i|$ (the
+      still-hard cases).
+    \item \textbf{Randomly sample} $b\!\cdot\!n$ of the small-gradient rest.
+    \item \textbf{Up-weight} that sample by $\tfrac{1-a}{b}$ so the split-gain estimate stays
+      \textbf{unbiased} (the kept easy rows now stand in for all of them).
+  \end{enumerate}
+  \vskip 2pt
+  {\small Defaults $a = 0.2,\ b = 0.1$: e.g.\ \textbf{1000 rows} $\to$ keep the 200 hardest
+  $+$ a random 80 of the other 800 $=$ train on ${\sim}280$.}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-    \emph{Why it works:} rows the model already gets right (tiny gradient) carry little new
-    signal -- spend the budget on the hard rows, and reweight the easy sample so the data still
-    looks unbiased. Big speed-up, negligible accuracy loss.} \hfill {\scriptsize Ke et al.\ (2017).}}
+    \emph{Why it works:} rows the model already gets right carry little new signal -- spend the
+    budget on the hard rows, and reweight the easy sample so the data still looks unbiased.
+    Big speed-up, negligible accuracy loss.} \hfill {\scriptsize Ke et al.\ (2017).}}
 \end{frame}
 
 \begin{frame}{EFB: exclusive feature bundling}
@@ -458,6 +515,51 @@
   lose almost nothing while doing far less work.} \hfill {\scriptsize Ke et al.\ (2017).}
 \end{frame}
 
+\begin{frame}{EFB by example: how two features actually merge}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Two sparse features never nonzero together (two one-hot columns), $A \in \{0\ldots10\}$,
+    $B \in \{0\ldots5\}$. \textbf{Shift $B$ by an offset $=\max(A)=10$}:
+    \[
+      \text{bundle} =
+      \begin{cases}
+        A & A > 0\\ B + 10 & B > 0\\ 0 & \text{both } 0
+      \end{cases}
+    \]
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.0}
+      \begin{tabular}{ccc}
+        \toprule $A$ & $B$ & bundle \\ \midrule
+        3 & 0 & 3 \\ 0 & 2 & \textbf{12} \\ 0 & 0 & 0 \\ 0 & 4 & \textbf{14} \\ \bottomrule
+      \end{tabular}
+    \end{center}
+    \column{0.5\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize]
+        \draw[armblue, line width=6pt] (0,0) -- (2.4,0);
+        \draw[armred, line width=6pt] (2.5,0) -- (3.7,0);
+        \node[below] at (0,-0.08) {\tiny 0};
+        \node[below] at (2.4,-0.08) {\tiny 10};
+        \node[below] at (3.7,-0.08) {\tiny 15};
+        \node[armblue] at (1.2,0.33) {$A$'s bins};
+        \node[armred] at (3.1,0.33) {$B{+}10$};
+      \end{tikzpicture}
+    \end{center}
+    \textbf{Read it back:} bundle $\le 10 \Rightarrow$ $A$'s value; bundle $> 10 \Rightarrow$
+    $B$'s value ($-10$).
+    \vskip 3pt
+    One histogram now holds \emph{both} in \textbf{disjoint bins}, so a split on the bundle
+    \emph{is} a split on one original feature -- \textbf{nothing lost}.
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Exclusivity is the trick:} $A$, $B$ never both nonzero, so each value decodes
+    unambiguously. (Real EFB allows a \emph{few} conflicts to bundle more.)}}
+\end{frame}
+
+\modeltransition{CatBoost}{Ordered target statistics and ordered boosting -- categorical
+  features without target leakage.}{2018}{Prokhorenkova et al.\ (Yandex)}{catboost/catboost}
+
 \begin{frame}{CatBoost: the categorical specialist}
   \begin{columns}[T]
     \column{0.6\textwidth}
@@ -484,7 +586,47 @@
   \vskip 2pt
   {\footnotesize \emph{Intuition:} the whole-dataset average peeks at the answer (leakage); a
   running average over \emph{earlier} rows is honest - that is what ``ordered'' means.}
-  \hfill {\scriptsize Prokhorenkova et al.\ (2018); \href{https://github.com/catboost/catboost}{github.com/catboost/catboost}.}
+\end{frame}
+
+\begin{frame}{CatBoost's oblivious (symmetric) trees}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    An \textbf{oblivious} tree uses the \textbf{same split on every node at a given depth} -- the
+    whole level tests one $(\text{feature}, \text{threshold})$.
+    \begin{itemize}\small
+      \item A depth-$d$ tree is just \textbf{$d$ conditions}; its $2^d$ leaves are indexed by the
+        $d$ yes/no answers (a bit-vector).
+      \item \textbf{Very fast} prediction: compute $d$ tests $\to$ look the leaf up in an array
+        (no node-by-node traversal).
+      \item The forced symmetry is a \textbf{regularizer} -- balanced trees, less overfitting.
+    \end{itemize}
+    \footnotesize A normal CART tree may split each node on a \emph{different} feature; oblivious
+    trees give that up for speed and regularity.
+    \column{0.52\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize,
+          q/.style={draw, rounded corners, fill=popblue!15, inner sep=2.5pt},
+          lf/.style={draw, rounded corners, fill=paramgreen!18, inner sep=2.5pt, minimum width=6mm}]
+        \node[q] (r)  at (0,2.1)   {age $>30$?};
+        \node[q] (a)  at (-1.75,1.0){hours $>40$?};
+        \node[q] (b)  at (1.75,1.0) {hours $>40$?};
+        \node[armred, font=\tiny] at (0,1.0) {same split};
+        \node[lf] (l1) at (-2.55,-0.1){$v_1$};
+        \node[lf] (l2) at (-0.95,-0.1){$v_2$};
+        \node[lf] (l3) at (0.95,-0.1) {$v_3$};
+        \node[lf] (l4) at (2.55,-0.1) {$v_4$};
+        \draw[-{Latex}] (r)--(a) node[midway,above left,font=\tiny]{no};
+        \draw[-{Latex}] (r)--(b) node[midway,above right,font=\tiny]{yes};
+        \draw[-{Latex}] (a)--(l1); \draw[-{Latex}] (a)--(l2);
+        \draw[-{Latex}] (b)--(l3); \draw[-{Latex}] (b)--(l4);
+      \end{tikzpicture}\\[2pt]
+      \scriptsize Both level-2 nodes ask the \emph{same} question.
+    \end{center}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Leaf $=$ a lookup by $(\text{age}{>}30,\ \text{hours}{>}40)$ -- four cells, like a tiny
+    decision \textbf{table}. That table structure is what makes CatBoost inference so fast.}}
 \end{frame}
 
 \begin{frame}{Which one, when?}
@@ -812,4 +954,19 @@ clf.fit(X_tr, y_tr)   # cv=5 -> honest out-of-fold base predictions
 %     only); added GitHub repos + authors to the 3 model frames; GOSS expanded with goss.pdf +
 %     a concrete 1000->280 example; easier monotonic/interaction examples; added a "no online
 %     learning" limitation. New in make_xgb_figures.py: fig_lightgbm_meme, fig_goss.
+%   - 2026-07-21: \modeltransition macro + convention = per-model transition CARD (name, tagline,
+%     year, company/authors, github repo) for XGBoost (2016, Chen & Guestrin, dmlc/xgboost),
+%     LightGBM (2017, Ke et al., Microsoft), CatBoost (2018, Prokhorenkova et al., Yandex);
+%     trimmed the now-redundant inline repo/citations. Abbreviation convention: spell the full
+%     name on first use (GOSS = Gradient-based One-Side Sampling; DART = Dropouts meet Multiple
+%     Additive Regression Trees). Split the dense GOSS frame into part 1 (what "gradient" means:
+%     the per-row g_i from [19], |g_i| = residual size / how-wrong) + part 2 (the recipe). Added
+%     "So how does the parabola become a tree?" frame + leaf_parabola.pdf (per-point parabolas ->
+%     summed leaf parabola, min = c* = -G/(H+lambda); splits group similar-step points).
+%   - 2026-07-21 (concreteness): added "EFB by example" frame -- the abstract 3-col->1-col diagram
+%     raised "how are they actually combined?", so show the OFFSET merge (shift B by max(A) so the
+%     value ranges are disjoint; bundle decodes back to one feature; exclusivity = lossless) with a
+%     numeric table + value-axis strip. Added "CatBoost's oblivious (symmetric) trees" frame:
+%     same split per depth level -> 2^d leaves indexed by d yes/no tests (a lookup table) -> fast
+%     inference + regularization; TikZ depth-2 example (age>30 / hours>40).
 % =============================================================

@@ -7,6 +7,20 @@
 % Same embed technique as the ch5 dl_* set (see ml/ch5_neural_networks/README.md).
 \usepackage{pdfpages}
 
+\graphicspath{{fig/}{fig/borrowed/}}
+
+% full-bleed showcase still: a 16:9 image, letterboxed on black in this 4:3 deck
+\newcommand{\bbslide}[2]{%
+  {\setbeamercolor{background canvas}{bg=black}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node at (current page.center) {\includegraphics[width=\paperwidth]{#1}};
+      \node[anchor=south west, font=\tiny, text=white!70]
+        at ([shift={(0.28cm,0.18cm)}]current page.south west) {#2};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
 \title{The Convolution, Mathematically}
 \subtitle{Optional appendix -- CNN chapter}
 \date{}
@@ -47,12 +61,15 @@
     \item \textbf{Cross-correlation, formally.} Its own definition and animation, then the
       side-by-side with convolution -- and why \texttt{nn.Conv2d} computes cross-correlation
       and nobody minds.
+    \item \textbf{Two bonus threads} (from 3Blue1Brown, at the very end): what a convolution
+      looks like in \textbf{2D} - a kernel blurring an image - and the FFT trick that
+      computes a convolution in $O(n\log n)$.
   \end{itemize}
   \vfill
   \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-    Every page after this is LMU's, verbatim. The two long stretches are click-through
+    The two long stretches that follow are LMU's, verbatim: click-through
     \textbf{animations} (1D convolution, then 1D cross-correlation) -- advance them with the
-    arrow key.}}
+    arrow key. A short house-authored bonus closes the deck.}}
 \end{frame}
 
 % ---- LMU chunk, part 1 (pp 1-40): deeper look + 1D convolution animation + discretization
@@ -83,6 +100,110 @@
 \includepdf[pages=41-76]{lmu_src/05_cnn-math-conv-vs-crosscorr.pdf}
 
 % ================================================================
+% OUR BONUS 1: the 2D picture (image blur) -- 3Blue1Brown stills
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Bonus 1: convolution in 2D}}\\[0.9em]
+    \begin{minipage}{0.86\textwidth}\centering\small
+      Every LMU page so far is one-dimensional. Here is the very same operation, blurring
+      an image.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{2D convolution: blurring an image}
+  The moving average of the LMU pages, in two dimensions: slide a small \textbf{kernel} of
+  weights over the image and average each neighborhood.
+  \vfill
+  \begin{itemize}\small
+    \item A $3\times3$ \textbf{box kernel} - every weight $\tfrac19$ - replaces each pixel
+      with the mean of its $3\times3$ patch. The image blurs.
+    \item Colors are vectors, so the average runs \textbf{per channel} (R, G, B).
+    \item Pick different weights and you get sharpening or edge detection instead - a CNN
+      \emph{learns} those weights (L16).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The next two stills show the $\tfrac19$ kernel marching across the image, then the
+    weighted sum it computes at one stop.}}
+\end{frame}
+
+\bbslide{3b1b_mario_kernel.jpg}{3Blue1Brown, "But what is a convolution?" (2022)}
+\bbslide{3b1b_mario_calc.jpg}{3Blue1Brown, "But what is a convolution?" (2022)}
+
+% ================================================================
+% OUR BONUS 2: fast convolution via the FFT
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Bonus 2: computing convolutions fast}}\\[0.9em]
+    \begin{minipage}{0.86\textwidth}\centering\small
+      The convolution theorem is not just elegant - it hands you an algorithm three orders
+      of magnitude faster than the naive slide-and-sum.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{You have been convolving since school}
+  Multiply two polynomials and watch the coefficients:
+  \[
+    (1 + 2x + 3x^2)(4 + 5x + 6x^2) = 4 + 13x + 28x^2 + 27x^3 + 18x^4
+  \]
+  Each output coefficient collects the pairwise products whose indices add up - the
+  diagonals of the product table:
+  \vskip 4pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{c|ccc}
+       & $1$ & $2x$ & $3x^2$\\
+      \hline
+      $4$    & $4$    & $8x$    & $12x^2$\\
+      $5x$   & $5x$   & $10x^2$ & $15x^3$\\
+      $6x^2$ & $6x^2$ & $12x^3$ & $18x^4$\\
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Expanding a polynomial and collecting like terms \emph{is} a convolution of the two
+    coefficient lists: $(1,2,3) \ast (4,5,6) = (4,13,28,27,18)$.}}
+\end{frame}
+
+\begin{frame}{Predict: how fast can we convolve?}
+  Two lists of \textbf{100{,}000} random numbers. \texttt{numpy.convolve} averages
+  \textbf{4.87 s}. \textbf{Predict} how long \texttt{scipy.signal.fftconvolve} - the same
+  result, a cleverer algorithm - takes.
+  \pause
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{4.3 ms} - roughly \textbf{1000$\times$ faster}, identical output. Naive
+    slide-and-sum fills an $n\times n$ table of pairwise products: $O(n^2)$. The fast route
+    is $O(n\log n)$.}}
+\end{frame}
+
+\begin{frame}{The trick: multiply in frequency}
+  The convolution theorem (proved a few pages back) turns convolving into
+  \emph{multiplying} in the frequency domain:
+  \[
+    f \ast g \;=\; \mathcal{F}^{-1}\!\big\{\,\mathcal{F}\{f\}\cdot\mathcal{F}\{g\}\,\big\}.
+  \]
+  \begin{itemize}\small
+    \item Treat each list as polynomial coefficients; \textbf{sample} both at the same
+      points and the convolution becomes a cheap \textbf{pointwise} product.
+    \item Sample at the \textbf{roots of unity} - evenly spaced on the unit circle. That
+      choice is the \textbf{discrete Fourier transform}, and the \textbf{FFT} both evaluates
+      it and inverts it in $O(n\log n)$.
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    FFT both lists $\to$ multiply pointwise $\to$ inverse FFT. That is what
+    \texttt{fftconvolve} does - and why two $n$-digit numbers can be multiplied in
+    $O(n\log n)$, not the $O(n^2)$ you learned in school.}}
+\end{frame}
+
+% ================================================================
 % OUR CLOSING FRAME: back to the main thread
 \begin{frame}{Back to L16}
   \begin{itemize}\small
@@ -92,6 +213,8 @@
       because the kernel is learned, so the flip is irrelevant.
     \item The frequency view is why a kernel is a \textbf{frequency filter}: box blur $=$
       low-pass, Sobel $=$ high-pass (L16, section 2).
+    \item It also makes convolution \textbf{fast}: FFT both lists, multiply pointwise,
+      invert - $O(n\log n)$, the algorithm behind \texttt{fftconvolve}.
   \end{itemize}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
@@ -119,5 +242,17 @@
 %     NOT re-derive (L16 gives the convolution theorem + Fourier as a 4-frame aside, proof
 %     skipped; the kernel flip is a one-line footnote). The rest of the LMU CNN material is
 %     already covered in house style, so no other embed was built.
+%
+%   2026-07-21 addition (instructor request, from the 3Blue1Brown video "But what is a
+%     convolution?", youtu.be/KuXjwB4LzSA, mined into _reference_3b1b_convolution/): two
+%     bonus threads after the LMU cross-correlation chunk.
+%     - Bonus 1 (2D image blur): a house frame + two full-bleed 3b1b stills
+%       (fig/borrowed/3b1b_mario_kernel.jpg, 3b1b_mario_calc.jpg). \bbslide letterboxes the
+%       16:9 stills on black in this 4:3 deck; per-frame source line on each.
+%     - Bonus 2 (fast convolution): poly-mult = convolution of coefficients, the
+%       numpy.convolve 4.87s vs scipy.fftconvolve 4.3ms timing (predict-first), and the
+%       FFT O(n log n) algorithm. All house-authored - no 3b1b figure copied for the math;
+%       the two runtimes are 3b1b's quoted numbers.
+%     Orientation frame + "Back to L16" close updated to mention the bonus.
 %   Not registered in _quarto.yml (optional appendix); rename/slot if it ever gets a video.
 % =============================================================

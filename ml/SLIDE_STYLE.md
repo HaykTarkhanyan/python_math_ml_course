@@ -64,6 +64,8 @@ Callout boxes via `fcolorbox{COLOR}{COLOR!8}{\parbox...}`:
 - **Recap** frame at the end + a `paramgreen` **"Next:"** box pointing to the next lecture.
 - **No HW frame in the deck.** Homework lives on the chapter `.qmd` page, not in the slides.
 - **Long decks are fine — no fixed length, and don't split or trim a deck just because it's long.** One idea per frame; split only a single *dense* frame into two. A single deck may cover several subtopics in one file (e.g. binary + multiclass logistic regression).
+- **Full-bleed / full-screen frames — an approved default, not an exception (added 2026-07-21).** When a frame's payload is one strong visual — a big architecture diagram, a photo, an animation still, a borrowed video still, a rich generated figure — prefer a `[plain]` **full-screen** frame that lets the image fill the slide over the usual title+body+footer structure. Use it **sometimes**, by judgment: go full-bleed when the picture should do the talking (visualization-rich moments); keep the standard structure when the frame needs surrounding prose. Good practice: set up a full-bleed still with a short *preceding* normal frame, and keep only a small source/caption line (and optionally suppress the footer for the cleanest look).
+  - **Mechanism.** 16:9 deck: `\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{fig/...}}` wrapped around a `[plain]` frame (see the welchlabs full-bleed pattern in `ml/ch5_neural_networks`). 4:3 deck (e.g. the `dl_*` LMU-embed set): letterbox the image on black so it is not distorted — see the `\bbslide` macro in `ml/ch6_cnn/dl_cnn_conv_math.tex`. Put the attribution/caption in a small `tikz` overlay node.
 
 ---
 
@@ -77,6 +79,8 @@ Callout boxes via `fcolorbox{COLOR}{COLOR!8}{\parbox...}`:
 - **Math:** show **full step-by-step derivations**, usually in a boxed/structured frame (e.g. the sigmoid derivation, MLE -> log-loss).
 - **Code:** **minimal** — at most one canonical "in `sklearn`" snippet per topic. Teach the concept, not the API.
 - **Misconception pre-empts** where a confusion is common (e.g. "0.5 is the default threshold, not a law"; "score vs calibrated probability").
+- **Cite the source (convention).** For each named method/algorithm, cite the originating paper as **author(s) + year** (e.g. "AdaBoost (Freund & Schapire, 1997)", "gradient boosting (Friedman, 2001)"). For a **library/model**, give it a transition **card** (`\modeltransition` in `20_advanced_boosting.tex`) showing **year · company/authors · GitHub repo** (e.g. "LightGBM — 2017 · Ke et al. (Microsoft) · github.com/microsoft/LightGBM"). Verify years by web search before baking them in.
+- **Abbreviations (convention).** Spell the **full name on first use, then introduce the abbreviation**, e.g. "Gradient-based One-Side Sampling (GOSS)", "Exclusive Feature Bundling (EFB)", "DART (Dropouts meet Multiple Additive Regression Trees)". After that, the abbreviation alone is fine.
 
 Common math macros (from `preamble.tex`): `\xv \yv \thetav \thx \fh \fxh \sumin \argmin \risk \riske`. Reuse them, don't redefine.
 

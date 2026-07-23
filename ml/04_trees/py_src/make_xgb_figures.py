@@ -231,7 +231,52 @@ def fig_goss():
     log.info(f"wrote {out.name} (threshold at top {a:.0%})")
 
 
+def fig_leaf_parabola():
+    """How the per-point 2nd-order Taylor parabolas become ONE leaf value. Each point i has its
+    own parabola g_i*b + 0.5*h_i*b^2 whose minimum -g_i/h_i is its ideal Newton step; points that
+    share a leaf must share one value, so we SUM their parabolas and take the minimum
+    c* = -G/(H+lambda) -- the curvature-weighted compromise. Answers 'how does the parabola
+    connect to the tree?': the tree's splits just group points that want similar steps."""
+    b = np.linspace(-2.0, 3.5, 400)
+    pts = [(-3.0, 1.0), (-1.0, 1.0), (1.0, 1.0)]     # (g, h); squared loss h=1; ideal steps 3, 1, -1
+    lam = 1.0
+    fig, ax = plt.subplots(figsize=(6.4, 4.1))
+    for g, h in pts:
+        ax.plot(b, g * b + 0.5 * h * b**2, color=ARM_BLUE, lw=1.2, alpha=0.5)
+        star = -g / h
+        ax.plot(star, g * star + 0.5 * h * star**2, "o", color=ARM_BLUE, ms=5, alpha=0.7)
+    G, H = sum(g for g, _ in pts), sum(h for _, h in pts)
+    Lsum = G * b + 0.5 * (H + lam) * b**2
+    ax.plot(b, Lsum, color=ARM_RED, lw=2.6)
+    cstar = -G / (H + lam)
+    ymin = G * cstar + 0.5 * (H + lam) * cstar**2
+    ax.axvline(cstar, color=ARM_ORANGE, ls="--", lw=1.5)
+    ax.plot(cstar, ymin, "*", color=ARM_RED, ms=19, mec="k", mew=0.5, zorder=6)
+    ax.annotate(rf"leaf value $c^*=\frac{{-G}}{{H+\lambda}}={cstar:.2f}$",
+                xy=(cstar, ymin), xytext=(cstar + 0.5, ymin + 5.5),
+                fontsize=10, color=ARM_RED,
+                arrowprops=dict(arrowstyle="->", color=ARM_RED, lw=1.2))
+    ax.text(2.55, -3.6, "each point's\nideal step $-g_i/h_i$", fontsize=8, color=ARM_BLUE,
+            ha="center")
+    ax.axhline(0, color="0.85", lw=0.8)
+    ax.set_xlabel(r"correction added to every point in this leaf,  $b$")
+    ax.set_ylabel(r"approx. loss  $g\,b + \frac{1}{2} h\,b^2$")
+    handles = [Line2D([], [], color=ARM_BLUE, lw=1.2, alpha=0.6,
+                      label="each point's parabola (dot = its ideal step)"),
+               Line2D([], [], color=ARM_RED, lw=2.6,
+                      label=r"leaf $=$ sum of them ($+\,\lambda$); min $=c^*$")]
+    ax.legend(handles=handles, fontsize=8.5, frameon=False, loc="upper center")
+    ax.set_ylim(-6, 14)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    out = FIG / "leaf_parabola.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"wrote {out.name}: c*={cstar:.3f}, ideal steps {[-g/h for g, h in pts]}")
+
+
 if __name__ == "__main__":
+    fig_leaf_parabola()
     fig_histogram_split()
     fig_earlystop()
     fig_importance()

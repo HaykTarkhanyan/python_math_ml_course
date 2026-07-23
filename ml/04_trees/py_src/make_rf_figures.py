@@ -8,7 +8,7 @@ Produces four PDFs into ``ml/04_trees/fig/`` from the Titanic dataset:
                              "more trees plateau, they do NOT overfit" curve.
   3. rf_importance.pdf    -- default impurity-based RF feature_importances_, with
                              value labels on the bars (per repo CLAUDE.md).
-  (plus oob_fraction, variance_floor, oob_vs_cv, rf_max_features, rf_boundary_smoothing.)
+  (plus oob_fraction, variance_floor, oob_vs_cv, bias_variance_dartboard, rf_boundary_smoothing.)
 
 Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
     ./ma/Scripts/python.exe ml/04_trees/py_src/make_rf_figures.py
@@ -181,58 +181,43 @@ def fig_importance(X, y, feature_names, logger):
     logger.info(f"wrote {out.name}")
 
 
-def fig_max_features(logger):
-    """The decorrelation knob, made visible. As max_features drops, the trees'
-    predictions get less correlated (rho falls -- the rho*sigma^2 floor term the deck
-    derives); test error is a gentler tradeoff. Synthetic set with one dominant feature,
-    so plain bagging would otherwise make every tree split on it and correlate.
-    (Titanic has too few features to show this cleanly; the error effect is genuinely
-    small and data-dependent, so we show the mechanism rho, not a staged error drop.)"""
+def fig_bias_variance_dartboard(logger):
+    """Bias-variance dartboard for the 'can averaging fix a biased model?' frame. Left target:
+    unbiased, high-variance trees whose AVERAGE (red star) lands on the bullseye (truth). Right:
+    biased trees whose average stays off-target. Averaging removes the scatter (variance) but not
+    the systematic offset (bias) -- which is why the bagging variance formula has no bias term."""
+    from matplotlib.patches import Circle
+    from matplotlib.lines import Line2D
     rng = np.random.default_rng(SEED)
-    n = 2500
-    Xs = rng.normal(size=(n, 25))
-    logit = (1.7 * Xs[:, 0]                       # one dominant feature
-             + 0.55 * Xs[:, 1:5].sum(axis=1)
-             + 0.35 * Xs[:, 5:9].sum(axis=1))
-    ys = (rng.uniform(size=n) < 1.0 / (1.0 + np.exp(-logit))).astype(int)
-    X_tr, X_te, y_tr, y_te = train_test_split(
-        Xs, ys, test_size=0.3, random_state=SEED, stratify=ys)
-
-    mfs = [1, 2, 3, 5, 8, 12, 16, 20, 25]
-    rho, err = [], []
-    for mf in mfs:
-        rf = RandomForestClassifier(n_estimators=150, max_features=mf,
-                                    random_state=SEED, n_jobs=1).fit(X_tr, y_tr)
-        P = np.array([t.predict_proba(X_te)[:, 1] for t in rf.estimators_])
-        C = np.corrcoef(P)
-        rho.append(float(C[np.triu_indices_from(C, k=1)].mean()))
-        err.append(1.0 - rf.score(X_te, y_te))
-    logger.info(f"max_features rho={[round(r,3) for r in rho]}")
-    logger.info(f"max_features err={[round(e,3) for e in err]}")
-
-    fig, ax = plt.subplots(figsize=(6.6, 4.0))
-    ax.plot(mfs, rho, "-o", color=ARM_BLUE, lw=2, ms=4,
-            label=r"tree-to-tree correlation $\rho$")
-    ax.axvline(5, color=ARM_ORANGE, ls="--", lw=1.5)
-    ax.annotate(r"sqrt$\approx$5 (default)", xy=(5, rho[3]), xytext=(6.5, 0.12),
-                color=ARM_ORANGE, fontsize=8,
-                arrowprops=dict(arrowstyle="->", color=ARM_ORANGE))
-    ax.set_xlabel("max_features (features tried per split, of 25)")
-    ax.set_ylabel(r"mean tree-to-tree correlation $\rho$", color=ARM_BLUE)
-    ax.tick_params(axis="y", labelcolor=ARM_BLUE)
-    ax.set_ylim(0, 0.32)
-    ax2 = ax.twinx()
-    ax2.plot(mfs, err, "-s", color=ARM_RED, lw=2, ms=4, label="test error")
-    ax2.set_ylabel("test error (1 - accuracy)", color=ARM_RED)
-    ax2.tick_params(axis="y", labelcolor=ARM_RED)
-    lines = ax.get_lines()[:1] + ax2.get_lines()
-    ax.legend(lines, [l.get_label() for l in lines], loc="upper left",
-              fontsize=8, frameon=False)
-    for a in (ax, ax2):
-        a.spines[["top"]].set_visible(False)
-    fig.tight_layout()
-    out = FIG_DIR / "rf_max_features.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.4))
+    panels = [("high variance, no bias  (deep trees)", np.array([0.0, 0.0]),
+               "average lands\non target"),
+              ("biased  (all trees too shallow)", np.array([1.55, 1.05]),
+               "average\nstill off")]
+    for ax, (title, center, note) in zip(axes, panels):
+        for r, c in zip([3.0, 2.1, 1.2], ["0.90", "0.80", "0.68"]):
+            ax.add_patch(Circle((0, 0), r, color=c, zorder=1, ec="white", lw=1))
+        ax.add_patch(Circle((0, 0), 0.45, color="white", zorder=1, ec="0.6", lw=1))
+        ax.plot(0, 0, "+", color=ARM_ORANGE, ms=13, mew=2.2, zorder=5)
+        ax.text(0, -3.55, "truth", ha="center", va="top", fontsize=8, color="0.4")
+        pts = rng.normal(center, 0.8, size=(12, 2))
+        ax.scatter(pts[:, 0], pts[:, 1], s=20, color=ARM_BLUE, alpha=0.85, zorder=3)
+        avg = pts.mean(axis=0)
+        ax.plot(avg[0], avg[1], "*", color=ARM_RED, ms=20, mec="k", mew=0.5, zorder=6)
+        ax.annotate(note, xy=(avg[0], avg[1]), xytext=(-3.0, 3.2), ha="left", va="top",
+                    fontsize=8, color=ARM_RED,
+                    arrowprops=dict(arrowstyle="->", color=ARM_RED, lw=1))
+        ax.set_xlim(-3.4, 3.4); ax.set_ylim(-3.95, 3.95)
+        ax.set_aspect("equal"); ax.axis("off")
+        ax.set_title(title, fontsize=9.5)
+    handles = [Line2D([], [], marker="o", ls="", color=ARM_BLUE, label="individual trees"),
+               Line2D([], [], marker="*", ls="", color=ARM_RED, mec="k", ms=12,
+                      label="their average")]
+    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=9, frameon=False,
+               bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=[0, 0.07, 1, 1])
+    out = FIG_DIR / "bias_variance_dartboard.pdf"
+    fig.savefig(out)
     plt.close(fig)
     logger.info(f"wrote {out.name}")
 
@@ -510,17 +495,52 @@ def fig_superdataset(logger):
     logger.info(f"wrote {out.name}")
 
 
+def fig_isolation_forest(logger):
+    """Isolation Forest anomaly-score map on a 2D toy: a dense normal cluster + scattered
+    outliers. Filled contour = the model's decision score (red = anomalous, blue = normal);
+    points are colored by the model's flag. The canonical 'a forest that finds the odd points
+    out' visual for the [18] aside (Liu, Ting & Zhou, 2008)."""
+    from sklearn.ensemble import IsolationForest
+    rng = np.random.default_rng(SEED)
+    Xn = rng.normal(0.0, 1.0, size=(320, 2))              # normal cluster
+    Xo = rng.uniform(-4.5, 4.5, size=(20, 2))             # scattered outliers
+    Xs = np.vstack([Xn, Xo])
+    iso = IsolationForest(n_estimators=200, contamination=0.06,
+                          random_state=SEED).fit(Xs)
+    pred = iso.predict(Xs)                                # -1 anomaly, +1 normal
+    xx, yy = np.meshgrid(np.linspace(-5, 5, 300), np.linspace(-5, 5, 300))
+    Z = iso.decision_function(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+    fig, ax = plt.subplots(figsize=(5.6, 4.6))
+    cf = ax.contourf(xx, yy, Z, levels=20, cmap="RdBu")   # low (negative) -> red -> anomalous
+    ax.scatter(Xs[pred == 1, 0], Xs[pred == 1, 1], s=12, color="white",
+               edgecolor="0.3", lw=0.3, label="normal")
+    ax.scatter(Xs[pred == -1, 0], Xs[pred == -1, 1], s=55, color=ARM_RED,
+               edgecolor="k", lw=0.5, marker="X", label="flagged anomaly")
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
+    cb = fig.colorbar(cf, ax=ax, fraction=0.046, pad=0.03)
+    cb.set_label("decision score (red = anomalous)", fontsize=8)
+    cb.ax.tick_params(labelsize=7)
+    fig.tight_layout()
+    out = FIG_DIR / "isolation_forest.pdf"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"wrote {out.name}: flagged {int((pred == -1).sum())}/{len(Xs)} as anomalies")
+
+
 def main():
     logger = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
     np.random.seed(SEED)
     fig_forest_meme(logger)
     fig_superdataset(logger)
+    fig_isolation_forest(logger)
     X, y, feats = load_titanic(logger)
     inst = fig_instability(X, y, feats, logger)
     ne = fig_n_estimators(X, y, feats, logger)
     fig_importance(X, y, feats, logger)
-    fig_max_features(logger)
+    fig_bias_variance_dartboard(logger)
     fig_boundary_smoothing(logger)
     fig_oob_fraction(logger)
     fig_variance_floor(X, y, logger)

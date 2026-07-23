@@ -151,13 +151,18 @@
       \foreach \i in {0,1,2,3,4} {\draw[armblue, fill=armblue!10] (\i*0.85,0) -- (\i*0.85+0.3,0.55) -- (\i*0.85+0.6,0) -- cycle;}
       \node at (1.7,-0.35) {many trees};
       \draw[-{Latex}, gray] (3.9,0.25) -- (4.6,0.25);
-      \node[draw, rounded corners, fill=paramgreen!12] at (6.0,0.25) {majority vote / mean};
+      \node[draw, rounded corners, fill=paramgreen!12] at (6.0,0.25) {soft vote / mean};
     \end{tikzpicture}
   \end{center}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
     Many noisy-but-roughly-right trees, averaged, give a steadier prediction than any
     single one of them.}}
+  \vskip 4pt
+  {\footnotesize In \texttt{sklearn}, \texttt{predict} is the \textbf{soft vote}: it
+  \emph{averages the trees' leaf probabilities} and takes the argmax (i.e.\ threshold $0.5$),
+  \emph{not} a hard tree-count majority. So \texttt{predict\_proba} gives one averaged score
+  per class -- and you \textbf{threshold-tune on that} exactly as in [13].}
 \end{frame}
 
 \begin{frame}{By hand: three bootstrap samples, then aggregate}
@@ -223,11 +228,14 @@
   Suppose every tree \textbf{underfits} in the same way -- all too shallow, all leaning
   toward the same wrong answer. Will averaging many of them fix it?
   \pause
-  \vfill
-  \textbf{No.} Averaging copies of a biased model returns the same biased answer.
-  Averaging attacks \textbf{variance} (the scatter), not \textbf{bias} (the systematic
-  offset).
-  \vfill
+  \vskip 2pt
+  \textbf{No.} Averaging attacks \textbf{variance} (the scatter), not \textbf{bias} (the
+  offset) -- the darts' \emph{average} only hits the bullseye when the trees are
+  \textbf{unbiased}.
+  \begin{center}
+    \includegraphics[width=0.74\linewidth]{fig/bias_variance_dartboard.pdf}
+  \end{center}
+  \vskip -3pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
     Bagging lowers \textbf{variance} and leaves \textbf{bias} about unchanged -- which is
     why the formula on the next frame has \emph{no bias term}, and why we bag
@@ -236,7 +244,8 @@
 
 \begin{frame}{Briefly: why averaging hits a floor}
   We will not dwell on the algebra. Averaging $M$ trees, each with variance $\sigma^2$ and
-  \textbf{average pairwise correlation} $\rho$, gives (ESL):
+  \textbf{average pairwise correlation} $\rho$, gives (\emph{The Elements of Statistical
+  Learning}, Hastie, Tibshirani \& Friedman):
   \[
     \mathrm{Var}\!\left(\bar f\right)
     = \underbrace{\rho\,\sigma^2}_{\textcolor{armred}{\text{the floor}}}
@@ -385,6 +394,10 @@
   \vfill
   Each tree gets \textbf{slightly worse} ($\sigma^2$ up a bit). But the strong feature can
   no longer dominate every tree, so the trees \textbf{disagree more} ($\rho$ down a lot).
+  \vskip 3pt
+  Recall the floor:
+  $\mathrm{Var}(\bar f) = \underbrace{\rho\,\sigma^2}_{\text{floor}} + \frac{1-\rho}{M}\,\sigma^2$
+  -- a smaller $\rho$ pulls the whole floor down.
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
     The floor $\rho\sigma^2$ drops faster than $\sigma^2$ rises -- so the \textbf{average
@@ -466,21 +479,6 @@
     regression, lower it by hand.}}
 \end{frame}
 
-\begin{frame}{The knob, measured: \texttt{max\_features} lowers $\rho$}
-  \begin{columns}[T]
-    \column{0.44\textwidth}
-    Straight from the variance formula: fewer features per split $\Rightarrow$ trees
-    \textbf{disagree more} $\Rightarrow$ correlation $\rho$ \textbf{falls} (blue).
-    \vskip 4pt
-    Test error (red) is a \emph{gentler} tradeoff -- weaker trees push back -- which is why
-    the default \texttt{sqrt} sits in a sensible middle, not at either extreme.
-    \column{0.56\textwidth}
-    \begin{center}
-      \includegraphics[width=\linewidth]{fig/rf_max_features.pdf}
-    \end{center}
-  \end{columns}
-\end{frame}
-
 % ================================================================
 \section{Random Forest in practice}
 \sectiontransition{Random Forest in Practice}{How many trees, which knobs, and what it still cannot do.}
@@ -501,7 +499,9 @@
     \column{0.52\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{fig/rf_n_estimators.pdf}\\[-2pt]
-      \scriptsize Titanic: rises, then flat past $\sim$100 trees.
+      \scriptsize Titanic: rises, then flat past $\sim$100 trees. OOB (blue) starts at
+      $\sim$10 trees: with fewer, some rows are out-of-bag for \emph{no} tree, so their OOB
+      vote is undefined.
     \end{center}
   \end{columns}
   \vfill
@@ -546,6 +546,11 @@ print(rf.oob_score_)         # free validation estimate
     Like a single tree: \textbf{no scaling needed} (callback: preprocessing), but sklearn still
     needs \textbf{numeric input} -- encode categoricals yourself. Use
     \texttt{RandomForestRegressor} for the Yerevan rent target.}}
+  \vskip 3pt
+  {\footnotesize In practice you often \textbf{skip sklearn} here: the boosting libraries do RF
+  too (LightGBM \texttt{boosting\_type='rf'}, XGBoost \texttt{num\_parallel\_tree}) -- one fast
+  library that handles \texttt{NaN} + categoricals natively and gives you tree, forest, and
+  boosting alike (see [20] and the practical).}
 \end{frame}
 
 \begin{frame}{Key knobs}
@@ -593,6 +598,81 @@ print(rf.oob_score_)         # free validation estimate
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
     \textbf{Bonus -- proximities:} how often two rows land in the \emph{same leaf} across
     the forest is a similarity measure $\to$ outlier detection, missing-value imputation.}}
+\end{frame}
+
+% ================================================================
+\section{Aside: Isolation Forest}
+\sectiontransition{Aside: Isolation Forest}{The forest's other job -- find the odd points out, with no labels.}
+
+\begin{frame}{Isolation Forest: isolate, don't predict}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    A forest for a \emph{different} job: \textbf{anomaly detection} with \textbf{no labels}
+    (fraud, defects, intrusions -- flag the weird points).
+    \vskip 4pt
+    Grow trees by \textbf{purely random splits} (random feature, random threshold -- no target).
+    The key observation:
+    \begin{itemize}\small
+      \item an \textbf{anomaly} sits far from the crowd $\Rightarrow$ a few random cuts already
+        \textbf{isolate} it -- a \textbf{short path} from the root;
+      \item a \textbf{normal} point hides in a dense region $\Rightarrow$ it takes \textbf{many}
+        cuts to isolate -- a \textbf{long path}.
+    \end{itemize}
+    So the \textbf{average path length} to isolate a point \emph{is} the anomaly signal:
+    \textbf{short $=$ anomalous}.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize]
+        \foreach \i in {0,1,2} {\fill[armred!75] (0,-\i*0.52) circle (2.3pt);}
+        \draw[armred, thick] (0,0)--(0,-1.04);
+        \node[armred, align=center] at (0,-1.55) {anomaly\\[-2pt]\textbf{2 cuts}};
+        \foreach \i in {0,1,2,3,4,5,6} {\fill[armblue!70] (1.7,-\i*0.52) circle (2.3pt);}
+        \draw[armblue, thick] (1.7,0)--(1.7,-3.12);
+        \node[armblue, align=center] at (1.7,-3.6) {normal\\[-2pt]\textbf{6 cuts}};
+      \end{tikzpicture}\\[2pt]
+      \scriptsize depth to isolate one point
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{From path length to an anomaly score}
+  \begin{columns}[T]
+    \column{0.45\textwidth}
+    Average the isolation depth $h(x)$ over all trees, normalized by $c(n)$ -- the depth
+    expected \emph{by chance} in a tree of $n$ points:
+    \[
+      s(x) = 2^{-\,E[h(x)]\,/\,c(n)} .
+    \]
+    \begin{itemize}\small
+      \item $s \to 1$: \textbf{very short} paths $\Rightarrow$ \textbf{anomaly};
+      \item $s \approx 0.5$: as deep as a normal point $\Rightarrow$ normal.
+    \end{itemize}
+    \footnotesize Each tree uses a small \textbf{subsample} (sklearn default 256 rows) -- fast,
+    and it sharpens anomalies (less ``masking'' by crowds).
+    \column{0.55\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/isolation_forest.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 1pt
+  \hfill {\scriptsize Liu, Ting \& Zhou (2008).}
+\end{frame}
+
+\begin{frame}[fragile]{Isolation Forest in practice}
+\begin{lstlisting}
+from sklearn.ensemble import IsolationForest
+iso = IsolationForest(n_estimators=200, contamination=0.05,
+                      random_state=509)
+iso.fit(X)                    # unsupervised -- no y!
+flag  = iso.predict(X)        # -1 = anomaly, +1 = normal
+score = iso.score_samples(X)  # lower = more anomalous
+\end{lstlisting}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{How it differs from a Random Forest:} \emph{unsupervised} (no target), splits are
+    \textbf{random} rather than best-gain, and it reads \textbf{path length} instead of averaging
+    predictions. Same ensemble-of-random-trees idea, aimed at ``what is weird?'' instead of
+    ``what is the label?''}}
 \end{frame}
 
 \begin{frame}{Bridge: two ways to combine trees}
@@ -682,6 +762,22 @@ print(rf.oob_score_)         # free validation estimate
 %     on 6 real Titanic rows: per-tree bootstrap rows (repeats/OOB) x root-split feature
 %     menu (seeded rng draws = the real bagging+subset mechanism, no accuracy claimed).
 %     Highlighted intersection = the slice the root split is chosen from.
+%   - 2026-07-21 (review pass): clarified sklearn predict = soft vote (avg leaf probs ->
+%     argmax), so threshold-tune on predict_proba (Aggregate frame); expanded ESL to full
+%     title; recalled the Var(fbar) floor formula on the "hide most features" frame; REMOVED
+%     the "knob measured: max_features" frame (rf_max_features.pdf now unused); footnoted why
+%     OOB starts ~10 trees (rows OOB for no tree -> undefined); noted using boosting libs'
+%     rf option (LightGBM boosting_type='rf') over sklearn on the in-sklearn frame.
+%   - 2026-07-21 (curriculum gap): added an "Aside: Isolation Forest" section (transition + 3
+%     frames: isolate-don't-predict with a path-length TikZ; the 2^{-E[h]/c(n)} anomaly score +
+%     isolation_forest.pdf 2D score map; sklearn code + RF contrast). Unsupervised anomaly
+%     detection via random-split trees; short path = anomalous. Cite Liu, Ting & Zhou (2008).
+%     New fig fn: fig_isolation_forest in make_rf_figures.py.
+%   - 2026-07-21 (review follow-up): added bias_variance_dartboard.pdf to the "can averaging
+%     fix a biased model?" frame (unbiased darts average onto the bullseye; biased darts'
+%     average stays off) -> averaging kills variance not bias. Relabeled the Aggregate TikZ
+%     "majority vote" -> "soft vote". Removed the orphaned fig_max_features()/rf_max_features.pdf
+%     (its frame was cut); bias_variance_dartboard() replaces it in make_rf_figures.py.
 %   - Pedagogy: variance formula Var = rho*sigma^2 + (1-rho)/M*sigma^2 (ESL 15.1) is
 %     the spine; floor rho*sigma^2 + the rho-down/sigma^2-up trade stated explicitly.
 %     4 predict-first frames (instability, bias-not-variance, fewer-features, more-trees).

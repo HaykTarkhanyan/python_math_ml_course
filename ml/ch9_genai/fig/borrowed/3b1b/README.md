@@ -4,13 +4,15 @@ Screenshots extracted from two 3Blue1Brown "Deep Learning" videos for the attent
 decks (L24/L25). Extracted 2026-07-19 with `yt-dlp` (720p) + `ffmpeg` single-frame grabs.
 Transcripts (with timestamps) live in `../../research/`.
 
-**License:** 3Blue1Brown videos are **CC BY-NC-SA 4.0**. Each frame used on a slide carries a
-small "3Blue1Brown, CC BY-NC-SA" credit line (per the instructor's 2026-07-19 decision). This is
-the one exception to the standing "no per-image credit line" rule, because of the NC license.
+**Credit:** Each frame used on a slide carries a small "3Blue1Brown" credit line (instructor
+decision 2026-07-21: just credit the source, drop the license tag - matches the standing
+no-license-caveat rule). Earlier the credit read "3Blue1Brown, CC BY-NC-SA"; that tag was removed
+from L24 (macros `\bbb`/`\bbbslide`/`\bbbcap`, the title page, and the Sources frame) on 2026-07-21.
 
 **Sources:**
 - Ch5 = "Transformers, the tech behind LLMs" (`wjZofJX0v4M`)
 - Ch6 = "Attention in transformers, step-by-step" (`eMlx5fFNoYc`)
+- Ch7 = "How might LLMs store facts" (`9-Jl0dxWQs8`)
 
 | File | Video @ time | Intended use |
 |---|---|---|
@@ -49,3 +51,51 @@ Notes:
   `unembedding` / `unembedding_matrix`.
 - All are 1280x720. Re-extract from the source videos (kept in the session scratchpad during the
   build) if a sharper crop is needed.
+
+## Full-bleed showcase stills (`fs_*.jpg`, L24, added 2026-07-21)
+
+13 full-slide stills at **1080p** (Ch6 `eMlx5fFNoYc` re-fetched at 1080p for crisp full-screen),
+used with the `\bbbslide` / `\bbbcap` macros in `L24_attention.tex` - a full-bleed image per
+teaching beat, sitting next to the small house-style frame it reinforces.
+
+| File | Ch6 @ time | Beat |
+|---|---|---|
+| `fs_mystery` | 04:11 | "therefore the murderer was ???" -> the last vector must encode all context |
+| `fs_eiffel` | 03:08 | tower -> Eiffel Tower vector move |
+| `fs_creature` | 04:12 | running example: "a fluffy blue creature roamed the verdant forest" |
+| `fs_query` | 06:58 | E_4 -> W_Q -> Q_4 ("any adjectives in front of me?") |
+| `fs_key` | 08:06 | keys advertise themselves ("I'm an adjective!") |
+| `fs_qkspace` | 07:40 | W_Q/W_K project into one shared query/key space |
+| `fs_dotgrid` | 08:48 | the key.query dot-product grid |
+| `fs_pattern` | 09:52 | the softmax'd attention pattern |
+| `fs_masking` | 12:28 | masking (shown as an aside; full treatment in L25) |
+| `fs_formula` | 10:28 | softmax(K^T Q / sqrt(d_k)) V |
+| `fs_value` | 13:33 | the value matrix |
+| `fs_deltae` | 15:12 | weighted values summed into delta-e |
+| `fs_onehead` | 15:48 | the whole single head on one frame |
+
+## Ch7 "store facts" stash for L25/L26 (`ch7_*.jpg`, added 2026-07-21)
+
+13 curated **1080p** stills from Ch7 (`9-Jl0dxWQs8`), stashed for the **MLP / feed-forward** part
+of **L25** (the transformer block) and the **param-count + superposition** payload for **L26**.
+Not yet wired into any deck. Transcript: `../../research/3b1b_ch7_store_facts.md`.
+
+| File | Ch7 @ time | Beat / intended use |
+|---|---|---|
+| `ch7_mj_hook` | 00:06 | "Michael Jordan plays the sport of ___" -> where do facts live? (L25 MLP cold-open) |
+| `ch7_flow_mlp` | 01:25 | transformer flow, MLP block highlighted vs attention (L25 "where the MLP sits") |
+| `ch7_direction_dotprod` | 05:18 | a direction encodes an idea; dot product ~ 0.91 (L25 toy-example setup) |
+| `ch7_upproj_rows` | 07:42 | up-projection: rows as dot-product questions; the "Michael+Jordan" row -> 2 |
+| `ch7_bias_andsetup` | 09:12 | bias = -1, so the value is positive iff the full name (AND-gate setup) |
+| `ch7_upproj_dims` | 09:42 | W_up is 49,152 rows = 4x the embedding dim (GPT-3) |
+| `ch7_relu_andgate` | 11:22 | ReLU clips to a clean 0/1 neuron -> an AND gate (**hero**) |
+| `ch7_neurons` | 11:48 | "neurons" = these values; the classic dots-and-lines NN picture (callback L14) |
+| `ch7_downproj_columns` | 12:35 | down-projection: columns as directions; first column = "basketball" |
+| `ch7_mlp_full` | 14:12 | the whole block: Linear -> ReLU -> Linear -> + residual (**hero** summary) |
+| `ch7_param_table` | 16:48 | full 175B param table; MLP ~ 116B = 2/3 of GPT-3 (L26 scale) |
+| `ch7_nearly_perp` | 18:48 | nearly-perpendicular directions (89-91 deg) intro (L26 superposition) |
+| `ch7_jl_lemma` | 20:12 | Johnson-Lindenstrauss: #near-perp vectors ~ exp(eps*N) (**hero**; L26 superposition) |
+
+Note: the superposition demo (100-dim, 10,000 random vectors, angle histogram converging to
+~90 deg) is better **reproduced** as a `py_src/` matplotlib figure (seed 509) than borrowed -
+flagged for when L26 is built.
