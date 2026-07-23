@@ -24,10 +24,11 @@ Work through these in order and report each as done or skipped (with reason).
    files, no oversized files, no PII datasets (the voter registry is
    deliberately git-ignored).
 
-3. **Write a session log:** add a new file `_work_sessions/YYYY-MM-DD_slug.toml`
-   with `title`, `date`, `areas` (folders touched), `done`, `pending`, `next`,
-   `files`, `commits`, `notes`. Concrete file paths, not vague summaries. Format:
-   `_work_sessions/README.md`. (Also skim the last 2-3 logs there at session start.)
+3. **Write a session log:** add a new file `_work_sessions/YYYY-MM-DD-HHMM_slug.toml`
+   (`HHMM` = 24h local start time) with `title`, `date`, `time`, `areas` (folders
+   touched), `done`, `pending`, `next`, `files`, `commits`, `notes`. Concrete file
+   paths, not vague summaries. Format: `_work_sessions/README.md`. (Also skim the
+   last 2-3 logs there at session start.)
 
 4. **If a lecture or practical was delivered today:**
    - Ask the user for the YouTube link, then add it to the matching `.qmd`

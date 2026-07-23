@@ -2,13 +2,14 @@
 
 One TOML file per work session. This replaces the single ever-growing
 `PROGRESS.md` (now a read-only archive). Files sort chronologically by their
-ISO-date filename prefix, so the newest session is last.
+date-time filename prefix, so the newest session is last.
 
 ## Filename
 
-`YYYY-MM-DD_slug.toml` - e.g. `2026-07-22_dl4nlp-decoding-deck.toml`.
-If a second session lands on the same day, add a short suffix (`..._b.toml`) or
-a time (`YYYY-MM-DD-HHMM_slug.toml`).
+`YYYY-MM-DD-HHMM_slug.toml` - e.g. `2026-07-23-1430_dl4nlp-decoding-deck.toml`.
+`HHMM` is the 24-hour local start time (Armenia / Berlin), with no colon so it
+is Windows-safe. Date + time in the prefix keep files sorting chronologically
+and make multiple sessions on the same day distinct without any `_b` suffix.
 
 ## Schema
 
@@ -16,6 +17,7 @@ Only `title`, `date`, and `done` are required; the rest are optional.
 
 - `title`        - one-line summary of the session
 - `date`         - session date, TOML date (unquoted): `2026-07-22`
+- `time`         - local start time (Armenia / Berlin), TOML time (unquoted): `14:30:00`
 - `session_name` - Claude Code session name, if any
 - `areas`        - top-level folders touched (array of strings)
 - `tags`         - freeform tags for searching (array of strings)
