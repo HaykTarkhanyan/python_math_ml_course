@@ -28,6 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Color palette: `popblue` (theory), `sampred` (data), `paramgreen` (parameters), `warnred` (warnings), `orange1`, `violet1`
 - All diagrams are TikZ/pgfplots code — no external images
 - Use `/beamer-overflow-check <pdf_path>` skill after compiling to visually detect clipped content
+- **Polishing a deck before delivery?** Follow the *Deck polish / review loop* in `WORKFLOWS.md`: fact-check, then a self-driven overflow pass, then an **opt-in Sonnet "student review"** of the rendered slides, then verify and commit. The student-review step is one Sonnet subagent that reads only the rendered PNGs (as a first-time student) and flags factual / overflow / clarity issues; it is a standard part of the flow, but **always ask before launching it** (per the subagent rule) - never run it automatically.
 
 ### `ml/` deck authoring conventions (instructor preferences)
 
