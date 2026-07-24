@@ -58,12 +58,12 @@ def fig_scorecard(kept, baseline, log):
     coefs = top["coef"].values
     colors = [ARM_BLUE if c > 0 else ARM_RED for c in coefs]
 
-    fig, ax = plt.subplots(figsize=(7.6, 4.4))
+    fig, ax = plt.subplots(figsize=(7.8, 4.7))
     bars = ax.barh(range(len(coefs)), coefs, color=colors)
-    ax.set_yticks(range(len(coefs)), labels, fontsize=8, fontfamily="monospace")
+    ax.set_yticks(range(len(coefs)), labels, fontsize=10, fontfamily="monospace")
     ax.axvline(0, color="0.3", lw=1)
-    ax.bar_label(bars, labels=[f"{c:+.0f}" for c in coefs], fontsize=8, padding=3)
-    ax.set_xlabel("weight added to the baseline when the rule fires (rentals)", fontsize=9)
+    ax.bar_label(bars, labels=[f"{c:+.0f}" for c in coefs], fontsize=9.5, padding=3)
+    ax.set_xlabel("weight added to the baseline when the rule fires (rentals)", fontsize=9.5)
     ax.set_title(f"RuleFit scorecard on bike (baseline $\\approx$ {baseline:,.0f} rentals)",
                  fontsize=11)
     ax.spines[["top", "right"]].set_visible(False)

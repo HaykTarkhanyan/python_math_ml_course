@@ -180,6 +180,85 @@ def fig_ale_vs_pdp(log):
     log.info("wrote ale_vs_pdp_bike.pdf")
 
 
+def fig_interactions(log):
+    """Friedman's pairwise H-statistic on the bike RF + a 2-D PDP of the top-interacting pair.
+
+    H_{jk} in [0,1]: 0 = the two features act additively (joint effect = sum of the two main
+    effects); ->1 = the joint effect is essentially all interaction. Computed on subsampled
+    partial-dependence grids (light: one vectorised predict per PD function).
+    """
+    df = pd.read_csv(DATA)
+    X, y = df[FEATURES], df["cnt"].values
+    rf = RandomForestRegressor(n_estimators=300, random_state=SEED).fit(X, y)
+
+    rng = np.random.RandomState(SEED)
+    E = X.iloc[rng.choice(len(X), size=min(150, len(X)), replace=False)].reset_index(drop=True)
+    B = X.iloc[rng.choice(len(X), size=min(80, len(X)), replace=False)].reset_index(drop=True)
+    cols = list(X.columns)
+    B_arr, E_arr = B.to_numpy(), E.to_numpy()
+    nb, ne = len(B), len(E)
+
+    def pd_centered(feat_cols):
+        """Centred partial dependence over feat_cols, evaluated at the E points."""
+        ci = [cols.index(c) for c in feat_cols]
+        M = np.tile(B_arr, (ne, 1))                       # background replicated per eval point
+        M[:, ci] = np.repeat(E_arr[:, ci], nb, axis=0)    # overwrite the fixed feature(s)
+        preds = rf.predict(pd.DataFrame(M, columns=cols)).reshape(ne, nb).mean(axis=1)
+        return preds - preds.mean()                       # centre to zero mean
+
+    # atemp excluded: corr(temp, atemp) = 0.99 -> H would be a correlation artefact, not real interaction
+    feats = ["yr", "temp", "hum", "season", "mnth", "weathersit", "windspeed", "weekday"]
+    pdj = {f: pd_centered([f]) for f in feats}
+    H = {}
+    for i, a in enumerate(feats):
+        for c in feats[i + 1:]:
+            pdac = pd_centered([a, c])
+            num = np.sum((pdac - pdj[a] - pdj[c]) ** 2)
+            den = np.sum(pdac ** 2) + 1e-12
+            H[(a, c)] = float(np.clip(np.sqrt(num / den), 0.0, 1.0))
+    top = sorted(H, key=H.get, reverse=True)[:8]
+    log.info("H top pairs: " + ", ".join(f"{a}x{c}={H[(a, c)]:.2f}" for (a, c) in top))
+
+    # --- H bar (top pairs) ---
+    labels = [f"{a} × {c}" for (a, c) in top][::-1]
+    vals = [H[p] for p in top][::-1]
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    bars = ax.barh(range(len(top)), vals, color=ARM_ORANGE)
+    ax.set_yticks(range(len(top)), labels, fontsize=9)
+    ax.set_xlim(0, max(vals) * 1.20)                      # right pad so end labels don't clip
+    ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8)
+    ax.set_xlabel("interaction strength  H   (0 = additive,  1 = all interaction)")
+    ax.set_title("Friedman's H-statistic: strongest feature pairs (bike)", fontsize=11)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout(); fig.savefig(FIG_DIR / "h_statistic_bar.pdf", bbox_inches="tight"); plt.close(fig)
+    log.info("wrote h_statistic_bar.pdf")
+
+    # --- 2-D PDP on a SYNTHETIC strongly-interacting pair (illustrative). y = x1 * x2, so x1's
+    #     slope reverses with the sign of x2 -> the surface is a clear saddle. The bike model's own
+    #     interactions (H bar above) are mild, so this clean toy carries the "bands fan out =
+    #     interaction" teaching point; the real ranking is measured on the H bar. ---
+    rng2 = np.random.RandomState(SEED)
+    nt = 800
+    Xt = pd.DataFrame({"x1": rng2.uniform(-2, 2, nt), "x2": rng2.uniform(-2, 2, nt)})
+    yt = Xt["x1"].values * Xt["x2"].values + rng2.normal(0, 0.2, nt)
+    rft = RandomForestRegressor(n_estimators=300, random_state=SEED).fit(Xt, yt)
+    g = np.linspace(-2, 2, 25)
+    bg = Xt.sample(150, random_state=SEED).to_numpy()
+    Z = np.empty((len(g), len(g)))
+    for ii, v1 in enumerate(g):
+        for jj, v2 in enumerate(g):
+            m = bg.copy(); m[:, 0] = v1; m[:, 1] = v2
+            Z[jj, ii] = rft.predict(pd.DataFrame(m, columns=["x1", "x2"])).mean()
+    fig, ax = plt.subplots(figsize=(5.9, 4.5))
+    cf = ax.contourf(g, g, Z, levels=14, cmap="RdBu_r")
+    fig.colorbar(cf, ax=ax, label="partial dependence")
+    ax.set_xlabel("$x_1$"); ax.set_ylabel("$x_2$")
+    ax.set_title("2-D PDP, strongly interacting pair (illustrative)\n"
+                 r"$x_1$'s effect reverses with $x_2$: bands fan out", fontsize=10)
+    fig.tight_layout(); fig.savefig(FIG_DIR / "pdp_2d_interaction.pdf", bbox_inches="tight"); plt.close(fig)
+    log.info("wrote pdp_2d_interaction.pdf (synthetic saddle y=x1*x2)")
+
+
 def main():
     log = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
@@ -187,6 +266,7 @@ def main():
     fig_interaction_toy(log)
     fig_correlation_trap(log)
     fig_ale_vs_pdp(log)
+    fig_interactions(log)
     log.info("done.")
 
 

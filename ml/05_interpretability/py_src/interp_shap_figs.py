@@ -74,8 +74,10 @@ def main():
     _save("shap_beeswarm.pdf"); log.info("wrote shap_beeswarm.pdf")
 
     plt.figure()
-    shap.plots.scatter(sv[:, "temp"], show=False)
-    plt.gcf().set_size_inches(6.0, 4.4)
+    # color=sv lets shap auto-pick the strongest-interacting feature for the colour axis,
+    # so the "colour reveals interactions" claim on the slide is actually shown (+ a colorbar).
+    shap.plots.scatter(sv[:, "temp"], color=sv, show=False)
+    plt.gcf().set_size_inches(6.4, 4.4)
     _save("shap_dependence.pdf"); log.info("wrote shap_dependence.pdf")
 
 

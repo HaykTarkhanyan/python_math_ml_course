@@ -14,6 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
+from matplotlib.patches import Ellipse
 from sklearn.datasets import make_blobs, make_circles, make_moons
 from sklearn.discriminant_analysis import (
     LinearDiscriminantAnalysis,
@@ -78,6 +79,18 @@ def _scatter(ax, X, y):
                linewidth=0.5, zorder=3)
 
 
+def _cov_ellipse(ax, mean, cov, color, nstd=2.0):
+    """Draw the nstd-sigma Gaussian contour ellipse for (mean, cov)."""
+    vals, vecs = np.linalg.eigh(cov)
+    order = vals.argsort()[::-1]
+    vals, vecs = vals[order], vecs[:, order]
+    angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
+    w, h = 2 * nstd * np.sqrt(vals)
+    e = Ellipse(xy=mean, width=w, height=h, angle=angle, fill=False,
+                edgecolor=color, lw=2.0, ls="--", zorder=4)
+    ax.add_patch(e)
+
+
 def save(fig, name):
     out = FIG / name
     fig.savefig(out)
@@ -112,16 +125,29 @@ def lda_qda():
     X = np.vstack([X0, X1])
     y = np.r_[np.zeros(n), np.ones(n)].astype(int)
     xx, yy = _mesh(X, pad=1.0)
+
+    # class means + covariances; pooled (shared) covariance is the LDA assumption
+    m0, m1 = X0.mean(0), X1.mean(0)
+    C0, C1 = np.cov(X0.T), np.cov(X1.T)
+    C_pool = 0.5 * (C0 + C1)
+
+    specs = [
+        ("LDA: shared covariance -> linear", LinearDiscriminantAnalysis(),
+         [(m0, C_pool), (m1, C_pool)]),   # both classes: same ellipse shape
+        ("QDA: per-class covariance -> curved", QuadraticDiscriminantAnalysis(),
+         [(m0, C0), (m1, C1)]),           # each class: its own ellipse
+    ]
     fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.9))
-    for ax, (name, clf) in zip(axes, [
-        ("LDA: shared covariance -> linear", LinearDiscriminantAnalysis()),
-        ("QDA: per-class covariance -> curved", QuadraticDiscriminantAnalysis()),
-    ]):
+    for ax, (name, clf, ells) in zip(axes, specs):
         clf.fit(X, y)
         Z = clf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
         ax.contourf(xx, yy, Z, cmap=CMAP_LIGHT, alpha=0.9)
         ax.contour(xx, yy, Z, levels=[0.5], colors=ORANGE, linewidths=2)
         _scatter(ax, X, y)
+        for (mean, cov), col in zip(ells, [RED, BLUE]):
+            _cov_ellipse(ax, mean, cov, col)
+            ax.scatter(*mean, c=col, s=110, marker="X", edgecolor="white",
+                       linewidth=1.3, zorder=5)
         ax.set_title(name)
         ax.set_xticks([]); ax.set_yticks([])
     save(fig, "cm_lda_qda.pdf")
