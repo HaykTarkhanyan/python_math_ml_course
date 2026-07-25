@@ -2,7 +2,37 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-06-19
+Last updated: 2026-07-25
+
+---
+
+## dl4nlp slides: mine Karpathy "Deep Dive into LLMs" for stage examples + high-level explanations
+
+Instructor ask (2026-07-25). Source: Andrej Karpathy, "Deep Dive into LLMs like ChatGPT" (3h31m) — https://www.youtube.com/watch?v=7xTGNNLPyMI . This is the general-audience companion to his tokenizer video we already mined for deck 03. Full 24-chapter list is in the 2026-07-25 session log; key timestamps below.
+
+**Goal:** across the dl4nlp decks, add more of Karpathy's concrete examples and his intuition-first "what is actually happening" framing for **every training stage** — pretraining, post-training (SFT), RLHF/RL. Our decks are currently more definitional than illustrative; the user wants the same motivation-first arc we gave deck 03.
+
+Primary home: `07_pretraining_finetuning.tex`; also touch `01`, `06`, `09`, `18` where a stage already has a deck. **Interview the instructor on scope/depth first** (slide-style new-content workflow), then outline, then build. Cross-link deck 03 for the tokenization callbacks instead of duplicating.
+
+Per-stage examples/framings to pull (timestamps into the video):
+- **Pretraining data (1:00)** — internet as corpus; FineWeb-scale filtering funnel (dedup, language ID, quality, PII); "the model is a lossy compression of the internet."
+- **Neural net I/O + internals + inference (14:27–31:09)** — next-token prediction *is* the whole objective; network as a fixed function with tunable knobs; sampling = one token at a time. Keep high-level, minimal math.
+- **Pretraining → post-training (59:23)** — why a base model isn't a usable chatbot; the shift in both data and objective.
+- **Post-training = conversations (1:01)** — SFT on human-written ideal assistant replies; the conversation/token format (ties to our `<|im_start|>` chat-tokens frame in deck 03); InstructGPT-style labelers + labeling instructions; "the assistant is a statistical imitation of a helpful human labeler."
+- **Hallucinations, tool use, working vs long-term memory (1:20)** — why models make things up; "weights = vague memory, context tokens = working memory"; tool use (search, code) to reduce hallucination.
+- **Knowledge of self (1:41)** — "who are you" answers are trained/spoofable, not intrinsic.
+- **Models need tokens to think (1:46)** — spread reasoning across tokens; why "explain then answer" beats "answer then explain"; mental-arithmetic example.
+- **Tokenization revisited / spelling (2:01)** — count-the-r's, reversing strings. Cross-link deck 03, don't duplicate.
+- **SFT → RL, RLHF, DeepSeek-R1, AlphaGo (2:07–3:09)** — RL as "practice problems with verifiable answers"; emergence of reasoning traces; RLHF reward model + its gameability; AlphaGo "move 37" analogy. Home: `18_reinforcement_learning.tex`.
+
+## dl4nlp reminder: show a base model MEMORIZING and NOT being an assistant yet
+
+Explicit instructor ask (2026-07-25). At/just before the pretraining→post-training transition, add frame(s) that make the base-vs-assistant distinction visceral (Karpathy does this ~42:52, "Llama 3.1 base model inference"):
+- **Memorization/regurgitation:** prompt a base model (Llama 3.1 base / GPT-2) with the opening of a famous Wikipedia article or poem → it continues *verbatim*. It has memorized chunks of the training set.
+- **Not an assistant yet:** ask a *base* model a question → it does NOT answer; it autocompletes more questions or rambles like a web document. The helpful "assistant" only appears after post-training (SFT).
+- **It's a document simulator:** base model "dreams internet documents"; few-shot prompting can coax useful behavior, but there's no built-in Q&A persona.
+- Delivery: live demo (Hyperbolic/Together base-model endpoint, or a small local base model) vs annotated screenshots — decide in the interview. Raster screenshots are fine (deck 03 already embeds PNGs).
+- Home: `07_pretraining_finetuning.tex`, at the base-model / "why post-training" moment.
 
 ---
 

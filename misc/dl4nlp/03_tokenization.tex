@@ -1,22 +1,6 @@
 \documentclass[aspectratio=169]{beamer}
 \input{preamble}
 
-% Code listings for the BPE walkthrough frames - local to this deck.
-\usepackage{listings}
-\lstdefinestyle{bpe}{
-  language=Python,
-  basicstyle=\ttfamily\scriptsize,
-  keywordstyle=\color{popblue}\bfseries,
-  commentstyle=\color{paramgreen}\itshape,
-  stringstyle=\color{sampred},
-  showstringspaces=false,
-  frame=single,
-  rulecolor=\color{black!25},
-  backgroundcolor=\color{black!3},
-  aboveskip=3pt, belowskip=3pt,
-}
-\lstset{style=bpe}
-
 \title{Tokenization}
 \subtitle{Word $\cdot$ Character $\cdot$ Subword $\cdot$ BPE $\cdot$ WordPiece $\cdot$ SentencePiece}
 \date{}
@@ -63,13 +47,16 @@
     Paste a big number like \texttt{1234567}, a non-English word, indented code, and a word with a leading space. Watch the token count jump around --- we will explain every surprise by the end.
   };
 \end{tikzpicture}
+
+\vspace{0.25cm}
+{\footnotesize\textcolor{black!70}{Examples here draw on Andrej Karpathy's \textit{``Let's build the GPT Tokenizer''}: \texttt{youtu.be/zduSFxRajkE}}}
 \end{center}
 \end{frame}
 
 % ============================================================
 % THE FUNDAMENTAL PROBLEM
 % ============================================================
-\section{Why tokenize?}
+\section{Why tokenization matters}
 \begin{frame}
 \frametitle{Models need numbers, not text}
 
@@ -110,8 +97,335 @@
 \end{frame}
 
 % ============================================================
+% WHY TOKENIZATION MATTERS
+% ============================================================
+\begin{frame}
+\frametitle{Why tokenization matters: LLM quirks}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}[
+  quirkbox/.style={draw, rounded corners=6pt, minimum width=5.8cm, minimum height=2.2cm, text width=5.3cm, align=left, inner sep=8pt, font=\small}
+]
+  % Quirk 1: Arithmetic
+  \node[quirkbox, fill=sampred!8] at (-4, 2) {
+    \textbf{\textcolor{sampred}{Bad at arithmetic}}\\[3pt]
+    ``\texttt{12345}'' $\to$ \texttt{["123", "45"]}\\
+    The model never sees the\\
+    individual digits together!
+  };
+
+  % Quirk 2: Non-English
+  \node[quirkbox, fill=orange1!8] at (4, 2) {
+    \textbf{\textcolor{orange1}{Poor non-English efficiency}}\\[3pt]
+    English ``hello'' = 1 token\\
+    Armenian ``barev'' = 8 tokens\\
+    Same greeting, 8$\times$ the cost!
+  };
+
+  % Quirk 3: Trailing spaces
+  \node[quirkbox, fill=violet1!8] at (-4, -1.2) {
+    \textbf{\textcolor{violet1}{Sensitive to formatting}}\\[3pt]
+    ``\texttt{Hello World}'' and\\
+    ``\texttt{Hello{\ }{\ }World}'' produce\\
+    different token sequences.
+  };
+
+  % Quirk 4: Can't count letters
+  \node[quirkbox, fill=warnred!8] at (4, -1.2) {
+    \textbf{\textcolor{warnred}{Can't count letters}}\\[3pt]
+    ``How many r's in strawberry?''\\
+    ``\texttt{straw}'' + ``\texttt{berry}'' --- the\\
+    model can't see individual letters.
+  };
+
+  % Bottom note
+  \node[draw=paramgreen, fill=paramgreen!5, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.7) {
+    Many apparent ``reasoning failures'' of LLMs are actually \textbf{tokenization artifacts}.\\
+    The model literally cannot see what you think it sees.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% LIVE EXAMPLE 1: THE EGG (case + position)
+% ============================================================
+\begin{frame}
+\frametitle{Same three letters, five different tokenizations}
+\vspace{-0.15cm}
+{\small The nuance that trips everyone up: case and a leading space change the tokens entirely (GPT-2). \texttt{\_} marks a leading space.}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape, font=\small,
+  tk/.style={draw=popblue!50, fill=popblue!15, rounded corners=2pt, inner sep=3pt, font=\scriptsize\ttfamily, minimum height=0.5cm}]
+  \node[anchor=east, font=\ttfamily\small] at (-3.6, 2.0) {"egg"};
+  \node[anchor=east, font=\ttfamily\small] at (-3.6, 1.2) {"\_egg"};
+  \node[anchor=east, font=\ttfamily\small] at (-3.6, 0.4) {"Egg"};
+  \node[anchor=east, font=\ttfamily\small] at (-3.6, -0.4) {"\_Egg"};
+  \node[anchor=east, font=\ttfamily\small] at (-3.6, -1.2) {"EGG"};
+  % egg (1)
+  \node[tk] at (-2.7, 2.0) {egg};
+  \node[anchor=west, font=\scriptsize] at (-1.9, 2.0) {1 token \quad id 33856};
+  % _egg (1) green
+  \node[tk, fill=paramgreen!18, draw=paramgreen!55] at (-2.65, 1.2) {\_egg};
+  \node[anchor=west, font=\scriptsize] at (-1.9, 1.2) {1 token \quad id 5935 \;\textcolor{warnred}{(different id!)}};
+  % Egg (2) orange
+  \node[tk, fill=orange1!18, draw=orange1!55] at (-2.9, 0.4) {E};
+  \node[tk, fill=orange1!18, draw=orange1!55] at (-2.5, 0.4) {gg};
+  \node[anchor=west, font=\scriptsize] at (-1.9, 0.4) {2 tokens \quad ids 36, 1130};
+  % _Egg (1) green
+  \node[tk, fill=paramgreen!18, draw=paramgreen!55] at (-2.65, -0.4) {\_Egg};
+  \node[anchor=west, font=\scriptsize] at (-1.9, -0.4) {1 token \quad id 14562};
+  % EGG (2) red
+  \node[tk, fill=sampred!18, draw=sampred!55] at (-2.9, -1.2) {EG};
+  \node[tk, fill=sampred!18, draw=sampred!55] at (-2.5, -1.2) {G};
+  \node[anchor=west, font=\scriptsize] at (-1.9, -1.2) {2 tokens \quad ids 7156, 38};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=paramgreen, fill=paramgreen!7, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
+    Same concept ``egg'' --- but lowercase vs capitalized, with or without a leading space, give \textbf{different token counts and always different IDs}. The model must \emph{learn from data} that these are the same word.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% LIVE EXAMPLE 2: NUMBERS
+% ============================================================
+\begin{frame}
+\frametitle{Numbers split arbitrarily --- why arithmetic is hard}
+\vspace{-0.15cm}
+{\small The model never sees a number as a whole; digits are chunked by \emph{frequency}, not by place value (GPT-2 unless noted).}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape, font=\small,
+  tk/.style={draw=popblue!50, fill=popblue!15, rounded corners=2pt, inner sep=3pt, font=\scriptsize\ttfamily, minimum height=0.5cm}]
+  \node[anchor=east, font=\ttfamily] at (-4.3, 1.8) {127};
+  \node[tk, fill=paramgreen!18, draw=paramgreen!55] at (-3.5, 1.8) {127};
+  \node[anchor=west, font=\scriptsize] at (-2.8, 1.8) {1 token};
+  \node[anchor=east, font=\ttfamily] at (-4.3, 1.0) {677};
+  \node[tk] at (-3.6, 1.0) {6}; \node[tk] at (-3.2, 1.0) {77};
+  \node[anchor=west, font=\scriptsize] at (-2.8, 1.0) {2 tokens};
+  \node[anchor=east, font=\ttfamily] at (-4.3, 0.2) {8080};
+  \node[tk] at (-3.6, 0.2) {80}; \node[tk] at (-3.15, 0.2) {80};
+  \node[anchor=west, font=\scriptsize] at (-2.8, 0.2) {2 tokens \;(80 $+$ 80)};
+  \node[anchor=east, font=\ttfamily] at (-4.3, -0.7) {1234567};
+  \node[tk] at (-3.5, -0.7) {123}; \node[tk] at (-3.0, -0.7) {45}; \node[tk] at (-2.6, -0.7) {67};
+  \node[anchor=west, font=\scriptsize] at (-2.0, -0.7) {GPT-2: \texttt{123|45|67}};
+  \node[anchor=east, font=\ttfamily] at (-4.3, -1.5) {1234567};
+  \node[tk, fill=orange1!18, draw=orange1!55] at (-3.5, -1.5) {123};
+  \node[tk, fill=orange1!18, draw=orange1!55] at (-3.0, -1.5) {456};
+  \node[tk, fill=orange1!18, draw=orange1!55] at (-2.6, -1.5) {7};
+  \node[anchor=west, font=\scriptsize] at (-2.0, -1.5) {GPT-4: \texttt{123|456|7} \;(max 3 digits)};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=warnred, fill=warnred!6, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
+    \texttt{1234567} becomes \texttt{123|45|67} --- the model must reconstruct place value from arbitrary chunks, and a different tokenizer splits it \emph{differently}. This is a big part of why LLMs stumble on multi-digit arithmetic.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% LIVE EXAMPLE 3: NON-ENGLISH BLOAT (long sequences)
+% ============================================================
+\begin{frame}
+\frametitle{Non-English inflates the sequence}
+\vspace{-0.15cm}
+{\small Tokenizers split \textbf{bytes}, not characters --- and each non-Latin letter takes 2--3 bytes. So Armenian ``barev'' is only \textbf{4 letters} but \textbf{8 tokens}, and a translated document runs out of context far sooner. GPT-2 counts, same greeting:}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape, font=\small]
+  \def\sc{0.35}
+  \foreach \y/\lang/\g/\col in {%
+    2.0/{English ``hello''}/1/paramgreen,
+    1.3/{Chinese ``nihao''}/4/popblue,
+    0.6/{Japanese ``konnichiwa''}/6/popblue,
+    -0.1/{Russian ``privet''}/7/popblue,
+    -0.8/{Armenian ``barev''}/8/armred,
+    -1.5/{Korean ``annyeonghaseyo''}/14/popblue} {%
+      \node[anchor=east, font=\scriptsize] at (-0.15, \y) {\lang};
+      \fill[\col!30] (0, \y-0.16) rectangle ({\g*\sc}, \y+0.16);
+      \draw[\col] (0, \y-0.16) rectangle ({\g*\sc}, \y+0.16);
+      \node[anchor=west, font=\scriptsize\bfseries] at ({\g*\sc + 0.12}, \y) {\g};
+  }
+  \draw[-Stealth, gray] (0,-1.85) -- (0, 2.35);
+  \node[font=\scriptsize, text=gray, anchor=west] at (0.1, 2.3) {GPT-2 tokens};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=orange1, fill=orange1!6, rounded corners=6pt, text width=12.7cm, align=center, inner sep=7pt, font=\small] {
+    Same meaning, \textbf{4--14$\times$} the tokens. GPT-4's bigger vocab helped some scripts a lot (Japanese \textbf{6$\to$1}, Korean \textbf{14$\to$5}) --- but \textbf{not Armenian (8$\to$8)}. Low-resource languages stay expensive.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% LIVE EXAMPLE 4: PYTHON WHITESPACE
+% ============================================================
+\begin{frame}
+\frametitle{Python whitespace: GPT-2 wastes it, GPT-4 groups it}
+\vspace{-0.15cm}
+{\small Every indentation space is its own token (id \texttt{220}) in GPT-2. On a single 12-space line \texttt{\_\_\_\_...print(i)}:}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.92, transform shape, font=\small,
+  sp/.style={draw=sampred!50, fill=sampred!15, rounded corners=2pt, minimum width=0.3cm, minimum height=0.45cm, inner sep=1pt, font=\tiny\ttfamily},
+  tok/.style={draw=popblue!50, fill=popblue!15, rounded corners=2pt, inner sep=3pt, font=\scriptsize\ttfamily}]
+  % GPT-2 row
+  \node[anchor=east, font=\small\bfseries, text=sampred] at (-5.7, 1.1) {GPT-2};
+  \foreach \i in {1,...,12} { \node[sp] at ({-5.3 + (\i-1)*0.34}, 1.1) {\_}; }
+  \node[tok] at (-0.7, 1.1) {print};
+  \node[tok] at (0.3, 1.1) {(i};
+  \node[tok] at (0.95, 1.1) {)};
+  \node[anchor=west, font=\scriptsize\bfseries] at (1.4, 1.1) {15 tokens};
+  % GPT-4 row
+  \node[anchor=east, font=\small\bfseries, text=paramgreen] at (-5.7, 0.1) {GPT-4};
+  \node[draw=paramgreen!55, fill=paramgreen!18, rounded corners=2pt, minimum width=1.6cm, minimum height=0.45cm, inner sep=1pt, font=\scriptsize\ttfamily] at (-4.4, 0.1) {\_\_\_\_\_\_\_\_\_\_\_};
+  \node[tok] at (-3.0, 0.1) {\_print};
+  \node[tok] at (-1.95, 0.1) {(i};
+  \node[tok] at (-1.3, 0.1) {)};
+  \node[anchor=west, font=\scriptsize\bfseries] at (-0.85, 0.1) {4 tokens};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[font=\small]
+  \node[draw=popblue, fill=lightbg, rounded corners=6pt, text width=6.0cm, align=center, inner sep=8pt] at (-3.4, 0) {
+    \textbf{A whole FizzBuzz function}\\[3pt]
+    GPT-2: \textbf{116} tokens\\ (\textbf{57} of them lone spaces!)\\[2pt]
+    GPT-4: \textbf{55} tokens
+  };
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=6.0cm, align=left, inner sep=8pt] at (3.4, 0) {
+    \textbf{\textcolor{paramgreen}{Why it matters}}\\[3pt]
+    GPT-2 blows about half its tokens on indentation --- so it runs out of context and is \textbf{bad at Python}. GPT-4 groups whitespace on purpose.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% UNICODE CODE POINTS
+% ============================================================
+\section{From text to bytes}
+\begin{frame}
+\frametitle{Text is a sequence of Unicode code points}
+\vspace{-0.15cm}
+{\small In Python a \texttt{str} is an immutable sequence of \textbf{Unicode code points}. \texttt{ord()} maps a character to its integer code point; \texttt{chr()} maps back.}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[font=\small]
+  \node[draw=popblue!50, fill=popblue!6, rounded corners=6pt, text width=5.9cm, align=left, inner sep=9pt] at (-3.4, 0) {
+    {\ttfamily\small ord('A') = 65\\ ord('h') = 104\\ ord('é') = 233}\\[6pt]
+    {\scriptsize\textcolor{gray}{a smiley emoji $\to$ 128578\\ an Armenian letter $\to$ 1378}}
+  };
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=6.1cm, align=left, inner sep=9pt] at (3.4, 0) {
+    \textbf{\textcolor{orange1}{Unicode today}}\\[4pt]
+    $\sim$\textbf{150{,}000} code points across \textbf{161} scripts (v15.1, 2023) --- and the standard \textbf{keeps growing}.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=warnred, fill=warnred!6, rounded corners=6pt, text width=12.7cm, align=center, inner sep=8pt, font=\small] {
+    \textbf{Why not feed code points to the model directly?} The vocabulary would be $\sim$150k (a huge embedding $+$ softmax), and the standard is a \textbf{moving target}. We want a smaller, stable base --- so we encode code points into \textbf{bytes}.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% UTF-8 vs UTF-16 vs UTF-32
+% ============================================================
+\begin{frame}
+\frametitle{Turning code points into bytes: UTF-8 / 16 / 32}
+\vspace{-0.15cm}
+{\small Unicode defines three \textbf{encodings} from code points to byte streams. The same character \texttt{'A'} (U+0041), three ways:}
+
+\vspace{0.25cm}
+\begin{center}
+{\small
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{l c l}
+  \textbf{Encoding} & \textbf{Bytes for \texttt{'A'}} & \textbf{\texttt{"hello"}}\\
+  \hline
+  \texttt{UTF-8}\;\;\; (variable, 1--4 B) & \texttt{41} & 5 bytes\\
+  \texttt{UTF-16} (variable, 2 or 4 B) & \texttt{00 41} & 10 bytes\\
+  \texttt{UTF-32} (fixed, 4 B) & \texttt{00 00 00 41} & 20 bytes\\
+  \hline
+\end{tabular}
+}
+\end{center}
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=paramgreen, fill=paramgreen!7, rounded corners=6pt, text width=12.7cm, align=center, inner sep=8pt, font=\small] {
+    UTF-16/32 pad ASCII with \textbf{zeros} --- wasteful (``hello'' is 10 or 20 bytes, not 5). \textbf{UTF-8} is variable-length, \textbf{backwards-compatible with ASCII} (English is unchanged, 1 byte/char), and dominant on the web. \textbf{That is the one we use.}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% UTF-8: EVERYTHING IS BYTES
+% ============================================================
+\begin{frame}
+\frametitle{Everything is bytes: the UTF-8 encoding}
+\vspace{-0.1cm}
+{\small So we settle on \textbf{UTF-8}. Here is exactly how many bytes each character takes --- \textbf{1 to 4}, by code-point range. This is the 256-symbol base that byte-level BPE starts from.}
+
+\vspace{0.25cm}
+\begin{center}
+{\small
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{l c l}
+  \textbf{Code point range} & \textbf{Bytes} & \textbf{Example (hex)}\\
+  \hline
+  \texttt{U+0000..U+007F} (ASCII) & 1 & \texttt{A} $\to$ \texttt{41}\\
+  \texttt{U+0080..U+07FF} & 2 & \'e $\to$ \texttt{C3 A9} \; {\scriptsize (also Armenian, Arabic, Hebrew)}\\
+  \texttt{U+0800..U+FFFF} & 3 & CJK \texttt{U+4E2D} $\to$ \texttt{E4 B8 AD}\\
+  \texttt{U+10000..U+10FFFF} & 4 & emoji \texttt{U+1F642} $\to$ \texttt{F0 9F 99 82}\\
+  \hline
+\end{tabular}
+}
+\end{center}
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=paramgreen, fill=paramgreen!7, rounded corners=6pt, text width=12.7cm, align=center, inner sep=8pt, font=\small] {
+    ASCII stays 1 byte, so UTF-8 is \textbf{backwards-compatible} with plain English. Byte-level BPE starts from these 256 bytes, so it encodes \textbf{any} script with no \texttt{[UNK]} --- but non-Latin text costs more from the start.\\[4pt]
+    \textbf{\textcolor{armred}{Armenian ``barev'' (4 letters) $=$ 8 bytes $=$ 8 GPT-4 tokens}}; English ``hello'' $=$ \textbf{1 token}. Same greeting, \textbf{8$\times$} the cost.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
 % THREE LEVELS
 % ============================================================
+\section{Word, character, or subword?}
 \begin{frame}
 \frametitle{Three levels of granularity}
 
@@ -442,219 +756,6 @@
 \end{frame}
 
 % ============================================================
-% BPE IN CODE 1: COUNTING PAIRS
-% ============================================================
-\begin{frame}[fragile]
-\frametitle{BPE in code: counting adjacent pairs}
-\vspace{-0.1cm}
-{\small Same algorithm as the worked example, now the canonical implementation (Sennrich et al., 2016). Each word is stored as space-separated symbols ending in \texttt{</w>}, an explicit \textbf{end-of-word} marker so a merge never crosses a word boundary.}
-
-\vspace{0.15cm}
-\begin{columns}[T]
-\begin{column}{0.55\textwidth}
-\begin{lstlisting}
-import re, collections
-
-def get_stats(vocab):
-  pairs = collections.defaultdict(int)
-  for word, freq in vocab.items():
-    symbols = word.split()
-    for i in range(len(symbols)-1):
-      pairs[symbols[i],symbols[i+1]] += freq
-  return pairs
-\end{lstlisting}
-\end{column}
-\begin{column}{0.43\textwidth}
-\begin{lstlisting}
-vocab = {'l o w </w>'      : 5,
-         'l o w e r </w>'  : 2,
-         'n e w e s t </w>': 6,
-         'w i d e s t </w>': 3}
-
-pairs = get_stats(vocab)
-# ('e','s'): 9, ('s','t'): 9,
-# ('t','</w>'): 9, ('w','e'): 8,
-# ('l','o'): 7, ('o','w'): 7 ...
-\end{lstlisting}
-\end{column}
-\end{columns}
-
-\vspace{0.15cm}
-\begin{center}
-\begin{tikzpicture}
-  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=12.8cm, align=center, inner sep=6pt, font=\small] {
-    \texttt{get\_stats} counts each adjacent pair, weighted by word frequency. Top pair: \texttt{(e,\,s)} at $9 = 6\,(\text{newest}) + 3\,(\text{widest})$.\\
-    {\footnotesize Three pairs tie at 9; \texttt{max(pairs, key=pairs.get)} keeps the first one seen, \texttt{(e,\,s)}.}
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
-% BPE IN CODE 2: APPLYING A MERGE
-% ============================================================
-\begin{frame}[fragile]
-\frametitle{BPE in code: applying one merge}
-\vspace{-0.1cm}
-{\small \texttt{merge\_vocab} glues the winning pair into a single symbol wherever it occurs. The regex matches the pair only as two \emph{whole} symbols, so a merge never fuses across a space.}
-
-\vspace{0.15cm}
-\begin{lstlisting}
-def merge_vocab(pair, v_in):
-  v_out = {}
-  bigram = re.escape(' '.join(pair))
-  p = re.compile(r'(?<!\S)' + bigram + r'(?!\S)')
-  for word in v_in:
-    w_out = p.sub(''.join(pair), word)
-    v_out[w_out] = v_in[word]
-  return v_out
-
-best  = max(pairs, key=pairs.get)   # ('e', 's')
-vocab = merge_vocab(best, vocab)    # 'e s' -> 'es'
-\end{lstlisting}
-
-\vspace{0.15cm}
-\begin{center}
-\begin{tikzpicture}[font=\small]
-  \node[draw=black!30, fill=black!3, rounded corners=5pt, text width=5.6cm, align=left, inner sep=7pt] (before) at (-3.5,0) {
-    \textbf{Before:}\\[2pt]
-    \texttt{n e w \textcolor{sampred}{e s} t </w>} : 6\\
-    \texttt{w i d \textcolor{sampred}{e s} t </w>} : 3
-  };
-  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=5pt, text width=5.6cm, align=left, inner sep=7pt] (after) at (3.5,0) {
-    \textbf{After merge \texttt{(e,\,s)}:}\\[2pt]
-    \texttt{n e w \textcolor{paramgreen}{\textbf{es}} t </w>} : 6\\
-    \texttt{w i d \textcolor{paramgreen}{\textbf{es}} t </w>} : 3
-  };
-  \draw[-{Stealth}, thick, popblue] (before) -- (after);
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
-% BPE IN CODE 3: THE TRAINING LOOP
-% ============================================================
-\begin{frame}[fragile]
-\frametitle{BPE in code: the full training loop}
-\vspace{-0.1cm}
-{\small Wrap it in a loop: recount, pick the best pair, merge, repeat. One hyperparameter --- the number of merges, which sets the final vocab size.}
-
-\vspace{0.15cm}
-\begin{columns}[T]
-\begin{column}{0.48\textwidth}
-\begin{lstlisting}
-num_merges = 10
-
-for i in range(num_merges):
-  pairs = get_stats(vocab)
-  best  = max(pairs, key=pairs.get)
-  vocab = merge_vocab(best, vocab)
-  print(best)
-\end{lstlisting}
-\end{column}
-\begin{column}{0.50\textwidth}
-\begin{lstlisting}
-('e','s')            # es
-('es','t')           # est
-('est','</w>')       # est</w>
-('l','o')            # lo
-('lo','w')           # low
-('n','e')            # ne
-('ne','w')           # new
-('new','est</w>')    # newest</w>
-('low','</w>')       # low</w>
-('w','i')            # wi
-\end{lstlisting}
-\end{column}
-\end{columns}
-
-\vspace{0.15cm}
-\begin{center}
-\begin{tikzpicture}
-  \node[draw=paramgreen, fill=paramgreen!6, rounded corners=6pt, text width=12.8cm, align=center, inner sep=6pt, font=\small] {
-    Merges build up in frequency order: first the suffix \texttt{est</w>}, then whole words \texttt{low}, \texttt{new}, \texttt{newest</w>}. BPE learns morphology and frequent words \textbf{automatically} --- no linguistic rules.
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
-% BPE IN CODE 4: GENERALIZATION
-% ============================================================
-\begin{frame}[fragile]
-\frametitle{Why the learned merges generalize}
-\vspace{-0.15cm}
-{\small The 10 merges define the vocabulary's pieces. A word \textbf{never seen in training} still splits into known pieces --- just apply the merge rules in the order they were learned.}
-
-\vspace{0.05cm}
-\begin{center}
-\begin{tikzpicture}[scale=0.80, transform shape]
-  \node[font=\large\bfseries, popblue, anchor=east] at (-4.0, 2) {Tokenize ``slowest'':};
-
-  \node[draw, fill=popblue!8, rounded corners=4pt, font=\ttfamily\normalsize, inner sep=7pt] (a) at (1.0, 2) {s \quad l \quad o \quad w \quad e \quad s \quad t \quad </w>};
-  \node[font=\small, anchor=east] at (-2.2, 2) {Start:};
-
-  \node[draw, fill=sampred!8, rounded corners=4pt, font=\ttfamily\normalsize, inner sep=7pt] (b) at (1.0, 0.4) {s \quad l \quad o \quad w \quad \textcolor{sampred}{\textbf{est</w>}}};
-  \node[font=\small, text width=3.3cm, align=right, anchor=east] at (-2.2, 0.4) {\texttt{es}, \texttt{est}, \texttt{est</w>}:};
-
-  \node[draw, fill=paramgreen!8, rounded corners=4pt, font=\ttfamily\normalsize, inner sep=7pt] (c) at (1.0, -1.2) {s \quad \textcolor{paramgreen}{\textbf{low}} \quad est</w>};
-  \node[font=\small, anchor=east] at (-2.2, -1.2) {\texttt{lo}, \texttt{low}:};
-
-  \draw[-{Stealth}, thick] (a) -- (b);
-  \draw[-{Stealth}, thick] (b) -- (c);
-
-  \node[draw=paramgreen, fill=paramgreen!10, rounded corners=6pt, font=\normalsize, inner sep=8pt] at (1.0, -2.9) {
-    \textbf{Result:} \texttt{["s", "low", "est</w>"]} --- 3 known pieces, 0 unknowns
-  };
-\end{tikzpicture}
-\end{center}
-
-\vspace{0.1cm}
-\begin{center}
-\begin{tikzpicture}
-  \node[draw=orange1, fill=orange1!5, rounded corners=6pt, text width=12.8cm, align=center, inner sep=6pt, font=\small] {
-    \texttt{low} and \texttt{est</w>} were learned from \emph{lower}, \emph{newest}, \emph{widest} --- never from \emph{slowest}. This is why a $\sim$50k-merge BPE vocabulary covers essentially any input with no \texttt{[UNK]}.
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
-% UTF-8: EVERYTHING IS BYTES
-% ============================================================
-\begin{frame}
-\frametitle{Everything is bytes: the UTF-8 encoding}
-\vspace{-0.1cm}
-{\small Byte-level BPE starts from ``256 byte values'' --- but where do bytes come from? \textbf{UTF-8} turns every character into \textbf{1 to 4 bytes}, depending on its Unicode code point.}
-
-\vspace{0.25cm}
-\begin{center}
-{\small
-\renewcommand{\arraystretch}{1.45}
-\begin{tabular}{l c l}
-  \textbf{Code point range} & \textbf{Bytes} & \textbf{Example (hex)}\\
-  \hline
-  \texttt{U+0000..U+007F} (ASCII) & 1 & \texttt{A} $\to$ \texttt{41}\\
-  \texttt{U+0080..U+07FF} & 2 & \'e $\to$ \texttt{C3 A9} \; {\scriptsize (also Armenian, Arabic, Hebrew)}\\
-  \texttt{U+0800..U+FFFF} & 3 & CJK \texttt{U+4E2D} $\to$ \texttt{E4 B8 AD}\\
-  \texttt{U+10000..U+10FFFF} & 4 & emoji \texttt{U+1F642} $\to$ \texttt{F0 9F 99 82}\\
-  \hline
-\end{tabular}
-}
-\end{center}
-
-\vspace{0.3cm}
-\begin{center}
-\begin{tikzpicture}
-  \node[draw=paramgreen, fill=paramgreen!7, rounded corners=6pt, text width=12.7cm, align=center, inner sep=8pt, font=\small] {
-    ASCII stays 1 byte, so UTF-8 is \textbf{backwards-compatible} with plain English. Byte-level BPE starts from these 256 bytes, so it encodes \textbf{any} script with no \texttt{[UNK]} --- but non-Latin text costs more from the start.\\[4pt]
-    \textbf{\textcolor{armred}{Armenian ``barev'' (4 letters) $=$ 8 bytes $=$ 8 GPT-4 tokens}}; English ``hello'' $=$ \textbf{1 token}. Same greeting, \textbf{8$\times$} the cost.
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
 % BYTE-LEVEL BPE
 % ============================================================
 \begin{frame}
@@ -680,7 +781,7 @@ for i in range(num_merges):
     \small
     Base vocab = \textbf{256 byte values}\\[3pt]
     Vocab size = 256 + merges\\
-    {\footnotesize (GPT-2: 256 bytes $+$ 50{,}000 merges $+$ 1 special $=$ 50{,}257)}\\[3pt]
+    {\footnotesize (GPT-2: 256 bytes $+$ 50{,}000 merges $+$ 1 special \texttt{<|endoftext|>} $=$ 50{,}257)}\\[3pt]
     \textcolor{paramgreen}{\textbf{No \texttt{[UNK]} ever}}\\[3pt]
     Any byte sequence is representable
   };
@@ -726,7 +827,7 @@ for i in range(num_merges):
 \begin{center}
 \begin{tikzpicture}
   \node[draw=warnred, fill=warnred!6, rounded corners=6pt, text width=12.7cm, align=center, inner sep=8pt, font=\small] {
-    \textbf{Gotcha:} not every byte sequence is valid UTF-8. If a model emits a broken sequence, \texttt{bytes.decode("utf-8")} would \emph{crash} --- so real code passes \texttt{errors="replace"}, substituting a replacement character instead of failing.
+    \textbf{Gotcha:} not every byte sequence is valid UTF-8. If a model emits a broken sequence, decoding would fail --- so a special \textbf{replacement character} is substituted instead of crashing.
   };
 \end{tikzpicture}
 \end{center}
@@ -764,52 +865,6 @@ for i in range(num_merges):
 \begin{tikzpicture}
   \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
     GPT-2 first chops text into chunks with a regex, runs BPE \textbf{independently inside each chunk}, then concatenates. A merge can therefore never cross a letter $\leftrightarrow$ number $\leftrightarrow$ punctuation $\leftrightarrow$ space boundary.
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
-% PRE-TOKENIZATION 2: THE GPT-2 / GPT-4 PATTERN
-% ============================================================
-\begin{frame}[fragile]
-\frametitle{The GPT-2 split pattern (and what GPT-4 changed)}
-\vspace{-0.1cm}
-{\small GPT-2 splits with this regex before any merging (the \texttt{regex} module, not \texttt{re}):}
-
-\vspace{0.1cm}
-\begin{lstlisting}[language={}, basicstyle=\ttfamily\scriptsize, keywordstyle={}, stringstyle={}, commentstyle={}, breaklines=true]
-'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
-\end{lstlisting}
-
-\vspace{0.15cm}
-\begin{columns}[T]
-\begin{column}{0.54\textwidth}
-{\small
-\textbf{Each \texttt{|} is an alternative, tried left to right:}\\[6pt]
-\textbullet\ \texttt{'s 't 're 've ...} --- contractions\\[4pt]
-\textbullet\ \texttt{\textbackslash p\{L\}+} --- letters (opt.\ leading space)\\[4pt]
-\textbullet\ \texttt{\textbackslash p\{N\}+} --- digits (opt.\ leading space)\\[4pt]
-\textbullet\ everything else --- punctuation\\[4pt]
-\textbullet\ \texttt{\textbackslash s+} --- runs of whitespace
-}
-\end{column}
-\begin{column}{0.44\textwidth}
-{\small \textbf{Example split:}}\\[4pt]
-\begin{tikzpicture}
-  \node[draw=popblue!50, fill=popblue!8, rounded corners=4pt, text width=4.7cm, align=left, inner sep=8pt, font=\ttfamily\small] {
-    "Hello world123 :)"\\[5pt]
-    $\to$ ["Hello", "\_world",\\ \phantom{$\to$ }"123", "\_:)"]
-  };
-\end{tikzpicture}
-\end{column}
-\end{columns}
-
-\vspace{0.15cm}
-\begin{center}
-\begin{tikzpicture}
-  \node[draw=orange1, fill=orange1!6, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
-    \textbf{GPT-4 changed two things:} contractions match \textbf{case-insensitively}, and numbers are capped at \textbf{three digits} (\texttt{\textbackslash p\{N\}\{1,3\}}) --- so no single token is ever a long number. That alone measurably helps arithmetic.
   };
 \end{tikzpicture}
 \end{center}
@@ -989,60 +1044,9 @@ for i in range(num_merges):
 \end{frame}
 
 % ============================================================
-% WHY TOKENIZATION MATTERS
-% ============================================================
-\section{Tokenization in practice}
-\begin{frame}
-\frametitle{Why tokenization matters: LLM quirks}
-\vspace{-0.2cm}
-\begin{center}
-\begin{tikzpicture}[
-  quirkbox/.style={draw, rounded corners=6pt, minimum width=5.8cm, minimum height=2.2cm, text width=5.3cm, align=left, inner sep=8pt, font=\small}
-]
-  % Quirk 1: Arithmetic
-  \node[quirkbox, fill=sampred!8] at (-4, 2) {
-    \textbf{\textcolor{sampred}{Bad at arithmetic}}\\[3pt]
-    ``\texttt{12345}'' $\to$ \texttt{["123", "45"]}\\
-    The model never sees the\\
-    individual digits together!
-  };
-
-  % Quirk 2: Non-English
-  \node[quirkbox, fill=orange1!8] at (4, 2) {
-    \textbf{\textcolor{orange1}{Poor non-English efficiency}}\\[3pt]
-    English ``hello'' = 1 token\\
-    Armenian ``barev'' = 8 tokens\\
-    Same greeting, 8$\times$ the cost!
-  };
-
-  % Quirk 3: Trailing spaces
-  \node[quirkbox, fill=violet1!8] at (-4, -1.2) {
-    \textbf{\textcolor{violet1}{Sensitive to formatting}}\\[3pt]
-    ``\texttt{Hello World}'' and\\
-    ``\texttt{Hello{\ }{\ }World}'' produce\\
-    different token sequences.
-  };
-
-  % Quirk 4: Can't count letters
-  \node[quirkbox, fill=warnred!8] at (4, -1.2) {
-    \textbf{\textcolor{warnred}{Can't count letters}}\\[3pt]
-    ``How many r's in strawberry?''\\
-    ``\texttt{straw}'' + ``\texttt{berry}'' --- the\\
-    model can't see individual letters.
-  };
-
-  % Bottom note
-  \node[draw=paramgreen, fill=paramgreen!5, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.7) {
-    Many apparent ``reasoning failures'' of LLMs are actually \textbf{tokenization artifacts}.\\
-    The model literally cannot see what you think it sees.
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
 % GROSS PARTS: FOOT-GUNS UP CLOSE
 % ============================================================
+\section{Tokenization in practice}
 \begin{frame}
 \frametitle{The foot-guns, up close}
 \vspace{-0.15cm}
@@ -1064,6 +1068,88 @@ for i in range(num_merges):
   };
 \end{tikzpicture}
 \end{center}
+\end{frame}
+
+% ============================================================
+% ENDOFTEXT INJECTION (screenshot)
+% ============================================================
+\begin{frame}
+\frametitle{Special tokens can leak: the \texttt{<|endoftext|>} bug}
+\vspace{-0.15cm}
+{\small Ask ChatGPT to simply \emph{print} \texttt{<|endoftext|>} --- it can't: the tokenizer swaps it for the real end-of-text token, so the model sees a \textbf{document boundary}, not your text.}
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=gray!40, rounded corners=3pt, inner sep=2pt] {\includegraphics[height=5.9cm]{fig/endoftext_chatgpt.png}};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.02cm}
+\begin{center}{\footnotesize\textcolor{black!70}{A special-token \emph{string} in your prompt gets parsed as the token itself --- a small attack surface.}}\end{center}
+\end{frame}
+
+% ============================================================
+% SOLIDGOLDMAGIKARP
+% ============================================================
+\begin{frame}
+\frametitle{SolidGoldMagikarp: a token the model never learned}
+\vspace{-0.1cm}
+{\small A cluster of \textbf{glitch tokens} that make GPT-2/3 dodge, babble, or even insult you when you just ask them to repeat the word. The cause is the tokenizer/model \textbf{data split}:}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[font=\small, b/.style={draw, rounded corners=6pt, align=left, inner sep=8pt}]
+  \node[b, fill=orange1!10, draw=orange1, text width=5.6cm] (t) at (-3.5, 0) {
+    \textbf{\textcolor{orange1}{Tokenizer's data}}\\[3pt]
+    lots of Reddit --- \texttt{u/SolidGoldMagikarp} posted constantly, so BPE merged it into \textbf{one token}.
+  };
+  \node[b, fill=popblue!8, draw=popblue, text width=5.6cm] (m) at (3.5, 0) {
+    \textbf{\textcolor{popblue}{Model's data}}\\[3pt]
+    that Reddit dump is \textbf{absent} --- so the token \textbf{never appears}; its embedding row keeps its \textbf{random init}.
+  };
+  \draw[-{Stealth}, very thick, warnred] (t) -- (m) node[midway, above, font=\scriptsize\bfseries, text=warnred] {mismatch};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=warnred, fill=warnred!6, rounded corners=6pt, text width=12.7cm, align=center, inner sep=8pt, font=\small] {
+    At inference, evoking the token plucks out an \textbf{untrained} row --- like reading \textbf{unallocated memory}. The Transformer gets a garbage vector and produces undefined behavior.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.12cm}
+\begin{center}{\footnotesize\textcolor{black!70}{Discovered on LessWrong: \texttt{lesswrong.com/posts/aPeJE8bSo6rAFoLqg/solidgoldmagikarp-plus-prompt-generation}}}\end{center}
+\end{frame}
+
+% ============================================================
+% GLITCH TOKENS: ACTUAL OUTPUTS (screenshot)
+% ============================================================
+\begin{frame}
+\frametitle{Glitch tokens: the actual outputs}
+\vspace{-0.1cm}
+\begin{columns}[c]
+\begin{column}{0.5\textwidth}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=gray!40, rounded corners=3pt, inner sep=2pt] {\includegraphics[height=6.2cm]{fig/glitch_tokens.png}};
+\end{tikzpicture}
+\end{center}
+\end{column}
+\begin{column}{0.48\textwidth}
+{\small Ask GPT-3 (temperature 0) to just \emph{repeat} a glitch token, and it:\\[7pt]
+\textbullet\ \textbf{dodges} --- ``I don't know what you're talking about''\\[5pt]
+\textbullet\ \textbf{insults} --- ``You're a jerk'', ``You're a nerd''\\[5pt]
+\textbullet\ goes \textbf{bizarre} --- ``You are a banana'', ``We are not amused''\\[9pt]
+Tokens like \texttt{StreamerBot}, \texttt{guiActiveUn}, \texttt{MpServer} --- all with \textbf{untrained} embeddings, all undefined behavior.}
+\end{column}
+\end{columns}
+
+\vspace{0.15cm}
+\begin{center}{\footnotesize\textcolor{black!70}{Even the \emph{nondeterminism at temperature 0} is a symptom --- the garbage vector isn't stable.}}\end{center}
 \end{frame}
 
 % ============================================================
@@ -1191,6 +1277,44 @@ for i in range(num_merges):
 \end{frame}
 
 % ============================================================
+% CHAT TOKENS + COST OF ADDING TOKENS
+% ============================================================
+\begin{frame}
+\frametitle{Chat tokens, and the cost of adding them}
+\vspace{-0.1cm}
+{\small Chat models add their \emph{own} special tokens during fine-tuning to delimit turns. GPT-3.5/4 use the \textbf{ChatML} format:}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=violet1!50, fill=violet1!6, rounded corners=6pt, text width=8.6cm, align=left, inner sep=9pt, font=\ttfamily\small] {
+    \textcolor{violet1}{<|im\_start|>}user\\
+    How many r's in strawberry?\textcolor{violet1}{<|im\_end|>}\\
+    \textcolor{violet1}{<|im\_start|>}assistant\\
+    There are three r's.\textcolor{violet1}{<|im\_end|>}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[font=\small]
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=6.0cm, align=left, inner sep=8pt] at (-3.4,0) {
+    \textbf{\textcolor{orange1}{Adding a token $=$ model surgery}}\\[3pt]
+    each new token adds \textbf{one row} to the embedding matrix and \textbf{one output} to the final softmax --- both grow with the vocabulary.
+  };
+  \node[draw=warnred, fill=warnred!7, rounded corners=6pt, text width=6.0cm, align=left, inner sep=8pt] at (3.4,0) {
+    \textbf{\textcolor{warnred}{\ldots and it needs data}}\\[3pt]
+    a new token starts \textbf{randomly initialized}; unless it appears in enough training data it stays undertrained --- exactly the SolidGoldMagikarp failure.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}{\footnotesize\textcolor{black!70}{This is why you can't just make the vocabulary huge --- every extra token costs embedding $+$ softmax parameters and its own share of the training data.}}\end{center}
+\end{frame}
+
+% ============================================================
 % VOCAB SIZE TRADEOFF
 % ============================================================
 \begin{frame}
@@ -1256,51 +1380,6 @@ for i in range(num_merges):
     In practice, the differences between BPE, WordPiece, and Unigram are \textbf{small}.\\
     What matters most: vocab size, training corpus, and whether byte-level is used.\\[2pt]
     \textbf{Byte-level BPE} is the current default for new large language models.
-  };
-\end{tikzpicture}
-\end{center}
-\end{frame}
-
-% ============================================================
-% PRACTICAL: TRYING IT OUT
-% ============================================================
-\begin{frame}
-\frametitle{Practical: tokenizers in action}
-
-\begin{center}
-\begin{tikzpicture}[scale=0.88, transform shape]
-  % Code box 1: tiktoken (GPT)
-  \node[draw=gray, fill=gray!5, rounded corners=4pt, text width=6.5cm, align=left, inner sep=10pt, font=\ttfamily\scriptsize] at (-4, 1.2) {
-    \textcolor{popblue}{\# GPT-4 tokenizer (tiktoken:}\\
-    \textcolor{popblue}{\# OpenAI's fast BPE impl in Rust)}\\
-    \textcolor{violet1}{import} tiktoken\\
-    enc = tiktoken.encoding\_for\_model(\\
-    \quad \textcolor{sampred}{"gpt-4"})\\
-    tokens = enc.encode(\\
-    \quad \textcolor{sampred}{"Hello world!"})\\
-    \textcolor{paramgreen}{\# [9906, 1917, 0]}\\
-    enc.decode(tokens)\\
-    \textcolor{paramgreen}{\# "Hello world!"}
-  };
-
-  % Code box 2: HuggingFace (BERT)
-  \node[draw=gray, fill=gray!5, rounded corners=4pt, text width=6.5cm, align=left, inner sep=10pt, font=\ttfamily\scriptsize] at (4, 1.2) {
-    \textcolor{popblue}{\# BERT tokenizer}\\
-    \textcolor{violet1}{from} transformers \textcolor{violet1}{import}\\
-    \quad AutoTokenizer\\
-    tok = AutoTokenizer.from\_pretrained(\\
-    \quad \textcolor{sampred}{"bert-base-uncased"})\\
-    tok.tokenize(\\
-    \quad \textcolor{sampred}{"unbelievably"})\\
-    \textcolor{paramgreen}{\# ["un", "\#\#bel", "\#\#ie",}\\
-    \textcolor{paramgreen}{\#\quad "\#\#va", "\#\#bly"]}
-  };
-
-  % Try it yourself
-  \node[draw=orange1, fill=orange1!5, rounded corners=8pt, text width=12.5cm, align=center, inner sep=10pt, font=\small] at (0, -2.3) {
-    \textbf{Try it yourself:} \texttt{https://platform.openai.com/tokenizer}\\[3pt]
-    Paste any text and see how GPT tokenizes it. Pay attention to:\\
-    numbers, non-English text, code, and whitespace.
   };
 \end{tikzpicture}
 \end{center}

@@ -4,8 +4,9 @@
 # Usage: bash yt_fetch.sh <URL> <DEST_DIR>
 #   e.g. bash yt_fetch.sh "https://youtu.be/XXXX" ml/ch5_neural_networks/_reference_welchlabs
 #
-# Produces in DEST: meta.txt, transcript.txt, video.mp4 (git-ignored), video.en*.vtt
-# (git-ignored), a .gitignore, and an empty frames/ dir. Write README.md yourself after.
+# Produces in DEST: meta.txt, description.txt (chapters + links mentioned in the video),
+# transcript.txt, video.mp4 (git-ignored), video.en*.vtt (git-ignored), a .gitignore,
+# and an empty frames/ dir. Write README.md yourself after.
 set -uo pipefail
 
 URL="${1:?usage: bash yt_fetch.sh <URL> <DEST_DIR>}"
@@ -17,6 +18,13 @@ echo "== metadata =="
 yt-dlp --no-warnings --print \
   "%(title)s | %(duration>%H:%M:%S)s | %(uploader)s | %(upload_date)s | %(view_count)s views" \
   "$URL" | tee "$DEST/meta.txt"
+
+# Description carries the chapter timestamps and any links the author mentions
+# (colab, repos, papers). Always save it - it is small and committed.
+echo "== description (chapters + links) =="
+yt-dlp --no-warnings --skip-download --print "%(description)s" "$URL" > "$DEST/description.txt" 2>/dev/null \
+  && echo "description: $(wc -l < "$DEST/description.txt") lines -> description.txt" \
+  || echo "WARNING: description not fetched"
 
 echo "== subtitles =="
 # en.* also pulls translated tracks (en-tr) that sometimes 429; tolerate it, the real
