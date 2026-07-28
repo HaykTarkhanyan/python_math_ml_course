@@ -1,0 +1,645 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{Interpreting Linear Models \& Trees}
+\subtitle{Models you can read --- before any fancy method}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Two routes to interpretability}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    You built models that work --- but \emph{why} do they predict what they do?
+    \vskip 6pt
+    Two routes:
+    \begin{itemize}\small
+      \item \textbf{Use a glass-box model you can read} --- the model \emph{is} the explanation.
+        \textbf{(this deck)}
+      \item \textbf{Explain a black box afterwards} with model-agnostic tools. (decks 2--3)
+    \end{itemize}
+    \vskip 6pt
+    Today: the two transparent families you already know --- \textbf{linear models} and
+    \textbf{trees}.
+    \vskip 4pt
+    \footnotesize Why bother? To \textbf{trust} a model, \textbf{debug} it, and catch ones that
+    \emph{cheat} --- like deck 3's ``wolf'' detector that really keys on \emph{snow}.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=stealth]
+        \node[draw, rounded corners, fill=armblue!10, minimum width=2.7cm] (g) at (0,0)
+          {glass box: \emph{read it}};
+        \node[draw, rounded corners, fill=armred!10, minimum width=2.7cm] (b) at (0,-1.4)
+          {black box: \emph{explain it}};
+        \node[font=\tiny, armblue] at (0,-0.55) {linear, tree, rules};
+        \node[font=\tiny, armred] at (0,-1.95) {forest, boosting, NN};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: which one can you actually read?}
+  A linear model and a random forest reach the \textbf{same accuracy} on the bike-rental data.
+  Which can you \emph{read} --- and how?
+  \vfill
+  \pause
+  \begin{itemize}\small
+    \item \textbf{Linear model:} yes --- each feature has one coefficient.
+    \item \textbf{A single tree:} yes --- follow the splits from root to leaf (a rule).
+    \item \textbf{A random forest:} \textbf{no} --- hundreds of trees, no readable whole. But it
+      still hands you a built-in \emph{importance} number (which, we'll see, is biased).
+  \end{itemize}
+  \vfill
+  \footnotesize Running example: \textbf{bike sharing} --- predict daily rental count from weather
+  \& calendar features.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\begin{frame}{The running example: bike sharing}
+  \textbf{The task:} predict how many bikes are rented in Washington DC on a given day.
+  \vskip 2pt
+  \footnotesize \textbf{UCI Bike Sharing} --- $731$ daily records, 2011-01-01 to 2012-12-31.
+  Target \texttt{cnt}: total rentals that day, from $22$ to $8714$ (mean $\approx 4500$).
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{fig/bike_overview.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize Two patterns to keep in mind: rentals grew \textbf{$+64\%$} from 2011 to 2012 (the
+  service was expanding), and they swing hard with the \textbf{seasons}. That growth is why
+  \texttt{yr} tops almost every importance ranking in this chapter.
+\end{frame}
+
+\begin{frame}{The 11 features --- and what \texttt{atemp} is}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    {\small
+    \renewcommand{\arraystretch}{1.12}
+    \begin{tabular}{@{}l l@{}}
+      \texttt{season} & 1 winter, 2 spring, 3 summer, 4 fall \\
+      \texttt{yr} & \textbf{0 $=$ 2011}, \textbf{1 $=$ 2012} \\
+      \texttt{mnth} & month, 1--12 \\
+      \texttt{holiday} & is it a holiday? \\
+      \texttt{weekday} & day of week, 0--6 \\
+      \texttt{workingday} & neither weekend nor holiday \\
+      \texttt{weathersit} & 1 clear, 2 mist, 3 light rain/snow \\
+      \texttt{temp} & air temperature \\
+      \texttt{atemp} & \textbf{``feels-like'' temperature} \\
+      \texttt{hum} & humidity \\
+      \texttt{windspeed} & wind speed \\
+      \hline
+      \texttt{cnt} & \textbf{the target} --- rentals that day \\
+    \end{tabular}}
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{\texttt{atemp} is the \emph{apparent} temperature} --- what the air \emph{feels}
+      like once wind and humidity are accounted for. It is the same weather, measured a second
+      way.}}
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      On this data $\mathrm{corr}(\texttt{temp}, \texttt{atemp}) = \mathbf{0.99}$.
+      \textbf{Remember that number} --- it causes trouble in all three decks of this chapter.}}
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{All four weather columns are rescaled to $[0,1]$}, so the numbers are not degrees.
+      For temperature $T$ in Celsius, $\texttt{temp} = (T+8)/47$.
+      \vskip 2pt
+      So when a tree splits at \texttt{temp}$\,\le 0.43$, it means
+      \textbf{``colder than about $12^\circ$C''}.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Reading a linear model}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reading a linear model}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The most transparent model: one number per feature.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Coefficients as importance}
+  A linear model $\hat y = \theta_0 + \sum_j \theta_j x_j$ tells you everything directly:
+  \begin{itemize}\small
+    \item \textbf{Sign} of $\theta_j$ = direction; \textbf{magnitude} = effect per $+1$ unit of $x_j$.
+    \item \textbf{Standardize first} to compare --- a raw coef of $5000$ on \texttt{temp} (range
+      $0$--$1$) vs $2$ on \texttt{hum} is \emph{not} ``$2500\times$ more important''; that's units
+      (L12). Standardized, $|\theta_j|$ is fair: on bike \texttt{yr} \& \texttt{atemp} top it.
+    \item Classification analog: $e^{\theta_j}$ = \textbf{odds ratio} (L11).
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    No extra method needed: a (standardized) coefficient \emph{is} a built-in importance and
+    effect, in one number.}}
+\end{frame}
+
+\begin{frame}{Two words for the whole chapter: main effect, interaction}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Main effect} of a feature: what it does to the prediction \textbf{on its own},
+      averaging over everything else.}}
+    \vskip 4pt
+    A linear model is \emph{nothing but} main effects --- each $\theta_j$ \textbf{is} one.
+    \vskip 8pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{Interaction}: when one feature's effect \textbf{depends on the value of another}.}}
+    \vskip 4pt
+    Then no single coefficient can tell the story --- the answer to ``what does \texttt{temp} do?''
+    becomes \emph{``it depends''}.
+    \column{0.5\textwidth}
+    \textbf{Made concrete:} suppose warm weather lifted rentals a lot on \texttt{workingday}s but
+    barely at all on holidays.
+    \begin{itemize}\small
+      \item \texttt{temp}'s effect is no longer \emph{one} number --- it is one number per kind of
+        day.
+      \item That is an \textbf{interaction} between \texttt{temp} and \texttt{workingday}.
+    \end{itemize}
+    \vskip 4pt
+    \[ \hat y = \theta_0 + \theta_1 x_{\text{temp}} + \theta_2 x_{\text{work}}
+       + \underbrace{\theta_3\, x_{\text{temp}} x_{\text{work}}}_{\text{the interaction term}} \]
+    \vskip 2pt
+    \footnotesize A linear model has interactions \textbf{only if you write them in by hand}.
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Deck 2} makes this precise (the \emph{functional ANOVA} decomposition) and puts a
+    \textbf{number} on how much interaction a model actually has (Friedman's $H$).}}
+\end{frame}
+
+\begin{frame}{Linear models: the caveats}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Only additive, linear effects}
+    \begin{itemize}\small
+      \item One straight-line effect per feature; no interactions or curves unless you engineer them.
+    \end{itemize}
+    \vskip 4pt
+    \textbf{Correlated features split the credit}
+    \begin{itemize}\small
+      \item \texttt{temp} and \texttt{atemp} (feels-like) are nearly the same column, so the model
+        has to divide \emph{one} effect between \emph{two} coefficients --- next frame.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      A coefficient answers ``how does the prediction move with this feature, \emph{holding the
+      others fixed}'' --- which is exactly what breaks when features move \emph{together}.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Correlated features split the credit}
+  \begin{columns}[T]
+    \column{0.38\textwidth}
+    \texttt{temp} and \texttt{atemp} carry \textbf{one signal} ($r = 0.99$). The fit must divide
+    that effect between them, and \emph{where} it lands is close to arbitrary.
+    \vskip 6pt
+    Across $400$ bootstrap refits each coefficient swings by $\approx\pm600$, and \texttt{temp}
+    comes out \textcolor{armred}{\textbf{negative on 32\%}} of them.
+    \vskip 6pt
+    Their \textbf{sum} hardly moves: $\mathrm{sd} = 43$, about $14\times$ steadier than either
+    part alone.
+    \column{0.62\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/corr_credit_split.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The tell:} drop \texttt{atemp} and \texttt{temp} jumps to $\mathbf{+943}$ --- almost
+    exactly the pair's sum ($+953$). \textbf{A small coefficient is not a small effect.}}}
+\end{frame}
+
+\begin{frame}{Lasso: the model selects its own features}
+  \textbf{L1 (Lasso) regularization} shrinks coefficients toward zero --- and drives many to
+  \textbf{exactly zero} (callback: Ch.\,2 regularization).
+  \vfill
+  \begin{itemize}\small
+    \item Non-zero coefficients $=$ the features the model \emph{kept} --- a built-in,
+      sparsity-based \textbf{feature selection}.
+    \item Stronger penalty $\Rightarrow$ fewer survivors. \textbf{On bike (scaled):} the
+      CV-tuned Lasso keeps $10/11$; turn the penalty up and survivors drop $10 \to 4 \to 1$ ---
+      \textbf{sparsity is a knob you set}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Caveat:} among correlated features, Lasso keeps \emph{one} and zeros the rest
+    \emph{~arbitrarily} --- ``not selected'' does not mean ``unimportant.''}}
+\end{frame}
+
+% ================================================================
+\section{Reading trees}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reading trees}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One tree you can read; a forest you cannot --- but it still scores features.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{A single tree is a glass box}
+  \begin{columns}[T]
+    \column{0.4\textwidth}
+    Each \textbf{root-to-leaf path is a rule}:
+    \vskip 2pt
+    \emph{warm day (\texttt{temp}$>0.43$) in year 2 (\texttt{yr}$=1$; $0{=}$2011, $1{=}$2012) $\to$ predict $\sim 6608$ rentals.}
+    \vskip 6pt
+    \begin{itemize}\small
+      \item Fully transparent --- if it stays shallow.
+      \item Depth $\uparrow$ $\Rightarrow$ accuracy $\uparrow$ but readability $\downarrow$.
+    \end{itemize}
+    \column{0.6\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/tree_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How a split is chosen: reduce impurity}
+  \emph{Recall from the trees lecture (ch.\,4):} a tree picks the split that most reduces
+  \textbf{impurity} $=$ parent $-$ \emph{weighted} child. Same idea, two rulers --- one worked number each:
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Classification: information gain} (entropy $H$) \\[2pt]
+    \footnotesize Toy: parent $5/5 \Rightarrow H=1.0$; a $4/1$ child has $H=0.72$.
+    \[ \text{gain} = 1.0 - \underbrace{0.72}_{\text{weighted child}} = \mathbf{0.28} \]
+    \column{0.5\textwidth}
+    \textbf{Regression: variance reduction} (bike root) \\[2pt]
+    \footnotesize Split \texttt{temp}$\le 0.43$ ($n=731$):
+    \[ \text{reduction} = \underbrace{3.75\text{M}}_{\text{parent}} - \underbrace{2.32\text{M}}_{\text{weighted child}} \approx \mathbf{1.43\text{M}} \]
+    \centering ($\approx 38\%$ of the parent variance)
+  \end{columns}
+  \vskip 6pt
+  \footnotesize The split with the biggest reduction wins.
+\end{frame}
+
+\begin{frame}{Forests and boosting: unreadable, but they score features}
+  A random forest is \textbf{hundreds of trees} fitted in parallel; a \textbf{boosted} model
+  (GBM, XGBoost, LightGBM, CatBoost --- ch.\,4) is hundreds fitted \emph{in sequence}. Neither has
+  a readable whole. \textbf{Both} still hand you a built-in \textbf{feature importance}:
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Sum each feature's impurity reduction (info gain / variance reduction) over \emph{all} its
+    splits, summed or averaged across the trees $\Rightarrow$ one importance per feature.}}
+  \vfill
+  \textbf{And in both, it is biased the same three ways:}
+  \begin{itemize}\small
+    \item Favors \textbf{high-cardinality / continuous} features (more places to split).
+    \item \textbf{Dilutes} across correlated features (credit shared between \texttt{temp},
+      \texttt{atemp} --- the same splitting we just saw for coefficients).
+    \item Computed on \textbf{training} data $\Rightarrow$ can reward overfitting.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Careful: your library picks the definition for you}
+  ``Feature importance'' is not one quantity. \texttt{feature\_importances\_} means something
+  \textbf{different} depending on what you fitted:
+  \vskip 6pt
+  \begin{center}\small
+    \begin{tabular}{ll}
+      \textbf{Model} & \textbf{What \texttt{feature\_importances\_} returns} \\[2pt]
+      \hline \\[-6pt]
+      sklearn \texttt{RandomForest}, \texttt{GradientBoosting} & impurity reduction (Gini / variance) \\
+      sklearn \texttt{HistGradientBoosting} & \textcolor{armred}{nothing --- the attribute does not exist} \\
+      XGBoost & \textbf{gain} (avg.\ improvement per split) \\
+      LightGBM & \textbf{split count} (how often it was used) \\
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \footnotesize On a toy where \emph{only} $x_1$ carries signal: XGBoost's gain gives $x_1$
+  \textbf{85\%} of the total, while LightGBM's split count gives it $121$ splits against
+  $46/39/14$ for three pure-noise features --- \textbf{45\%} of the ``importance'' handed to noise.
+  Counting splits \emph{is} the cardinality bias.
+  \vskip 4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    sklearn dropped the attribute from \texttt{HistGradientBoosting} on purpose and points you at
+    \textbf{permutation importance} instead --- which is exactly where deck 2 starts.}}
+\end{frame}
+
+\begin{frame}[fragile]{Reading these in \texttt{sklearn}}
+\begin{lstlisting}
+# linear: standardized coefficients as importance
+Xs = StandardScaler().fit_transform(X)
+coef = LinearRegression().fit(Xs, y).coef_        # |coef| = importance
+sel  = make_pipeline(StandardScaler(), LassoCV()) # SCALE, then L1 (scale-sensitive)
+kept = sel.fit(X, y)[-1].coef_ != 0               # the features Lasso keeps
+
+# trees: built-in (impurity) importance + read one tree
+RandomForestRegressor().fit(X, y).feature_importances_
+plot_tree(DecisionTreeRegressor(max_depth=3).fit(X, y))
+
+# boosting: SAME attribute name, different definition per library
+XGBRegressor().fit(X, y).feature_importances_     # gain
+LGBMRegressor().fit(X, y).feature_importances_    # split COUNT - different!
+\end{lstlisting}
+\end{frame}
+
+% ================================================================
+\section{Rule-based models}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Rule-based models}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Rules you can read --- a tree's logic with a linear model's sparsity.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{RuleFit: turn rules into features}
+  A single tree is readable but brittle; a forest is accurate but unreadable.
+  \textbf{RuleFit} (Friedman \& Popescu, 2008) takes the middle road: \textbf{keep the trees'
+  logic, throw away their structure}.
+  \vfill
+  The whole method is three steps, one per frame from here:
+  \begin{enumerate}\small
+    \item \textbf{Mine rules} from a tree ensemble --- every root-to-node path becomes a rule.
+    \item \textbf{Add them as columns} --- each rule is a new binary feature, next to the originals.
+    \item \textbf{Lasso} the lot --- the penalty decides how many terms survive.
+  \end{enumerate}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    RuleFit $=$ \textbf{rules from trees} $+$ \textbf{Lasso selection} --- the two glass boxes
+    from this deck, combined into one readable model.}}
+\end{frame}
+
+\begin{frame}{Step 1: mine rules from the ensemble}
+  Walk a tree from the root. Every node you pass is a \textbf{conjunction of split conditions} ---
+  make it a binary feature: $1$ if the row satisfies all of them, $0$ otherwise.
+  \vskip 2pt
+  \footnotesize Our depth-2 tree from earlier yields \textbf{6} rules: two with one condition,
+  four with two. \textbf{Support} $=$ the share of days on which the rule fires. A real run repeats
+  this over the whole ensemble --- on bike that is \textbf{99 candidate rules}.
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.94\linewidth]{fig/rulefit_step1_rules.pdf}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Step 2: every rule becomes a 0/1 column}
+  \begin{columns}[T]
+    \column{0.35\textwidth}
+    The rules are simply \textbf{appended} to the design matrix. Bike goes from
+    $11$ columns to $11 + 99 = \mathbf{110}$.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item Nothing about the fitting is special --- rules are \textbf{just features} now.
+      \item The \textbf{original columns stay}: that is what lets RuleFit express a smooth trend
+        without stacking dozens of step-shaped rules to approximate it.
+    \end{itemize}
+    \column{0.65\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/rulefit_step2_design.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 3: Lasso decides how many survive}
+  \begin{columns}[T]
+    \column{0.36\textwidth}
+    Fit a Lasso on all $110$ terms. Because most rules are redundant, the penalty $\alpha$ acts as
+    a \textbf{readability dial}:
+    \vskip 4pt
+    \begin{itemize}\small
+      \item CV's pick: $49$ terms, test $R^2 = 0.89$ --- it has caught the forest ($0.88$), and is
+        far too long to read.
+      \item Turn $\alpha$ up: $24$ terms $\to 0.82$; $9$ terms $\to 0.56$.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\footnotesize
+      \textbf{You} choose where to sit on this curve. RuleFit does not choose for you --- and CV
+      will always pull toward the accurate, unreadable end.}}
+    \column{0.64\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/rulefit_step3_sparsity.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reading a RuleFit model: a scorecard}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Read it like a \textbf{scorecard}: start at the baseline ($\sim\!4500$ rentals, the average),
+    then \textbf{add the weight of every rule that fires} for this day.
+    \vskip 4pt
+    \footnotesize A warm, fair 2012 day fires the big \textcolor{armblue}{\textbf{positive}} rules
+    ($+670$, $+551$, \dots) and stacks well above average; a cold day (\texttt{temp}$\le0.43$) fires
+    the \textcolor{armred}{\textbf{negative}} ones. This $13$-rule fit scores $R^2\approx0.65$ ---
+    a deliberately sparse point on the last frame's curve, traded for a model that fits on one slide.
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\footnotesize
+      \textbf{Watch out:} more rules $\Rightarrow$ more accurate but less readable (a denser RuleFit
+      catches the forest's $\sim\!0.88$); overlapping rules \textbf{share credit}, so one weight
+      is not a feature's full effect.}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/rulefit_scorecard.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{So which features matter?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{So which features matter?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Three glass boxes, three answers --- and the disagreement is worth reading.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Do the two methods agree?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Same bike data, same goal --- but the linear model and the random forest do \emph{not} pick the
+    same top features.
+    \vskip 4pt
+    \textbf{They don't:}
+    \begin{itemize}\small
+      \item Linear: \texttt{yr}, \texttt{atemp}, \texttt{season} on top.
+      \item Forest: \texttt{temp}, \texttt{yr}, \texttt{atemp} on top.
+    \end{itemize}
+    \vskip 4pt
+    Part of the gap is the \textbf{impurity bias} we just saw; the rest is that they genuinely
+    \textbf{measure different things} (a linear effect vs.\ impurity reduction), splitting the
+    \texttt{temp}/\texttt{atemp} correlation differently.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/imp_methods_disagree.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \textbf{Importance is method-dependent} --- always say \emph{which} importance you mean.
+\end{frame}
+
+\begin{frame}{The disagreement is information, not noise}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    Don't just pick a winner. \textbf{Which way} they disagree tells you about the \textbf{shape}
+    of the effect:
+    \vskip 4pt
+    \begin{itemize}\small
+      \item \textbf{Trees high, linear low} $\Rightarrow$ the effect is \textbf{curved or
+        interaction-driven}. A single slope cannot express it, so the coefficient stays small.
+      \item \textbf{Linear high, trees low} $\Rightarrow$ a \textbf{smooth monotone} trend (trees
+        need many splits to trace one), or credit \textbf{diluted} across correlated columns.
+    \end{itemize}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/temp_effect_shape.pdf}\\[-2pt]
+      \scriptsize Bike \texttt{temp} climbs steeply, then \textbf{flattens and dips}. One line has
+      to average the two, so the linear model under-rates it --- the forest, which can bend, does not.
+    \end{center}
+  \end{columns}
+  \vskip 3pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Use the gap as a \textbf{diagnostic}: it tells you which features deserve a
+    \textbf{feature-effect plot} (deck 2) --- which shows you the curve instead of making you infer it.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Linear models} are read directly: (standardized) \textbf{coefficients} =
+      effect + importance; $e^{\theta_j}$ = odds ratio; \textbf{Lasso} selects features by zeroing them.
+    \item \textbf{Correlated features share one effect} between several coefficients --- unstable,
+      sometimes sign-flipped. A \textbf{small coefficient is not a small effect}.
+    \item \textbf{A single tree} is a glass box (paths = rules); splits are chosen by
+      \textbf{impurity reduction} (information gain / variance reduction).
+    \item \textbf{RuleFit} (Friedman \& Popescu, 2008) mines rules from an ensemble, adds them as
+      binary columns, then Lasso-selects a short weighted list you read as a \textbf{scorecard}
+      --- accuracy vs readability is a dial you set.
+    \item \textbf{Forests and boosted models} are black boxes but emit a built-in
+      \textbf{impurity importance} --- fast, \textbf{biased} (cardinality, correlation,
+      train-based), and \textbf{defined differently by each library} (gain vs split count).
+    \item Different methods give \textbf{different rankings} --- read the \textbf{disagreement} as
+      a clue to the effect's shape. Importance is method-dependent, and \emph{none of it is causation}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} model-agnostic interpretability --- \textbf{permutation importance} (fixes the
+    cardinality \& train-based biases --- though correlation still bites) and \textbf{feature-effect
+    curves}, which show the \emph{shape} of a feature's influence, for \emph{any} model.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Interpretability chapter (ml/05_interpretability/), deck 1 of 3.
+%     Intrinsic interpretability: linear models (coef / odds ratios / Lasso) + trees
+%     (single-tree reading, info gain / variance reduction, forest impurity importance + biases).
+%   - Anchor dataset: UCI Bike Sharing (day.csv), regression on cnt. data/bike-day.csv.
+%   - Figures (py_src/interp_linear_trees_figs.py, ma venv): imp_methods_disagree (linear coef vs
+%     RF impurity, rankings differ), tree_bike (DEPTH-2 regression tree, 4 leaves, big font so it
+%     reads on a projector; leaf temp>0.43 & yr=1 -> ~6608). Worked numbers (recomputed 2026-07-24):
+%     bike root split temp<=0.43 variance 3.75M->2.32M (reduction ~1.43M, 38%); info-gain toy parent H=1.0 -> 0.72,
+%     gain 0.278. "How a split is chosen" frame = ch4-trees callback (recap, not re-derivation).
+%   - Dataset intro added 2026-07-28 (user: "atemp was never introduced"). Two frames after the Outline:
+%     (1) the task + fig/bike_overview.pdf (daily rentals 2011-2012, per-year means 3,406 -> 5,600,
+%     +64%) - this figure exists to explain WHY `yr` tops every importance ranking in the chapter;
+%     (2) an 11-feature table + what atemp actually is (apparent / "feels-like" temperature).
+%     UCI normalisation verified against the dataset docs and sanity-checked against DC weather:
+%     temp = (T+8)/47, atemp = (T+16)/66, hum = h/100, windspeed = w/67. So the deck's recurring
+%     split threshold temp<=0.43 is ~12.2 C; temp mean 0.495 = 15.3 C, min 0.059 = -5.2 C,
+%     max 0.862 = 32.5 C. NOTE: day.csv's weathersit only ever takes values 1-3 (category 4,
+%     heavy rain, never occurs as a daily average) - the table lists 3 on purpose.
+%   - "Main effect / interaction" frame added 2026-07-28 (user asked where these were defined and
+%     expected deck 1). They were previously first defined in deck 2's fANOVA frame, even though
+%     deck 1 used the word "interaction" twice before that. Deck 1 now defines both in plain words at
+%     first use, and deck 2's fANOVA frame was reworded to a callback ("Deck 1 introduced ... in
+%     words. Here is the same split, written down"). The workingday example is phrased as a SUPPOSE
+%     (hypothetical) - the measured top interaction on bike is temp x season (H=0.19, deck 2), not
+%     temp x workingday, so do not restate it as fact.
+%   - Predict-first \pause removed from "Do the two methods agree?" (user request); frame retitled
+%     from "Predict-first: ..." since it no longer withholds the answer.
+%   - Student-review pass (Sonnet, 2026-07-28) - findings verified against source before applying:
+%     * The sklearn code frame overflowed after the two boosting lines were added: the last comment
+%       was vertically clipped. Fixed by DROPPING the import lines (house style says teach the
+%       concept, not the API) rather than shrinking the font.
+%     * R^2 CONTRADICTION between the step-3 frame ("test R^2 = 0.89 ... as good as the forest") and
+%       the scorecard watch-out ("climbs toward the forest's ~0.87"). Resolved by MEASURING it rather
+%       than picking a side: RF test R^2 on the identical 70/30 split (seed 509) = 0.879, so the
+%       49-term RuleFit (0.891) actually edges past the forest. Both frames now say 0.88 and
+%       "catches/has caught" instead of "climbs toward". (RF train R^2 is 0.984 - do not confuse.)
+%     * "So which features matter?" was the only section with no [plain] transition slide; added one
+%       to match the other three.
+%   - Correlated-credit frame (added 2026-07-28): corr_credit_split.pdf = temp/atemp scatter (r=0.99)
+%     + 400-bootstrap scatter of the two standardized coefs. Real numbers: full-data temp +371 /
+%     atemp +582 (sum +953); bootstrap sd temp 593, atemp 605, SUM 43 (14x steadier); temp negative
+%     on 32% of resamples; DROP atemp -> temp coef +943 (~= the pair's sum). Deck 2's "correlation
+%     trap" frame back-references this as the deflation half of the story.
+%   - Effect-shape frame (added 2026-07-28): temp_effect_shape.pdf = binned mean cnt vs temp with the
+%     OLS line on top. Verified on data: linear R^2 0.394 vs quadratic 0.453, x^2 coef -15055
+%     (concave); binned means climb 1387 -> 5824 then flatten/dip (5538, 5774, 5193). This is the
+%     evidence for "trees high + linear low => curved effect". Honest framing: saturating curve with
+%     a dip, NOT a dramatic hump.
+%   - Library-importance frame (added 2026-07-28), all verified empirically on sklearn 1.7.1 /
+%     xgboost 3.1.1 / lightgbm 4.6.0: HistGradientBoosting has NO feature_importances_ attribute;
+%     XGBRegressor.feature_importances_ defaults to GAIN; LGBMRegressor's defaults to SPLIT COUNT.
+%     Toy (4 features, only x1 signal): XGB gain [.851 .046 .052 .051] vs LGBM split [121 46 39 14].
+%   - Rule-based models section (RuleFit, Friedman & Popescu, "Predictive Learning via Rule
+%     Ensembles", Annals of Applied Statistics 2(3):916-954, 2008): imodels RuleFitRegressor on bike (max_rules=15 -> 13 terms,
+%     R^2 0.65); rulefit_scorecard.pdf is a diverging bar of the kept rules (py_src/interp_rulefit_figs.py):
+%     season>1.5&yr>0.5&weathersit<=2.5 +670, yr>0.5&temp>0.35&hum<=0.88 +551, yr>0.5&atemp>0.29 +265,
+%     temp<=0.43 -256, season<=3&temp<=0.44 -272. (Replaced the old LaTeX table with the figure.)
+%     Step-by-step frames (added 2026-07-28), figures from interp_rulefit_figs.py:
+%       step1 = the SAME depth-2 tree as tree_bike (seed 509) + its 6 path-rules with support;
+%               reusing that tree is deliberate - students already read it 4 frames earlier.
+%       step2 = design-matrix heatmap, 11 continuous originals | 99 binary rule columns. Rows are
+%               sampled ACROSS both years and columns restricted to mid-support (0.2-0.8) rules;
+%               the first-40-days version was all-constant columns and showed nothing.
+%       step3 = own Lasso path over [11 originals | 99 rules] = 110 terms, 70/30 split:
+%               LassoCV -> 49 terms, test R^2 0.891; alpha up -> 24 terms 0.824, 9 terms 0.557.
+%     TWO fits in this section on purpose: the mechanism frames use a full-size run (max_rules=200
+%     -> 99 candidate rules) so step 3 has a real sparsity dial, while the scorecard stays the
+%     deliberately small max_rules=15 model. imodels' own Lasso barely sparsifies (it keeps ~all
+%     candidates at every max_rules), so the sparsity story HAD to come from an explicit Lasso path.
+%   - Framing only from lecture_iml (CC BY 4.0) interpretable-models.
+%   - Callbacks: L11 (odds ratios), L12 (standardize coefficients), ch2 regularization (Lasso),
+%     ch4 trees (info gain / RF importance, assumed delivered). Forward: deck 2 (PFI, PDP/ICE).
+%   - Design doc: 22_linear_and_trees_OUTLINE.md (v3). Interview-locked: bike anchor, ch4 callback,
+%     Lasso added, worked split both criteria (info gain + variance reduction).
+% =============================================================

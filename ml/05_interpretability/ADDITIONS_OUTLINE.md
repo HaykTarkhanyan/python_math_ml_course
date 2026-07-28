@@ -6,7 +6,7 @@ counterfactuals on bank-marketing (ch3 callback); depth = concept + properties +
 
 ---
 
-## Deck 1 - `01_linear_and_trees.tex`: new section "Rule-based models"
+## Deck 1 - `22_linear_and_trees.tex`: new section "Rule-based models"
 
 **Placement:** new `\section{Rule-based models}` AFTER "Reading trees", BEFORE "So which
 features matter?" - rules are the synthesis of the two glass-box families just taught.
@@ -40,7 +40,7 @@ features matter?" - rules are the synthesis of the two glass-box families just t
 
 ---
 
-## Deck 3 - `03_shap_lime.tex`: new section "Counterfactual explanations"
+## Deck 3 - `24_shap_lime.tex`: new section "Counterfactual explanations"
 
 **Placement:** new `\section{Counterfactual explanations}` AFTER "LIME", BEFORE the
 "Same data, four rankings" wrap-up.

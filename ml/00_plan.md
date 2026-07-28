@@ -1,6 +1,6 @@
 # Course plan
 
-Last updated: 2026-06-19
+Last updated: 2026-07-29
 
 ## Already delivered ✅
 
@@ -10,6 +10,36 @@ Last updated: 2026-06-19
 - **[04] Linear regression from scratch — practical** (HW1)
 - **[05] Linear regression — predicting house rent** (HW2)
 - **[06] Model evaluation — overfitting and cross-validation**
+- **[07] Regularization** — Ridge, Lasso, early stopping
+- **[08] Hyperparameter tuning** — grid / random / Bayesian
+- **[09] Regression metrics** — MSE, R², diagnostic plots
+- **[10] Practical — find the errors**
+- **[11] Logistic regression** — binary + multiclass, log-loss, odds ratios
+- **[12] Classification metrics** — precision/recall/F1, ROC-AUC, PR-AUC, lift
+- **[13] Threshold tuning** — cost-optimal cutoff, Youden's J, `TunedThresholdClassifierCV`
+- **[14] Calibration** — reliability diagrams, Brier/ECE, Platt + isotonic
+- **[15] Imbalanced learning** — class weights, resampling, SMOTE
+- **[16] Classification practical — bank marketing**
+- **[17] Decision trees** — Gini/entropy, CART, pruning
+- **[18] Random forests** — bagging, OOB, the ρσ² floor
+- **[19] Boosting** — AdaBoost, gradient boosting in function space
+- **[20] Advanced boosting** — XGBoost / LightGBM / CatBoost, stacking
+- **[21] Trees practical** — wine + census income
+- **[22] Interpreting linear models & trees** — glass boxes, split credit, RuleFit
+- **[23] PFI & feature effects** — PFI/CFI/LOCO/SAGE, fANOVA, ICE→PDP→M-plot→ALE, Friedman's H
+
+## Built but not yet delivered
+
+- **[24] SHAP & LIME** — Shapley values, the four SHAP plots, LIME step by step, counterfactuals
+- **[25] Interpretability practical** — explaining startup success (leakage audit + glass boxes + PFI/PDP)
+
+## Next chapter
+
+**Feature engineering / selection** (`ml/06_feature_engineering`) — both decks exist but date from
+2026-07-07 and predate the current style conventions, so they need a polish pass before recording.
+After that: **classic methods** (`ml/07_classic_methods` — KNN, Naive Bayes, LDA/QDA, SVM, GP),
+which is deliberately placed right before the neural-network block so the margin/kernel material
+sets it up.
 
 ## Next lecture — Tuesday 2026-06-23
 

@@ -31,6 +31,13 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 1. **Fact-check** - web-verify every cited number, date, attribution, and formula against the source paper; fix errors. (Facts before layout.)
 2. **Self-driven overflow / polish pass** - compile, render each page to PNG (`pdftoppm -png -r 120`), read the images, fix silent Beamer overflow (boxes drawn over each other, clipped text, title clips), re-render the changed pages to confirm. This catches *layout* faults.
+2b. **Acronym check** (mechanical, 10 seconds - the style rule alone has not been enough):
+
+   ```bash
+   sed 's/%.*//' DECK.tex | grep -oE '\b[A-Z]{2,6}\b' | sort -u
+   ```
+
+   Every acronym listed must be **spelled out somewhere in the deck**, at or before first use. Frame titles and forward references count as uses and define nothing. See the Abbreviations bullet in `ml/SLIDE_STYLE.md` for the failure modes. (Shipped `CFI`, `LOCO`, `SAGE`, `ICE`, `SHAP`, `LIME`, `GAM` undefined across the interpretability chapter, 2026-07-28 - caught by the instructor, not by a read-through.)
 3. **Student review - opt-in, ASK FIRST.** One **Sonnet** subagent reads ONLY the rendered slide PNGs, as a sharp first-time student, and reports factual errors, hidden / overlapping content, undefined notation, and confusing explanations. It is the reviewer bake-off winner for deck QA (0 false positives; catches *semantic* faults the overflow pass misses - e.g. a diagram that contradicts its own adjacent equation). **Before launching it, ask the instructor whether to run it** - it is one agent, roughly 40-90k tokens and 5-8 min. Yes -> launch it; no -> skip to step 5.
 4. **Verify + apply** - verify each finding against the source (Sonnet is strong but not infallible), apply the quick wins, re-render to confirm.
 5. **Clean + commit** - `clean_latex.py`, then commit the deck as its own unit.
@@ -39,7 +46,7 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 | Artifact | Done means |
 |---|---|
-| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, overflow checked visually, aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
+| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
 | Figure script | runs end-to-end under the `ma` venv, PDFs in sibling `fig/`, log in `logs/`, figures actually embedded in the deck and the deck recompiled |
 | Homework `.qmd` | registered in `_quarto.yml` with exact-case path, blank line before every list / blockquote / fence, difficulty markers set |
 | Commit | no `.aux`/`.log`/`.nav` staged, message explains the change, push only when asked |

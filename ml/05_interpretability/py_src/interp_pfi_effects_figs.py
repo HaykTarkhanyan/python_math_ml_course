@@ -81,6 +81,39 @@ def fig_pfi_and_pdp(log):
     log.info("wrote pdp_bike.pdf")
 
 
+def fig_ice_then_pdp(log):
+    """The ICE -> PDP pair: same curves twice, the second time with their average drawn.
+
+    Deck order is ICE first, then "average them and that IS the PDP", so the two figures must
+    show the SAME curves - only the bold average is added.
+    """
+    df = pd.read_csv(DATA)
+    X, y = df[FEATURES], df["cnt"].values
+    rf = RandomForestRegressor(n_estimators=300, random_state=SEED).fit(X, y)
+
+    for name, with_pdp in [("ice_bike_temp.pdf", False), ("ice_pdp_bike_temp.pdf", True)]:
+        fig, ax = plt.subplots(figsize=(6.0, 4.2))
+        disp = PartialDependenceDisplay.from_estimator(
+            rf, X, ["temp"], kind="both" if with_pdp else "individual", ax=ax,
+            ice_lines_kw=dict(color=ARM_BLUE, alpha=0.10),
+            pd_line_kw=dict(color=ARM_ORANGE, lw=3.4, label="PDP = the average"))
+        # sklearn writes its own "Partial dependence" ylabel on the axes IT created, so relabel
+        # via the display - otherwise the ICE-only panel claims to show a PDP that isn't drawn.
+        pax = disp.axes_.ravel()[0]
+        pax.set_ylabel("predicted rentals", fontsize=9.5)
+        pax.set_xlabel("temp", fontsize=9.5)
+        pax.set_title("One curve per day: what if THIS day had been warmer?"
+                      if not with_pdp else
+                      "Average the curves at each temp $\\Rightarrow$ that is the PDP", fontsize=10.5)
+        if with_pdp:
+            pax.legend(fontsize=9, loc="upper left")
+        elif pax.get_legend() is not None:
+            pax.get_legend().remove()
+        pax.spines[["top", "right"]].set_visible(False)
+        fig.tight_layout(); fig.savefig(FIG_DIR / name, bbox_inches="tight"); plt.close(fig)
+        log.info(f"wrote {name}")
+
+
 def fig_interaction_toy(log):
     """PDP ~flat but ICE fans out: y = group * x, so opposing per-instance slopes cancel."""
     rng = np.random.RandomState(SEED)
@@ -180,6 +213,133 @@ def fig_ale_vs_pdp(log):
     log.info("wrote ale_vs_pdp_bike.pdf")
 
 
+def fig_pdp_mplot_ale(log):
+    """The three ways to average out the other features, on one axis (bike temp).
+
+    PDP   : E_{X_-j}[f(x_j, X_-j)]        - marginal, so it builds impossible rows.
+    M-plot: E[f(X) | X_j ~ x_j]           - conditional, never extrapolates, but CONFOUNDED
+                                            (atemp rises with temp, so its effect is folded in).
+    ALE   : accumulated local differences  - conditional AND the differencing removes the
+                                            confounding.
+    """
+    df = pd.read_csv(DATA)
+    X, y = df[FEATURES], df["cnt"].values
+    rf = RandomForestRegressor(n_estimators=300, random_state=SEED).fit(X, y)
+    t = X["temp"].values
+    grid = np.linspace(np.quantile(t, 0.02), np.quantile(t, 0.98), 50)
+
+    pdp = np.array([rf.predict(X.assign(temp=g)).mean() for g in grid])
+    pdp -= pdp.mean()
+
+    # M-plot: average the real predictions of the rows whose temp is near g (10% window)
+    preds = rf.predict(X)
+    half = max(1, int(0.05 * len(t)))
+    order = np.argsort(t)
+    ts, ps = t[order], preds[order]
+    mplot = np.array([ps[max(0, i - half):i + half].mean()
+                      for i in np.searchsorted(ts, grid)])
+    mplot -= mplot.mean()
+
+    # ALE (same construction as fig_ale_vs_pdp)
+    K = 20
+    edges = np.unique(np.quantile(t, np.linspace(0, 1, K + 1)))
+    ale = [0.0]; counts = []
+    for k in range(1, len(edges)):
+        m = (t > edges[k - 1]) & (t <= edges[k])
+        if k == 1:
+            m |= (t == edges[0])
+        if m.sum() == 0:
+            ale.append(ale[-1]); counts.append(0); continue
+        lo = X[m].copy(); lo["temp"] = edges[k - 1]
+        hi = X[m].copy(); hi["temp"] = edges[k]
+        ale.append(ale[-1] + np.mean(rf.predict(hi) - rf.predict(lo)))
+        counts.append(int(m.sum()))
+    ale = np.array(ale)
+    centers = (ale[:-1] + ale[1:]) / 2
+    ale -= np.average(centers, weights=counts)
+
+    fig, ax = plt.subplots(figsize=(7.4, 4.4))
+    ax.plot(grid, pdp, color=ARM_BLUE, lw=2.6, label="PDP: average over ALL rows (extrapolates)")
+    ax.plot(grid, mplot, color=ARM_RED, lw=2.6, ls=":",
+            label="M-plot: average over NEARBY rows (confounded)")
+    ax.plot(edges, ale, color=ARM_ORANGE, lw=2.8, ls="--",
+            label="ALE: accumulate local changes (neither)")
+    ax.set_xlabel("temp", fontsize=10)
+    ax.set_ylabel("centred effect on rentals", fontsize=10)
+    ax.set_title("Three ways to hold the other features 'fixed'", fontsize=11.5)
+    ax.legend(fontsize=8.5, loc="upper left")
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout(); fig.savefig(FIG_DIR / "pdp_mplot_ale_bike.pdf", bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"PDP/M-plot/ALE ranges: pdp {pdp.ptp():.0f}, mplot {mplot.ptp():.0f}, "
+             f"ale {ale.ptp():.0f} rentals")
+    log.info("wrote pdp_mplot_ale_bike.pdf")
+
+
+def fig_pfi_cfi_loco(log):
+    """PFI vs CFI vs LOCO, all measured as the same thing: rise in test MAE.
+
+    The point of the figure is temp/atemp (r=0.99): PFI still credits them, but CFI and LOCO
+    both collapse toward 0 because each feature is redundant GIVEN the other.
+    """
+    from sklearn.metrics import mean_absolute_error
+    from sklearn.tree import DecisionTreeRegressor
+
+    df = pd.read_csv(DATA)
+    X, y = df[FEATURES], df["cnt"].values
+    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=SEED)
+    rf = RandomForestRegressor(n_estimators=300, random_state=SEED).fit(Xtr, ytr)
+    base = mean_absolute_error(yte, rf.predict(Xte))
+    rng = np.random.RandomState(SEED)
+    log.info(f"baseline test MAE = {base:.1f}")
+
+    r = permutation_importance(rf, Xte, yte, n_repeats=20, random_state=SEED,
+                               scoring="neg_mean_absolute_error")
+    pfi = dict(zip(FEATURES, r.importances_mean))
+
+    cfi, loco = {}, {}
+    for f in FEATURES:
+        others = [c for c in FEATURES if c != f]
+        # CFI: permute f only WITHIN groups of rows that look alike on the other features,
+        # so the permuted rows stay realistic (a tree on X_-j defines the groups).
+        groups = DecisionTreeRegressor(max_leaf_nodes=8, random_state=SEED) \
+            .fit(Xte[others], Xte[f]).apply(Xte[others])
+        rises = []
+        for _ in range(5):
+            Xp = Xte.copy()
+            for lf in np.unique(groups):
+                m = groups == lf
+                v = Xp.loc[m, f].to_numpy().copy()
+                rng.shuffle(v)
+                Xp.loc[m, f] = v
+            rises.append(mean_absolute_error(yte, rf.predict(Xp)) - base)
+        cfi[f] = float(np.mean(rises))
+        # LOCO: actually refit the model without the feature.
+        rf2 = RandomForestRegressor(n_estimators=300, random_state=SEED).fit(Xtr[others], ytr)
+        loco[f] = float(mean_absolute_error(yte, rf2.predict(Xte[others])) - base)
+
+    order = sorted(FEATURES, key=lambda f: pfi[f])
+    idx = np.arange(len(order)); h = 0.26
+    fig, ax = plt.subplots(figsize=(7.8, 5.0))
+    ax.barh(idx + h, [pfi[f] for f in order], height=h, color=ARM_RED, label="PFI (permute freely)")
+    ax.barh(idx, [cfi[f] for f in order], height=h, color=ARM_ORANGE,
+            label="CFI (permute within similar rows)")
+    ax.barh(idx - h, [loco[f] for f in order], height=h, color=ARM_BLUE,
+            label="LOCO (drop it and refit)")
+    ax.set_yticks(idx, order, fontsize=9)
+    ax.axvline(0, color="0.3", lw=1)
+    ax.set_xlabel("increase in test MAE (rentals)", fontsize=10)
+    ax.set_title("Three importance questions, three answers (bike)", fontsize=11.5)
+    ax.legend(fontsize=8.5, loc="lower right")
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout(); fig.savefig(FIG_DIR / "pfi_cfi_loco_bike.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    for f in ["temp", "atemp", "yr", "hum"]:
+        log.info(f"  {f:<10} PFI={pfi[f]:7.1f}  CFI={cfi[f]:7.1f}  LOCO={loco[f]:7.1f}")
+    log.info("wrote pfi_cfi_loco_bike.pdf")
+
+
 def fig_interactions(log):
     """Friedman's pairwise H-statistic on the bike RF + a 2-D PDP of the top-interacting pair.
 
@@ -218,6 +378,32 @@ def fig_interactions(log):
             H[(a, c)] = float(np.clip(np.sqrt(num / den), 0.0, 1.0))
     top = sorted(H, key=H.get, reverse=True)[:8]
     log.info("H top pairs: " + ", ".join(f"{a}x{c}={H[(a, c)]:.2f}" for (a, c) in top))
+
+    # --- OVERALL interaction strength H_j: does feature j interact with ANYTHING?
+    #     H^2_j = sum( f^c(x) - f^c_j(x_j) - f^c_-j(x_-j) )^2 / sum( f^c(x) )^2.
+    #     pd_centered(all cols except j) is exactly f^c_-j (fix everything but j, average j out). ---
+    full = rf.predict(E)
+    fc = full - full.mean()
+    Hj = {}
+    for f in feats:
+        pd_minus = pd_centered([c for c in cols if c != f])
+        num = np.sum((fc - pdj[f] - pd_minus) ** 2)
+        den = np.sum(fc ** 2) + 1e-12
+        Hj[f] = float(np.clip(np.sqrt(num / den), 0.0, 1.0))
+    log.info("H_j (overall): " + ", ".join(f"{f}={Hj[f]:.2f}"
+                                          for f in sorted(Hj, key=Hj.get, reverse=True)))
+
+    ordj = sorted(Hj, key=Hj.get)
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    bars = ax.barh(range(len(ordj)), [Hj[f] for f in ordj], color=ARM_BLUE)
+    ax.set_yticks(range(len(ordj)), ordj, fontsize=9)
+    ax.set_xlim(0, max(Hj.values()) * 1.20)
+    ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8)
+    ax.set_xlabel("overall interaction strength  $H_j$   (feature $j$ vs all others)")
+    ax.set_title("Does this feature interact with anything at all? (bike)", fontsize=11)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout(); fig.savefig(FIG_DIR / "h_overall_bar.pdf", bbox_inches="tight"); plt.close(fig)
+    log.info("wrote h_overall_bar.pdf")
 
     # --- H bar (top pairs) ---
     labels = [f"{a} × {c}" for (a, c) in top][::-1]
@@ -263,6 +449,7 @@ def main():
     log = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
     fig_pfi_and_pdp(log)
+    fig_ice_then_pdp(log)
     fig_interaction_toy(log)
     fig_correlation_trap(log)
     fig_ale_vs_pdp(log)

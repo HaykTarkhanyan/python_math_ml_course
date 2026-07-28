@@ -94,6 +94,158 @@ def fig_methods_disagree(df, log):
     log.info("wrote imp_methods_disagree.pdf")
 
 
+def fig_bike_overview(df, log):
+    """Introduce the running dataset: daily rentals over the two years.
+
+    Shows at a glance the two effects the whole chapter keeps rediscovering - the year-on-year
+    growth (why `yr` tops every importance ranking) and the seasonal temperature swing.
+    """
+    d = df.copy()
+    d["date"] = pd.to_datetime(d["dteday"])
+    m11 = d.loc[d["yr"] == 0, "cnt"].mean()
+    m12 = d.loc[d["yr"] == 1, "cnt"].mean()
+
+    # Means go in the legend labels, not as free-floating annotations: any text placed in the
+    # upper-left collides with the legend, and anywhere else collides with the data.
+    fig, ax = plt.subplots(figsize=(9.6, 4.0))
+    for yr, colour, label, mean in [(0, ARM_BLUE, "2011", m11), (1, ARM_RED, "2012", m12)]:
+        s = d[d["yr"] == yr]
+        ax.plot(s["date"], s["cnt"], lw=0.9, color=colour, alpha=0.85,
+                label=f"{label}  (mean {mean:,.0f})")
+        ax.axhline(mean, color=colour, ls="--", lw=1.5)
+    ax.set_ylabel("daily rentals (cnt)", fontsize=10)
+    ax.set_xlabel("date", fontsize=10)
+    ax.set_title("Bike sharing, Washington DC: 731 days, 2011-2012", fontsize=11.5)
+    ax.legend(fontsize=9, loc="upper left", ncol=2, framealpha=0.9)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(FIG_DIR / "bike_overview.pdf", bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"BIKE OVERVIEW: 2011 mean {m11:,.0f}, 2012 mean {m12:,.0f} "
+             f"(+{100 * (m12 / m11 - 1):.0f}%)")
+    log.info(f"  cnt range {d['cnt'].min()}-{d['cnt'].max()}, temp range "
+             f"{d['temp'].min():.3f}-{d['temp'].max():.3f}")
+    # UCI normalisation: temp = (T+8)/47 -> report the real degrees behind the deck's numbers
+    for v in (0.43, d["temp"].mean(), d["temp"].min(), d["temp"].max()):
+        log.info(f"  temp {v:.3f} -> {v * 47 - 8:.1f} C")
+    log.info("wrote bike_overview.pdf")
+
+
+def fig_temp_shape(df, log):
+    """Why the forest ranks temp above the linear model does: the effect is not a straight line.
+
+    Binned mean rentals vs temp, with the fitted single slope on top. The line has to average
+    the steep climb and the flat/falling top end, so it under-states how much temp matters.
+    """
+    t, y = df["temp"].values, df["cnt"].values
+    bins = np.linspace(t.min(), t.max(), 11)
+    idx = np.digitize(t, bins) - 1
+    idx = np.clip(idx, 0, len(bins) - 2)
+    centers = 0.5 * (bins[:-1] + bins[1:])
+    means = np.array([y[idx == k].mean() for k in range(len(centers))])
+
+    slope, intercept = np.polyfit(t, y, 1)
+    quad = np.polyfit(t, y, 2)
+    grid = np.linspace(t.min(), t.max(), 200)
+    r2_lin = 1 - ((y - np.polyval([slope, intercept], t)) ** 2).sum() / ((y - y.mean()) ** 2).sum()
+    r2_quad = 1 - ((y - np.polyval(quad, t)) ** 2).sum() / ((y - y.mean()) ** 2).sum()
+
+    fig, ax = plt.subplots(figsize=(7.6, 4.3))
+    ax.scatter(t, y, s=8, alpha=0.18, color="0.5", edgecolors="none", label="days")
+    ax.plot(centers, means, "o-", color=ARM_RED, lw=2.2, ms=7,
+            label="actual mean rentals per temp bin")
+    ax.plot(grid, np.polyval([slope, intercept], grid), ls="--", lw=2.2, color=ARM_BLUE,
+            label=f"what the linear model fits ($R^2$={r2_lin:.2f})")
+    ax.annotate("climbs steeply", xy=(0.3, 3000), xytext=(0.22, 5600), fontsize=9,
+                arrowprops=dict(arrowstyle="->", color="0.3"))
+    ax.annotate("then flattens and dips", xy=(0.78, 5400), xytext=(0.45, 1800), fontsize=9,
+                arrowprops=dict(arrowstyle="->", color="0.3"))
+    ax.set_xlabel("temp (normalised)", fontsize=10)
+    ax.set_ylabel("daily rentals", fontsize=10)
+    ax.set_title("One slope cannot say this", fontsize=11.5)
+    ax.legend(fontsize=8.5, loc="upper left", framealpha=0.9)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(FIG_DIR / "temp_effect_shape.pdf", bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"TEMP SHAPE: linear R^2={r2_lin:.3f} vs quadratic R^2={r2_quad:.3f} "
+             f"(quad x^2 coef = {quad[0]:,.0f}, negative = concave)")
+    log.info(f"  binned means: {[f'{m:,.0f}' for m in means]}")
+    log.info("wrote temp_effect_shape.pdf")
+
+
+def fig_corr_credit(df, log):
+    """Correlated features split the credit: temp vs atemp on bike.
+
+    Left  : the two features are almost the same column (Pearson r).
+    Right : bootstrap scatter of their two standardized coefficients. The credit sloshes
+            between them across resamples while their SUM barely moves - that is the
+            "split credit" claim, shown rather than asserted.
+    """
+    X, y = df[FEATURES].values, df["cnt"].values
+    Xs = StandardScaler().fit_transform(X)
+    i_t, i_a = FEATURES.index("temp"), FEATURES.index("atemp")
+    r = float(np.corrcoef(df["temp"], df["atemp"])[0, 1])
+
+    rng = np.random.default_rng(SEED)
+    n_boot = 400
+    coefs = np.empty((n_boot, 2))
+    for b in range(n_boot):
+        idx = rng.integers(0, len(y), len(y))
+        c = LinearRegression().fit(Xs[idx], y[idx]).coef_
+        coefs[b] = (c[i_t], c[i_a])
+    sd_t, sd_a = coefs[:, 0].std(), coefs[:, 1].std()
+    sd_sum = (coefs[:, 0] + coefs[:, 1]).std()
+    full = LinearRegression().fit(Xs, y).coef_
+
+    # reference: drop atemp -> temp alone carries the whole effect
+    keep = [f for f in FEATURES if f != "atemp"]
+    Xs_drop = StandardScaler().fit_transform(df[keep].values)
+    coef_drop = LinearRegression().fit(Xs_drop, y).coef_[keep.index("temp")]
+
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 4.3))
+
+    a1.scatter(df["temp"], df["atemp"], s=9, alpha=0.45, color=ARM_BLUE, edgecolors="none")
+    a1.plot([0, 1], [0, 1], ls="--", lw=1, color="0.45")
+    a1.set_xlabel("temp", fontsize=9.5)
+    a1.set_ylabel("atemp (feels-like)", fontsize=9.5)
+    a1.set_title(f"Two features, one signal:  r = {r:.2f}", fontsize=10.5)
+
+    a2.scatter(coefs[:, 0], coefs[:, 1], s=11, alpha=0.5, color=ARM_ORANGE, edgecolors="none")
+    a2.scatter([full[i_t]], [full[i_a]], s=70, marker="X", color=ARM_RED,
+               zorder=5, label="fit on the full data")
+    lo = min(coefs.min(), 0) - 200
+    hi = coefs.max() + 200
+    s_mean = coefs.sum(axis=1).mean()
+    a2.plot([lo, hi], [s_mean - lo, s_mean - hi], ls="--", lw=1.2, color=ARM_BLUE,
+            label=f"constant sum ($\\approx${s_mean:,.0f})")
+    a2.set_xlim(lo, hi); a2.set_ylim(lo, hi)
+    a2.set_xlabel("coefficient on temp", fontsize=9.5)
+    a2.set_ylabel("coefficient on atemp", fontsize=9.5)
+    a2.set_title("400 bootstrap refits: the credit moves, the total does not", fontsize=10.5)
+    a2.legend(fontsize=8, loc="upper right", framealpha=0.9)
+    a2.text(0.03, 0.03,
+            f"sd(temp) = {sd_t:,.0f}\nsd(atemp) = {sd_a:,.0f}\nsd(temp+atemp) = {sd_sum:,.0f}",
+            transform=a2.transAxes, fontsize=8.5, va="bottom",
+            bbox=dict(boxstyle="round", fc="white", ec="0.7"))
+
+    for a in (a1, a2):
+        a.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(FIG_DIR / "corr_credit_split.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    log.info(f"CORR CREDIT: r(temp, atemp) = {r:.4f}")
+    log.info(f"  full-data standardized coefs: temp={full[i_t]:+,.0f}  atemp={full[i_a]:+,.0f}  "
+             f"sum={full[i_t] + full[i_a]:+,.0f}")
+    log.info(f"  bootstrap sd: temp={sd_t:,.0f}  atemp={sd_a:,.0f}  SUM={sd_sum:,.0f} "
+             f"(sum is {sd_t / sd_sum:.1f}x more stable than temp alone)")
+    log.info(f"  sign flips across resamples: temp {np.mean(coefs[:, 0] < 0):.0%}, "
+             f"atemp {np.mean(coefs[:, 1] < 0):.0%}")
+    log.info(f"  drop atemp -> temp coef = {coef_drop:+,.0f} (vs {full[i_t]:+,.0f} with atemp in)")
+    log.info("wrote corr_credit_split.pdf")
+
+
 def fig_tree(df, log):
     from sklearn.tree import export_text
     X, y = df[FEATURES].values, df["cnt"].values
@@ -161,6 +313,8 @@ def main():
     FIG_DIR.mkdir(exist_ok=True)
     df = get_bike(log)
     fig_methods_disagree(df, log)
+    fig_corr_credit(df, log)
+    fig_temp_shape(df, log)
     fig_tree(df, log)
     worked_info_gain(log)
     lasso_selection(df, log)

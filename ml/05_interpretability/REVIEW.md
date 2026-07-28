@@ -1,7 +1,7 @@
 # Interpretability chapter (ml/05_interpretability) - content & teaching review
 
-Reviewed 2026-07-07 (Claude). Scope: the 3 decks (01_linear_and_trees, 02_pfi_and_effects,
-03_shap_lime), their outlines, ADDITIONS_OUTLINE, and figures. Method: close read of the .tex
+Reviewed 2026-07-07 (Claude). Scope: the 3 decks (22_linear_and_trees, 23_pfi_and_effects,
+24_shap_lime), their outlines, ADDITIONS_OUTLINE, and figures. Method: close read of the .tex
 sources + visual pass over all 3 compiled PDFs (rendered pages). This review is about
 **content and teaching only** - not file/nav/numbering infrastructure.
 

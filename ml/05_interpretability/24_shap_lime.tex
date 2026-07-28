@@ -1,0 +1,958 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+% ../preamble defines \xv but no \zv; the LIME frames need a symbol for the sampled
+% neighbour points, matched to \xv's style.
+\newcommand{\zv}{\mathbf{z}}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{SHAP \& LIME}
+\subtitle{Explaining a single prediction --- and the plots that make it readable}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Why this one prediction?}
+  Global importance (deck 2) says \texttt{temp} and \texttt{yr} matter \emph{overall}. But the
+  model predicts \textbf{this particular day} at \textbf{4311 rentals} (below the $\sim\!4500$
+  average) --- which features drove \emph{that}?
+  \vfill
+  Global tools can't answer per-prediction. \textbf{Shapley Additive Explanations}
+  (\textbf{SHAP}) can: it explains a \textbf{single prediction}, and the same idea rolls up into
+  global plots.
+  \vfill
+  \footnotesize Still the bike-sharing random forest from decks 1--2.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What SHAP is}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What SHAP is}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A fair split of the prediction among the features.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The idea: a fair payout}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Treat the prediction as a \textbf{payout to split fairly} among the features --- like a team
+    bonus among players who contributed differently.
+    \vskip 6pt
+    \textbf{SHAP} gives each feature its \textbf{fair share}: its contribution \emph{averaged over
+    all the orders} in which features could be added to the model.
+    \vskip 4pt
+    \footnotesize \textbf{Next:} where this idea comes from, then we work one out \emph{by hand}
+    before meeting the formula.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shapley_1.png}\\[-2pt]
+      \scriptsize Source: LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{This is not an ML idea: it comes from game theory}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    The \textbf{Shapley value} was defined by \textbf{Lloyd Shapley in 1953}, in
+    \textbf{cooperative game theory} --- decades before anyone used it on a model.
+    \vskip 4pt
+    The setup there:
+    \begin{itemize}\small
+      \item A set of \textbf{players} $P = \{1,\dots,p\}$; any subset $S \subseteq P$ can form a
+        \textbf{coalition}.
+      \item A \textbf{value function} $v(S)$ says what each coalition earns, with
+        $v(\emptyset) = 0$. The whole team earns $v(P)$.
+      \item Player $j$'s \textbf{marginal contribution} to a coalition:
+        \[ \Delta(j, S) = v(S \cup \{j\}) - v(S) \]
+      \item \textbf{The question:} how do we split $v(P)$ fairly, given players contribute
+        differently and help each other?
+    \end{itemize}
+    \column{0.44\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{The translation to ML:}
+      \vskip 3pt
+      \begin{tabular}{@{}l@{\ $\to$\ }l@{}}
+        players & \textbf{features} \\
+        coalition $S$ & a \textbf{subset} of features \\
+        payout $v(P)$ & $\hat f(\xv) - \mathbb{E}[\hat f]$ \\
+        fair share $\phi_j$ & \textbf{SHAP value} \\
+      \end{tabular}}}
+    \vskip 6pt
+    \footnotesize Shapley shared the \textbf{2012 Nobel Memorial Prize in Economics} with Alvin
+    Roth --- though for \emph{stable matching and market design}, not for this value.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{By hand: three friends split the payout}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Adi}, \textbf{Budi} and \textbf{Gogi} run a stall together. Working in different groups,
+    they would earn different amounts --- the group's \textbf{payout} $v(S)$:
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Together they earn \textbf{90}. \textbf{What is each one's fair share} of that 90?}}
+    \vskip 6pt
+    {\footnotesize \textit{Names: qarakusi.am}}
+    \column{0.48\textwidth}
+    \centering\small
+    \renewcommand{\arraystretch}{1.12}
+    \begin{tabular}{l r}
+      \textbf{who works together} $S$ & $v(S)$ \\
+      \hline
+      nobody & 0 \\
+      Adi & 10 \\
+      Budi & 20 \\
+      Gogi & 30 \\
+      Adi $+$ Budi & 40 \\
+      Adi $+$ Gogi & 50 \\
+      Budi $+$ Gogi & 60 \\
+      \textbf{all three} & \textbf{90} \\
+      \hline
+    \end{tabular}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Fair share $=$ average marginal contribution}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \textbf{Adi}'s \emph{extra} contribution depends on who is \textbf{already there}:
+    \vskip 3pt
+    {\footnotesize
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{l c c}
+      who's before Adi & $\Delta_{\text{Adi}}$ & \#orders \\
+      \hline
+      nobody (Adi first) & $10-0 = 10$ & 2 \\
+      Budi & $40-20 = 20$ & 1 \\
+      Gogi & $50-30 = 20$ & 1 \\
+      Budi \& Gogi & $90-60 = 30$ & 2 \\
+      \hline
+    \end{tabular}}
+    \vskip 4pt
+    Average over all \textbf{6 orders}:
+    \[ \phi_{\text{Adi}} = \tfrac{2(10)+20+20+2(30)}{6} = \mathbf{20}. \]
+    \column{0.46\textwidth}
+    Same for each friend:
+    \[ \phi_{\text{Adi}}{=}20,\ \ \phi_{\text{Budi}}{=}30,\ \ \phi_{\text{Gogi}}{=}40 \]
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      They \textbf{sum to 90} --- the whole payout is split, nothing lost or invented
+      (\emph{efficiency}).}}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{In a model:} the players are \textbf{features}, the payout is
+      $\hat f(\xv) - \mathbb{E}[\hat f]$, and each fair share is that feature's \textbf{SHAP value}
+      $\phi_j$.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Now the same thing, formally}
+  You just computed a Shapley value by hand. The next two slides are that \emph{exact} procedure
+  written in general notation --- nothing new, just symbols for what we already did.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Watch for:} the \textbf{value function} $v(S)$ --- that was our payout table --- and
+      the \textbf{marginal contribution} $v(S \cup \{j\}) - v(S)$, which was Adi's ``extra''
+      column.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      The scary-looking $\frac{|S|!\,(p-|S|-1)!}{p!}$ is just the \textbf{\#orders} column from our
+      table, turned into a fraction --- how often that coalition comes up among all $p!$ orders.}}
+  \end{columns}
+\end{frame}
+
+% --- Embedded LMU IML slides: the formal statement, AFTER our by-hand worked example ---
+\begin{frame}[plain]
+  \centering
+  \includegraphics[width=\paperwidth,height=0.9\paperheight,keepaspectratio]{fig/lmu_shapley_value.pdf}\\[-2pt]
+  {\scriptsize Source: LMU Interpretable Machine Learning (CC BY 4.0)}
+\end{frame}
+
+\begin{frame}[plain]
+  \centering
+  \includegraphics[width=\paperwidth,height=0.9\paperheight,keepaspectratio]{fig/lmu_shapley_formula.pdf}\\[-2pt]
+  {\scriptsize Source: LMU Interpretable Machine Learning (CC BY 4.0)}
+\end{frame}
+
+\begin{frame}{One prediction = base value + the SHAP values}
+  Every SHAP explanation is one simple sum:
+  \[
+    \underbrace{\hat f(\xv)}_{\text{this prediction}} \;=\;
+    \underbrace{\mathbb{E}[\hat f(X)]}_{\text{base value (avg.\ prediction)}}
+    \;+\; \sum_j \phi_j ,
+  \]
+  where $\phi_j$ is feature $j$'s SHAP value.
+  \begin{itemize}\small
+    \item $\phi_j > 0$ pushes this prediction \textbf{up}; $\phi_j < 0$ pushes it \textbf{down}.
+    \item \textbf{Every SHAP plot visualizes this sum} --- for one row, or aggregated over many.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Exact SHAP explodes --- TreeSHAP \& KernelSHAP to the rescue}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    3 features $\to$ $3! = 6$ orders ($2^3 = 8$ coalitions): easy by hand. But it \textbf{explodes}
+    with the number of features:
+    \vskip 4pt
+    \centering\small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{r r}
+      \textbf{features} & \textbf{orders} $n!$ \\
+      \hline
+      3  & 6 \\
+      10 & $3.6$ million \\
+      20 & $2.4\times10^{18}$ \\
+      \hline
+    \end{tabular}
+    \vskip 4pt
+    \raggedright You \textbf{cannot} enumerate them all $\Rightarrow$ we \textbf{approximate}.
+    \column{0.56\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{KernelSHAP:} \emph{sample} a handful of coalitions and fit a \textbf{weighted linear
+      model} to recover the $\phi_j$. Works on \textbf{any} model --- but approximate and slow.}}
+    \vskip 8pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{TreeSHAP:} exploits the \textbf{tree structure} to get \textbf{exact} SHAP in
+      \emph{polynomial} time --- fast $+$ exact for trees/boosting $\Rightarrow$ the \textbf{default}.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The SHAP plots (how to read them)}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The SHAP plots --- how to read them}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One local plot, three global ones. Same SHAP values, different views.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Waterfall: one prediction, fully explained}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Start at the \textbf{base value} ($\sim\!4502$ rentals) and add each feature's SHAP value until
+    you reach \textbf{this day's prediction} ($4311$).
+    \vskip 4pt
+    \textbf{Read it:} \texttt{yr} ($+860$) and \texttt{temp} ($+771$) push it \textbf{up}, but a
+    very humid day (\texttt{hum} $-1590$) and poor \texttt{weathersit} ($-418$) push it
+    \textbf{down} --- landing just below average.
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_waterfall_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Bar: global importance (mean $|$SHAP$|$)}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Average the \textbf{magnitude} of each feature's SHAP over all rows:
+    \[ \text{importance}_j = \tfrac1n\sum_i |\phi_j^{(i)}| \]
+    \begin{itemize}\small
+      \item One bar per feature --- \textbf{reads like the PFI bar} from deck 2.
+      \item \texttt{yr}, \texttt{temp} dominate --- roughly agreeing with PFI.
+    \end{itemize}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_bar.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Beeswarm: the signature SHAP plot}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \textbf{One dot per row, per feature.} \quad $x$ = SHAP value; \textbf{colour = feature value}.
+    \vskip 4pt
+    \textbf{Read it:}
+    \begin{itemize}\small
+      \item \textbf{Spread} = how much the feature matters.
+      \item \textbf{Colour pattern} = direction: high \texttt{temp} (red) $\to$ positive SHAP
+        (more rentals); low (blue) $\to$ negative.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_beeswarm.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dependence: the effect shape (\& interactions)}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    SHAP value of a feature \textbf{vs.\ its value} --- one dot per row.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item Shows the \textbf{effect shape}: rentals \textbf{rise sharply} with \texttt{temp}, peak,
+        then \textbf{dip at extreme heat} ($\approx$ a PDP).
+      \item Colour by a second feature (here \texttt{yr}) reveals \textbf{interactions}.
+      \item Per-instance --- \emph{like ICE did for PDP}, it shows the spread the average hides.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/shap_dependence.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{SHAP in practice}
+
+\begin{frame}{How SHAP ties the methods together}
+  \begin{itemize}\small
+    \item \textbf{TreeSHAP} (previous slide) makes SHAP the \textbf{default} for trees/boosting.
+    \item \textbf{SHAP unifies what we've seen:}
+      \begin{itemize}\small
+        \item the \textbf{bar} $\approx$ PFI (global importance),
+        \item the \textbf{dependence} plot $\approx$ PDP (effect shape),
+        \item \textbf{plus} a \emph{local} view (the waterfall) the others can't give --- with a
+          consistency guarantee (use a feature more $\Rightarrow$ its SHAP can't fall).
+      \end{itemize}
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{But like every method here, correlation muddies SHAP too} --- the \texttt{temp}/\texttt{atemp}
+    credit split stays ambiguous. SHAP also explains the model's \emph{score}: if that score isn't
+    \textbf{calibrated} (L14), SHAP faithfully explains a \emph{miscalibrated} number. Still
+    \textbf{model behaviour, not causation} (deck 2's ice cream), and rich plots are \textbf{easy to over-read}.}}
+\end{frame}
+
+\begin{frame}[fragile]{SHAP in code}
+\begin{lstlisting}
+import shap
+explainer = shap.TreeExplainer(model)      # fast & exact for trees/boosting
+sv = explainer(X)                          # SHAP values for every row
+
+shap.plots.waterfall(sv[i])                # one prediction
+shap.plots.bar(sv)                         # global: mean |SHAP|
+shap.plots.beeswarm(sv)                    # global: dot per row, colour = value
+shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
+\end{lstlisting}
+  \vskip 2pt
+  \footnotesize \texttt{shap.Explainer(model, X)} auto-picks the right method (TreeSHAP here).
+\end{frame}
+
+% ================================================================
+\section{LIME}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{LIME: the lighter local cousin}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A simple, model-agnostic local explanation --- with sharper edges.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{LIME: the locality assumption}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \textbf{Local Interpretable Model-agnostic Explanations} (\textbf{LIME}). Every word in that
+    name is a design decision, and the next two slides unpack them.
+    \vskip 4pt
+    The starting point: a black box $\hat f$ can be hopelessly complicated \emph{globally} --- but
+    \textbf{in a small neighbourhood of one point $\xv$ it is usually close to simple}.
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      So: don't explain $\hat f$. Explain a \textbf{local surrogate} $\hat g$ --- an interpretable
+      model (sparse linear, shallow tree) that mimics $\hat f$ \emph{near $\xv$ only}.}}
+    \vskip 6pt
+    A surrogate is useful only if it is both:
+    \begin{enumerate}\small
+      \item \textbf{Interpretable} --- you can read it (coefficients, structure).
+      \item \textbf{Locally faithful} --- $\hat g(\zv) \approx \hat f(\zv)$ for points $\zv$
+        \emph{near} $\xv$.
+    \end{enumerate}
+    \vskip 4pt
+    \footnotesize Model-agnostic: works on tabular, text and images (Ribeiro et al., 2016).
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=stealth]
+        \draw[rounded corners, fill=armred!8, draw=armred!60] (-2.1,-1.5) rectangle (2.1,1.5);
+        \node[armred] at (0,1.15) {black box $\hat f$: complicated};
+        \draw[fill=armblue!15, draw=armblue, thick] (0.3,-0.2) circle (0.85);
+        \node[armblue] at (0.3,-1.25) {near $\xv$: nearly simple};
+        \fill[armorange] (0.3,-0.2) circle (2.6pt);
+        \node[right, font=\tiny] at (0.45,-0.2) {$\xv$};
+        \draw[dashed, thick, armblue] (-0.5,-0.85) -- (1.35,0.35);
+        \node[font=\tiny, armblue] at (1.55,0.62) {$\hat g$};
+      \end{tikzpicture}
+    \end{center}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The goal:} \emph{minimum complexity, maximum local fidelity.}}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The three ingredients you must choose}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{1. A proximity measure} $\pi(\zv)$ --- how much does the point $\zv$ count as
+    ``near $\xv$''? Usually an exponential kernel:
+    \[ \pi(\zv) = \exp\!\big(-d(\xv,\zv)^2 / \sigma^2\big) \]
+    {\footnotesize $d$ = a distance (Euclidean, or \textbf{Gower} for mixed types);
+    $\sigma$ = the \textbf{kernel width}, which sets how local ``local'' is.}
+    \vskip 4pt
+    \textbf{2. A loss} $L(\hat f(\zv), \hat g(\zv))$ --- usually squared error. Weighted by
+    proximity, the \textbf{local fidelity} of $\hat g$ is
+    \[ L(\hat f, \hat g, \pi) = \sum_{\zv \in \mathcal{Z}} \pi(\zv)\,
+       \big(\hat g(\zv) - \hat f(\zv)\big)^2 \]
+    \column{0.48\textwidth}
+    \textbf{3. A complexity measure} $J(\hat g)$ --- e.g.\ the number of non-zero coefficients of a
+    linear surrogate, or the number of leaves of a tree.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{LIME's optimization problem:}
+      \[ \hat g = \argmin_{g \,\in\, \mathcal{G}} \; L(\hat f, g, \pi) \;+\; J(g) \]
+      Fit the black box closely nearby, while staying simple.}}
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{In practice} nobody optimizes both: you \textbf{fix} the complexity first (``Lasso,
+      keep $k$ features'') and then just minimise the weighted loss.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 1: the point we want to explain}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    A classifier's decision surface (light vs dark grey), and one \textbf{yellow point $\xv$} whose
+    prediction we want explained.
+    \vskip 6pt
+    Globally that boundary is curved and messy --- no linear model could describe all of it.
+    \vskip 6pt
+    But look only at the little region \emph{around the yellow point}: there, a straight line would
+    do fine. That is the locality assumption, in a picture.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{fig/lmu_lime_s1_point.pdf}\\[-2pt]
+      \scriptsize Source: LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 2: sample new points, and label them with the black box}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    We need data to fit the surrogate on --- so we \textbf{make some}:
+    \begin{itemize}\small
+      \item Sample points $\zv$ across the feature space (uniformly, on a grid, or by perturbing
+        the training data).
+      \item Ask the \textbf{black box} for its prediction $\hat f(\zv)$ at each one.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The surrogate is trained on $\hat f$'s \textbf{predictions}, not on the true labels $y$. We
+      are explaining \textbf{the model}, not the world.}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{fig/lmu_lime_s2_sample.pdf}\\[-2pt]
+      \scriptsize Sampled points spread across the feature space. LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 3: weight each sample by how close it is}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Those samples are scattered everywhere --- but we only care about the neighbourhood of $\xv$.
+    \vskip 4pt
+    So weight every point by the proximity kernel
+    $\pi(\zv) = \exp(-d(\xv,\zv)^2/\sigma^2)$:
+    \begin{itemize}\small
+      \item Close to $\xv$ $\Rightarrow$ \textbf{big} weight (big dots).
+      \item Far away $\Rightarrow$ weight $\approx 0$, effectively ignored.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{This is the step that makes it ``local''} --- and the kernel width $\sigma$ is the
+      knob that decides how big the neighbourhood is.}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{fig/lmu_lime_s3_weight.pdf}\\[-2pt]
+      \scriptsize Dot size $=$ proximity weight. LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Step 4: fit the interpretable model --- and read it}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Fit the surrogate $\hat g$ on the sampled points, using the black box's predictions as the
+    target and the proximity as \textbf{sample weights}.
+    \vskip 4pt
+    Here that is a logistic regression: the red line is its local decision boundary. It is wrong far
+    away --- and we do not care, because those points had weight $\approx 0$.
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{The explanation is $\hat g$'s coefficients:} ``these few features, with these signs,
+      are what moves the prediction \emph{around this point}.''}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{fig/lmu_lime_s4_fit.pdf}\\[-2pt]
+      \scriptsize The fitted local surrogate. LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LIME on images: the husky that was really snow}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    On images the ``features'' are \textbf{superpixels} (patches), and a sampled point $\zv$ is the
+    image with some patches \textbf{switched off}. The surrogate then says \emph{which patches}
+    carried the prediction.
+    \vskip 6pt
+    A husky-vs-wolf classifier looked convincing --- on the six examples we are about to see, it
+    gets five right. LIME showed what it actually keyed on:
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      \textbf{The \emph{snow} in the background} --- not the animal. A \emph{clever-Hans} model:
+      right answer, wrong reason, caught only by a local explanation.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/lime_husky.png}\\[-2pt]
+      \scriptsize Husky vs.\ wolf: LIME highlights snow pixels. LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LIME's proof: the explanation \emph{is} the snow}
+  \begin{center}
+    \includegraphics[width=0.73\linewidth]{fig/lime_husky_full.png}
+  \end{center}
+  \vskip 2pt
+  \footnotesize In each pair: the photo (left) and \textbf{LIME's explanation} (right --- the kept
+  superpixels). The model's ``reason'' is the \textbf{snow}, not the animal, so the snowy
+  \textbf{husky} (bottom-left) is misread as a \textbf{wolf}. \hfill LMU IML (CC BY 4.0) / Ribeiro et al.\ 2016.
+\end{frame}
+
+\begin{frame}{LIME caveats, and SHAP vs.\ LIME}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Caveats} --- both trace back to step 2 and step 3:
+    \begin{itemize}\small
+      \item \textbf{Unstable}: the samples are \emph{random}, so re-running LIME on the same point
+        can give a different explanation.
+      \item \textbf{The neighbourhood is your choice}: the kernel width $\sigma$ has no ``correct''
+        value, and changing it changes the answer. There is no way to check it from the data.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{SHAP vs.\ LIME:} SHAP has theory (consistency) + richer plots, but is slower; LIME is
+      simpler/faster but less stable. \textbf{SHAP is the modern default.}}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=0.86\linewidth]{fig/lime_robustness.png}\\[-2pt]
+      \scriptsize Repeated LIME fits near one point \textbf{disagree} --- unstable. LMU IML.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LIME's global sibling: the surrogate model}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    LIME fits a simple model \emph{locally}, around one prediction. Its \textbf{global} counterpart
+    does the same for the \emph{whole} model:
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{Global surrogate:} train an interpretable model --- a shallow tree, a linear model, a
+      GAM (\emph{generalized additive model} --- a sum of one smooth curve per feature, so it bends
+      but stays readable) --- to \textbf{mimic the black box's predictions} everywhere, then read the surrogate
+      instead of the black box.}}
+    \vskip 6pt
+    \begin{itemize}\small
+      \item Check its \textbf{fidelity} first ($R^2$ of surrogate vs.\ black-box output): a poor
+        mimic is a misleading explanation.
+      \item In effect it \textbf{distills the forest back into deck 1's glass box}.
+    \end{itemize}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=stealth]
+        \node[draw, rounded corners, fill=armred!12, minimum width=3.2cm, minimum height=0.8cm] (bb)
+          at (0,0) {black box $\hat f$ (forest, NN)};
+        \node[draw, rounded corners, fill=armblue!12, minimum width=3.2cm, minimum height=0.8cm] (s)
+          at (0,-1.9) {surrogate: tree / linear / GAM};
+        \draw[->, thick] (bb.south) -- node[right, font=\tiny, align=left]
+          {fit to $\hat f$'s\\ predictions} (s.north);
+        \node[font=\tiny, armblue] at (0,-2.7) {read this instead};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Counterfactual explanations}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Counterfactual explanations}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Not \emph{why} the model decided --- but \emph{what would change} the outcome.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The smallest change that flips the prediction}
+  SHAP and LIME answer ``\emph{why} this prediction?'' A \textbf{counterfactual} answers a
+  different, often more useful question:
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{What is the smallest change to the input that would flip the prediction?}}}
+  \vskip 6pt
+  \begin{itemize}\small
+    \item ``Flip'' needs a \textbf{decision}, so we switch from the (regression) bike model to
+      the \textbf{ch.\,3 bank-marketing} classifier --- \emph{will this client subscribe?}
+      (realistic model, the leaky \texttt{duration} feature removed).
+    \item A counterfactual is \textbf{actionable}: it tells you \emph{what to change}, not just
+      what mattered.
+  \end{itemize}
+  \vfill
+  \footnotesize \textit{Example:} a client predicted \textbf{won't subscribe} --- the
+  counterfactual says that \emph{had the bank called in a different month}, the model would flip
+  to \textbf{will subscribe}.
+\end{frame}
+
+\begin{frame}{Writing it as an optimization problem}
+  \textbf{Notation:} $\xv$ is the \textbf{factual} point (the client the model says
+  \emph{won't subscribe}); $y'$ is the \textbf{desired} outcome (``subscribes''), possibly an
+  interval. We search for a counterfactual $\xv'$.
+  \vskip 4pt
+  A \textbf{valid} counterfactual must do two things at once, so we penalise both:
+  \[
+    \argmin_{\xv'} \;\;
+    \lambda_1 \underbrace{o_{\text{target}}\big(\hat f(\xv'), y'\big)}_{\text{does it flip?}}
+    \;+\;
+    \lambda_2 \underbrace{o_{\text{prox}}(\xv', \xv)}_{\text{is it a small change?}}
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Distance in target space} $o_{\text{target}}$:
+      \begin{itemize}\footnotesize
+        \item Regression / predicted probability: $|\hat f(\xv') - y'|$
+        \item Hard labels: $\mathds{1}_{\{\hat f(\xv') \neq y'\}}$
+      \end{itemize}}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      $\lambda_1, \lambda_2$ trade the two off. Push $\lambda_1$ up and you always flip the
+      prediction --- possibly by changing everything.}}
+  \end{columns}
+  \vskip 4pt
+  \footnotesize Distance in \emph{feature} space is the harder one, because features have
+  different types and units --- next slide.
+\end{frame}
+
+\begin{frame}{Distance in feature space: the Gower distance}
+  A bank row mixes numbers (\texttt{balance}, \texttt{age}) with categories (\texttt{job},
+  \texttt{month}). \textbf{Gower} handles both, and normalises each to $[0,1]$:
+  \[
+    o_{\text{prox}}(\xv', \xv) \;=\; \mathrm{Gower}(\xv', \xv)
+      \;=\; \frac{1}{p}\sum_{j=1}^{p} \delta_G(x'_j, x_j) \;\in\; [0,1]
+  \]
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \[
+      \delta_G(x'_j, x_j) =
+      \begin{cases}
+        \dfrac{|x'_j - x_j|}{\widehat{R}_j} & x_j \text{ numerical} \\[8pt]
+        \mathds{1}_{\{x'_j \neq x_j\}} & x_j \text{ categorical}
+      \end{cases}
+    \]
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      $\widehat{R}_j$ is feature $j$'s \textbf{range in the training data}. Dividing by it is what
+      makes ``+500 in balance'' and ``+3 years of age'' comparable at all.}}
+  \end{columns}
+  \vskip 6pt
+  \footnotesize A categorical feature contributes $0$ or $1$ --- nothing in between. Changing
+  \texttt{month} from June to April costs the same as changing it to December.
+\end{frame}
+
+\begin{frame}{Two more objectives: sparsity and plausibility}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Sparsity} --- change \emph{few} features. People act on short advice, not on
+    ``adjust these nine things''. Count the changes ($L_0$):
+    \[ o_{\text{sparse}}(\xv', \xv) = \sum_{j=1}^{p} \mathds{1}_{\{x'_j \neq x_j\}} \]
+    \column{0.5\textwidth}
+    \textbf{Plausibility} --- the suggestion must be a \emph{realistic} row, not an impossible one
+    (deck 2's extrapolation trap again). Proxy: stay close to real data, via the nearest training
+    point $\xv^{[1]}$:
+    \[ o_{\text{plaus}}(\xv', \Xmat) = \mathrm{Gower}(\xv', \xv^{[1]}) \]
+  \end{columns}
+  \vskip 6pt
+  Putting all four together gives the objective the libraries actually optimise:
+  \[
+    \argmin_{\xv'} \;
+    \lambda_1 o_{\text{target}}\big(\hat f(\xv'), y'\big)
+    + \lambda_2 o_{\text{prox}}(\xv', \xv)
+    + \lambda_3 o_{\text{sparse}}(\xv', \xv)
+    + \lambda_4 o_{\text{plaus}}(\xv', \Xmat)
+  \]
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Actionability} is the fifth wish, and it is \emph{not} a $\lambda$ --- it is a
+    \textbf{constraint}: freeze the features the person cannot change (age, race), and optimise
+    only over the rest.}}
+\end{frame}
+
+\begin{frame}{The five wishes, and one real counterfactual}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Each objective term is one of the things we want:
+    \vskip 2pt
+    {\small
+    \begin{tabular}{@{}l@{\ \ }l@{}}
+      \textbf{Validity} & $o_{\text{target}}$ --- it actually flips \\
+      \textbf{Proximity} & $o_{\text{prox}}$ --- a small change \\
+      \textbf{Sparsity} & $o_{\text{sparse}}$ --- few features \\
+      \textbf{Plausibility} & $o_{\text{plaus}}$ --- a realistic row \\
+      \textbf{Actionability} & a \emph{constraint}, not a term \\
+    \end{tabular}}
+    \vskip 6pt
+    \footnotesize They pull against each other: the closest counterfactual is often the least
+    plausible one.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/cf_flip_bank.pdf}
+    \end{center}
+    \vskip 2pt
+    \footnotesize Real DiCE counterfactual (bank): \texttt{age}, \texttt{job}, \texttt{balance},
+    \texttt{poutcome} \textbf{frozen} (actionability); only the \textbf{call month} moved --- one
+    change, and the model crosses the decision line.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Two warnings before you hand one to a customer}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{1. The Rashomon effect}
+    \vskip 2pt
+    \begin{itemize}\small
+      \item The optimum is \textbf{not unique} --- many equally close, equally valid
+        counterfactuals exist.
+      \item So many equally good ``explanations'' exist for the same decision.
+      \item A nonlinear model can even offer \textbf{contradictory} advice (raise \emph{or} lower
+        the same feature). Which one do you show?
+    \end{itemize}
+    \vskip 2pt
+    \footnotesize Still an open problem in IML.
+    \column{0.5\textwidth}
+    \textbf{2. It explains the model, not the world}
+    \vskip 2pt
+    \begin{itemize}\small
+      \item ``Wait 5 years and you'd be approved'' --- but in 5 years the applicant's \emph{job},
+        \emph{income} and \emph{balance} have changed too. Features are
+        \textbf{causally linked}; the counterfactual moved one in isolation.
+      \item \textbf{Model drift:} the bank retrains, and the advice you gave is now invalid.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      A counterfactual is a statement about \textbf{a fitted function}, not a promise about
+      reality.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Counterfactuals in code}
+\begin{lstlisting}
+import dice_ml
+d   = dice_ml.Data(dataframe=df, continuous_features=num, outcome_name="y")
+m   = dice_ml.Model(model=clf, backend="sklearn")   # any fitted classifier
+exp = dice_ml.Dice(d, m, method="random")
+
+cf = exp.generate_counterfactuals(
+        client, total_CFs=3, desired_class="opposite",
+        features_to_vary=["contact", "month", "campaign"])  # actionable only
+cf.visualize_as_dataframe()
+\end{lstlisting}
+  \vskip 2pt
+  \footnotesize Libraries: \textbf{DiCE} (diverse counterfactuals), \textbf{Alibi}. Constrain
+  \texttt{features\_to\_vary} so the advice stays \emph{actionable}.
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Same data, four rankings}
+  One bike dataset, (mostly) one model --- four ``importance'' methods, four different top-3s:
+  \vskip 4pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l l}
+      \textbf{Method} & \textbf{Top 3 features} \\
+      \hline
+      Linear coefficients (deck 1) & \texttt{yr}, \texttt{atemp}, \texttt{season} \\
+      Tree impurity (deck 1) & \texttt{temp}, \texttt{yr}, \texttt{atemp} \\
+      Permutation / PFI (deck 2) & \texttt{yr}, \texttt{atemp}, \texttt{temp} \\
+      SHAP (deck 3) & \texttt{yr}, \texttt{temp}, \texttt{hum} \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \footnotesize They mostly agree on \texttt{yr}/temperature, but disagree on the rest
+  (\texttt{season}? \texttt{hum}? \texttt{temp} vs \texttt{atemp}?). \textbf{That} is what
+  ``importance is method-dependent'' means --- always say \emph{which} importance, on \emph{what} data.
+\end{frame}
+
+\begin{frame}{Which method when? (the whole chapter)}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.35}
+    \begin{tabular}{p{5.2cm} p{7.2cm}}
+      \textbf{You want\dots} & \textbf{Reach for\dots} \\
+      \hline
+      to read the model itself & a \textbf{glass-box model} --- coefficients / a tree / rules (deck 1) \\
+      global ``which features matter'' & \textbf{PFI} or \textbf{SHAP bar} (decks 2--3) \\
+      ``how does a feature act'' & \textbf{PDP / ICE} or \textbf{SHAP dependence} (decks 2--3) \\
+      ``why this one prediction'' & \textbf{SHAP waterfall} or \textbf{LIME} (deck 3) \\
+      ``what would change the outcome'' & \textbf{counterfactuals} --- DiCE / Alibi (deck 3) \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize Whatever you pick: \textbf{(1)} correlated features mislead them all, \textbf{(2)}
+  different methods rank differently (previous slide), \textbf{(3)} none of it is \emph{causation}.
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{SHAP} borrows the \textbf{Shapley value} from \textbf{cooperative game theory}
+      (Shapley, 1953): features are players, the payout is $\hat f(\xv) - \mathbb{E}[\hat f]$, and
+      each feature gets its average marginal contribution. So
+      $\hat f(\xv) = \text{base} + \sum_j \phi_j$.
+    \item Read the four plots: \textbf{waterfall} (one prediction), \textbf{bar} (global importance),
+      \textbf{beeswarm} (global, colour = value), \textbf{dependence} (effect shape + interaction).
+    \item \textbf{TreeSHAP} makes it the default for trees/boosting; SHAP \textbf{unifies} PFI \& PDP
+      and adds a local view.
+    \item \textbf{LIME} fits a local surrogate: \textbf{sample} around the point, \textbf{weight}
+      by proximity $\pi(\zv)$, \textbf{fit} a sparse linear model on the black box's own
+      predictions. Handy, but the randomness and the kernel width $\sigma$ make it \textbf{unstable}.
+    \item \textbf{Counterfactuals} answer ``what would change the outcome'', as an optimization:
+      $\lambda_1 o_{\text{target}} + \lambda_2 o_{\text{prox}} + \lambda_3 o_{\text{sparse}}
+      + \lambda_4 o_{\text{plaus}}$, with actionability as a \textbf{constraint}. Beware the
+      \textbf{Rashomon effect} --- the answer is not unique.
+    \item Everything explains the \textbf{model}, not causation --- and plots are easy to over-read.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{That's interpretability:} read the model when you can, explain it when you can't ---
+    importance, effects, and per-prediction attributions, each answering a different question.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Interpretability chapter (ml/05_interpretability/), deck 3 of 3. SHAP (plots + how to read)
+%     + LIME (2 frames) + counterfactuals (DiCE), intuition-first; cut: Shapley axioms/orderings
+%     math, KernelSHAP weighting, SAGE.
+%   - Anchor: bike-sharing RF from decks 1-2.
+%   - Generated (py_src/interp_shap_figs.py, ma, shap lib): all 4 SHAP plots on the bike RF --
+%     shap_waterfall_bike (mixed instance 567, pred 4311 vs base 4502; hum down, yr/temp up),
+%     shap_bar (mean|SHAP|), shap_beeswarm, shap_dependence (temp 0-1, matches the chapter scale).
+%   - Reused (LMU IML, CC BY 4.0, credited): shapley_1 (fair-payout framing), lime_husky
+%     (husky/wolf -> snow), lime_robustness (instability).
+%   - Counterfactuals section: DiCE on ch3 bank-marketing (duration dropped); cf_flip_bank.pdf
+%     (py_src/interp_counterfactual_figs.py) is a before/after probability bar crossing the 0.5
+%     decision line (client 6190: month jun->apr flips p(yes) 0.44->0.78, single actionable change;
+%     age/job/balance/poutcome frozen). Replaced the old 8-row LaTeX table with the figure.
+%     Desiderata: validity, proximity, sparsity, plausibility, actionability.
+%   - Added (review polish): global-surrogate frame (LIME's global sibling, TikZ box diagram) in the
+%     LIME section; a calibration one-liner (L13) in the SHAP-caveat box. LIME-robustness image
+%     shrunk to 0.86\linewidth to clear a caption/page-number collision.
+%   - Student-review pass (Sonnet, 2026-07-24): shap_dependence regenerated with color=sv (auto-picks
+%     yr as the strongest-interacting feature -> the "colour reveals interactions" claim is now shown);
+%     "rise then plateau" corrected to "rise, peak, dip at extreme heat" (matches the real SHAP curve);
+%     clever-Hans glossed; LIME-robustness caption fixed (was "two runs, same point" -> the image shows
+%     several disagreeing fits near one point).
+%   - 2026-07-28 pass (user requests), LMU sources now cloned locally at _reference/lecture_iml:
+%     * GAME-THEORY ORIGIN: new frame before the worked example (Shapley 1953, cooperative games,
+%       value function v(S) with v(empty)=0, marginal contribution Delta(j,S)=v(S+j)-v(S), and the
+%       players->features / payout->f(x)-E[f] translation table). Source: LMU slides01-shapley-game-theory.
+%       Nobel line is deliberately hedged: Shapley shared the 2012 Economics prize with Roth for STABLE
+%       MATCHING / market design, NOT for the Shapley value - verified, do not "simplify" this away.
+%     * REORDERED: the two embedded LMU formal slides (lmu_shapley_value/lmu_shapley_formula) now come
+%       AFTER our Adi/Budi/Gogi worked example, not before, plus a bridging frame ("Now the same thing,
+%       formally") that maps v(S) -> our payout table and the |S|!(p-|S|-1)!/p! weight -> our #orders column.
+%     * LIME rebuilt 1 -> 7 frames following LMU slides04-le-lime: locality assumption + surrogate
+%       (interpretable AND locally faithful); the three ingredients (proximity kernel
+%       pi(z)=exp(-d(x,z)^2/sigma^2), weighted loss, complexity J) and the argmin L + J objective;
+%       then FOUR step frames using LMU's own figure sequence, copied to fig/ as lmu_lime_s1_point
+%       (=lime2), s2_sample (=lime3), s3_weight (=lime4), s4_fit (=lime5). The husky predict-first
+%       \pause was REMOVED (user request) and the husky frame now also explains superpixel sampling.
+%     * COUNTERFACTUALS deepened 1 -> 5 frames following LMU slides07-le-counterfactuals-optim:
+%       the 2-term objective (o_target with its regression/probability/hard-label cases + o_prox),
+%       the Gower distance with both delta_G cases and the range normaliser R_j, then o_sparse (L0)
+%       and o_plausible (Gower to the nearest training point) and the full 4-lambda objective;
+%       the 5 desiderata are now MAPPED onto those terms (actionability = a constraint, not a lambda);
+%       new closing frame on the Rashomon effect + model-vs-real-world (causal links, model drift).
+%     * Local macro \zv added (../preamble has \xv but no \zv).
+%   - Student-review pass (Sonnet, 2026-07-28) - all findings verified against source before applying:
+%     * "husky-vs-wolf classifier was ~90% accurate" was UNSOURCED (Ribeiro et al. 2016 trains on 20
+%       images and tests on 60; no 90% figure appears). Replaced with a claim checkable from our OWN
+%       embedded figure: lime_husky_full.png has 6 panels of which 5 are correct (bottom-left husky
+%       predicted wolf). Counted panel by panel. Do not reintroduce a percentage.
+%     * "calibrated (L13)" was an OFF-BY-ONE: the delivered numbering in 03_classification.qmd is
+%       [13] Threshold tuning, [14] Calibration. Corrected to L14.
+%     * Counterfactual notation frame said "the client who was refused" - wrong domain (that is the
+%       credit/loan framing from LMU's slides). Our running example is bank MARKETING, so it is now
+%       "the client the model says won't subscribe", matching the neighbouring frames.
+%     * LIME step-2 caption claimed the sampled points were "coloured by the black box's prediction";
+%       in LMU's lime3 figure every dot is the same blue. Caption corrected to what is actually drawn.
+%     Reviewer also re-derived the Adi/Budi/Gogi Shapley values independently (20/30/40, sum 90) and
+%     confirmed the counterfactual objective is stated identically on all three slides where it appears.
+%   - SHAP "how it's computed" pass (2026-07-24, user request): embedded two LMU IML slides
+%     (fig/lmu_shapley_value.pdf = value function + marginal contribution; fig/lmu_shapley_formula.pdf
+%     = Shapley order-definition formula; extracted from LMU slides02-shapley-ml pp.6-7, CC BY 4.0),
+%     then a house-style worked example (Adi/Budi/Gogi, names via qarakusi.am): coalition payouts
+%     v(S) -> average marginal contribution over 6 orders -> phi=(20,30,40) summing to 90 (efficiency);
+%     verified with itertools.permutations. Added a "2^n explodes -> KernelSHAP (sample coalitions +
+%     weighted linear model) / TreeSHAP (exact, polynomial)" frame; trimmed the later practice frame's
+%     duplicate TreeSHAP bullet.
+%   - Husky example completed (2026-07-24, user request): added a "LIME's proof" frame with the full
+%     6-pair LMU figure fig/lime_husky_full.png (= LMU lime-wolfhusky3.png; photo + LIME explanation per
+%     pair, snow superpixels highlighted; bottom-left husky misread as wolf) -- the evidence the old
+%     3-image lime_husky.png lacked for the clever-Hans story.
+%   - Callbacks: deck 1 (glass-box), deck 2 (PFI ~ SHAP bar, PDP ~ SHAP dependence; ice-cream
+%     != causation), ch4 trees/boosting (TreeSHAP). Chapter decision guide in the wrap-up.
+%   - Design doc: 24_shap_lime_OUTLINE.md (v2). Interview-locked: hybrid figures (reuse LMU
+%     bar/beeswarm/dependence + animation, generate waterfall), bike RF, LIME = 2 frames.
+% =============================================================

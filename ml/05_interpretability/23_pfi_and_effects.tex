@@ -1,0 +1,777 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+% Var is not in ../preamble (which defines \E but no variance operator); used by the
+% fANOVA variance-decomposition and H-statistic frames.
+\newcommand{\var}{\operatorname{Var}}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{PFI \& Feature Effects (PDP / ICE)}
+\subtitle{Model-agnostic: which features matter, and how}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Open the black box --- from any model}
+  Deck 1 read the model directly (coefficients, tree splits). But a random forest, a boosting
+  model, a neural net --- you \emph{can't} read those.
+  \vfill
+  \textbf{Model-agnostic} tools work on \emph{any} fitted model and answer two questions:
+  \begin{itemize}\small
+    \item \textbf{How much} does a feature matter? $\to$ \textbf{Permutation Feature Importance (PFI)}.
+    \item \textbf{How} does a feature act on the prediction? $\to$ \textbf{feature effects (PDP / ICE)}.
+  \end{itemize}
+  \vfill
+  \footnotesize Running example continues: a \textbf{bike-sharing} random forest (deck 1's data).
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Permutation feature importance}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{How much does a feature matter?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Make a feature useless and watch the error rise.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Permutation feature importance: the idea}
+  \textbf{Make feature $X_j$ useless} by \textbf{permuting} its column (shuffle its values across
+  rows): same marginal distribution, but its link to the target is broken. Then see how much the
+  error rises:
+  \[
+    \mathrm{PFI}_j \;=\; \underbrace{\mathbb{E}\big[L(\hat f(\text{$X_j$ permuted}), Y)\big]}_{\text{error after}}
+    \;-\; \underbrace{\mathbb{E}\big[L(\hat f(X), Y)\big]}_{\text{baseline error}}.
+  \]
+  \begin{itemize}\small
+    \item Big rise $\Rightarrow$ the model leaned on $X_j$. Near zero $\Rightarrow$ it didn't.
+    \item \textbf{Permute, don't drop} --- the model is already trained; we can't remove a feature
+      without refitting a \emph{different} model.
+    \item Repeat the shuffle several times and average (it's random).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Permutation importance, step by step}
+  \begin{center}
+    \only<1>{\includegraphics[page=2, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<2>{\includegraphics[page=3, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<3>{\includegraphics[page=4, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<4>{\includegraphics[page=5, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<5>{\includegraphics[page=6, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+    \only<6>{\includegraphics[page=7, trim={0 5 0 66}, clip, width=0.82\linewidth]{fig/pfi_demo2.pdf}}%
+  \end{center}
+  \vskip 2pt
+  \footnotesize \textbf{Perturb} (permute the feature) $\to$ \textbf{predict} on both versions $\to$
+  \textbf{aggregate} the change in loss, averaged over rows and repeats.
+  \hfill \scriptsize Source: LMU IML (CC BY 4.0).
+\end{frame}
+
+% --- Embedded LMU IML slide: the fully worked PFI computation (two permutations -> average) ---
+\begin{frame}[plain]
+  \centering
+  \includegraphics[width=\paperwidth,height=0.9\paperheight,keepaspectratio]{fig/lmu_pfi_worked.pdf}\\[-2pt]
+  {\scriptsize Source: LMU Interpretable Machine Learning (CC BY 4.0)}
+\end{frame}
+
+\begin{frame}{PFI on the bike model}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Permuting each feature on the \textbf{test set}, measured as the rise in MAE:
+    \begin{itemize}\small
+      \item \texttt{yr}, \texttt{atemp}/\texttt{temp} dominate. By hand: baseline MAE $\approx 455$;
+        shuffle \texttt{yr} $\to$ MAE $\approx 1225$; $\text{PFI}(\texttt{yr}) \approx \mathbf{770}$.
+      \item Calendar/weather minutiae barely matter.
+      \item Error bars = variation over repeated shuffles.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize Model-agnostic: same recipe would work on boosting, an SVM, a neural net.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pfi_bar.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Train or test? They answer different questions}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Predict-first:} an \texttt{xgboost} model overfits noise. Which features does PFI flag
+    --- on train vs.\ on test?
+    \vskip 4pt
+    \pause
+    \begin{itemize}\small
+      \item \textbf{Train PFI} highlights whatever the model \emph{overfit} to (spurious links).
+      \item \textbf{Test PFI} shows what actually \emph{generalizes} --- here, nothing.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      For ``which features help the model generalize?'', compute PFI on \textbf{test} data.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pfi_test_vs_train.pdf}\\[-2pt]
+      \scriptsize Illustrative example (not the bike model). Source: LMU IML (CC BY 4.0).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The correlation trap}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Permuting a feature that is \textbf{correlated} with others creates \textbf{impossible rows}
+    (e.g.\ a hot \texttt{temp} with a freezing \texttt{atemp}).
+    \vskip 4pt
+    \begin{itemize}\small
+      \item The model is then scored on inputs it \emph{never sees} in reality (extrapolation).
+      \item $\Rightarrow$ PFI can \textbf{inflate} the importance of correlated features.
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize \textbf{Note the flip:} correlation \emph{deflated} impurity importance (deck 1);
+    here it \emph{inflates} PFI. \quad \textbf{Next three slides:} two repairs --- permuting more
+    carefully, and not permuting at all --- and what they reveal about \texttt{temp}/\texttt{atemp}.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/trap_temp_atemp.pdf}\\[-2pt]
+      \scriptsize Bike: \texttt{temp}/\texttt{atemp} corr.\ $0.99$; permuting \texttt{temp} makes impossible rows.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Repair 1 --- Conditional Feature Importance (CFI)}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    The trap came from permuting \textbf{freely}. So don't: permute $X_j$ only \textbf{among rows
+    that look alike on the other features} --- that is the ``\textbf{conditional}'' in the name.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item Group the rows by $\xv_{-j}$ (e.g.\ the leaves of a small tree predicting $X_j$ from
+        the rest), then shuffle $X_j$ \emph{inside each group}.
+      \item Warm days get swapped with warm days $\Rightarrow$ no freezing-\texttt{atemp} /
+        hot-\texttt{temp} monsters.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{It answers a different question.}
+      \textbf{PFI:} ``does the model \emph{use} this feature?''
+      \textbf{CFI:} ``does this feature carry information \emph{beyond what the others already
+      give me}?''}}
+    \column{0.46\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\small
+      \textbf{Consequence to expect:} for two near-duplicate features, CFI sends \textbf{both}
+      toward zero --- each is redundant \emph{given} the other. That is correct for the question
+      CFI asks, and badly misleading if you read it as ``temperature doesn't matter.''}}
+    \vskip 8pt
+    \footnotesize On bike this drops \texttt{temp} from $284$ to $\mathbf{18}$ and \texttt{atemp}
+    from $413$ to $\mathbf{39}$ MAE --- while \texttt{yr}, which nothing can stand in for, barely
+    moves ($766 \to 671$).
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Repair 2 --- Leave-One-Covariate-Out (LOCO)}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Deck's earlier warning was ``we can't drop a feature without refitting a \emph{different}
+    model.'' \textbf{Leave-One-Covariate-Out} (\textbf{LOCO}; Lei et al., 2018) says: fine,
+    \textbf{refit}.
+    \[
+      \mathrm{LOCO}_j \;=\; \underbrace{L\big(\hat f_{-j}\big)}_{\text{model retrained without } j}
+      \;-\; \underbrace{L\big(\hat f\big)}_{\text{full model}}
+    \]
+    \begin{itemize}\small
+      \item No permuting at all $\Rightarrow$ \textbf{no impossible rows, ever}.
+      \item Cost: \textbf{$p$ refits} instead of $p$ shuffles.
+      \item Question asked: ``would I lose anything by \textbf{never collecting} this feature?''
+    \end{itemize}
+    \column{0.46\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      \textbf{The bike headline:} PFI scores \texttt{atemp} at $413$ --- \textbf{second only to
+      \texttt{yr}} --- yet $\mathrm{LOCO}(\texttt{atemp}) = \mathbf{-0.7}$ MAE: drop it and the
+      model gets \emph{very slightly better}.
+      \vskip 3pt
+      Nothing is broken --- \texttt{temp} simply carries the same signal. \textbf{``Important''
+      and ``needed'' are different words.}}}
+    \vskip 6pt
+    \footnotesize LOCO can go \textbf{negative}: removing a redundant feature can help by
+    shortening the model's search.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Three questions, three answers}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    All three are measured in the \textbf{same unit} --- rise in test MAE --- so you can read them
+    off one axis:
+    \vskip 4pt
+    \begin{itemize}\small
+      \item \texttt{yr}: all three agree ($766 / 671 / 653$). \textbf{Nothing substitutes for it.}
+      \item \texttt{temp}, \texttt{atemp}: huge under PFI, $\approx 0$ under CFI and LOCO.
+        \textbf{Each is only redundant because the other exists.}
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
+      A feature scoring high on PFI but $\approx 0$ on LOCO is the signature of a
+      \textbf{duplicated signal} --- not of an unimportant feature.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pfi_cfi_loco_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{And one more: SAGE, the fair split of performance}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    PFI, CFI and LOCO each remove \textbf{one} feature at a time --- which is exactly why
+    duplicated features confuse them. \textbf{SAGE} (\emph{Shapley Additive Global importancE};
+    Covert et al., 2020) removes features in \textbf{every possible subset} and gives each one its
+    \emph{average} contribution to the \textbf{loss}.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item That averaging-over-subsets is the \textbf{Shapley} idea --- the whole of deck 3, but
+        applied to the model's \emph{error} instead of a single prediction.
+      \item Because it is a fair split, the scores \textbf{add up} to the model's total loss
+        reduction: importance as \emph{shares of performance}.
+      \item Redundant features \textbf{share} the credit rather than each looking essential
+        (PFI) or each looking worthless (CFI/LOCO).
+    \end{itemize}
+    \column{0.44\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\small
+      \textbf{The catch:} $2^p$ subsets. SAGE is \textbf{sampled}, not exact, and is by far the
+      most expensive method in this deck. Library: \texttt{sage-importance}.}}
+    \vskip 8pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.96\linewidth}{\small
+      \textbf{Pick by question, not by fashion:}
+      \vskip 3pt
+      \begin{tabular}{@{}l@{\ }l@{}}
+        \textbf{PFI} & does the model use it? \\
+        \textbf{CFI} & does it add new info? \\
+        \textbf{LOCO} & do I need to collect it? \\
+        \textbf{SAGE} & what is its fair share? \\
+      \end{tabular}}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Important $\neq$ causal}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Summer heat drives both \textbf{ice-cream sales} and \textbf{drownings}. A model predicting
+    drownings from ice-cream sales finds ice cream \textbf{highly important}.
+    \vskip 6pt
+    \begin{itemize}\small
+      \item PFI is right: the \emph{model} relies on ice cream.
+      \item But \textbf{banning ice cream won't stop drownings} --- it isn't the cause.
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.96\linewidth}{\small
+      Importance tells you what the \textbf{model uses}, not what \emph{causes} the outcome.}}
+    \vskip 4pt
+    {\footnotesize \textbf{In our data:} \texttt{yr} is the \#1 feature, yet the year doesn't
+    \emph{cause} rides --- it proxies the service growing. \emph{(Confounding --- a different problem
+    from the trap's impossible inputs.)}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small, >=stealth, node distance=1.1cm,
+        v/.style={draw, ellipse, inner sep=2pt, minimum width=1.9cm}]
+        \node[v, dashed, fill=gray!10] (t) at (0,1.4) {temperature};
+        \node[v, fill=armblue!12] (ic) at (-1.9,0) {ice-cream};
+        \node[v, fill=armred!12] (d) at (1.9,0) {drownings $Y$};
+        \draw[->] (t) -- (ic); \draw[->] (t) -- (d);
+        \node[draw, rounded corners, fill=armorange!15] (yh) at (-1.9,-1.5) {$\hat Y$ (model)};
+        \draw[->, armorange!80!black, thick] (ic) -- (yh);
+        \node[gray, font=\scriptsize] at (0,2.05) {(the real cause)};
+      \end{tikzpicture}
+      \\[2pt]
+      \scriptsize Model uses the \emph{proxy} (ice cream), not the cause (temperature).
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Feature effects: PDP \& ICE}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{From ``how much'' to ``how''}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Importance is one number; effects show the \emph{shape} of a feature's influence.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Functional ANOVA: decomposing a prediction}
+  Deck 1 introduced \textbf{main effects} and \textbf{interactions} in words. Here is the same
+  split, written down: a baseline, each feature acting \emph{alone}, then features acting
+  \emph{together}. It is the \textbf{functional ANOVA} (\textbf{fANOVA}) decomposition
+  (Hooker, 2004):
+  \[
+    \hat f(\xv) \;=\; \underbrace{g_\emptyset}_{\text{baseline}}
+      \;+\; \underbrace{\textstyle\sum_j g_j(x_j)}_{\text{main effects}}
+      \;+\; \underbrace{\textstyle\sum_{j<k} g_{jk}(x_j,x_k)}_{\text{2-way interactions}}
+      \;+\;\cdots
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Main effect} $g_j$: how the prediction moves as $x_j$ varies \emph{alone}
+      (averaging the rest).}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{Interaction} $g_{jk}$: the leftover when $x_j$'s effect \emph{depends on} $x_k$.
+      Zero for an \textbf{additive} model (linear with no product terms, deck 1).}}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{This one equation organises the whole deck:} the effect plots estimate the
+    $g_j$, and the interaction measures put a number on the $g_{jk}$.}}
+\end{frame}
+
+\begin{frame}{Computing the components --- and where the PDP fits}
+  Work \textbf{order by order}: average out everything not in $S$, then subtract what the
+  lower orders already explained.
+  \[
+    g_S(\xv_S) \;=\; \underbrace{\hat f_{S,\mathrm{PD}}(\xv_S)}_{\text{average out all features not in } S}
+    \;-\; \sum_{V \subsetneq S} g_V(\xv_V)
+  \]
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    {\small Unrolling the recursion:}
+    \begin{align*}
+      g_\emptyset &= \mathbb{E}[\hat f(X)] \\
+      g_j(x_j) &= \hat f_{j,\mathrm{PD}}(x_j) - g_\emptyset \\
+      g_{jk}(x_j,x_k) &= \hat f_{jk,\mathrm{PD}} - g_j - g_k - g_\emptyset
+    \end{align*}
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Read the second line again: the \textbf{centred PDP \emph{is}} the fANOVA main effect $g_j$
+      --- not an approximation of it. That is why the PDP is \emph{the} main-effect plot.}}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Two catches:} the full decomposition needs $2^p$ PD-functions (hopeless past a
+    handful of features), and the clean split \textbf{assumes independent features} --- our
+    \texttt{temp}/\texttt{atemp} problem again.}}
+\end{frame}
+
+\begin{frame}{Why ``ANOVA''? Because it splits the variance}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    Classical \textbf{ANOVA} splits the variance of an \emph{outcome} into main effects plus
+    interactions. \textbf{fANOVA} does the same for the variance of a fitted \emph{function}'s
+    predictions.
+    \vskip 4pt
+    If the features are \textbf{independent}, the components are uncorrelated, so the variance
+    splits with \textbf{no covariance terms}:
+    \[ \var[\hat f(X)] = \sum_{S} \var[g_S(X_S)] \]
+    Divide through by $\var[\hat f(X)]$ and the pieces are \textbf{fractions that sum to 1}.
+    \column{0.46\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Sobol index} --- the share of prediction variance explained by one component:
+      \[ S_V = \frac{\var[g_V(X_V)]}{\var[\hat f(X)]} \]
+      A main-effect $S_j$ answers ``how much of the model's variability is feature $j$ alone?'';
+      the higher-order ones are what is left for pairs, triples, \dots}}
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    So ``importance'' can also mean \textbf{share of variance} --- yet another definition, on top
+    of deck 1's coefficients/impurity and this deck's PFI. \textbf{Always say which one you mean.}}}
+\end{frame}
+
+\begin{frame}{Start local: one curve per observation (ICE)}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    Take \textbf{one day}. Hold everything about it fixed, sweep \texttt{temp} across its range,
+    and record what the model predicts. That is one \textbf{individual conditional expectation}
+    (\textbf{ICE}) curve --- a what-if for that single day (Goldstein et al., 2015).
+    \vskip 4pt
+    Do it for every day $\Rightarrow$ one curve each.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item The \textbf{level} differs: some days are busy, some quiet.
+      \item The \textbf{shape} is what we care about --- here almost every curve steps up around
+        \texttt{temp}$\approx 0.45$.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/ice_bike_temp.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Average the ICE curves --- and that \emph{is} the PDP}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    At each value of \texttt{temp}, take the \textbf{mean over all the curves}. The result is the
+    \textbf{partial dependence plot}.
+    \[ \hat f_{j,\mathrm{PD}}(x_j) = \frac1n \sum_{i=1}^{n} \hat f\big(x_j,\ \xv^{(i)}_{-j}\big) \]
+    \begin{itemize}\small
+      \item Centre it and you have $g_j$ --- the \textbf{fANOVA main effect} from two slides ago.
+      \item One curve replaces $731$: readable, but everything the individual curves disagreed
+        about is now \textbf{gone}.
+    \end{itemize}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/ice_pdp_bike_temp.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What the average can hide}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \textbf{Predict-first:} this PDP (orange) is \textbf{flat}. Does the feature not matter?
+    \vskip 4pt
+    \pause
+    \textbf{No.} The ICE curves \textbf{fan out}: $x$'s effect \textbf{flips sign depending on
+    another feature} --- rising for half the rows, falling for the other half, so the opposing
+    effects \textbf{cancel in the average}. The PDP hid that interaction; ICE exposes it --- exactly
+    the kind of interaction a \emph{linear} model couldn't represent (deck 1).
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/ice_interaction_toy.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize \textbf{The visual test:} \emph{parallel} ICE curves $=$ no interaction; curves that
+  \textbf{fan out} $=$ interaction. \textbf{Always look at the ICE before trusting a PDP.}
+\end{frame}
+
+\begin{frame}{PDP shares PFI's correlation trap --- and ALE fixes it}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Look again at the averaging formula: it pairs \emph{every} value of \texttt{temp} with
+    \emph{every} other row's features. With correlated features that builds the same
+    \textbf{impossible rows} as the PFI trap --- a hot \texttt{temp} on a freezing-\texttt{atemp} day.
+    \vskip 6pt
+    \textbf{ALE} (Accumulated Local Effects; Apley \& Zhu, 2020) fixes it: split the feature into
+    small windows, and inside each window ask only how the prediction changes for the rows
+    \emph{that are actually there}. Accumulate those local changes $\Rightarrow$ a
+    correlation-robust effect curve that never leaves the data.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/ale_vs_pdp_bike.pdf}\\[-2pt]
+      \scriptsize Bike \texttt{temp}: PDP overshoots at the extremes; ALE stays realistic.
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize But there is an obvious middle option we skipped --- and it is a trap. Next slide.
+\end{frame}
+
+\begin{frame}{Three ways to hold the other features ``fixed''}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    {\small
+    \textbf{PDP} --- average over \emph{all} rows:
+    \[ \mathbb{E}_{X_{-j}}\big[\hat f(x_j, X_{-j})\big] \]
+    Builds impossible rows. \textcolor{armred}{\textbf{Extrapolates.}}
+    \vskip 4pt
+    \textbf{M-plot} --- the obvious fix: average only over rows that \emph{really have} that $x_j$:
+    \[ \mathbb{E}\big[\hat f(X) \mid X_j = x_j\big] \]
+    Never extrapolates --- but warm days also have high \texttt{atemp}, \texttt{season},
+    \texttt{mnth}, so their effects get charged to \texttt{temp}.
+    \textcolor{armred}{\textbf{Confounded.}}
+    \vskip 4pt
+    \textbf{ALE} --- inside each window take the \emph{difference} in prediction; differencing
+    cancels the neighbours' contribution. \textcolor{paramgreen}{\textbf{Neither problem.}}}
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pdp_mplot_ale_bike.pdf}
+    \end{center}
+    \vskip -1pt
+    {\scriptsize The M-plot spans $\approx 4200$ rentals against ALE's $\approx 1600$: most of that
+    steepness belongs to the \emph{other} features, not to \texttt{temp}.}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Correlated features $\Rightarrow$ use ALE.}}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Feature interactions}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{When one feature's effect depends on another}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      \emph{See} it (the 2-D PDP), then put a \emph{number} on it (the H-statistic).
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Seeing an interaction: the 2-D PDP}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Vary \textbf{two} features together and average over the rest --- a partial-dependence
+    \textbf{surface}.
+    \vskip 4pt
+    \begin{itemize}\small
+      \item \textbf{No interaction} $\Rightarrow$ the bands are \textbf{parallel}: one feature's
+        effect is the same at every value of the other.
+      \item \textbf{Interaction} $\Rightarrow$ the bands \textbf{fan / bend}: here $x_1$'s effect
+        \textbf{reverses} with the sign of $x_2$ (a clean $y=x_1x_2$ toy).
+    \end{itemize}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      Illustrative on purpose --- the bike model's \emph{real} interactions are mild (we measure them
+      next).}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/pdp_2d_interaction.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{First: what exactly counts as ``no interaction''?}
+  To compare effects we first put them on the same footing --- \textbf{centre} every PD-function by
+  subtracting the baseline: $\;\hat f^{\,c}_{S,\mathrm{PD}} = \hat f_{S,\mathrm{PD}} - g_\emptyset$.
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Definition.} $x_j$ and $x_k$ \textbf{do not interact} if their joint effect is just the
+    two separate effects added up:
+    \[ \hat f^{\,c}_{jk,\mathrm{PD}}(x_j,x_k) \;=\; \hat f^{\,c}_{j,\mathrm{PD}}(x_j)
+       \;+\; \hat f^{\,c}_{k,\mathrm{PD}}(x_k) \]}}
+  \vskip 6pt
+  So the \textbf{interaction is whatever is left over} when you subtract the two main effects from
+  the joint one:
+  \[
+    \underbrace{\hat f^{\,c}_{jk,\mathrm{PD}}(x_j,x_k)
+      - \hat f^{\,c}_{j,\mathrm{PD}}(x_j) - \hat f^{\,c}_{k,\mathrm{PD}}(x_k)}_{
+      \textstyle =\; g_{jk}(x_j,x_k)\ \text{ --- the fANOVA interaction component}}
+  \]
+  \vskip 2pt
+  \footnotesize For an \textbf{additive} model this leftover is $0$ at every point. All that remains
+  is to turn ``how big is the leftover?'' into one number.
+\end{frame}
+
+\begin{frame}{Friedman's H: the leftover as a fraction}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Take the \textbf{variance of the leftover}, relative to the variance of the joint effect
+    (Friedman \& Popescu, 2008 --- \emph{the same paper as RuleFit}, deck 1):
+    \[
+      H^2_{jk} = \frac{\var\big[\hat f^{\,c}_{jk} - \hat f^{\,c}_{j} - \hat f^{\,c}_{k}\big]}
+                      {\var\big[\hat f^{\,c}_{jk}\big]}
+    \]
+    In practice, the sum over the rows:
+    \[
+      H^2_{jk} = \frac{\sum_i \big(\hat f^{\,c}_{jk} - \hat f^{\,c}_{j} - \hat f^{\,c}_{k}\big)^2}
+      {\sum_i \big(\hat f^{\,c}_{jk}\big)^2}
+      \quad \text{\footnotesize (at each row $i$)}
+    \]
+    \vskip 2pt
+    {\small Dividing by the joint effect makes it a \textbf{share}, so $H \in [0,1]$ and pairs are
+    comparable: $0 =$ perfectly additive, $\to 1 =$ almost all interaction.}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/h_statistic_bar.pdf}
+    \end{center}
+    \vskip -1pt
+    {\scriptsize All $H < 0.2$: the bike model is \textbf{mostly main effects};
+    \texttt{temp}$\times$\texttt{season} ($H{=}0.19$) leads, but modestly.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Does a feature interact with \emph{anything}? ($H_j$) --- and the caveats}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Same construction, but split the world into \textbf{feature $j$} and \textbf{everything else}
+    $(-j)$ instead of two single features:
+    \[
+      H^2_{j} = \frac{\sum_i \big(\hat f^{\,c}(\xv^{(i)})
+        - \hat f^{\,c}_{j}(x^{(i)}_j) - \hat f^{\,c}_{-j}(\xv^{(i)}_{-j})\big)^2}
+      {\sum_i \big(\hat f^{\,c}(\xv^{(i)})\big)^2}
+    \]
+    One number per feature: \emph{``is this feature additive, or does it depend on the rest of the
+    row?''} On bike, \texttt{temp} leads at $0.21$ --- the same feature whose curve bends (deck 1).
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\scriptsize
+      \textbf{Caveats.} \textbf{(1)} Costly: a $k$-way $H$ needs $\approx 2^k$ PD-functions.
+      \textbf{(2)} \textbf{Correlation inflates it} --- we dropped \texttt{atemp} for that reason.
+      \textbf{(3)} \textbf{No natural threshold} --- read $H$ as a \emph{ranking}.
+      \textbf{(4)} Not in \texttt{sklearn}: use \texttt{pyartemis}.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/h_overall_bar.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{In \texttt{sklearn}}
+\begin{lstlisting}
+from sklearn.inspection import permutation_importance, PartialDependenceDisplay
+
+# PFI on the TEST set -- works for ANY fitted model
+r = permutation_importance(model, X_test, y_test, n_repeats=20,
+                           scoring="neg_mean_absolute_error")
+r.importances_mean         # rise in MAE per feature = importance
+
+# feature effects: PDP (average) + ICE (one line per row)
+PartialDependenceDisplay.from_estimator(model, X, ["temp", "hum"])      # PDP
+PartialDependenceDisplay.from_estimator(model, X, ["temp"], kind="both")  # PDP + ICE
+PartialDependenceDisplay.from_estimator(model, X, [("temp", "season")])   # 2-D PDP (interaction)
+\end{lstlisting}
+  \vskip 2pt
+  \footnotesize Note what is \textbf{missing} here: \texttt{sklearn} has no ALE and no
+  H-statistic. For those you leave \texttt{sklearn} --- next slide.
+\end{frame}
+
+\begin{frame}{Beyond \texttt{sklearn}: which library has what}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{p{3.5cm} p{8.4cm}}
+      \textbf{You want\dots} & \textbf{Use\dots} \\
+      \hline
+      PFI & \texttt{sklearn} (\texttt{permutation\_importance}), \texttt{dalex}, \texttt{alibi} \\
+      \textbf{CFI} / \textbf{LOCO} & \texttt{fippy}, or a few lines by hand (group $\to$ shuffle;
+        or drop $\to$ refit) \\
+      \textbf{SAGE} & \texttt{sage-importance} \quad\textcolor{armred}{(not in \texttt{sklearn})} \\
+      PDP / ICE & \texttt{sklearn} (\texttt{PartialDependenceDisplay}), \texttt{dalex},
+        \texttt{interpret} (InterpretML) \\
+      \textbf{ALE} / \textbf{M-plots} & \texttt{alibi}, \texttt{PyALE}, \texttt{effector},
+        \texttt{dalex} \quad\textcolor{armred}{(not in \texttt{sklearn})} \\
+      \textbf{H-statistic} & \texttt{pyartemis}
+        \quad\textcolor{armred}{(not in \texttt{sklearn})} \\
+      SHAP, counterfactuals & \texttt{shap}, \texttt{dice-ml}, \texttt{alibi} \hfill (deck 3) \\
+      Glass-box models & \texttt{interpret} (EBM), \texttt{imodels} (RuleFit, deck 1) \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \footnotesize \textbf{One-stop shops:} \texttt{dalex} and \texttt{alibi} cover most of this deck
+  in one API. \quad \textbf{In R:} \texttt{iml} (Molnar's own) and \texttt{DALEX}.
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    Name trap: \texttt{pip install pyartemis}, but \texttt{import artemis} --- plain
+    \texttt{artemis} on PyPI is an unrelated package.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Model-agnostic} tools open any black box.
+    \item \textbf{PFI} (\emph{how much}): permute a feature, measure the error rise, on \textbf{test}
+      data. Watch the \textbf{correlation trap}, and remember \textbf{important $\neq$ causal}.
+    \item Four methods, \textbf{four different questions}: \textbf{PFI} (does the model use it?),
+      \textbf{CFI} (new info beyond the others?), \textbf{LOCO} (must I collect it?), \textbf{SAGE}
+      (fair share). Bike: \texttt{atemp} $= 413$ on PFI, $\mathbf{-0.7}$ on LOCO.
+    \item \textbf{fANOVA} (Hooker, 2004) organises it all: prediction $=$ baseline $+$ main effects
+      $+$ interactions, with $g_j = $ the \textbf{centred PDP}; under independence it splits the
+      \textbf{prediction variance} (the \textbf{Sobol index}).
+    \item \textbf{ICE} (\emph{how}): one what-if curve per row. \textbf{Average them and that
+      \emph{is} the PDP} --- readable, but it can hide a sign-flipping interaction. Of the three
+      ways to average, \textbf{PDP} extrapolates and \textbf{M-plots} confound, so with correlated
+      features use \textbf{ALE} (Apley \& Zhu, 2020).
+    \item The \textbf{2-D PDP} \emph{shows} an interaction; \textbf{Friedman's H} \emph{measures} it
+      as the \textbf{leftover after removing the main effects}: pairwise $H_{jk}$, or $H_j$ for
+      ``does $j$ interact with anything?'' (bike: mostly main effects).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} \textbf{SHAP} --- one method for a \emph{single} prediction that also rolls up
+    to global importance and effects.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Interpretability chapter (ml/05_interpretability/), deck 2 of 3.
+%     Model-agnostic: PFI (how much) + feature effects PDP/ICE (how), + ALE one-liner.
+%   - Anchor: bike-sharing RF from deck 1 (data/bike-day.csv).
+%   - Generated (py_src/interp_pfi_effects_figs.py, ma): pfi_bar (PFI on test, MAE rise;
+%     top yr/atemp/temp), pdp_bike (temp/hum), ice_interaction_toy (PDP flat, ICE fans out),
+%     trap_temp_atemp (corr 0.99 -> impossible rows when permuted), ale_vs_pdp_bike (PDP overshoots
+%     at extremes, ALE realistic; manual 1D ALE, with the PDP-ALE gap SHADED + annotated ~572 rentals
+%     so it reads at slide scale). permutation_importance: importances_mean = MAE rise.
+%   - Effects section opens with a decomposition frame (f = baseline + main effects + interactions):
+%     defines MAIN EFFECT (= the PDP) and INTERACTION (effect depends on another feature; 0 = additive).
+%   - New section "Feature interactions": 2-D PDP (fig/pdp_2d_interaction.pdf, SYNTHETIC saddle y=x1*x2 --
+%     illustrative, because the bike's real interactions are mild and the real pair's plot was dominated
+%     by the temp main effect) + Friedman's H-statistic (fig/h_statistic_bar.pdf, pairwise H on the bike
+%     RF; all H<0.2 -> mostly main effects, temp x season H=0.19 strongest). H on subsampled PD grids
+%     (light); atemp excluded (0.99 corr with temp -> H artefact). Both in fig_interactions.
+%   - Effects order REVERSED 2026-07-28 (user request) to ICE -> PDP -> "what the average hides" -> ALE.
+%     Rationale: "average the curves and that IS the PDP" is exactly true of ICE (it is NOT true of ALE,
+%     which accumulates local differences under the conditional distribution - the user's original phrasing
+%     asked for ALE-first, and this ordering was chosen after flagging that). New figures ice_bike_temp.pdf
+%     (ICE only) and ice_pdp_bike_temp.pdf (SAME curves + the bold average) so the reveal is literal.
+%     pdp_bike.pdf (temp+hum panels) is superseded by that pair and no longer used in the deck.
+%   - fANOVA added 2026-07-28 (user request "mention ANOVA and fANOVA"), from LMU slides02-fd-standard-fANOVA:
+%     named the existing decomposition as functional ANOVA (Hooker 2004, KDD); added the recursive component
+%     formula g_S = f_{S,PD} - sum_{V subsetneq S} g_V (so the CENTRED PDP *is* g_j, not an approximation);
+%     added the variance-decomposition frame (why "ANOVA"): under independence Var[f] = sum_S Var[g_S],
+%     giving the Sobol index S_V = Var[g_V]/Var[f]. Caveats kept: 2^p PD-functions, independence assumption.
+%   - H-statistic expanded 1 -> 3 frames 2026-07-28 (user request), following LMU slides03-fd-h-statistic:
+%     (1) centred PD-functions + the DEFINITION of no-interaction (joint = sum of mains) so the leftover is
+%     visibly g_jk; (2) H^2_jk as variance-of-leftover / variance-of-joint, in both variance and empirical-sum
+%     form; (3) OVERALL H_j (feature j vs all others) + caveats. New figure h_overall_bar.pdf: H_j on bike =
+%     temp 0.21, yr 0.18, hum 0.16, season 0.14, mnth 0.13, windspeed 0.10, weekday 0.07, weathersit 0.04
+%     (computed with the existing pd_centered helper: pd_centered(all cols except j) IS f^c_-j).
+%     Cited Friedman & Popescu 2008 - the SAME paper as RuleFit in deck 1, an explicit callback.
+%   - Four importance methods added 2026-07-28 (user request, after I flagged them as the deck's gaps):
+%     * CFI (conditional FI): permute X_j only WITHIN groups of rows alike on X_-j. Implemented honestly
+%       in fig_pfi_cfi_loco as leaves of a DecisionTreeRegressor(max_leaf_nodes=8) fitted X_-j -> X_j,
+%       shuffling inside each leaf, 5 repeats. Was previously a single throwaway clause on the trap frame.
+%     * LOCO (Lei, G'Sell, Rinaldo, Tibshirani, Wasserman 2018, JASA 113(523)): genuinely refit without
+%       the feature. This pays off the deck's own earlier line ("we can't drop a feature without refitting
+%       a different model") which previously went nowhere.
+%     * SAGE (Covert, Lundberg, Lee 2020, NeurIPS "Understanding Global Feature Contributions With Additive
+%       Importance Measures"): Shapley applied to the LOSS; the explicit bridge into deck 3.
+%     * New figure pfi_cfi_loco_bike.pdf - all three in the SAME unit (rise in test MAE) so they share one
+%       axis. Real numbers, baseline test MAE 455.1: yr 766/671/653 (nothing substitutes for it),
+%       temp 284/18/5, atemp 413/39/-0.7. The atemp headline is the teaching moment: PFI's #1 feature has
+%       a slightly NEGATIVE LOCO. Do not "tidy" that minus sign away - it is the point.
+%   - M-plots added 2026-07-28 (same request): completes the PDP / M-plot / ALE trio, so ALE stops looking
+%     like a magic fix and becomes the third corner. New figure pdp_mplot_ale_bike.pdf; M-plot estimated as
+%     the mean of REAL predictions in a 10% moving window of temp (i.e. E[f(X)|X_j ~ x_j]). Measured spans:
+%     M-plot ~4215 rentals vs PDP ~1906 vs ALE ~1608 - the M-plot's extra steepness is atemp/season/mnth
+%     being charged to temp, which is exactly the confounding to show.
+%   - Library frame added 2026-07-28 (user request "mention other libraries not just sklearn"). All verified
+%     live on PyPI: interpret 0.7.8, alibi 0.9.6, PyALE 1.2.0, dalex 1.8.0, effector 0.5.0, shap 0.52.0,
+%     pyartemis 0.1.5. FIXED a real bug: the deck said "the artemis package" for the H-statistic, but
+%     `artemis` on PyPI is an unrelated API client - the right name is `pip install pyartemis`.
+%   - Student-review pass (Sonnet, 2026-07-24): synthetic 2-D PDP replaced a
+%     mild real one, H-frame ties PD to the PDPs, train/test figure flagged as illustrative-not-bike.
+%   - PFI step-by-step (2026-07-24, user request): embedded LMU IML slide fig/lmu_pfi_worked.pdf (the fully
+%     worked PFI computation -- two permutations -> PFI_S = 1/2(0.267+0.4); from LMU slides02-fi-pfi p.9,
+%     CC BY 4.0) right after our pfi_demo2 animation, to slow the too-quick step-by-step.
+%   - Reused (LMU IML, CC BY 4.0, credited): pfi_demo2 (pages 2-7 animation), pfi_test_vs_train
+%     (overfit train-vs-test).
+%   - "Important != causal": ice-cream/drownings confounding via temperature (TikZ DAG).
+%   - Callbacks: deck 1 (impurity importance was biased/train-based -> PFI fixes), L14 (permutation
+%     idea), L12 (loss, train-vs-test/leakage). Forward: deck 3 (SHAP).
+%   - Design doc: 23_pfi_and_effects_OUTLINE.md (v2). Interview-locked: bike anchor, hybrid figures,
+%     ALE one-liner+fig, ice-cream/drownings causation toy.
+% =============================================================
