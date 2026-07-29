@@ -1,0 +1,883 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+% local: a compact callout box, used throughout
+\newcommand{\callout}[2]{%
+  \fcolorbox{#1}{#1!8}{\parbox{0.96\linewidth}{\small #2}}}
+
+\title{Feature Engineering}
+\subtitle{Nobody handed you those columns --- somebody made them}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% COLD OPEN
+% ================================================================
+\begin{frame}{You have used these 11 features for three lectures}
+  Here is \texttt{bike-day.csv}, exactly as it sits on disk:
+  \vskip 4pt
+  \begin{center}
+    {\tiny\ttfamily
+    \begin{tabular}{@{}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{\;}l@{}}
+      instant & dteday & season & yr & mnth & holiday & weekday & workingday & weathersit
+        & temp & atemp & hum & windspeed & casual & registered & cnt \\
+      \hline
+      1 & 2011-01-01 & 1 & 0 & 1 & 0 & 6 & 0 & 2 & 0.344 & 0.364 & 0.806 & 0.160 & 331 & 654 & 985 \\
+      2 & 2011-01-02 & 1 & 0 & 1 & 0 & 0 & 0 & 2 & 0.363 & 0.354 & 0.696 & 0.249 & 131 & 670 & 801 \\
+    \end{tabular}}
+  \end{center}
+  \vfill
+  \pause
+  \begin{center}
+    \textbf{\large Which of these columns came off a sensor or a calendar,}\\
+    \textbf{\large and which ones did a \emph{human} build?}
+  \end{center}
+  \vfill
+  \footnotesize Take a guess before the next slide. Most people say ``most of them are raw.''
+\end{frame}
+
+\begin{frame}{Exactly one column is raw}
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize, >=stealth, node distance=0.25cm,
+      raw/.style={draw=armred, very thick, rounded corners=2pt, fill=armred!12,
+                  minimum height=0.62cm, minimum width=1.9cm, align=center},
+      ext/.style={draw=armorange, very thick, rounded corners=2pt, fill=armorange!14,
+                  minimum height=0.62cm, minimum width=2.5cm, align=center},
+      der/.style={draw=armblue, thick, rounded corners=2pt, fill=armblue!8,
+                  minimum height=0.5cm, minimum width=1.55cm, align=center, font=\tiny\ttfamily},
+      ar/.style={->, thick, armblue!70}]
+
+      \node[raw] (dt) at (0, 0) {\ttfamily dteday\\[-1pt]\tiny(the date)};
+      \node[ext] (cal) at (0, -1.75) {US holiday\\[-1pt]calendar};
+      \node[ext] (wx)  at (0, 1.75) {weather\\[-1pt]station};
+
+      \node[der] (yr)   at (3.5,  0.75) {yr};
+      \node[der] (mn)   at (3.5,  0.20) {mnth};
+      \node[der] (wd)   at (3.5, -0.35) {weekday};
+      \node[der] (se)   at (3.5, -0.90) {season};
+      \node[der] (ho)   at (3.5, -1.75) {holiday};
+
+      \node[der] (ws) at (3.5, 2.25) {weathersit};
+      \node[der] (te) at (3.5, 1.75) {temp};
+      \node[der] (at) at (3.5, 1.25) {atemp};
+
+      \node[der, minimum width=2.0cm] (wk) at (7.3, -1.05) {workingday};
+
+      \foreach \t in {yr, mn, wd, se} \draw[ar] (dt) -- (\t);
+      \draw[ar] (cal) -- (ho);
+      \foreach \t in {ws, te, at} \draw[ar] (wx) -- (\t);
+      \draw[ar, armred!70] (wd) -- (wk);
+      \draw[ar, armred!70] (ho) -- (wk);
+
+      \node[align=left, font=\tiny, armblue] at (3.5, -2.35) {\ldots and \texttt{hum}, \texttt{windspeed}};
+      \node[align=center, font=\scriptsize, armred] at (7.4, 0.4)
+        {a feature built\\ \emph{from two other}\\ \emph{engineered features}};
+      \node[align=center, font=\tiny, armorange] at (0, 2.55) {joined in};
+      \node[align=center, font=\tiny, armorange] at (0, -2.45) {joined in};
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \callout{armblue}{The design matrix you have been interpreting for three lectures \textbf{is a
+  worked feature-engineering example.} Everything in this deck is already on this slide.}
+\end{frame}
+
+\begin{frame}{And one thing that should never have shipped}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    \vskip 6pt
+    \[ \texttt{casual} + \texttt{registered} = \texttt{cnt} \]
+    \vskip 2pt
+    \footnotesize Exactly. On \textbf{all 731 rows}.
+    \vskip 6pt
+    $331 + 654 = 985$ \quad\checkmark\\
+    $131 + 670 = 801$ \quad\checkmark
+    \vskip 8pt
+    Two columns shipped in the dataset \textbf{add up to the target}. Fit on them and you get a
+    near-perfect model that has learned nothing about bicycles.
+    \column{0.58\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/fe_leak_casual_registered.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \callout{armred}{This is \textbf{target leakage}, and it is the single most common way a model
+  lies to you. It will come back three more times in this deck --- every time, it enters through a
+  \emph{feature}.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What and why}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Three places a feature can come from}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The same row, many rows, or outside your table entirely.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}[fragile]{Preprocess, engineer, select --- three different verbs}
+  \begin{itemize}
+    \item \textbf{Preprocessing} (lecture 3) --- \emph{fix} the data. Same columns, cleaner.
+    \item \textbf{Feature engineering} (this lecture) --- \emph{create} columns. More columns.
+    \item \textbf{Feature selection} (next lecture) --- \emph{choose} columns. Fewer columns.
+  \end{itemize}
+  \vfill
+{\lstset{basicstyle=\ttfamily\small}
+\begin{lstlisting}
+df["hum"] = df["hum"].fillna(df["hum"].median())   # preprocess: fix
+df["discomfort"] = df["hum"] * df["windspeed"]     # engineer:   create
+X = X[["temp", "yr", "discomfort"]]                # select:     choose
+\end{lstlisting}}
+  \vfill
+  \footnotesize They get confused constantly, and the difference matters: preprocessing is
+  \emph{obligatory}, engineering is a \emph{bet}, and selection is a \emph{decision}.
+\end{frame}
+
+\begin{frame}{Predict-first: where does a machine-learning project's time go?}
+  A project has stages: collect data, explore, preprocess, engineer features, model, tune,
+  evaluate, deploy.
+  \vfill
+  \pause
+  \textbf{What fraction goes to data and features, versus modelling and tuning?}
+  \pause
+  \vskip 6pt
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/fe_project_time.pdf}
+  \end{center}
+  \vskip 2pt
+  \footnotesize Students almost always guess the reverse. \textbf{But be careful with this number:}
+  it comes from vendor surveys (CrowdFlower 2016, Anaconda 2020), not from research. Nobody has
+  measured it rigorously. Treat it as \emph{folklore that points in the right direction}.
+\end{frame}
+
+\begin{frame}{Does feature engineering still matter in 2026?}
+  The classic line is ``good features beat a better algorithm.'' That was the 2015 consensus.
+  Let us test it on \emph{our own data} --- same features, two model families:
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.72\linewidth]{fig/fe_thesis_2x2.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{armred}{The same 219 engineered features are worth $\mathbf{+81.5}$ mean absolute error
+  (MAE) to a linear model and $\mathbf{-4.3}$ to a forest --- it got slightly \emph{worse}. The
+  forest was already deriving them internally, through nested splits (lecture 22).}
+\end{frame}
+
+\begin{frame}{So when is it worth the effort?}
+  Feature engineering still wins decisively where the model \textbf{cannot get there alone}:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{External joins.} No model invents the weather. Slide 2 is the proof.
+    \item \textbf{Domain knowledge.} A ratio the model would need far more data to discover.
+    \item \textbf{Small data.} You cannot afford to spend rows teaching the model what you
+      already know.
+    \item \textbf{Leakage-free time features.} Building these \emph{correctly} is a modelling
+      decision, not an automation problem.
+    \item \textbf{Linear and distance-based models}, which construct nothing on their own ---
+      as the previous slide just showed.
+  \end{itemize}
+  \vfill
+  \callout{paramgreen}{\textbf{The thesis for the whole chapter:} \emph{generate cheaply, select
+  ruthlessly.} It is fine to mass-produce candidates --- as long as the next lecture prunes them.}
+\end{frame}
+
+\begin{frame}{When the model does this for you}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Hand-engineering is what you do when the model \emph{cannot} do it itself.
+    \vskip 6pt
+    \begin{itemize}\small
+      \item \textbf{Images:} convolutional networks learn edge and texture detectors. Nobody
+        hand-codes those any more.
+      \item \textbf{Text:} transformers learn token representations. Same story.
+      \item \textbf{Tabular:} genuinely mixed. Trees derive interactions; nothing derives your
+        company's business logic.
+    \end{itemize}
+    \column{0.43\textwidth}
+    \vskip 4pt
+    \callout{armblue}{The trend of the last decade is features moving \emph{from} the engineer
+    \emph{into} the model --- fastest for images and text, slowest for tabular data.}
+    \vskip 8pt
+    \footnotesize We come back to this properly in the neural-network chapter, where ``learning a
+    representation'' becomes the whole point.
+  \end{columns}
+  \vfill
+  \footnotesize \textbf{The honest summary:} feature engineering is not dead --- it moved. It is
+  worth less on the parts a model can derive, and just as much on the parts it cannot.
+\end{frame}
+
+\begin{frame}{The three sources of a new feature}
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    \textbf{\small From the same row}\\
+    \footnotesize one observation in, one feature out
+    \vskip 4pt
+    \begin{itemize}\scriptsize
+      \item transformations: log, power, bins
+      \item ratios, differences, products
+      \item interactions
+    \end{itemize}
+    \vskip 2pt
+    \scriptsize\emph{bike:} \texttt{yr}, \texttt{mnth}, \texttt{weekday}, \texttt{season} ---
+    all squeezed out of \texttt{dteday}
+    \column{0.32\textwidth}
+    \textbf{\small From many rows}\\
+    \footnotesize a group of observations in, one feature out
+    \vskip 4pt
+    \begin{itemize}\scriptsize
+      \item group-by aggregations
+      \item ranks within a group
+      \item lags and rolling windows
+    \end{itemize}
+    \vskip 2pt
+    \scriptsize\emph{bike:} nothing --- and that is a gap we will fill
+    \column{0.32\textwidth}
+    \textbf{\small From outside the data}\\
+    \footnotesize joins to another source
+    \vskip 4pt
+    \begin{itemize}\scriptsize
+      \item calendar and holidays
+      \item weather
+      \item geography, demographics
+    \end{itemize}
+    \vskip 2pt
+    \scriptsize\emph{bike:} \texttt{holiday}, and all five weather columns
+  \end{columns}
+  \vfill
+  \callout{armorange}{\textbf{Domain knowledge cuts across all three} and is the biggest single
+  multiplier. The next three sections take these one at a time.}
+\end{frame}
+
+% ================================================================
+\section{From the same row}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{One row in, one feature out}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The cheapest features to build --- and the ones a linear model cannot build for itself.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Ratios and differences}
+  Often the most predictive column in a table is not in the table --- it is a \emph{rate}.
+  \vfill
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \footnotesize
+    \textbf{Canonical examples:}
+    \begin{itemize}\footnotesize
+      \item body mass index $=$ weight $/$ height$^2$
+      \item loan-to-income $=$ loan $/$ income
+      \item debt-to-equity, price per m$^2$, clicks per impression
+    \end{itemize}
+    \column{0.48\textwidth}
+    \footnotesize
+    \textbf{Why they work:}
+    \begin{itemize}\footnotesize
+      \item scale-invariant --- 30k on 60k is the same risk as 3k on 6k
+      \item one column instead of two
+      \item a linear model \emph{cannot} construct them
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \callout{armred}{\textbf{Before you subtract two columns, check they are in the same units.}
+  On bike, \texttt{temp} and \texttt{atemp} are \emph{both} normalised --- but
+  \textbf{differently}: $\texttt{temp} = (T+8)/47$ and $\texttt{atemp} = (T_a+16)/66$ (lecture 22).
+  So \texttt{atemp} $-$ \texttt{temp} is not a ``feels-like gap'' --- it is an arbitrary mixture of
+  two different scales.}
+\end{frame}
+
+\begin{frame}{What happens when you actually check}
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{fig/fe_ratio_gain.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \footnotesize \textbf{Left.} Reconstruct both in Celsius
+    ($47\,\texttt{temp}-8$, $66\,\texttt{atemp}-16$) and a \textbf{corrupt row} falls out:
+    \textbf{2012-08-17} claims $26^\circ$C air and $0^\circ$C ``feels like'' in a Washington August.
+    \column{0.49\textwidth}
+    \footnotesize \textbf{Right.} And the honest result: the \emph{correct} gap feature made Ridge
+    \textbf{worse} ($664.0$ vs $655.2$). Only \texttt{hum}$\times$\texttt{windspeed} helped, by
+    $1.1$.
+  \end{columns}
+  \vskip 4pt
+  \callout{armorange}{Two lessons, neither of them ``ratios help''. \textbf{(1)} Building a feature
+  is how you \emph{find} bad data --- lectures 22--24 ranked \texttt{atemp} second with that broken
+  row in it. \textbf{(2)} Useless alone $\neq$ useless: next lecture's selection \emph{keeps} this
+  feature.}
+\end{frame}
+
+\begin{frame}{Interactions: what a linear model cannot see}
+  From lecture 22: a \textbf{main effect} is what one feature does on its own; an
+  \textbf{interaction} is when the effect of one feature \emph{depends on} another.
+  \vfill
+  Polynomial regression already did this for a single feature (lecture 2). Extend it to pairs:
+  \[
+    \phi(\xv) = \big(1,\; x_1,\; x_2,\; x_1^2,\; x_2^2,\; \underbrace{x_1 x_2}_{\text{the interaction}}\big)
+  \]
+  The product term is what lets a linear model say \emph{``warm weather matters more at the weekend''}.
+  \vfill
+  \callout{armred}{\textbf{Scale before you expand.} If $x$ runs to the hundreds then $x^3$ runs to
+  the millions, and a Ridge or Lasso penalty lands almost entirely on the low-order terms. Put
+  \texttt{StandardScaler} \emph{before} \texttt{PolynomialFeatures} in the pipeline, always.}
+\end{frame}
+
+\begin{frame}{Predict-first: who needs to be told about the interaction?}
+  You believe warm weather drives \emph{leisure} riding, so \texttt{temp} should matter more on
+  non-working days. You add \texttt{temp}\,$\times$\,\texttt{workingday} explicitly.
+  \vfill
+  \textbf{Does it help (a) Ridge regression, (b) a random forest?}
+  \pause
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/fe_interaction_lin_vs_tree.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{paramgreen}{\textbf{Ridge: yes} ($+6.9$). \textbf{Forest: no} ($-1.1$, marginally worse) ---
+  it already found that interaction by splitting on \texttt{workingday} \emph{below} a split on
+  \texttt{temp}. \textbf{Polynomial and interaction features are a linear-model crutch, not a
+  universal good.} Adding them to a tree ensemble is wasted compute.}
+\end{frame}
+
+\begin{frame}{Binning: when a straight line is the wrong shape}
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{fig/fe_binning_temp.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \footnotesize
+    Three ways to cut a continuous feature:
+    \begin{itemize}\scriptsize
+      \item \textbf{equal-width} --- same range per bin
+      \item \textbf{equal-frequency (quantile)} --- same count per bin
+      \item \textbf{supervised} --- splits chosen to separate $y$ (this is what a tree does)
+    \end{itemize}
+    \column{0.42\textwidth}
+    \footnotesize
+    \textbf{Bin when:} the effect is non-monotonic \emph{and} the model is linear.
+    \vskip 3pt
+    \textbf{Never bin for trees} --- they bin implicitly, and you would only be throwing away
+    resolution.
+  \end{columns}
+  \vskip 2pt
+  \callout{paramgreen}{Rentals climb, then \textbf{flatten} above $\sim18^\circ$C and dip at the
+  very top. A straight line has to keep climbing --- so it is wrong in the middle \emph{and} at the
+  top. Five quantile bins: $\mathbf{+59.0}$ MAE, the biggest single win in this deck.}
+\end{frame}
+
+\begin{frame}{Already covered --- deliberately not repeated}
+  Two same-row techniques belong here in the taxonomy, but you already have them from
+  \textbf{lecture 3 (preprocessing)}:
+  \vfill
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{Skew transforms}
+    \begin{itemize}\small
+      \item \texttt{np.log1p} for right-skewed positives
+      \item \texttt{PowerTransformer} (Yeo-Johnson, Box-Cox)
+      \item invert with \texttt{np.expm1} to report error in real units
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Datetime components}
+    \begin{itemize}\small
+      \item \texttt{.dt.year}, \texttt{.dt.month}, \texttt{.dt.dayofweek}, \texttt{.dt.hour}
+      \item weekend and holiday flags
+      \item \textbf{cyclic} $\sin/\cos$ encoding, so hour 23 sits next to hour 0
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \callout{armblue}{If you only remember one thing from that lecture: \texttt{dteday} on slide 2
+  became \emph{four} columns this way. That is the single highest-yield transformation in tabular
+  machine learning, and it costs one line of pandas.}
+\end{frame}
+
+% ================================================================
+\section{From many rows}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{A group of rows in, one feature out}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Powerful, and the place leakage most often gets in.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}[fragile]{Group-by aggregations}
+  For each row, attach a summary of \emph{its group}. Enormously effective on tabular data.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+g = df.groupby(["season", "workingday"])["cnt"]
+
+df["grp_mean"]  = g.transform("mean")     # what is typical for days like this?
+df["grp_std"]   = g.transform("std")      # how variable are days like this?
+df["grp_count"] = g.transform("count")    # how much evidence do we have?
+df["rank_in_grp"] = g.rank(pct=True)      # where does THIS day sit in its group?
+df["vs_grp"]    = df["cnt"] / df["grp_mean"]
+\end{lstlisting}}
+  \vfill
+  \footnotesize The last two are usually the strongest: a raw value says \emph{how much}, but a
+  rank or ratio-to-group says \emph{how unusual}, which is often what actually predicts.
+  \vskip 4pt
+  \callout{armred}{Look closely at those five lines. \textbf{Every one of them touches
+  \texttt{cnt}} --- the target. That is fine, and it is also a trap.}
+\end{frame}
+
+\begin{frame}{The leak hiding in the previous slide}
+  Compute the group mean on the \textbf{whole dataset} and then split, and each row's own target
+  has already contributed to its own feature.
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{fig/fe_groupby_leakage.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{armred}{\textbf{Leakage severity scales with how precisely the group identifies the row.}
+  At 183 rows per group the mean is a coarse summary and the lie is worth $1.5$. At 4.4 rows per
+  group it is nearly the row's own target and the lie is worth $\mathbf{118.0}$ --- a
+  $\mathbf{17.4\%}$ apparent improvement that does not exist.}
+\end{frame}
+
+\begin{frame}{Read the bottom row again}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    For \texttt{yr}$\times$\texttt{mnth}$\times$\texttt{weekday} (168 groups, 4.4 rows each):
+    \vskip 6pt
+    {\small
+    \begin{tabular}{@{}l r@{}}
+      no group feature at all & $660.5$ \\
+      \textcolor{armblue}{\textbf{honest}} (computed in-fold) & \textcolor{armblue}{$\mathbf{678.1}$} \\
+      \textcolor{armred}{\textbf{leaky}} (computed on all data) & \textcolor{armred}{$\mathbf{560.1}$} \\
+    \end{tabular}}
+    \column{0.46\textwidth}
+    \vskip 2pt
+    \callout{armred}{The honest feature is the \textbf{worst} option on the table --- it makes the
+    model worse than not having it. The leaky one looks like the \textbf{best} feature in the whole
+    deck.}
+  \end{columns}
+  \vfill
+  \begin{center}
+    \textbf{\large The more attractive the number, the harder you should look at it.}
+  \end{center}
+  \vfill
+  \footnotesize You will not catch this by staring at cross-validation scores --- leakage
+  \emph{improves} them. You catch it by knowing how the feature was built.
+\end{frame}
+
+\begin{frame}[fragile]{Doing it right: out-of-fold encoding}
+  The fix is mechanical. For each fold, compute the statistic on the \textbf{other} folds only:
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+for train_idx, val_idx in KFold(5, shuffle=True, random_state=509).split(X):
+    means = y[train_idx].groupby(key[train_idx]).mean()    # fit on train part ONLY
+    f_train = key[train_idx].map(means)
+    f_val   = key[val_idx].map(means).fillna(y[train_idx].mean())   # unseen group -> global
+\end{lstlisting}}
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Unseen groups} are guaranteed at prediction time. Fall back to the global mean.
+    \item \textbf{Smooth small groups} toward the global mean:
+      $\; \tilde{\mu}_g = \dfrac{n_g \mu_g + m\,\mu}{n_g + m}$, with $m$ a prior weight.
+      A group of 2 rows should not be trusted like a group of 200.
+    \item Libraries: \texttt{category\_encoders} (\texttt{TargetEncoder}, cross-validated), and
+      \texttt{sklearn.preprocessing.TargetEncoder}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Get it into the Pipeline, or it will leak anyway}
+  Unenforceable if you engineer in a notebook and cross-validate afterwards. Make the feature a
+  \textbf{transformer}, so \texttt{fit} only ever sees the training fold.
+  \vskip 2pt
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+# stateless (ratios, differences): nothing learned -> safe anywhere
+ratio = FunctionTransformer(lambda X: np.c_[X, X[:, 0] * X[:, 1]])
+
+# stateful (group means, bin edges): MUST be refitted per fold
+class GroupMean(BaseEstimator, TransformerMixin):
+    def fit(self, X, y):
+        self.mu_ = pd.Series(y).groupby(X["season"]).mean()
+        self.default_ = y.mean()
+        return self
+    def transform(self, X):
+        g = X["season"].map(self.mu_).fillna(self.default_)
+        return X.assign(grp_mean=g)
+
+pipe = Pipeline([("f", GroupMean()), ("sc", StandardScaler()), ("m", Ridge())])
+cross_val_score(pipe, X, y, cv=5)     # refit inside every fold
+\end{lstlisting}}
+  \vskip 2pt
+  \callout{paramgreen}{\textbf{The test:} does your feature \emph{learn} anything from the data ---
+  a mean, a category list, bin edges? If yes, it belongs inside a \texttt{Pipeline}.}
+\end{frame}
+
+\begin{frame}{Handed forward: lags, rolling windows, forward splits}
+  Everything in this section assumed rows are \textbf{exchangeable} --- that any row could have
+  been in the training set.
+  \vfill
+  When rows are ordered in \emph{time}, aggregation gets a second rule: \textbf{only look
+  backwards}.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Lags} --- \texttt{y.shift(1)}, \texttt{shift(7)}: yesterday, last week.
+    \item \textbf{Rolling windows} --- \texttt{y.shift(1).rolling(7).mean()}. Note the
+      \texttt{shift} \emph{before} the \texttt{rolling}: without it, the window contains the value
+      you are trying to predict.
+    \item \textbf{Forward splits} --- \texttt{TimeSeriesSplit}, never a random split.
+  \end{itemize}
+  \vfill
+  \callout{paramgreen}{\textbf{Next chapters:} this is the spine of the time-series chapter, where
+  it gets a full treatment with forecasting horizons and the naive baseline. We are deliberately
+  not doing it twice.}
+\end{frame}
+
+% ================================================================
+\section{From outside the data}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The information is not in your table}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Where feature engineering still beats any model, and always will.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Joins: the features no model can invent}
+  Go back to slide 2. \texttt{holiday} and all five weather columns \textbf{are joins}. Somebody
+  decided the weather mattered, went and got it, and merged it on the date.
+  \vfill
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \footnotesize
+    \textbf{What to join:}
+    \begin{itemize}\footnotesize
+      \item calendar: holidays, school terms, paydays
+      \item weather: temperature, precipitation, wind
+      \item demographics: income and density by area
+      \item reference data: official price indices, exchange rates
+    \end{itemize}
+    \column{0.48\textwidth}
+    \vskip 2pt
+    \callout{armorange}{\textbf{Point-in-time correctness.} Join the value \emph{as it was known on
+    that date}, not today's revised figure. Economic statistics get revised for years; joining the
+    final revision to a historical row is leakage from the future.}
+  \end{columns}
+  \vfill
+  \footnotesize \textbf{This is the highest-leverage thing in the deck} and the one place where
+  ``good features beat a better algorithm'' is still unambiguously true --- because no amount of
+  gradient boosting recovers information that is not in your table.
+\end{frame}
+
+\begin{frame}{Geospatial features}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/fe_geo_illustration.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \footnotesize
+    Raw latitude and longitude are nearly useless to a linear model --- ``demand rises with
+    latitude'' is rarely true. The \emph{relationships} are what predict.
+    \column{0.51\textwidth}
+    \begin{itemize}\scriptsize
+      \item \textbf{distances} to landmarks (centre, metro, river)
+      \item \textbf{cluster identifiers} from k-means on coordinates
+      \item \textbf{grid cells} --- geohash, H3 --- then aggregate per cell
+      \item \textbf{counts of points of interest} (POI) within a radius
+    \end{itemize}
+  \end{columns}
+  \vskip 2pt
+  \scriptsize \emph{Different data, same idea:} \texttt{bike-day.csv} is a daily system-wide total
+  with no coordinates, so this is a synthetic illustration.
+\end{frame}
+
+\begin{frame}[fragile]{High-cardinality categoricals: crosses}
+  Lecture 3 gave you target and frequency encoding for a column with hundreds of levels. The new
+  idea is combining two of them:
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+df["district_x_rooms"] = df["district"] + "_" + df["rooms"].astype(str)   # "Kentron_3br"
+\end{lstlisting}}
+  \vfill
+  \begin{itemize}\small
+    \item Captures effects that are \textbf{jointly} true: three-room flats are expensive
+      \emph{in Kentron specifically}.
+    \item Heavily used in click-through rate (CTR) prediction --- Google's Wide \& Deep model is
+      built on exactly this idea.
+    \item \textbf{The risk is explosion:} 100 districts $\times$ 10 room counts $=$ 1000 levels,
+      most with a handful of rows each. Every one of them then needs encoding, and the small ones
+      need smoothing (previous section).
+    \item \textbf{The modern alternative} is to learn an \emph{embedding} per category --- a short
+      dense vector, fitted with the model. Neural networks do this natively.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Text, in one slide}
+  Text has to become numbers. Three layers, increasing in power and cost:
+  \vfill
+  \begin{enumerate}\small
+    \item \textbf{Engineered scalars.} Length, word count, punctuation, capital-letter ratio,
+      digit count. Cheap, and surprisingly strong for spam and sentiment.
+    \item \textbf{Bag-of-words and term frequency--inverse document frequency (TF-IDF).}
+      Count the words, down-weight the ones that appear everywhere. The classical workhorse.
+    \item \textbf{Embeddings.} Learned dense vectors --- deferred to the language chapter.
+  \end{enumerate}
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+tfidf = TfidfVectorizer(max_features=2000, ngram_range=(1, 2), min_df=5)
+X_text = tfidf.fit_transform(df["description"])          # fit on TRAIN only
+
+df["desc_len"]   = df["description"].str.len()           # the cheap layer often
+df["caps_ratio"] = df["description"].str.count(r"[A-Z]") / df["desc_len"]   # gets you most of it
+\end{lstlisting}}
+  \vfill
+  \footnotesize \emph{Note:} bike-day has no text either --- illustration only.
+\end{frame}
+
+% ================================================================
+\section{Generating candidates at scale}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Now do it two hundred times}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Generate cheaply --- because next lecture prunes ruthlessly.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}[fragile]{Systematic expansion}
+  Stop hand-picking. Apply this deck's operations \emph{mechanically} to every pair of columns:
+  \vskip 2pt
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+for a, b in itertools.combinations(FEATURES, 2):
+    pool[f"{a}_x_{b}"]     = df[a] * df[b]      # 55 products
+    pool[f"{a}_minus_{b}"] = df[a] - df[b]      # 55 differences
+for a, b in itertools.permutations(FEATURES, 2):
+    pool[f"{a}_over_{b}"]  = df[a] / df[b]      # 110 ratios, both ways
+\end{lstlisting}}
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.78\linewidth]{fig/fe_candidate_pool.pdf}
+  \end{center}
+  \vskip 1pt
+  \footnotesize \textbf{231 columns from 11, in about thirty lines} --- 3 constant and 1 duplicated
+  column drop out, leaving \textbf{230}. Most are meaningless. That is next lecture's problem.
+\end{frame}
+
+\begin{frame}{Expansion is also a data-quality probe}
+  Those 110 ratios produced \textbf{14{,}120 non-finite cells}. Five features contain zeros, and
+  dividing by them gives $\pm\infty$:
+  \vfill
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    {\small
+    \begin{tabular}{@{}l r l@{}}
+      \texttt{holiday} & 710 & \textcolor{paramgreen}{legitimate --- it is a flag} \\
+      \texttt{yr} & 365 & \textcolor{paramgreen}{legitimate --- 2011 is coded 0} \\
+      \texttt{workingday} & 231 & \textcolor{paramgreen}{legitimate --- a flag} \\
+      \texttt{weekday} & 105 & \textcolor{paramgreen}{legitimate --- Sunday is 0} \\
+      \texttt{hum} & \textbf{1} & \textcolor{armred}{\textbf{not legitimate}} \\
+    \end{tabular}}
+    \column{0.46\textwidth}
+    \vskip 2pt
+    \callout{armred}{\texttt{hum} $=0$ on \textbf{2011-03-10}. Zero percent humidity in Washington
+    DC in March is \textbf{physically impossible}. It is an unflagged missing value.}
+  \end{columns}
+  \vfill
+  \callout{armorange}{Two bad rows in this deck --- this one, and the $0^\circ$C August day from
+  the ratio slide --- and \textbf{both were found by building a feature}, not by looking at the
+  data. Four lectures of interpretability ran on this table without either surfacing. Mechanical
+  expansion is a surprisingly good bug detector.}
+\end{frame}
+
+\begin{frame}[fragile]{Automated feature engineering: the libraries}
+  You are not the first person to think ``a machine could do this''.
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{featuretools} --- Deep Feature Synthesis (DFS) walks a \emph{relational} schema
+      and stacks aggregations across table joins: \texttt{MEAN(rentals.duration)},
+      \texttt{COUNT(stations.rentals)}, \texttt{STD(users.trips)}.
+    \item \textbf{tsfresh} --- hundreds of statistical features from time series (autocorrelations,
+      spectral peaks, entropy), with a built-in significance filter.
+    \item \textbf{autofeat, featurewiz} --- general-purpose automated construction and screening.
+  \end{itemize}
+  \vfill
+  \callout{armorange}{\textbf{Where these shine is many related tables} --- customers, orders, order
+  lines --- which is exactly what our single flat \texttt{bike-day.csv} is not. On one table, DFS
+  can only re-derive the transformations we just wrote by hand.}
+  \vskip 4pt
+  \footnotesize \textbf{Use them for exploration, not production.} Auto-generated features are hard
+  to maintain, expensive to serve, and usually lose to a handful of domain features --- which is
+  the whole argument of slide 7.
+\end{frame}
+
+% ================================================================
+\section{Pitfalls and production}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Five ways to shoot yourself}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Four of them make your scores go \emph{up}.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Five feature-engineering pitfalls}
+  \begin{enumerate}\small
+    \item \textbf{Target leakage.} A feature built from the target, computed before the split.
+      Three appearances in this deck: \texttt{casual}$+$\texttt{registered}, group means, and
+      target encoding. \emph{Fix:} out-of-fold, inside a \texttt{Pipeline}.
+    \item \textbf{Look-ahead bias.} Using future values in a ``rolling'' or aggregate feature.
+      \emph{Fix:} trailing windows only, \texttt{shift} before \texttt{rolling}. (Time-series chapter.)
+    \item \textbf{Train--serve skew.} A feature that is easy on historical data and impossible at
+      prediction time --- ``total lifetime purchases'' when the customer is still shopping.
+      \emph{Fix:} ask ``would I know this value at 9am on the day I have to predict?''
+    \item \textbf{Hard-coded statistics.} ``Just divide by the mean.'' Whose mean? Recomputing it
+      on test data is leakage; hard-coding it from a notebook is a bug waiting for the next
+      retrain. \emph{Fix:} fit it, store it, ship it in the pipeline.
+    \item \textbf{Over-engineering.} 500 features on 1000 rows. Multicollinearity, variance, and
+      the curse of dimensionality all bite at once. \emph{Fix:} next lecture.
+  \end{enumerate}
+  \vfill
+  \callout{armred}{Numbers 1, 2 and 4 all make your cross-validation score \emph{better}. That is
+  what makes them dangerous --- you have no reason to go looking.}
+\end{frame}
+
+\begin{frame}{Feature stores: training and serving see the same feature}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \footnotesize
+    In production, the code that trains and the code that serves are different code paths --- so
+    they compute features differently. A \textbf{feature store} makes the definition the single
+    source of truth:
+    \begin{itemize}\footnotesize
+      \item one definition, written once
+      \item \textbf{batch} reads for training (historical, point-in-time correct)
+      \item \textbf{online} reads for inference (low latency)
+      \item versioning, so you can rebuild last quarter's model
+    \end{itemize}
+    \vskip 4pt
+    Tools: \textbf{Feast} (open source), \textbf{Tecton}, and the managed stores in Vertex AI and
+    SageMaker.
+    \column{0.43\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=stealth, node distance=0.42cm,
+        d/.style={draw=armblue, very thick, rounded corners=2pt, fill=armblue!10,
+                  text width=2.7cm, align=center, minimum height=0.6cm},
+        s/.style={draw=armorange, very thick, rounded corners=2pt, fill=armorange!15,
+                  text width=2.7cm, align=center, minimum height=0.6cm},
+        e/.style={draw=paramgreen, very thick, rounded corners=2pt, fill=paramgreen!10,
+                  text width=2.7cm, align=center, minimum height=0.62cm},
+        a/.style={->, thick, armblue}]
+        \node[d] (def) {one feature\\definition};
+        \node[s, below=of def] (st) {feature store};
+        \node[e, below=of st] (tr) {\textbf{training}\\{\tiny batch, historical}};
+        \node[e, below=of tr] (sv) {\textbf{serving}\\{\tiny online, real time}};
+        \draw[a] (def) -- (st);
+        \draw[a] (st) -- (tr);
+        \draw[a] (st.west) .. controls +(-1.2,-1.5) .. (sv.west);
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+  \vfill
+  \footnotesize For coursework, a \texttt{Pipeline} gets you the same guarantee. You need a real
+  feature store when features are shared across teams and models.
+\end{frame}
+
+% ================================================================
+\section*{}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Somebody made your features.} Of 16 columns in \texttt{bike-day.csv}, one is raw.
+      The rest are date parts, two joins, and a combination.
+    \item \textbf{Feature engineering is worth $+81.5$ MAE to Ridge and $-4.3$ to a forest.}
+      It pays where the model cannot get there alone: joins, domain knowledge, small data,
+      time features, linear models.
+    \item \textbf{Three sources:} the same row (ratios, interactions, bins), many rows
+      (aggregations), outside the data (joins, geography, text).
+    \item \textbf{Biggest single win here was binning} ($+59.0$), because \texttt{temp}'s effect
+      saturates and a straight line cannot.
+    \item \textbf{Leakage scales with group precision} --- $1.5$ MAE at 183 rows per group,
+      $118.0$ at 4.4. The honest feature was worse than no feature; the leaky one looked best.
+    \item \textbf{If a feature learns anything from data, it goes inside the \texttt{Pipeline}.}
+    \item \textbf{Two corrupt rows} were found by \emph{building features}, not by inspecting data.
+  \end{itemize}
+  \vfill
+  \callout{paramgreen}{\textbf{Next lecture:} you can now generate 230 features in thirty lines.
+  Which fifteen do you keep? Every importance tool from chapter 5 gives you a \emph{ranking} ---
+  and none of them tells you where to \emph{cut}.}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Replaces L01g_feature_engineering.tex (2026-06-05), which predated chapters 4 and 5,
+%     ran on a "Yerevan rent" dataset that does not exist in the repo, and asserted a
+%     leakage inflation figure ("32 vs 24 kAMD, ~25%") that was never measured.
+%   - Outline + all locked decisions: 26_feature_engineering_OUTLINE.md (v3).
+%   - EVERY number on these slides is measured by py_src/fe_measure.py and re-derived at
+%     render time by py_src/fe_figs.py. Log: logs/fe_measure.log, logs/fe_figs.log.
+%     Same split/seed as decks 22-24 (test_size=0.3, random_state=509, RF n_estimators=300),
+%     so the baselines (forest MAE 455.1, R2 0.879) match those slides exactly.
+%   - Candidate pool (230 columns) is persisted to data/bike_candidates.csv and is consumed
+%     by deck 27 -- the two decks are chained and must see the same matrix.
+%   - Two data-quality bugs surfaced while building this deck and are now taught as content:
+%     hum == 0 on 2011-03-10, and atemp == -0.0 C on 2012-08-17 (a 26 C August day).
+%     Both were present, unnoticed, throughout decks 22-24.
+%   - Deliberately NOT covered (cross-refs instead): datetime components + cyclic encoding
+%     and log/power transforms (lecture 3); lags, rolling windows, TimeSeriesSplit
+%     (time-series chapter); all of feature selection (deck 27).
+%   - Scope: regression only, by instructor decision.
+% =============================================================
