@@ -220,6 +220,41 @@
   \end{itemize}
 \end{frame}
 
+\begin{frame}{One catch: what does ``without a feature'' even mean?}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    The coalition story needs $v(S)$: what the model predicts \emph{using only} the features in
+    $S$. But a \textbf{fitted model has a fixed input shape} --- you cannot hand a trained forest
+    6 of its 11 columns.
+    \vskip 3pt
+    So ``absent'' is \textbf{faked}: fill the missing features from a \textbf{background dataset}
+    and average the predictions,
+    \[ v(S) \;=\; \mathbb{E}\big[\,\hat f(\xv_S,\, X_{\bar S})\,\big]. \]
+    \begin{itemize}\footnotesize
+      \item No features at all $\Rightarrow v(\emptyset) = \mathbb{E}[\hat f]$: exactly the
+        \textbf{base value} from the previous slide.
+      \item So every $\phi_j$ is \textbf{relative to that background} --- the \texttt{X} in
+        \texttt{shap.Explainer(model, X)}.
+    \end{itemize}
+    \column{0.45\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      Replacing a feature \emph{independently of the others} invents rows that never existed
+      (30\,\textdegree C \emph{and} snow) --- \textbf{deck 2's extrapolation trap}, back again. It
+      is the same reason correlated features muddy SHAP.}}
+    \vskip 8pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{``Absent'' is whatever your data type allows:}
+      \vskip 2pt
+      \begin{tabular}{@{}l@{\ \ }l@{}}
+        \textbf{table} & resample the column \\
+        \textbf{text} & mask the word out \\
+        \textbf{image} & grey the patch out \\
+      \end{tabular}
+      \vskip 2pt
+      That is the whole reason SHAP ports to text and images at all --- we come back to this.}}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Exact SHAP explodes --- TreeSHAP \& KernelSHAP to the rescue}
   \begin{columns}[T]
     \column{0.44\textwidth}
@@ -272,6 +307,11 @@
     \textbf{Read it:} \texttt{yr} ($+860$) and \texttt{temp} ($+771$) push it \textbf{up}, but a
     very humid day (\texttt{hum} $-1590$) and poor \texttt{weathersit} ($-418$) push it
     \textbf{down} --- landing just below average.
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Careful:} $\phi_{\texttt{temp}} = +771$ does \textbf{not} mean ``drop \texttt{temp}
+      and the prediction falls by 771''. It is temp's \emph{average} share over all the orders
+      features could enter in --- a \textbf{fair split}, not a what-if.}}
     \column{0.58\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{fig/shap_waterfall_bike.pdf}
@@ -353,6 +393,30 @@
     \textbf{model behaviour, not causation} (deck 2's ice cream), and rich plots are \textbf{easy to over-read}.}}
 \end{frame}
 
+\begin{frame}{SHAP on text: the same sum, over words}
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    A post $\to$ TF-IDF $\to$ logistic regression: the ``features'' are now \textbf{words},
+    ``absent'' means \textbf{masked out of the string}, and \textbf{nothing else changes}.
+    \[ \underbrace{0.41}_{\text{base}} + \underbrace{0.47}_{\sum_j \phi_j}
+       = \underbrace{0.88}_{P(\text{christian})} \]
+    \begin{itemize}\footnotesize
+      \item One bar per \textbf{token position} --- hence three \texttt{Jesus} bars.
+      \item Hundreds of tokens $\Rightarrow 2^{n}$ coalitions: \texttt{shap} masks \emph{groups}
+        of neighbouring words (a \textbf{Partition} explainer).
+    \end{itemize}
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/text_shap_tokens.pdf}
+    \end{center}
+  \end{columns}
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{TF-IDF} = \emph{term frequency $\times$ inverse document frequency}: one column per
+    vocabulary word, rare words weighted higher (properly in ch.\,6). Logistic regression was deck
+    1's \textbf{glass box} --- but nobody reads $\sim$\,16\,000 coefficients.
+    \textbf{An interpretable model \emph{class} is not an interpretable model.}}}
+\end{frame}
+
 \begin{frame}[fragile]{SHAP in code}
 \begin{lstlisting}
 import shap
@@ -363,9 +427,14 @@ shap.plots.waterfall(sv[i])                # one prediction
 shap.plots.bar(sv)                         # global: mean |SHAP|
 shap.plots.beeswarm(sv)                    # global: dot per row, colour = value
 shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
+
+# text: same idea, features = words, "absent" = masked out of the string
+ex = shap.Explainer(text_clf.predict_proba, shap.maskers.Text())
+shap.plots.text(ex(["a review to explain"]))
 \end{lstlisting}
   \vskip 2pt
-  \footnotesize \texttt{shap.Explainer(model, X)} auto-picks the right method (TreeSHAP here).
+  \footnotesize \texttt{shap.Explainer(model, X)} auto-picks the right method (TreeSHAP here); with
+  a \texttt{Text} masker it switches to the token version.
 \end{frame}
 
 % ================================================================
@@ -532,6 +601,37 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
   \end{columns}
 \end{frame}
 
+\begin{frame}{LIME's real trick: explain in a \emph{simplified} space}
+  Those four steps ran in the \emph{raw} feature space --- fine for two numeric columns. In
+  general LIME fits the surrogate on an \textbf{interpretable representation} instead: a binary
+  vector $\zv' \in \{0,1\}^{d'}$ saying \emph{which pieces of the input are switched on}.
+  \vskip 4pt
+  That is what lets the same four steps run on \textbf{anything} you can chop into pieces:
+  \vskip 3pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{l|l l l}
+      & \textbf{tabular} & \textbf{text} & \textbf{images} \\
+      \hline
+      one ``piece'' & a feature (column) & a \textbf{word / token} & a \textbf{superpixel} (patch) \\
+      switch it off & resample the column & \textbf{delete the word} & \textbf{grey the patch out} \\
+      you read & a weight per feature & \textbf{highlighted words} & \textbf{highlighted patches} \\
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      This is why \textbf{one} implementation covers all three --- and why the explanation always
+      comes back in \textbf{human units} (words, patches), never in raw pixels or TF-IDF numbers.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Same move as SHAP's masking slide.} Both methods need a notion of ``absent'', and
+      both get it by \textbf{switching pieces off} --- that shared trick is what makes them
+      modality-agnostic.}}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{LIME on images: the husky that was really snow}
   \begin{columns}[T]
     \column{0.5\textwidth}
@@ -561,6 +661,25 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
   \footnotesize In each pair: the photo (left) and \textbf{LIME's explanation} (right --- the kept
   superpixels). The model's ``reason'' is the \textbf{snow}, not the animal, so the snowy
   \textbf{husky} (bottom-left) is misread as a \textbf{wolf}. \hfill LMU IML (CC BY 4.0) / Ribeiro et al.\ 2016.
+\end{frame}
+
+\begin{frame}{The same trap, in text: a classifier that read the mail headers}
+  {\small Ribeiro et al.\ ran the \emph{same} experiment on \textbf{documents} --- \emph{atheism}
+  vs \emph{christianity} newsgroups. Their classifier scored \textbf{94\%} held-out, top LIME words
+  \texttt{Posting}, \texttt{Host}, \texttt{Re}. Ours agrees: \texttt{NNTP} (a newsgroup header
+  field) is in \textbf{21.6\%}
+  of training posts (\textbf{99.6\%} atheism), and \texttt{solntze}/\texttt{wpd}/\texttt{livesey}
+  are one prolific poster's machine and surname (\textbf{100\%} atheism). Only \texttt{morality}
+  is about the topic.}
+  \vskip 1pt
+  \begin{center}
+    \includegraphics[width=0.85\linewidth]{fig/text_lime_newsgroups.pdf}
+  \end{center}
+  \vskip 1pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{The snow and the mail header are the same bug} --- a shortcut that tracks the label
+    \emph{in this dataset}, invisible to held-out accuracy because the artifact is in the test
+    set too. Only a \textbf{local explanation} showed it.}}
 \end{frame}
 
 \begin{frame}{LIME caveats, and SHAP vs.\ LIME}
@@ -702,9 +821,15 @@ shap.plots.scatter(sv[:, "temp"])          # dependence: effect shape
       $\widehat{R}_j$ is feature $j$'s \textbf{range in the training data}. Dividing by it is what
       makes ``+500 in balance'' and ``+3 years of age'' comparable at all.}}
   \end{columns}
-  \vskip 6pt
-  \footnotesize A categorical feature contributes $0$ or $1$ --- nothing in between. Changing
-  \texttt{month} from June to April costs the same as changing it to December.
+  \vskip 4pt
+  {\footnotesize A categorical feature contributes $0$ or $1$ --- nothing in between. Changing
+  \texttt{month} from June to April costs the same as changing it to December.}
+  \vskip 4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Text and images have no Gower distance} --- a sentence has no ranges and no
+    categories. There ``a small change'' becomes the smallest \textbf{edit} (swap one word), and
+    \emph{plausibility} becomes ``is it still a grammatical sentence?'' --- much harder to
+    optimise than a number.}}
 \end{frame}
 
 \begin{frame}{Two more objectives: sparsity and plausibility}
@@ -850,6 +975,8 @@ cf.visualize_as_dataframe()
   \vfill
   \footnotesize Whatever you pick: \textbf{(1)} correlated features mislead them all, \textbf{(2)}
   different methods rank differently (previous slide), \textbf{(3)} none of it is \emph{causation}.
+  \textbf{(4)} None of them is tabular-only --- on text the ``features'' are \textbf{words}, on
+  images \textbf{superpixels}; everything above still applies.
 \end{frame}
 
 \begin{frame}{Recap}
@@ -865,16 +992,20 @@ cf.visualize_as_dataframe()
     \item \textbf{LIME} fits a local surrogate: \textbf{sample} around the point, \textbf{weight}
       by proximity $\pi(\zv)$, \textbf{fit} a sparse linear model on the black box's own
       predictions. Handy, but the randomness and the kernel width $\sigma$ make it \textbf{unstable}.
-    \item \textbf{Counterfactuals} answer ``what would change the outcome'', as an optimization:
-      $\lambda_1 o_{\text{target}} + \lambda_2 o_{\text{prox}} + \lambda_3 o_{\text{sparse}}
-      + \lambda_4 o_{\text{plaus}}$, with actionability as a \textbf{constraint}. Beware the
-      \textbf{Rashomon effect} --- the answer is not unique.
+    \item \textbf{Any modality:} both only need a way to switch one piece of the input
+      \textbf{off} --- a column, a \textbf{word}, a \textbf{superpixel}. One tool, snow-detector
+      \emph{and} mail-header detector.
+    \item \textbf{Counterfactuals} answer ``what would change the outcome'', as an optimization
+      trading \textbf{validity} against \textbf{proximity}, \textbf{sparsity} and
+      \textbf{plausibility} --- actionability being a \textbf{constraint}, not a term. Beware the
+      \textbf{Rashomon effect}: the answer is not unique.
     \item Everything explains the \textbf{model}, not causation --- and plots are easy to over-read.
   \end{itemize}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
     \textbf{That's interpretability:} read the model when you can, explain it when you can't ---
-    importance, effects, and per-prediction attributions, each answering a different question.}}
+    importance, effects, and per-prediction attributions, each answering a different question.
+    \textbf{Next:} the chapter practical --- \emph{explaining startup success}.}}
 \end{frame}
 
 \end{document}
@@ -955,4 +1086,38 @@ cf.visualize_as_dataframe()
 %     != causation), ch4 trees/boosting (TreeSHAP). Chapter decision guide in the wrap-up.
 %   - Design doc: 24_shap_lime_OUTLINE.md (v2). Interview-locked: hybrid figures (reuse LMU
 %     bar/beeswarm/dependence + animation, generate waterfall), bike RF, LIME = 2 frames.
+%   - 2026-07-30 pass (user request): pedagogy polish + TEXT MODALITY. Four new frames:
+%     * "One catch: what does 'without a feature' even mean?" (after the base-value identity) --
+%       the mechanic the deck previously skipped: v(S) = E[f(x_S, X_Sbar)], i.e. absent features are
+%       resampled from a BACKGROUND dataset, v(empty) = E[f] is exactly the base value, and every
+%       phi is relative to that background (the X in shap.Explainer(model, X)). Also the hook for
+%       every other modality: absent = resample a column / mask a word / grey a patch.
+%     * "SHAP on text: the same sum, over words" (SHAP-in-practice section) + fig/text_shap_tokens.
+%     * "LIME's real trick: explain in a simplified space" (before the husky) -- LIME fits on a
+%       BINARY presence vector z' in {0,1}^d', not on the model's inputs; 3x3 table of what a
+%       "piece" is per modality. Retro-explains the superpixels the husky frame used in passing.
+%     * "The same trap, in text" (after the husky proof) + fig/text_lime_newsgroups -- the text
+%       twin of the husky/snow clever-Hans.
+%     Smaller: a misconception box on the waterfall (phi_temp=+771 is NOT "delete temp"); a
+%     text/image note on the Gower frame (no ranges, no categories -> smallest EDIT + fluency);
+%     shap.maskers.Text lines in the code frame; a modality clause on "Which method when?"; a
+%     modality bullet + the missing "Next:" pointer in the recap.
+%   - MEASURED for the two text frames (py_src/interp_text_figs.py, ma venv, seed 509;
+%     20 newsgroups alt.atheism vs soc.religion.christian, 1079 train / 717 test):
+%     TF-IDF + logistic regression, headers KEPT -> test acc 0.9066 (vocab 19666); headers/footers/
+%     quotes STRIPPED -> 0.7908 (vocab 15698). So 11.6 points of the accuracy was header artifact.
+%     LIME top-10 for test post 481: sgi, NNTP, Host, wpd, solntze, Posting, morality, writes,
+%     livesey, ksu. Class skew measured on OUR training split: NNTP in 21.6% of posts / 99.6%
+%     atheism; Host 22.4% / 97.5%; Posting 27.4% / 86.5%; solntze, wpd, livesey ~5.7-5.9% / 100%
+%     (one prolific poster's machine + surname -- Ribeiro's second failure mode). Only "morality"
+%     is topical. SHAP text post 239: base 0.4063 + sum(phi) 0.4715 = 0.8778 = f(x), top tokens
+%     Christ/Christians/Jesus/resurrection.
+%     Ribeiro et al. (2016) numbers are cited as THEIRS and kept separate: RBF-SVM, 94% held-out,
+%     top words Posting/Host/Re, "Posting" in 22% of examples / 99% atheism. Do not merge the two
+%     sets of numbers. "SVM" is deliberately NOT named on the slide (ch7 has not taught it yet).
+%     The SHAP document is picked by pick_content_doc(): without it the explainer lands on a
+%     signature block (bobbe@, ICO., TEK.) and teaches nothing -- candidates are ranked by the
+%     linear model's own w_j*x_j and required to be common words (alphabetic, >=4 chars, df>=25).
+%     Corpus note: fetch_20newsgroups() re-reads all 18846 files to build its cache (tens of
+%     minutes on this filesystem); the script reads the two category folders directly instead.
 % =============================================================

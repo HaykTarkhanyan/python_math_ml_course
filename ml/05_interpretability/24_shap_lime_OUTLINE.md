@@ -99,6 +99,24 @@ lighter local cousin. No game-theory derivations.
 2. Which course model for the generated plot — bank-marketing classifier or rent regression?
 3. Keep the chapter decision guide here (deck 3 finale) — confirm this is the right home.
 
+## Changelog (v2 → built deck, 2026-07-30 pedagogy + text-modality pass)
+
+The deck has grown well past this outline. What is in `24_shap_lime.tex` but *not* described
+above (see the `% Provenance:` block in the `.tex` for the full record):
+
+- **Game-theory origin + Adi/Budi/Gogi worked example**, then the two embedded LMU formal slides.
+- **LIME expanded 2 → 8 frames** (locality assumption, three ingredients, 4 step frames, the
+  simplified-space frame, husky + husky-proof, caveats, global surrogate).
+- **Counterfactuals** as their own section (5 frames + `cf_flip_bank.pdf`) — see
+  `ADDITIONS_OUTLINE.md`.
+- **The masking frame** ("what does *without a feature* even mean?") — `v(S)` needs a background
+  dataset; `v(∅) = E[f̂]` is the base value. This is the frame that makes SHAP portable across
+  modalities.
+- **Text modality, measured** — `SHAP on text` (`fig/text_shap_tokens.pdf`) and `The same trap, in
+  text` (`fig/text_lime_newsgroups.pdf`), both from `py_src/interp_text_figs.py` on the
+  atheism-vs-christianity newsgroup subset. Headers kept → 0.9066 test accuracy, stripped →
+  0.7908.
+
 ## Changelog (v1 → v2)
 1. **LIME trimmed** from a 5-frame section to **2 frames** (10–11), matching the "especially SHAP
    plots, *maybe* LIME" steer; the reclaimed room goes to the SHAP plot frames.
