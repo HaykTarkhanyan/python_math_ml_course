@@ -39,7 +39,24 @@ Last updated: 2026-07-29
 2026-07-07 and predate the current style conventions, so they need a polish pass before recording.
 After that: **classic methods** (`ml/07_classic_methods` — KNN, Naive Bayes, LDA/QDA, SVM, GP),
 which is deliberately placed right before the neural-network block so the margin/kernel material
-sets it up.
+sets it up. Then **time series** (`ml/08_time_series`), below.
+
+## Time series — built, not delivered (`ml/08_time_series`)
+
+Two decks, reviewed and reworked 2026-07-31. They were originally numbered 07/08, which collided
+with the delivered [07] Regularization and [08] Hyperparameter tuning; renumbered to **30/31**,
+leaving **28–29 free for classic methods** (chapter 07 comes first in course order).
+
+- **[30] Time series — classical methods** — trend/season/noise, STL, stationarity + differencing
+  (ADF *and* KPSS), ACF/PACF read on our own series, AR/MA/ARMA/ARIMA/SARIMA, Holt-Winters,
+  naive baselines and MASE worked by hand.
+- **[31] Time series — the ML approach** — forecasting as supervised learning, time-aware splits
+  and leakage, lag/rolling/calendar/exogenous features, `TimeSeriesSplit` (incl. `gap`),
+  the tree extrapolation trap, recursive vs direct, prediction intervals via conformal,
+  M4/M5 and why the winners were hybrids, deep + foundation models.
+
+Open items before recording: no real dataset appears in either deck (everything is one synthetic
+monthly series); the AMD/Dram exchange rate is name-dropped in the cold open but never shown.
 
 ## Next lecture — Tuesday 2026-06-23
 

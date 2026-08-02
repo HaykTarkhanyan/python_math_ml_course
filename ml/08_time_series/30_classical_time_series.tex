@@ -22,7 +22,7 @@
 \newcommand{\callout}[2]{%
   \begin{center}\fcolorbox{#1}{#1!8}{\parbox{0.92\textwidth}{#2}}\end{center}}
 
-\title{07: Time Series -- Classical Methods}
+\title{30: Time Series -- Classical Methods}
 \subtitle{When the order of the rows is the whole point}
 \date{}
 
@@ -43,12 +43,12 @@
   today's. You can only train on the past, and you must predict the future --
   never the other way around.}
   \vfill
-  Examples everywhere: daily sales, electricity demand, website traffic, AMD /
-  Dram exchange rate, sensor readings, COVID case counts, your heart rate.
+  Examples everywhere: daily sales, electricity demand, website traffic, the
+  dram-to-dollar exchange rate, sensor readings, COVID case counts, your heart rate.
   \vfill
-  \footnotesize Two lectures. \textbf{Today (07):} the classical statistical
+  \footnotesize Two lectures. \textbf{Today (30):} the classical statistical
   toolkit -- decomposition, stationarity, ARIMA, exponential smoothing.
-  \textbf{Next (08):} treating forecasting as a supervised ML problem.
+  \textbf{Next (31):} treating forecasting as a supervised ML problem.
 \end{frame}
 
 \begin{frame}{Outline}
@@ -175,15 +175,32 @@ res.trend, res.seasonal, res.resid
         period $m$.
     \end{itemize}
     \vskip4pt
-    \textbf{Testing it -- the ADF test.}
-    Augmented Dickey-Fuller: $H_0 = $ ``non-stationary''.
-    \emph{Small $p$-value} $\Rightarrow$ reject $\Rightarrow$ stationary.
+    \textbf{Testing it -- two tests, opposite nulls} {\small(small $p$ rejects, so
+    they point opposite ways):}
+    \begin{itemize}\scriptsize
+      \item \textbf{Augmented Dickey-Fuller} (\textbf{ADF}) -- $H_0$: non-stationary.
+      \item \textbf{Kwiatkowski-Phillips-Schmidt-Shin} (\textbf{KPSS}) -- $H_0$:
+        stationary.
+    \end{itemize}
     \column{0.58\textwidth}
     \includegraphics[width=\textwidth]{fig/differencing.pdf}
-    \vskip4pt
-    \callout{armred}{\scriptsize A trap: differencing too many times injects
-    artificial noise. Difference the \emph{minimum} amount that passes the test.}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Predict-first: if one difference is good, are two better?}
+  One difference took us from ADF $p = 0.94$ to $p = 0.000$. The series looks
+  stationary. Tempting thought: difference once more, just to be safe.
+  \vfill
+  \textbf{Predict: what happens to the spread of the values?}
+  \pause
+  \vfill
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/over_differencing.pdf}
+  \end{center}
+  \vskip1pt
+  \callout{armred}{\footnotesize The spread goes \emph{up}: $40.9 \to 10.8 \to 11.7$.
+  No trend was left to remove, so the second difference only differenced the
+  \textbf{noise} -- and the difference of noise is noisier still.}
 \end{frame}
 
 % ================================================================
@@ -265,6 +282,30 @@ res.trend, res.seasonal, res.resid
   a short \emph{echo} of the last random \emph{shock}. ARMA blends the two.}
 \end{frame}
 
+\begin{frame}{Careful: ``moving average'' means two different things}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \callout{armred}{\textbf{The MA in ARIMA is \emph{not} a rolling mean.}}
+    \vskip6pt
+    \textbf{What you already know} -- a \emph{rolling} or \emph{moving} average: a
+    sliding mean of the \textbf{values}, used to smooth a curve.
+    \[ \tfrac{1}{3}\big(y_{t-1}+y_{t-2}+y_{t-3}\big) \]
+    You compute it \emph{from data you can see}.
+    \column{0.52\textwidth}
+    \textbf{MA($q$) in ARIMA} -- a weighted sum of the past \textbf{shocks}
+    (the model's own errors):
+    \[ y_t = c + \eps_t + \theta_1\eps_{t-1} + \dots \]
+    The $\eps$'s are \emph{unobserved}. You never measure them; the fitting procedure
+    infers them. That is why MA orders cannot be read off the data directly the way a
+    rolling mean can -- and why they need the ACF.
+  \end{columns}
+  \vfill
+  \callout{armorange}{\footnotesize Two unrelated ideas, one name, purely for historical
+  reasons. Next lecture we build rolling-mean \emph{features}
+  (\texttt{y.shift(1).rolling(7).mean()}) and feed them to a tree -- that is the
+  \emph{other} moving average. Keep them apart.}
+\end{frame}
+
 \begin{frame}{SARIMA: adding seasonality}
   Real series are seasonal, so add a second, seasonal triple:
   \[ \text{SARIMA}(p,d,q)(P,D,Q)_m \]
@@ -274,18 +315,61 @@ res.trend, res.seasonal, res.resid
     \item $m$ -- periods per season (12 monthly, 7 daily-with-weekly, 24 hourly-with-daily).
   \end{itemize}
   \vfill
+  \callout{armorange}{\footnotesize One $m$ only. Hourly electricity demand has a daily
+  \emph{and} a weekly \emph{and} a yearly season -- SARIMA can model one of them. That
+  limitation is exactly why Fourier seasonal terms, and models like Prophet, exist.}
+\end{frame}
+
+\begin{frame}{Choosing the orders -- on our own series}
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/acf_pacf_series.pdf}
+  \end{center}
+  \vskip2pt
   \begin{columns}[T]
-    \column{0.55\textwidth}
+    \column{0.52\textwidth}
+    \footnotesize
+    \textbf{Left:} the raw ACF decays slowly (lag 1 $=0.94$) -- classic ``still
+    trending'', so we need $d \ge 1$.
+    \vskip3pt
+    \textbf{Middle:} after $(1-B)(1-B^{12})$ -- one ordinary and one seasonal
+    difference -- one clear \emph{negative} spike at \textbf{lag 12} ($-0.35$).
+    A single negative seasonal spike in the ACF is the signature of a
+    \textbf{seasonal MA} term, so $Q=1$.
+    \column{0.48\textwidth}
+    \callout{armblue}{\footnotesize That gives
+    $\text{SARIMA}(0,1,1)(0,1,1)_{12}$ -- known as the \textbf{airline model}, because
+    Box and Jenkins fitted exactly this to monthly airline passengers.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Did reading the plot actually help?}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    We could have guessed a seasonal \emph{AR} term instead. Compare the two by
+    \textbf{Akaike Information Criterion} (\textbf{AIC}) -- fit quality penalised
+    by the number of parameters, lower is better:
+    \vskip6pt
+    {\small
+    \begin{tabular}{lcc}
+      \textbf{orders} & \textbf{AIC} & \textbf{test MAE} \\ \hline
+      $(1,1,1)(1,1,0)_{12}$ & 356.4 & 7.24 \\
+      $(0,1,1)(0,1,1)_{12}$ & \textbf{343.8} & \textbf{6.07} \\
+    \end{tabular}}
+    \vskip6pt
+    \footnotesize The plot was right: the seasonal MA wins on both, and we never
+    touched the test set to find that out.
+    \column{0.54\textwidth}
     \includegraphics[width=\textwidth]{fig/arima_forecast.pdf}
-    \column{0.45\textwidth}
-    \callout{paramgreen}{\footnotesize The forecast comes with a \textbf{prediction
+    \vskip2pt
+    \callout{paramgreen}{\scriptsize The forecast comes with a \textbf{prediction
     interval} -- uncertainty grows with the horizon. A point forecast without an
     interval is only half an answer.}
-    \vskip4pt
-    \footnotesize \textbf{In practice:} don't hand-tune $p,d,q$. Use
-    \texttt{pmdarima.auto\_arima} or \texttt{statsforecast.AutoARIMA}, which
-    search orders by AIC.
   \end{columns}
+  \vskip2pt
+  \footnotesize \textbf{In practice:} don't hand-tune $p,d,q$ at all. Use
+  \texttt{pmdarima.auto\_arima} or \texttt{statsforecast.AutoARIMA}, which search
+  orders by AIC for you. Read the plot to \emph{understand}, let the search
+  \emph{choose}.
 \end{frame}
 
 % ================================================================
@@ -293,7 +377,7 @@ res.trend, res.seasonal, res.resid
 
 \begin{frame}[plain]
   \begin{center}
-    {\Large\color{popblue}\textbf{Exponential smoothing (ETS)}}\\[4pt]
+    {\Large\color{popblue}\textbf{Exponential smoothing}}\\[4pt]
     \small Weighted averages where the recent past counts most.
   \end{center}
 \end{frame}
@@ -301,7 +385,11 @@ res.trend, res.seasonal, res.resid
 \begin{frame}{From a simple average to Holt-Winters}
   \begin{columns}[T]
     \column{0.46\textwidth}
-    \textbf{Simple (SES)} -- level only. Weights decay geometrically into the past:
+    The family is written \textbf{ETS} -- \textbf{Error, Trend, Seasonality}, the three
+    components you switch on or off.
+    \vskip4pt
+    \textbf{Simple Exponential Smoothing} (\textbf{SES}) -- level only. Weights decay
+    geometrically into the past:
     \[ \hat{y}_{t+1} = \alpha y_t + (1-\alpha)\hat{y}_t \]
     Flat forecast -- no good if there is a trend or season.
     \vskip4pt
@@ -313,9 +401,9 @@ res.trend, res.seasonal, res.resid
     \includegraphics[width=\textwidth]{fig/exp_smoothing.pdf}
   \end{columns}
   \vskip2pt
-  \callout{armblue}{\footnotesize ETS and ARIMA overlap but are not the same:
-  ETS is built from interpretable components (level/trend/season); ARIMA is built
-  from autocorrelation. On many business series they perform similarly -- try both.}
+  \callout{armblue}{\footnotesize ETS and ARIMA overlap but are not the same: ETS is
+  built from interpretable \emph{components}, ARIMA from \emph{autocorrelation}. On
+  many business series they perform similarly -- try both.}
 \end{frame}
 
 % ================================================================
@@ -344,25 +432,74 @@ res.trend, res.seasonal, res.resid
     \column{0.5\textwidth}
     \textbf{Error metrics}
     \begin{itemize}\small
-      \item \textbf{MAE} -- mean $|$error$|$, in the target's units.
-      \item \textbf{RMSE} -- penalizes big misses more.
-      \item \textbf{MAPE} -- percentage error; breaks when $y\approx 0$ and is
-        asymmetric.
-      \item \textbf{MASE} $=$ MAE $/$ MAE$_{\text{seas.\ naive}}$ -- error relative to the
-        naive forecast. $<1$ beats naive, $>1$ loses. Scale-free; the one to report.
+      \item \textbf{Mean Absolute Error} (\textbf{MAE}) -- in the target's units.
+      \item \textbf{Root Mean Squared Error} (\textbf{RMSE}) -- penalizes big misses more.
+      \item \textbf{Mean Absolute Percentage Error} (\textbf{MAPE}) -- breaks when
+        $y\approx 0$, and punishes over-forecasting more than under-forecasting.
+      \item \textbf{Mean Absolute Scaled Error} (\textbf{MASE}) -- scale-free; the one
+        to report.
     \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{MASE, by hand}
+  \[ \text{MASE} \;=\;
+     \frac{\text{MAE of your forecast on the \textbf{test} set}}
+          {\text{MAE of the seasonal naive forecast \textbf{in-sample}, on the training set}} \]
+  \vskip2pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Denominator} -- walk the \emph{training} series and predict each month with the
+    same month last year. Say those errors are $|{-}12|, 20, |{-}18|, 22$:
+    \[ \tfrac{12+20+18+22}{4} = 18 \]
+    \textbf{Numerator} -- your model's test errors, say $5, |{-}9|, 7, 3$:
+    \[ \tfrac{5+9+7+3}{4} = 6 \]
+    \column{0.5\textwidth}
+    \[ \text{MASE} = \frac{6}{18} = \mathbf{0.33} \]
+    Your errors are a third of what naive repetition would cost. \textbf{Below 1 is a
+    win, above 1 means you lost to copying last year.}
+    \vskip4pt
+    \callout{armorange}{\scriptsize Note the asymmetry: the denominator is measured
+    \emph{in-sample}, on train. So the seasonal naive evaluated on the \emph{test} set
+    does \textbf{not} have to score exactly $1.00$ -- it can land either side.
+    Next lecture ours comes out at $1.22$.}
   \end{columns}
 \end{frame}
 
 \begin{frame}{Evaluate on the future, never by random split}
   You cannot shuffle-and-split a time series: that trains on the future to predict
-  the past. Instead use a \textbf{time-ordered holdout} and \textbf{backtesting}
-  (rolling / expanding windows).
+  the past.
+  \vskip3pt
+  \begin{center}
+    \includegraphics[width=0.66\textwidth]{fig/time_aware_split.pdf}
+  \end{center}
+  \vskip1pt
+  \callout{armorange}{\footnotesize This ``time-aware validation'' is the hinge between
+  the two lectures. We build the full machinery -- leakage, lag features,
+  \texttt{TimeSeriesSplit} -- in lecture 31.}
+\end{frame}
+
+\begin{frame}{One more trap: even the baseline has to respect the arrow}
+  Seasonal naive means ``this December $=$ last December''. Writing that as
+  \texttt{y.shift(12)} across a test block looks harmless -- and is wrong the moment
+  your horizon exceeds one season.
   \vfill
-  \callout{armorange}{\footnotesize This ``time-aware validation'' is the hinge
-  between the two lectures -- it is exactly what lets us hand forecasting to a
-  generic ML model next time. We build the full machinery (leakage, lag features,
-  \texttt{TimeSeriesSplit}) in lecture 08.}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \callout{armred}{\footnotesize Forecasting 18 months from one origin, steps 13--18
+    would reach back only 12 and land \emph{inside the test window} -- the ``baseline''
+    reads the future it is supposed to predict.}
+    \vskip4pt
+    \footnotesize The honest version always reaches back to an \emph{observed} value:
+    \[ \hat{y}_{T+k} \;=\; y_{T+k-m\lceil k/m\rceil} \]
+    \column{0.48\textwidth}
+    \footnotesize On our series that single fix moves the seasonal naive from
+    MASE \textbf{0.90} to \textbf{1.22}.
+    \vskip4pt
+    \callout{paramgreen}{\footnotesize Which is the whole point: a leaky baseline is
+    the most dangerous kind. It sets the bar \emph{too high}, so a good model looks
+    mediocre -- and you go tune something that was never the problem.}
+  \end{columns}
   \vfill
   \footnotesize \textbf{Rule of thumb for picking an approach:} short, single,
   strongly-seasonal series $\to$ ARIMA / ETS are hard to beat. Many related
@@ -380,14 +517,14 @@ res.trend, res.seasonal, res.resid
     \begin{itemize}\small
       \item Time order is information; only train on the past.
       \item Decompose into trend $+$ season $+$ residual (STL).
-      \item Make it stationary (difference; check with ADF).
-      \item ACF/PACF read off AR/MA orders.
-      \item ARIMA / SARIMA: autocorrelation-based.
-      \item Exponential smoothing: component-based.
-      \item Score against seasonal naive with MASE; evaluate on the future.
+      \item Difference the \emph{minimum} amount; check with ADF \textbf{and} KPSS.
+      \item ACF/PACF read off AR/MA orders; confirm with AIC.
+      \item MA($q$) is about \emph{shocks}, not a rolling mean.
+      \item ARIMA: autocorrelation-based. ETS: component-based.
+      \item Score with MASE -- and make sure the baseline doesn't peek.
     \end{itemize}
     \column{0.5\textwidth}
-    \callout{paramgreen}{\textbf{Next (08): ML for time series.}
+    \callout{paramgreen}{\textbf{Next (31): ML for time series.}
     Reframe forecasting as supervised learning --
     \begin{itemize}\scriptsize
       \item time-aware splits and leakage,
@@ -416,11 +553,33 @@ res.trend, res.seasonal, res.resid
 %   Figures -- all Python-generated (matplotlib/statsmodels) by
 %     py_src/classical_figs.py on a deterministic synthetic monthly series
 %     (seed 509): ts_anatomy, stl_decomposition, stationarity, differencing,
-%     acf_pacf, arima_forecast, exp_smoothing. No TikZ, no external images.
+%     over_differencing, acf_pacf, acf_pacf_series, ar_vs_ma, arima_forecast,
+%     exp_smoothing. No TikZ, no external images.
 %   Pedagogical decisions -- lead with "the rows are no longer interchangeable"
 %     to bridge from all prior i.i.d. supervised lectures; ADF p-values shown
 %     numerically (0.94 -> 0.000) so students see the test move; the naive/MASE
 %     baseline is framed as non-negotiable to set up the ML deck's honest
-%     model comparison; SARIMA orders motivated from ACF/PACF + ADF rather than
-%     auto-fit, but auto_arima flagged as the practical tool.
-%   Forward pointer -- 08_ml_time_series.tex picks up at "time-aware validation".
+%     model comparison.
+%
+%   Review pass 2026-07-31 (all numbers below re-measured, not carried over):
+%     - Renumbered 07 -> 30; the old number collided with the delivered
+%       [07] Regularization. 28-29 left free for ml/07_classic_methods.
+%     - SARIMA orders CHANGED from a hand-picked (1,1,1)(1,1,0)_12 to the
+%       airline model (0,1,1)(0,1,1)_12, because the new acf_pacf_series figure
+%       shows a single negative ACF spike at lag 12 = seasonal MA. Confirmed by
+%       AIC 343.8 vs 356.4 and test MAE 6.07 vs 7.24. The deck previously claimed
+%       orders were "motivated from ACF/PACF" while hard-coding them and showing
+%       the correlogram of an unrelated AR(2).
+%     - Added: KPSS alongside ADF (opposite null); a predict-first frame on
+%       over-differencing (std 40.9 -> 10.8 -> 11.7, so the 2nd difference makes
+%       it WORSE); the MA(q)-vs-rolling-mean name collision, which the next deck
+%       walks straight into; MASE worked by hand, which also explains why a
+%       held-out seasonal naive need not score 1.00; the leaky-baseline frame
+%       (shift(12) reads inside the test window past one season: MASE 0.90 vs
+%       an honest 1.22); multiple seasonality as SARIMA's hard limit.
+%     - Expanded on first use: ADF, KPSS, AIC, SES, MAE/RMSE/MAPE/MASE. "ETS"
+%       had been used as a synonym for exponential smoothing; it is Error,
+%       Trend, Seasonality (Hyndman's state-space framing).
+%     - arima_forecast / exp_smoothing fonts raised: they sit in ~55% columns
+%       and their 8.5pt legends were unreadable at projection scale.
+%   Forward pointer -- 31_ml_time_series.tex picks up at "time-aware validation".

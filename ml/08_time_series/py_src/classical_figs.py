@@ -1,13 +1,16 @@
-"""Figures for Lecture 1 -- Classical time series (07_classical_time_series).
+"""Figures for Lecture 1 -- Classical time series (30_classical_time_series).
 
 Generates PDFs into ml/08_time_series/fig/:
   ts_anatomy.pdf       -- one series annotated: trend + seasonality + noise.
   stl_decomposition.pdf-- STL: observed / trend / seasonal / residual.
   stationarity.pdf     -- stationary vs 3 kinds of non-stationary.
-  differencing.pdf     -- non-stationary series -> differenced, with ADF p-values.
+  differencing.pdf     -- non-stationary series -> differenced, ADF *and* KPSS p-values.
+  over_differencing.pdf-- what differencing one time too many does to the variance.
   acf_pacf.pdf         -- ACF & PACF of an AR(2) process (how to read the orders).
+  acf_pacf_series.pdf  -- ACF & PACF of OUR OWN series, raw and after (1-B)(1-B^12).
+  ar_vs_ma.pdf         -- AR(1) persistence vs MA(1) echo, sample paths.
   arima_forecast.pdf   -- SARIMA forecast on a held-out tail, with 95% interval.
-  exp_smoothing.pdf    -- naive / Holt / Holt-Winters forecasts compared.
+  exp_smoothing.pdf    -- SES / Holt / Holt-Winters forecasts compared.
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
     ./ma/Scripts/python.exe ml/08_time_series/py_src/classical_figs.py
@@ -27,11 +30,19 @@ import pandas as pd
 from statsmodels.tsa.arima_process import ArmaProcess
 from statsmodels.graphics.tsaplots import acf, pacf
 from statsmodels.tsa.seasonal import STL
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, kpss
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.holtwinters import ExponentialSmoothing, SimpleExpSmoothing, Holt
 
 SEED = 509
+
+# SARIMA orders, chosen from the correlogram in fig_acf_pacf_series rather than guessed:
+# after (1-B)(1-B^12) the ACF has a single negative spike at lag 12, the textbook
+# signature of a SEASONAL MA term. This is Box-Jenkins' "airline model". It beats the
+# seasonal-AR guess this deck used until 2026-07-31 on both AIC (343.8 vs 356.4) and
+# held-out MAE (6.07 vs 7.24). Keep in sync with ml_figs.py.
+ORDER, SEASONAL_ORDER = (0, 1, 1), (0, 1, 1, 12)
+
 ARM_BLUE = "#0033A0"
 ARM_RED = "#D90012"
 ARM_ORANGE = "#F2A800"
@@ -159,24 +170,73 @@ def fig_stationarity(log: logging.Logger) -> None:
     save(fig, "stationarity.pdf", log)
 
 
+def _kpss_p(x) -> str:
+    """KPSS p-value, honestly reported when statsmodels clips it to its lookup table.
+
+    KPSS's null is the OPPOSITE of ADF's: H0 = stationary. statsmodels only tabulates
+    p in [0.01, 0.10] and warns when the statistic falls outside, so returning the
+    clipped number as if it were exact would be a quiet lie.
+    """
+    import warnings
+    from statsmodels.tools.sm_exceptions import InterpolationWarning
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        p = kpss(x, regression="c", nlags="auto")[1]
+        clipped = any(issubclass(w.category, InterpolationWarning) for w in caught)
+    if clipped:
+        return f"< {p:.2f}" if p <= 0.01 else f"> {p:.2f}"
+    return f"= {p:.3f}"
+
+
 def fig_differencing(series: pd.Series, log: logging.Logger) -> None:
     d1 = series.diff().dropna()
-    p_raw = adfuller(series)[1]
-    p_diff = adfuller(d1)[1]
-    log.info(f"ADF p-value raw={p_raw:.3f}  differenced={p_diff:.3f}")
+    p_raw, p_diff = adfuller(series)[1], adfuller(d1)[1]
+    k_raw, k_diff = _kpss_p(series), _kpss_p(d1)
+    log.info(f"ADF  p raw={p_raw:.3f}  differenced={p_diff:.3f}")
+    log.info(f"KPSS p raw {k_raw}      differenced {k_diff}")
 
-    fig, axes = plt.subplots(2, 1, figsize=(8.5, 4.8), sharex=False)
+    fig, axes = plt.subplots(2, 1, figsize=(8.5, 5.0), sharex=False)
     axes[0].plot(series.index, series.values, color=ARM_RED, lw=1.4)
-    axes[0].set_title(f"Original: trending, ADF p = {p_raw:.2f}  "
-                      f"({'non-stationary' if p_raw > 0.05 else 'stationary'})",
-                      fontsize=11, loc="left", color=ARM_RED)
+    axes[0].set_title(f"Original: trending.   ADF p = {p_raw:.2f} (cannot reject "
+                      f"non-stationary)   KPSS p {k_raw} (rejects stationary)",
+                      fontsize=10.5, loc="left", color=ARM_RED)
     axes[1].plot(d1.index, d1.values, color=ARM_BLUE, lw=1.1)
     axes[1].axhline(0, color="k", lw=0.6)
-    axes[1].set_title(f"After 1st differencing $y_t - y_{{t-1}}$: ADF p = {p_diff:.3f}  "
-                      f"({'stationary' if p_diff < 0.05 else 'non-stationary'})",
-                      fontsize=11, loc="left", color=ARM_BLUE)
+    axes[1].set_title(f"After 1st differencing $y_t - y_{{t-1}}$.   ADF p = {p_diff:.3f} "
+                      f"(stationary)   KPSS p {k_diff} (agrees)",
+                      fontsize=10.5, loc="left", color=ARM_BLUE)
+    for ax in axes:
+        ax.tick_params(labelsize=9.5)
+    fig.text(0.5, -0.02, "Two tests, opposite nulls. Agreement is the evidence you want; "
+             "disagreement means look again.", ha="center", fontsize=9.5, color=GREY)
     fig.tight_layout()
     save(fig, "differencing.pdf", log)
+
+
+def fig_over_differencing(series: pd.Series, log: logging.Logger) -> None:
+    """The trap the deck states in words: differencing once more inflates the variance."""
+    levels = [("raw $y_t$", series, ARM_RED),
+              ("$d=1$: $y_t - y_{t-1}$", series.diff().dropna(), ARM_BLUE),
+              ("$d=2$: differenced again", series.diff().diff().dropna(), ARM_ORANGE)]
+    fig, axes = plt.subplots(1, 3, figsize=(10.2, 3.2))
+    for ax, (name, data, c) in zip(axes, levels):
+        ax.plot(data.index, data.values, color=c, lw=1.2)
+        sd = data.std()
+        ax.set_title(f"{name}\nstd = {sd:.1f}", fontsize=11, loc="left", color=c)
+        ax.tick_params(labelsize=9)
+        ax.xaxis.set_major_locator(plt.MaxNLocator(3))
+        log.info(f"over-differencing: {name:26s} std={sd:.2f}  "
+                 f"ADF p={adfuller(data)[1]:.4f}")
+        if name.startswith("$d=1$"):
+            ax.axhline(0, color="k", lw=0.6)
+        if name.startswith("$d=2$"):
+            ax.axhline(0, color="k", lw=0.6)
+    fig.suptitle("Difference the MINIMUM amount that passes the test", fontsize=12.5)
+    fig.text(0.5, -0.04, "One difference already passes ADF. The second one does not remove "
+             "more trend - there is none left - it just amplifies the noise.",
+             ha="center", fontsize=9.5, color=GREY)
+    fig.tight_layout()
+    save(fig, "over_differencing.pdf", log)
 
 
 def fig_acf_pacf(log: logging.Logger) -> None:
@@ -210,25 +270,61 @@ def fig_acf_pacf(log: logging.Logger) -> None:
     save(fig, "acf_pacf.pdf", log)
 
 
+def fig_acf_pacf_series(series: pd.Series, log: logging.Logger) -> None:
+    """ACF/PACF of OUR series -- raw, then after (1-B)(1-B^12) -- so the SARIMA orders
+    on the next frame are read off a picture instead of appearing from nowhere."""
+    stationary = series.diff().diff(12).dropna()
+    nlags = 26
+    panels = [("Raw series: ACF decays slowly = still trending", series, "acf", ARM_RED),
+              (r"After $(1-B)(1-B^{12})$: ACF", stationary, "acf", ARM_BLUE),
+              (r"After $(1-B)(1-B^{12})$: PACF", stationary, "pacf", ARM_ORANGE)]
+    fig, axes = plt.subplots(1, 3, figsize=(11.4, 3.3))
+    for ax, (title, data, kind, c) in zip(axes, panels):
+        vals = acf(data, nlags=nlags) if kind == "acf" else pacf(data, nlags=nlags)
+        ci = 1.96 / np.sqrt(len(data))
+        lags = np.arange(len(vals))
+        ax.vlines(lags, 0, vals, color=c, lw=1.8)
+        ax.plot(lags, vals, "o", color=c, ms=3)
+        ax.axhline(0, color="k", lw=0.6)
+        ax.axhspan(-ci, ci, color="grey", alpha=0.15)
+        ax.set_title(title, fontsize=10.5, loc="left", color=c)
+        ax.set_xlabel("lag", fontsize=10)
+        ax.tick_params(labelsize=9.5)
+        if data is stationary:
+            ax.axvline(12, color=GREY, ls=":", lw=1.2)
+            ax.annotate("lag 12", xy=(12, ax.get_ylim()[1] * 0.82), fontsize=9,
+                        color=GREY, ha="center")
+        log.info(f"{title[:44]:46s} lag1={vals[1]:+.2f} lag12={vals[12]:+.2f}")
+    fig.suptitle("Reading the orders off OUR monthly series", fontsize=12.5)
+    fig.tight_layout()
+    save(fig, "acf_pacf_series.pdf", log)
+
+
 def fig_arima_forecast(series: pd.Series, log: logging.Logger) -> None:
     h = 18
     train, test = series.iloc[:-h], series.iloc[-h:]
-    model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(1, 1, 0, 12),
+    model = SARIMAX(train, order=ORDER, seasonal_order=SEASONAL_ORDER,
                     enforce_stationarity=False, enforce_invertibility=False)
     fit = model.fit(disp=False)
     fc = fit.get_forecast(steps=h)
     mean = fc.predicted_mean
     ci = fc.conf_int(alpha=0.05)
+    log.info(f"SARIMA{ORDER}{SEASONAL_ORDER} AIC={fit.aic:.1f} "
+             f"test MAE={np.abs(test.values - mean.values).mean():.2f}")
 
-    fig, ax = plt.subplots(figsize=(8.6, 3.9))
-    ax.plot(train.index, train.values, color=ARM_BLUE, lw=1.3, label="train")
-    ax.plot(test.index, test.values, color="k", lw=1.6, label="actual (held out)")
-    ax.plot(mean.index, mean.values, color=ARM_RED, lw=2, label="SARIMA forecast")
+    # sized for a ~55% slide column, so every font is set well above matplotlib's
+    # defaults - at deck scale the old 8.5pt legend was unreadable
+    fig, ax = plt.subplots(figsize=(7.6, 4.0))
+    ax.plot(train.index, train.values, color=ARM_BLUE, lw=1.5, label="train")
+    ax.plot(test.index, test.values, color="k", lw=2.0, label="actual (held out)")
+    ax.plot(mean.index, mean.values, color=ARM_RED, lw=2.4, label="SARIMA forecast")
     ax.fill_between(ci.index, ci.iloc[:, 0], ci.iloc[:, 1],
-                    color=ARM_RED, alpha=0.15, label="95% interval")
-    ax.axvline(train.index[-1], color=GREY, ls="--", lw=1)
-    ax.set_title("SARIMA(1,1,1)(1,1,0)$_{12}$ forecast", fontsize=12, loc="left")
-    ax.legend(fontsize=8.5, ncol=2, loc="upper left")
+                    color=ARM_RED, alpha=0.18, label="95% interval")
+    ax.axvline(train.index[-1], color=GREY, ls="--", lw=1.2)
+    ax.set_title("SARIMA(0,1,1)(0,1,1)$_{12}$ forecast -- the 'airline model'",
+                 fontsize=13.5, loc="left")
+    ax.legend(fontsize=11, ncol=2, loc="upper left")
+    ax.tick_params(labelsize=11)
     fig.tight_layout()
     save(fig, "arima_forecast.pdf", log)
 
@@ -241,19 +337,21 @@ def fig_exp_smoothing(series: pd.Series, log: logging.Logger) -> None:
     hw = ExponentialSmoothing(train, trend="add", seasonal="add", seasonal_periods=12,
                               initialization_method="estimated").fit()
 
-    fig, ax = plt.subplots(figsize=(8.6, 3.9))
-    ax.plot(train.index[-36:], train.values[-36:], color=ARM_BLUE, lw=1.2, label="train")
-    ax.plot(test.index, test.values, color="k", lw=1.6, label="actual")
-    ax.plot(test.index, ses.forecast(h).values, color=GREY, lw=1.6, ls=":",
+    # same sizing note as fig_arima_forecast: this lands in a ~55% column
+    fig, ax = plt.subplots(figsize=(7.6, 4.0))
+    ax.plot(train.index[-36:], train.values[-36:], color=ARM_BLUE, lw=1.4, label="train")
+    ax.plot(test.index, test.values, color="k", lw=2.0, label="actual")
+    ax.plot(test.index, ses.forecast(h).values, color=GREY, lw=2.0, ls=":",
             label="simple (level only)")
-    ax.plot(test.index, holt.forecast(h).values, color=ARM_ORANGE, lw=1.6, ls="--",
+    ax.plot(test.index, holt.forecast(h).values, color=ARM_ORANGE, lw=2.0, ls="--",
             label="Holt (level+trend)")
-    ax.plot(test.index, hw.forecast(h).values, color=ARM_RED, lw=2,
+    ax.plot(test.index, hw.forecast(h).values, color=ARM_RED, lw=2.4,
             label="Holt-Winters (+season)")
-    ax.axvline(train.index[-1], color=GREY, ls="--", lw=1)
+    ax.axvline(train.index[-1], color=GREY, ls="--", lw=1.2)
     ax.set_title("Exponential smoothing: only Holt-Winters captures the season",
-                 fontsize=11.5, loc="left")
-    ax.legend(fontsize=8.5, ncol=2)
+                 fontsize=13, loc="left")
+    ax.legend(fontsize=10.5, ncol=2, loc="upper left")
+    ax.tick_params(labelsize=11)
     fig.tight_layout()
     save(fig, "exp_smoothing.pdf", log)
 
@@ -295,7 +393,9 @@ def main() -> None:
     fig_stl(series, log)
     fig_stationarity(log)
     fig_differencing(series, log)
+    fig_over_differencing(series, log)
     fig_acf_pacf(log)
+    fig_acf_pacf_series(series, log)
     fig_ar_vs_ma(log)
     fig_arima_forecast(series, log)
     fig_exp_smoothing(series, log)

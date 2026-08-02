@@ -1,13 +1,18 @@
-"""Figures for Lecture 2 -- ML for time series (08_ml_time_series).
+"""Figures for Lecture 2 -- ML for time series (31_ml_time_series).
 
 Generates PDFs into ml/08_time_series/fig/:
   time_aware_split.pdf   -- random split (leakage) vs forward-chaining split.
   supervised_reframe.pdf -- a series redrawn as a lag-feature design matrix.
-  ts_cv.pdf              -- TimeSeriesSplit: expanding-window cross-validation.
+  ts_cv.pdf              -- TimeSeriesSplit: expanding vs rolling vs gapped.
   gbm_forecast.pdf       -- gradient boosting on lag+calendar features vs actual.
-  feature_importance.pdf -- permutation importance of the engineered features.
-  model_comparison.pdf   -- seasonal-naive vs SARIMA vs GBM (MAE + MASE) on test.
+  feature_importance.pdf -- permutation importance on TEST of the engineered features.
+  model_comparison.pdf   -- seasonal-naive vs SARIMA vs GBM, all at h=18 (MAE + MASE).
   deep_ts_timeline.pdf   -- landscape of deep and foundation TS models.
+
+Review pass 2026-07-31 fixed three methodology defects that contradicted the slides:
+the seasonal-naive baseline read 6 of its 18 values out of the test window; permutation
+importance was scored on train (lecture 23 says test); and the GBM was scored 1 step
+ahead while SARIMA forecast 18, with the horizon stated nowhere.
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
     ./ma/Scripts/python.exe ml/08_time_series/py_src/ml_figs.py
@@ -21,6 +26,7 @@ from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -115,6 +121,46 @@ def make_supervised_diff(series: pd.Series, lags=(1, 2, 3, 12)) -> pd.DataFrame:
     return df.dropna()
 
 
+def seasonal_naive_from_origin(series: pd.Series, h: int, m: int = 12) -> np.ndarray:
+    """Seasonal naive for an h-step forecast issued ONCE at the end of the training set.
+
+    yhat(T+k) = y(T + k - m*ceil(k/m)), which is always an OBSERVED training value.
+
+    The tempting one-liner `series.shift(m)` is wrong here: for k > m it reaches back
+    only m steps and lands inside the test window, so the "baseline" quietly reads the
+    future it is supposed to be predicting. On this series that is 6 of the 18 points.
+    """
+    n_train = len(series) - h
+    out = []
+    for k in range(1, h + 1):
+        pos = n_train + k - 1 - m * int(np.ceil(k / m))
+        if pos >= n_train:
+            raise ValueError(f"seasonal naive step {k} would read position {pos} "
+                             f"from the test window (train ends at {n_train - 1})")
+        out.append(series.values[pos])
+    return np.array(out)
+
+
+def recursive_forecast(model, feats, series: pd.Series, h: int, lags=(1, 2, 3, 12)) -> np.ndarray:
+    """Genuine h-step forecast: feed each PREDICTED difference back in as the next lag.
+
+    This is what SARIMA's get_forecast(steps=h) does, so it is the only version that
+    can be put on the same bar chart as SARIMA.
+    """
+    d_all = series.diff().dropna()
+    d_hist = list(d_all.values[:len(d_all) - h])
+    level = series.values[len(series) - h - 1]
+    out = []
+    for k in range(h):
+        row = {f"dlag_{L}": d_hist[-L] for L in lags}
+        row["month"] = series.index[len(series) - h + k].month
+        dhat = model.predict(pd.DataFrame([row])[feats])[0]
+        level = level + dhat
+        out.append(level)
+        d_hist.append(dhat)
+    return np.array(out)
+
+
 # ----------------------------------------------------------------------------
 def fig_time_aware_split(series: pd.Series, log: logging.Logger) -> None:
     n = len(series)
@@ -172,23 +218,37 @@ def fig_supervised_reframe(series: pd.Series, log: logging.Logger) -> None:
 
 
 def fig_ts_cv(log: logging.Logger) -> None:
+    """Three flavours of forward-chaining CV: expanding, rolling, and gapped."""
     n = 40
-    tscv = TimeSeriesSplit(n_splits=5, test_size=5)
-    fig, ax = plt.subplots(figsize=(8.6, 3.4))
-    for k, (tr, te) in enumerate(tscv.split(np.arange(n))):
-        y = 5 - k
-        ax.scatter(tr, [y] * len(tr), marker="s", s=42, color=ARM_BLUE)
-        ax.scatter(te, [y] * len(te), marker="s", s=42, color=ARM_ORANGE)
-    ax.set_yticks(range(1, 6))
-    ax.set_yticklabels([f"fold {6 - k}" for k in range(1, 6)])
-    ax.set_xlabel("time index ->")
-    ax.set_ylim(0.4, 5.6)
-    ax.grid(False)
-    train_p = mpatches.Patch(color=ARM_BLUE, label="train (expanding past)")
-    test_p = mpatches.Patch(color=ARM_ORANGE, label="validation (next block)")
-    ax.legend(handles=[train_p, test_p], fontsize=9, loc="lower right")
-    ax.set_title("TimeSeriesSplit: the train window only ever grows into the past",
-                 fontsize=12, loc="left")
+    variants = [
+        ("expanding window\n(the default)", dict(n_splits=5, test_size=5)),
+        ("rolling window\n(max_train_size=15)", dict(n_splits=5, test_size=5, max_train_size=15)),
+        ("expanding + gap=3\n(kills lag leakage)", dict(n_splits=5, test_size=5, gap=3)),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(11.4, 3.3), sharey=True)
+    for ax, (title, kw) in zip(axes, variants):
+        tscv = TimeSeriesSplit(**kw)
+        for k, (tr, te) in enumerate(tscv.split(np.arange(n))):
+            y = 5 - k
+            ax.scatter(tr, [y] * len(tr), marker="s", s=30, color=ARM_BLUE)
+            ax.scatter(te, [y] * len(te), marker="s", s=30, color=ARM_ORANGE)
+            dropped = sorted(set(range(tr[-1] + 1, te[0])))
+            if dropped:
+                ax.scatter(dropped, [y] * len(dropped), marker="x", s=34, color=ARM_RED)
+        ax.set_yticks(range(1, 6))
+        ax.set_yticklabels([f"fold {6 - k}" for k in range(1, 6)])
+        ax.set_xlabel("time index ->", fontsize=10)
+        ax.set_ylim(0.4, 5.6)
+        ax.grid(False)
+        ax.set_title(title, fontsize=11, loc="left")
+        ax.tick_params(labelsize=10)
+    handles = [mpatches.Patch(color=ARM_BLUE, label="train"),
+               mpatches.Patch(color=ARM_ORANGE, label="validation"),
+               mpatches.Patch(color=ARM_RED, label="discarded (gap)")]
+    fig.legend(handles=handles, fontsize=10, ncol=3, loc="lower center",
+               bbox_to_anchor=(0.5, -0.09), frameon=False)
+    fig.suptitle("Forward-chaining cross-validation: the validation block is always in the future",
+                 fontsize=12.5)
     fig.tight_layout()
     save(fig, "ts_cv.pdf", log)
 
@@ -232,86 +292,127 @@ def fig_gbm_pitfall(series: pd.Series, log: logging.Logger):
 
     idx = d_te.index
     train_max = series.iloc[:-h].max()
-    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.7), sharey=True)
-    for ax, pred, title, c, mae in [
-        (axes[0], pred_lvl, f"Predict raw level: trees cap at the training max\n(MAE = {mae_lvl:.1f})", ARM_RED, mae_lvl),
-        (axes[1], pred_diff, f"Predict the difference, then add back\n(MAE = {mae_diff:.1f})", GREEN, mae_diff),
+    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.9), sharey=True)
+    for ax, pred, title, c in [
+        (axes[0], pred_lvl,
+         f"Predict the raw level: stuck under the ceiling\n(MAE = {mae_lvl:.1f})", ARM_RED),
+        (axes[1], pred_diff,
+         f"Predict the difference, then add back\n(MAE = {mae_diff:.1f})", GREEN),
     ]:
-        ax.plot(series.index[-40:-h], series.values[-40:-h], color=ARM_BLUE, lw=1.1, label="train")
-        ax.plot(idx, actual, color="k", lw=1.7, label="actual")
-        ax.plot(idx, pred, color=c, lw=2, marker="o", ms=3, label="GBM")
-        ax.axhline(train_max, color=GREY, ls=":", lw=1)
+        ax.plot(series.index[-40:-h], series.values[-40:-h], color=ARM_BLUE, lw=1.3, label="train")
+        ax.plot(idx, actual, color="k", lw=1.9, label="actual")
+        ax.plot(idx, pred, color=c, lw=2.2, marker="o", ms=3.5, label="GBM")
+        ax.axhline(train_max, color=GREY, ls=":", lw=1.2)
         ax.axvline(series.index[-h - 1], color=GREY, ls="--", lw=1)
-        ax.set_title(title, fontsize=10.5, loc="left", color=c)
-        ax.legend(fontsize=8, loc="upper left")
-    axes[0].text(series.index[-h - 2], train_max, "training max ", ha="right", va="bottom",
-                 fontsize=8, color=GREY)
+        ax.set_title(title, fontsize=11.5, loc="left", color=c)
+        # lower right is the only quadrant both panels leave empty; upper left is
+        # needed for the "largest y seen in training" annotation
+        ax.legend(fontsize=9.5, loc="lower right")
+        # one tick per year, else the monthly labels collide into an unreadable smear
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        ax.tick_params(axis="both", labelsize=9.5)
+    axes[0].text(series.index[-h - 2], train_max, "largest y seen in training ",
+                 ha="right", va="bottom", fontsize=9, color=GREY)
     fig.suptitle("Gradient boosting on a trending series: the extrapolation trap and its fix",
-                 fontsize=12)
+                 fontsize=12.5)
+    fig.text(0.5, -0.03,
+             "Both panels are 1-step-ahead: the model is handed the TRUE previous value each month. "
+             "Even so, the raw-level tree cannot climb.",
+             ha="center", fontsize=9.5, color=GREY)
     fig.tight_layout()
     save(fig, "gbm_forecast.pdf", log)
+    log.info(f"training max = {train_max:.1f}; raw-level GBM predicts "
+             f"{pred_lvl.min():.1f}-{pred_lvl.max():.1f} (it plateaus BELOW the ceiling, "
+             f"at its top leaf's mean)")
     return dff, d_tr, d_te, m_diff, f_diff, pred_diff, actual
 
 
-def fig_feature_importance(train_df, model, feats, log: logging.Logger) -> None:
-    r = permutation_importance(model, train_df[feats], train_df["d"],
+def fig_feature_importance(test_df, model, feats, log: logging.Logger) -> None:
+    """Permutation importance on the TEST split -- lecture 23's rule, applied here too.
+
+    Scoring on train would report how much the model *leans* on each feature; on test it
+    reports how much each feature actually buys on unseen data. The two disagree here:
+    on test, `month` overtakes `dlag_3` and `dlag_1` goes negative.
+    """
+    r = permutation_importance(model, test_df[feats], test_df["d"],
                                n_repeats=20, random_state=SEED)
     order = np.argsort(r.importances_mean)
     names = np.array(feats)[order]
     vals = r.importances_mean[order]
+    colors = [ARM_RED if v < 0 else ARM_BLUE for v in vals]
 
     fig, ax = plt.subplots(figsize=(7.6, 3.6))
-    ax.barh(names, vals, color=ARM_BLUE)
-    ax.set_xlabel("permutation importance (drop in R2)")
-    ax.set_title("Which engineered feature carries the signal?", fontsize=12, loc="left")
-    ax.grid(axis="y")
+    bars = ax.barh(names, vals, color=colors)
+    ax.bar_label(bars, fmt="%.3f", fontsize=9.5, padding=3)
+    ax.axvline(0, color="k", lw=1)
+    ax.set_xlabel("permutation importance on test (drop in $R^2$)", fontsize=10.5)
+    ax.set_title("Which engineered feature actually buys accuracy?", fontsize=12.5, loc="left")
+    ax.tick_params(labelsize=10.5)
+    # rcParams turns BOTH axes on, so switch everything off before re-enabling the one
+    # we want. Gridlines have to run ACROSS the bars to be readable, never along them.
+    ax.grid(False)
+    ax.grid(True, axis="x")
+    ax.margins(x=0.16)         # room for the end-aligned labels
     fig.tight_layout()
     save(fig, "feature_importance.pdf", log)
+    for n, v in zip(names[::-1], vals[::-1]):
+        log.info(f"  PFI(test) {n:10s} = {v:+.3f}")
 
 
-def fig_model_comparison(series: pd.Series, gbm_pred, gbm_actual,
+def fig_model_comparison(series: pd.Series, model, feats, gbm_1step, gbm_actual,
                          log: logging.Logger) -> None:
+    """All contenders on ONE horizon (18 steps from a fixed origin), plus a deliberate
+    apples-to-oranges bar so students see that the horizon has to be stated."""
     h = 18
-    test_idx = series.index[-h:]
     actual = gbm_actual
-
-    # seasonal-naive: y_hat(t) = y(t-12)
-    snaive = series.shift(12).reindex(test_idx).values
-    # SARIMA on the raw series
     train_series = series.iloc[:-h]
-    sar = SARIMAX(train_series, order=(1, 1, 1), seasonal_order=(1, 1, 0, 12),
+
+    snaive = seasonal_naive_from_origin(series, h)
+    # airline model -- orders read off the correlogram in lecture 30, not guessed.
+    # Keep in sync with classical_figs.ORDER / SEASONAL_ORDER.
+    sar = SARIMAX(train_series, order=(0, 1, 1), seasonal_order=(0, 1, 1, 12),
                   enforce_stationarity=False, enforce_invertibility=False).fit(disp=False)
     sarima_pred = sar.get_forecast(steps=h).predicted_mean.values
+    gbm_rec = recursive_forecast(model, feats, series, h)
 
-    # MASE denominator: in-sample seasonal-naive MAE on the training series
+    # MASE denominator: the IN-SAMPLE one-step seasonal-naive MAE on the training set
+    # (Hyndman's definition). That is why the held-out seasonal naive need not land on 1.0.
     naive_err = np.abs(train_series.values[12:] - train_series.values[:-12]).mean()
+    log.info(f"MASE denominator (in-sample seasonal-naive MAE on train) = {naive_err:.2f}")
 
-    def mase(a, p):
-        return mean_absolute_error(a, p) / naive_err
-
-    rows = [("Seasonal naive", snaive, ARM_ORANGE),
-            ("SARIMA", sarima_pred, ARM_BLUE),
-            ("GBM (differenced)", gbm_pred, ARM_RED)]
+    rows = [("Seasonal naive\n(h=18)", snaive, ARM_ORANGE),
+            ("SARIMA\n(h=18)", sarima_pred, ARM_BLUE),
+            ("GBM recursive\n(h=18)", gbm_rec, GREEN),
+            ("GBM\n(h=1)", gbm_1step, ARM_RED)]
     labels, maes, mases, colors = [], [], [], []
     for name, pred, c in rows:
         labels.append(name)
         maes.append(mean_absolute_error(actual, pred))
-        mases.append(mase(actual, pred))
+        mases.append(maes[-1] / naive_err)
         colors.append(c)
-        log.info(f"{name}: MAE={maes[-1]:.2f} MASE={mases[-1]:.2f}")
+        log.info(f"{name.replace(chr(10), ' '):26s} MAE={maes[-1]:6.2f} MASE={mases[-1]:.2f}")
 
-    fig, axes = plt.subplots(1, 2, figsize=(9, 3.4))
-    for ax, vals, title in [(axes[0], maes, "MAE (lower is better)"),
-                            (axes[1], mases, "MASE (vs seasonal naive = 1.0)")]:
+    fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.8))
+    for ax, vals, title, fmt in [(axes[0], maes, "MAE (lower is better)", "%.2f"),
+                                 (axes[1], mases, "MASE (< 1 beats the naive benchmark)", "%.2f")]:
         bars = ax.bar(labels, vals, color=colors)
-        ax.set_title(title, fontsize=11)
-        ax.tick_params(axis="x", labelsize=8.5, rotation=12)
-        for b, v in zip(bars, vals):
-            ax.text(b.get_x() + b.get_width() / 2, v, f"{v:.2f}",
-                    ha="center", va="bottom", fontsize=8.5)
-        ax.grid(axis="x")
+        ax.bar_label(bars, fmt=fmt, fontsize=10, padding=2)
+        ax.set_title(title, fontsize=11.5)
+        ax.tick_params(axis="x", labelsize=9.5)
+        ax.tick_params(axis="y", labelsize=9.5)
+        ax.grid(False)         # rcParams enables both axes; clear then re-enable one
+        ax.grid(True, axis="y")
+        ax.margins(y=0.18)
+        # the h=1 bar is a different task -- fence it off
+        ax.axvline(2.5, color=GREY, ls="--", lw=1.2)
     axes[1].axhline(1.0, color="k", ls="--", lw=1)
-    fig.suptitle("Always benchmark against the naive baseline", fontsize=12)
+    fig.suptitle("Same series, same test window -- but only the first three answer the same question",
+                 fontsize=12)
+    fig.text(0.5, -0.04,
+             "Right of the dashed line: the identical GBM scored 1 step ahead instead of 18. "
+             "Not better or worse - a different question.",
+             ha="center", fontsize=9.5, color=GREY)
     fig.tight_layout()
     save(fig, "model_comparison.pdf", log)
 
@@ -339,7 +440,14 @@ def fig_deep_timeline(log: logging.Logger) -> None:
                 fontsize=9, color=ARM_RED, ha="center")
     ax.set_xlim(2016.3, 2025.8)
     ax.set_ylim(-2.2, 2.4)
-    ax.axis("off")
+    # axis("off") would hide the YEARS -- a timeline without dates. Strip everything
+    # except the x tick labels instead.
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.set_yticks([])
+    ax.set_xticks(range(2017, 2026))
+    ax.tick_params(axis="x", labelsize=9.5, length=0, colors=GREY)
+    ax.grid(False)
     ax.set_title("Deep and foundation models for time series", fontsize=12)
     fig.tight_layout()
     save(fig, "deep_ts_timeline.pdf", log)
@@ -354,8 +462,8 @@ def main() -> None:
     fig_supervised_reframe(series, log)
     fig_ts_cv(log)
     dff, d_tr, d_te, m_diff, f_diff, gbm_pred, gbm_actual = fig_gbm_pitfall(series, log)
-    fig_feature_importance(d_tr, m_diff, f_diff, log)
-    fig_model_comparison(series, gbm_pred, gbm_actual, log)
+    fig_feature_importance(d_te, m_diff, f_diff, log)
+    fig_model_comparison(series, m_diff, f_diff, gbm_pred, gbm_actual, log)
     fig_deep_timeline(log)
     log.info("ml figures done")
 

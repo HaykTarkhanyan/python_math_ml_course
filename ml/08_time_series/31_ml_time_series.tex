@@ -21,7 +21,7 @@
 \newcommand{\callout}[2]{%
   \begin{center}\fcolorbox{#1}{#1!8}{\parbox{0.92\textwidth}{#2}}\end{center}}
 
-\title{08: Time Series -- Machine Learning Approach}
+\title{31: Time Series -- Machine Learning Approach}
 \subtitle{Forecasting as a supervised learning problem}
 \date{}
 
@@ -113,7 +113,7 @@
   \end{center}
   \vfill
   \callout{paramgreen}{\footnotesize Train on an earlier block, test on the later
-  block. Same rule as lecture 07: only ever learn from the past. This also means
+  block. Same rule as lecture 30: only ever learn from the past. This also means
   \textbf{no shuffling}, and any scaler / encoder must be fit on train only.}
 \end{frame}
 
@@ -173,20 +173,25 @@
 \begin{frame}[fragile]{TimeSeriesSplit}
   Ordinary K-fold shuffles -- forbidden here. Use forward-chaining: each fold
   trains on an expanding past and validates on the next block.
-  \vfill
+  \vskip1pt
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/ts_cv.pdf}
+  \end{center}
+  \vskip1pt
   \begin{columns}[T]
-    \column{0.56\textwidth}
-    \includegraphics[width=\textwidth]{fig/ts_cv.pdf}
-    \column{0.44\textwidth}
+    \column{0.42\textwidth}
     {\lstset{basicstyle=\ttfamily\scriptsize}\begin{lstlisting}
-from sklearn.model_selection \
-    import TimeSeriesSplit
-cv = TimeSeriesSplit(n_splits=5)
-cross_val_score(model, X, y, cv=cv)
+TimeSeriesSplit(n_splits=5,
+                gap=3)
 \end{lstlisting}}
+    \column{0.58\textwidth}
+    \scriptsize
+    \textbf{\texttt{max\_train\_size}} -- fix the window instead of growing it, when
+    the distant past is stale.
     \vskip2pt
-    \footnotesize This is also how you tune hyperparameters and pick lag sets --
-    grid/random search with \texttt{cv=TimeSeriesSplit}, never plain K-fold.
+    \textbf{\texttt{gap}} -- drop the rows straddling the boundary. A
+    \texttt{rolling(7)} feature at the start of validation was built from the last
+    training days, so the two sets \emph{overlap} even after an honest split.
   \end{columns}
 \end{frame}
 
@@ -200,10 +205,11 @@ cross_val_score(model, X, y, cv=cv)
   \end{center}
 \end{frame}
 
-\begin{frame}{Predict-first: point GBM at a trending series}
-  Gradient boosting (XGBoost / LightGBM / \texttt{HistGradientBoosting}) wins most
-  tabular competitions. We built lag + calendar features. Let it forecast the
-  trending series from lecture 07.
+\begin{frame}{Predict-first: point gradient boosting at a trending series}
+  \textbf{Gradient boosting} -- a \textbf{Gradient Boosting Machine}, \textbf{GBM} on
+  the charts that follow -- wins most tabular competitions (XGBoost / LightGBM /
+  \texttt{HistGradientBoosting}). We built lag $+$ calendar features. Let it forecast
+  the trending series from lecture 30.
   \vfill
   \textbf{Predict: does the boosting model track the upward trend?}
   \pause
@@ -214,21 +220,23 @@ cross_val_score(model, X, y, cv=cv)
 \end{frame}
 
 \begin{frame}{Trees cannot extrapolate -- so difference first}
+  \begin{center}
+    \includegraphics[width=0.68\textwidth]{fig/gbm_forecast.pdf}
+  \end{center}
+  \vskip1pt
   \begin{columns}[T]
     \column{0.5\textwidth}
-    A decision tree predicts by averaging \emph{training} labels in a leaf. Its
-    output can never exceed the largest $y$ it saw in training.
-    \vskip4pt
-    On a trending series the future is always above that ceiling, so a raw-level
-    tree model \textbf{flat-lines} below the trend (left panel, MAE 19).
+    \scriptsize A tree predicts by \emph{averaging training labels} in a leaf, so its
+    output can never exceed the largest $y$ it ever saw -- and it settles well
+    \emph{below} that ceiling, at the mean of its top leaf ($\approx 200$, against a
+    training max of $220$).
+    \vskip3pt
+    Same lesson as ARIMA's ``I''. Linear models and neural networks extrapolate fine;
+    \emph{trees do not}.
     \column{0.5\textwidth}
-    \callout{paramgreen}{\footnotesize \textbf{The fix:} make the target
-    stationary first -- predict the \emph{difference} $y_t - y_{t-1}$ (or a ratio),
-    then add it back. Now the targets live in a fixed range trees can handle
-    (right panel, MAE 6.7).}
-    \vskip4pt
-    \footnotesize Same lesson as ARIMA's ``I'': difference away the trend. Linear
-    models and neural nets extrapolate fine; \emph{trees do not}.
+    \callout{paramgreen}{\scriptsize \textbf{The fix:} make the \emph{target}
+    stationary -- predict the difference $y_t - y_{t-1}$, then add it back. Now the
+    targets live in a fixed range trees can handle: MAE $19.0 \to 6.7$.}
   \end{columns}
 \end{frame}
 
@@ -237,15 +245,21 @@ cross_val_score(model, X, y, cv=cv)
     \column{0.55\textwidth}
     \includegraphics[width=\textwidth]{fig/feature_importance.pdf}
     \column{0.45\textwidth}
-    Permutation importance on the differenced model:
+    Permutation importance, scored on the \textbf{test} split (lecture 23's rule --
+    on train it reports what the model \emph{leans} on, on test what actually
+    \emph{buys} accuracy):
     \begin{itemize}\small
-      \item \texttt{dlag\_12} -- the seasonal lag -- dominates.
-      \item \texttt{dlag\_3} and \texttt{month} carry the rest.
+      \item \texttt{dlag\_12}, the seasonal lag, dominates at $+0.63$.
+      \item \texttt{month} and \texttt{dlag\_3} split the rest.
+      \item \texttt{dlag\_1} is \textbf{negative} ($-0.03$).
     \end{itemize}
-    \vskip4pt
-    \callout{armblue}{\footnotesize This is why domain knowledge beats brute force:
-    knowing the season is 12 tells you which lag to build. The model can only use
-    features you gave it.}
+    \vskip2pt
+    \callout{armorange}{\scriptsize A \emph{negative} importance means shuffling the
+    column \textbf{helped} -- last month's change was noise, and the model is better
+    off without it.}
+    \vskip2pt
+    \callout{armblue}{\scriptsize Domain knowledge beats brute force: knowing the
+    season is 12 tells you which lag to build.}
   \end{columns}
 \end{frame}
 
@@ -286,16 +300,68 @@ cross_val_score(model, X, y, cv=cv)
 \end{frame}
 
 \begin{frame}{Benchmark everything against the naive baseline}
-  Our three contenders on the held-out year -- seasonal naive, SARIMA, and the
-  (differenced) gradient booster:
-  \vfill
+  Three contenders, one held-out block, and -- this is the part people skip --
+  \textbf{one stated horizon}: 18 months, forecast from a single origin.
+  \vskip1pt
   \begin{center}
-    \includegraphics[width=0.82\textwidth]{fig/model_comparison.pdf}
+    \includegraphics[width=0.74\textwidth]{fig/model_comparison.pdf}
   \end{center}
+  \vskip1pt
+  \callout{paramgreen}{\footnotesize A properly specified SARIMA (MASE $0.35$) and the
+  gradient booster ($0.35$) are \textbf{dead level}, both far past seasonal naive
+  ($1.22$). On one short, clean series the classical model was never the underdog.}
+\end{frame}
+
+\begin{frame}{Say your horizon out loud}
+  The red bar is the \emph{same trained model} as the green one. The only difference
+  is what we asked it.
   \vfill
-  \callout{paramgreen}{\footnotesize On this short, clean series SARIMA and GBM are
-  neck-and-neck, both crushing seasonal naive (MASE $\approx 0.4$ vs $0.9$). The
-  point is the \emph{habit}: report MASE against the naive baseline, always.}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{$h=18$ (recursive)} -- forecast 18 months from one origin, feeding each
+    prediction back in as the next lag. Nothing observed after the origin. MASE
+    $\mathbf{0.35}$.
+    \vskip4pt
+    \textbf{$h=1$} -- forecast one month, then get told the true value, then forecast
+    the next. MASE $\mathbf{0.39}$.
+    \column{0.5\textwidth}
+    \callout{armred}{\footnotesize Neither is ``the'' accuracy of the model. They
+    answer different business questions -- ``plan next year's capacity'' versus
+    ``restock tomorrow'' -- and a model can be excellent at one and useless at the
+    other.}
+    \vskip4pt
+    \callout{armorange}{\footnotesize The failure mode: quoting a 1-step number and a
+    competitor's 12-step number on the same chart. It is not a lie about either
+    model, and it is still meaningless.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{We still owe you an interval}
+  Lecture 30 was blunt: \emph{a point forecast without an interval is only half an
+  answer}. SARIMA hands you one for free -- it is a probability model. A gradient
+  booster hands you a single number.
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{Two ways to get one anyway:}
+    \begin{itemize}\small
+      \item \textbf{Quantile regression} -- train three boosters with a pinball loss
+        at $q = 0.05,\, 0.5,\, 0.95$
+        (\texttt{LGBMRegressor(objective="quantile", alpha=0.95)}).
+      \item \textbf{Conformal prediction} -- fit once, measure your errors on a
+        held-out calibration block, and use their empirical quantiles as the band.
+        Model-agnostic, and distribution-free.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \callout{armorange}{\footnotesize Both need the calibration block to sit
+    \emph{after} training and \emph{before} test -- the arrow of time again. And both
+    give you the width \emph{at a stated horizon}: a 1-step band is far narrower than
+    an 18-step one, so a single ``$\pm$'' number is meaningless without $h$.}
+    \vskip4pt
+    \footnotesize Libraries: \texttt{MAPIE}, \texttt{neuralforecast}'s conformal
+    wrapper, \texttt{Darts}. Connects straight back to lecture 14 -- an interval you
+    do not check the coverage of is decoration.
+  \end{columns}
 \end{frame}
 
 \begin{frame}{When to reach for ML vs classical}
@@ -318,10 +384,37 @@ cross_val_score(model, X, y, cv=cv)
     \end{itemize}
   \end{columns}
   \vfill
-  \callout{armblue}{\footnotesize In the M5 forecasting competition (Walmart
-  sales, thousands of series), gradient-boosted trees on engineered features won.
-  On the earlier M3/M4 single-series benchmarks, statistical methods and simple
-  combinations were extremely strong. Match the tool to the shape of the problem.}
+  \callout{armblue}{\footnotesize In the \textbf{M5} competition (Walmart sales,
+  thousands of related series), gradient-boosted trees on engineered features won.
+  On the earlier \textbf{M3}/\textbf{M4} single-series benchmarks, statistical methods
+  were extremely strong. Match the tool to the shape of the problem.}
+\end{frame}
+
+\begin{frame}{But the competitions gave a better answer than ``it depends''}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{M4 (2018), 100{,}000 series.}
+    \begin{itemize}\small
+      \item \textbf{1st -- Slawek Smyl (Uber): ES-RNN.} Exponential smoothing for
+        level and season, its parameters learned \emph{inside} a recurrent neural
+        network. Not statistics \emph{or} ML -- one model, both.
+      \item \textbf{2nd -- FFORMA} (Montero-Manso, Athanasopoulos, \textbf{Hyndman},
+        Talagala). Gradient boosting, but it does not forecast: it looks at features
+        of each series and predicts \emph{how to weight} a pool of classical models.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \callout{paramgreen}{\footnotesize Neither winner picked a side. One put a
+    statistical model inside a neural network; the other used ML to \emph{referee}
+    statistical models.}
+    \vskip4pt
+    \footnotesize And the runner-up's third author wrote the textbook this chapter is
+    built on. The classical-vs-ML framing is a teaching device, not a real dividing
+    line.
+    \vskip4pt
+    \callout{armorange}{\scriptsize Practical version of the same idea: average your
+    SARIMA and your booster. Forecast combinations are one of the most reliably
+    reproduced results in the field.}
+  \end{columns}
 \end{frame}
 
 % ================================================================
@@ -336,46 +429,59 @@ cross_val_score(model, X, y, cv=cv)
 
 \begin{frame}{The deep learning lineage}
   \begin{center}
-    \includegraphics[width=0.95\textwidth]{fig/deep_ts_timeline.pdf}
+    \includegraphics[width=0.80\textwidth]{fig/deep_ts_timeline.pdf}
   \end{center}
-  \vfill
+  \vskip1pt
   \begin{columns}[T]
     \column{0.5\textwidth}
     \footnotesize \textbf{Specialist deep models}
     \begin{itemize}\scriptsize
-      \item \textbf{DeepAR} -- probabilistic RNN over many series.
-      \item \textbf{N-BEATS / N-HiTS} -- pure MLP stacks.
-      \item \textbf{TFT} -- attention $+$ interpretability.
+      \item \textbf{DeepAR} -- a \textbf{recurrent} network (it carries a hidden state
+        along the sequence), trained across many series, predicting a
+        \emph{distribution} not a point.
+      \item \textbf{N-BEATS / N-HiTS} -- deep stacks of plain layers.
+      \item \textbf{Temporal Fusion Transformer} (\textbf{TFT}) -- attention $+$
+        built-in importances.
       \item \textbf{PatchTST} -- patch the series, feed a Transformer.
     \end{itemize}
     \column{0.5\textwidth}
     \footnotesize \textbf{Why they connect to us}
     \vskip2pt
-    \scriptsize These pick up in the RNN and attention chapters. They need a lot
-    of data (many series, long history) to beat a well-tuned gradient booster --
-    on a single short series they usually don't.
+    \scriptsize Recurrence and attention are the subject of two later chapters, so
+    treat these as a map, not a syllabus. What matters today: they need a \emph{lot} of
+    data -- many series, long history -- to beat a well-tuned gradient booster. On a
+    single short series like ours, they usually don't.
   \end{columns}
 \end{frame}
 
 \begin{frame}{Foundation models: zero-shot forecasting}
-  The 2023--2025 shift: pre-train one Transformer on billions of time points, then
-  forecast a \emph{new} series with no training at all -- like an LLM prompt.
+  Since 2023: pre-train one Transformer on billions of time points, then forecast a
+  \emph{new} series with no training at all -- the same trick a
+  \textbf{Large Language Model} (\textbf{LLM}) does when it answers a question it was
+  never specifically trained on.
   \vfill
   \begin{columns}[T]
     \column{0.52\textwidth}
-    \footnotesize \textbf{The current crop}
+    \footnotesize \textbf{The current crop (mid-2026)}
     \begin{itemize}\scriptsize
-      \item \textbf{TimesFM} (Google) -- patched decoder, pre-trained on 100B points.
-      \item \textbf{Chronos / Chronos-2} (Amazon) -- tokenizes values like language;
-        Chronos-Bolt is much faster.
-      \item \textbf{Moirai / Moirai-2} (Salesforce) -- multivariate, any frequency.
-      \item \textbf{TimeGPT} (Nixtla), \textbf{Lag-Llama}, \textbf{Time-MoE}.
+      \item \textbf{TimesFM} (Google) -- patched decoder, pre-trained on $\sim$100B points.
+      \item \textbf{Chronos-2} (Amazon) -- tokenizes values like language; five sizes
+        from 9M to 710M parameters; handles covariates.
+      \item \textbf{Moirai-2} (Salesforce) -- multivariate, any frequency.
+      \item \textbf{TimeGPT} (Nixtla), \textbf{Sundial}, \textbf{Time-MoE},
+        \textbf{Lag-Llama}.
     \end{itemize}
+    \vskip2pt
+    \scriptsize Don't take a vendor's word for it -- compare on a public leaderboard
+    (\textbf{GIFT-Eval}, \textbf{ProbTS}) \emph{and} on your own series.
     \column{0.48\textwidth}
-    \callout{armorange}{\scriptsize \textbf{Reality check.} Zero-shot is
-    astonishing for a cold start with no history. But a gradient booster with good
-    features and exogenous drivers is still a very strong, cheap, interpretable
-    baseline. Try the simple thing first.}
+    \callout{armorange}{\scriptsize \textbf{Reality check.} Zero-shot is astonishing
+    for a cold start with no history. But a gradient booster with good features and
+    exogenous drivers is still a very strong, cheap, interpretable baseline -- and
+    today it beat a tuned SARIMA by nothing at all. Try the simple thing first.}
+    \vskip4pt
+    \callout{armred}{\scriptsize This slide dates fastest of anything in the chapter.
+    Check the names before re-lecturing.}
   \end{columns}
 \end{frame}
 
@@ -388,12 +494,13 @@ cross_val_score(model, X, y, cv=cv)
     \begin{itemize}\small
       \item Forecasting $\to$ supervised learning by sliding a window.
       \item \textbf{Never} random-split; split and cross-validate by time
-        (\texttt{TimeSeriesSplit}).
+        (\texttt{TimeSeriesSplit}, with a \texttt{gap} if your features roll).
       \item Features: lags, (shifted) rolling stats, calendar, exogenous.
       \item Trees can't extrapolate -- difference the target first.
       \item Multi-step: recursive vs direct (let a library handle it).
-      \item Report MASE vs the naive baseline.
-      \item Deep + foundation models: powerful, data-hungry, know they exist.
+      \item Report MASE vs an \emph{honest} baseline, and \textbf{state the horizon}.
+      \item Point forecast $\ne$ answer: quantile or conformal intervals.
+      \item The M4 winners were \textbf{hybrids}, not one side or the other.
     \end{itemize}
     \column{0.48\textwidth}
     \callout{paramgreen}{\textbf{The one habit to keep:}
@@ -427,15 +534,50 @@ cross_val_score(model, X, y, cv=cv)
 %     survey (arXiv 2510.13654). Verify names/vendors before re-lecturing as the
 %     field moves fast.
 %   Figures -- all Python-generated by py_src/ml_figs.py (seed 509) on the same
-%     synthetic monthly series as lecture 07: supervised_reframe, time_aware_split,
+%     synthetic monthly series as lecture 30: supervised_reframe, time_aware_split,
 %     ts_cv, gbm_forecast (extrapolation pitfall + differenced fix),
 %     feature_importance, model_comparison, deep_ts_timeline. No external images.
 %   Pedagogical decisions -- two predict-first frames (random split is leakage;
 %     GBM flat-lines on a trend), both counter-intuitive per SLIDE_STYLE. The GBM
 %     is shown LOSING at raw levels then FIXED by differencing -- honest numbers
-%     (MAE 19 -> 6.7, MASE 0.39) rather than a staged ML victory. "When ML vs
-%     classical wins" framed via M3/M4 vs M5 so students don't over-generalize
-%     from one toy series. Foundation models kept awareness-level with a
-%     "try the simple thing first" reality check.
-%   Back pointer -- 07_classical_time_series.tex (handed off at time-aware
+%     (MAE 19.0 -> 6.7) rather than a staged ML victory. "When ML vs classical
+%     wins" framed via M3/M4 vs M5 so students don't over-generalize from one toy
+%     series. Foundation models kept awareness-level with a "try the simple thing
+%     first" reality check.
+%
+%   Review pass 2026-07-31 -- three methodology defects found by re-running the
+%     figure script; all numbers below are measured, none carried over:
+%     - Renumbered 08 -> 31 (the old number collided with the delivered
+%       [08] Hyperparameter tuning).
+%     - The seasonal-naive baseline used series.shift(12) across the test block,
+%       so 6 of its 18 values were read from INSIDE the test window. Replaced with
+%       a forecast-from-origin baseline. MASE moves 0.90 -> 1.22, i.e. the old
+%       "benchmark" was beating the real one by cheating. Lecture 30 now has a
+%       frame on exactly this.
+%     - Permutation importance was scored on TRAIN, contradicting lecture 23.
+%       Moved to test; the ranking changes (month 0.195 overtakes dlag_3 0.180)
+%       and dlag_1 goes NEGATIVE (-0.034), which is now its own teaching point.
+%     - The GBM was scored 1-step-ahead with true lags while SARIMA forecast 18
+%       steps, and no frame stated a horizon. Added a genuine recursive 18-step
+%       forecast; the comparison chart is now h=18 throughout with the h=1 bar
+%       fenced off behind a divider, and a frame ("Say your horizon out loud")
+%       built on the contrast. Note the recursive version scores BETTER (0.35 vs
+%       0.39) -- the old setup was not flattering the GBM, it was just comparing
+%       two different questions.
+%     - SARIMA orders changed to the airline model (0,1,1)(0,1,1)_12, matching
+%       lecture 30's new correlogram. SARIMA now TIES the booster (MAE 6.07 vs
+%       6.12, MASE 0.35 both), which is a truer message than the old GBM win.
+%     - Added: TimeSeriesSplit gap / max_train_size (ts_cv.pdf is now three
+%       panels); prediction intervals for ML (quantile + conformal), closing a
+%       promise lecture 30 makes and this deck used to drop; an M4 frame on the
+%       hybrid winners (Smyl's ES-RNN 1st, FFORMA 2nd -- Hyndman a co-author).
+%     - Expanded on first use: GBM, TFT, LLM. RNN/MLP were forward references to
+%       later chapters and are now described in words instead of acronyms.
+%     - gbm_forecast.pdf is repeated on the "trees cannot extrapolate" frame; the
+%       text says "left panel"/"right panel" and the figure used to be one slide
+%       back, off screen.
+%   Foundation-model names re-verified by web search 2026-07-31 (TimesFM,
+%     Chronos-2, Moirai-2, TimeGPT, Sundial, Time-MoE; GIFT-Eval / ProbTS as the
+%     leaderboards). This slide ages fastest -- recheck before re-lecturing.
+%   Back pointer -- 30_classical_time_series.tex (handed off at time-aware
 %     validation). Forward -- ties into the RNN (ch7) and attention chapters.
