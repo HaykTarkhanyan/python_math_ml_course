@@ -654,6 +654,186 @@ for xb in loader:             # no labels!
 \end{frame}
 
 % ================================================================
+\section{Sparse autoencoders and interpretability}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Sparse autoencoders}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The same trick, pointed at another network's mind.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Can you read a single neuron?}
+  \small
+  Take a small \textbf{recurrent neural network} (\textbf{RNN}, ch7) trained to spell: it reads a
+  stream of words drawn from a
+  \textbf{40-word lexicon} and predicts the next character. To finish a word it must carry
+  \emph{which word am I inside} in its \textbf{32-dimensional} hidden state.
+  \vskip 4pt
+  We generated the text, so we know the true answer at every step. Ask two questions.
+  \vskip 6pt
+  \textbf{Predict first:} is "am I inside word \#17" written on some neuron?
+  \pause
+  \vskip 6pt
+  \begin{center}\small
+    \begin{tabular}{@{}lc@{}}
+      \textbf{Read it off the best single neuron} & F1 = \textbf{0.57}\\
+      \textbf{Read it off all 32 together} (a trained linear probe) & F1 = \textbf{0.99}\\
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    The information \textbf{is} in the hidden state - a probe finds it almost perfectly. It is
+    just not written on any \textbf{one} neuron. The network's own coordinates are the wrong
+    place to look.}}
+\end{frame}
+
+\begin{frame}{Why one neuron is never enough}
+  \small
+  Two reasons, and only the second is exotic.
+  \vskip 4pt
+  \begin{itemize}
+    \item \textbf{Nothing asks the axes to mean anything.} Gradient descent is free to spread a
+      concept across a \emph{direction} like $0.3\,h_4 - 0.7\,h_{11} + \ldots$. Nothing in the
+      loss rewards lining that direction up with a coordinate axis.
+    \item \textbf{Superposition.} Our net must track \textbf{40} word identities in
+      \textbf{32} dimensions - more concepts than it has neurons. That is only possible because
+      the concepts are \textbf{sparse}: at any step you are inside exactly \emph{one} word, so
+      the directions can overlap and rarely collide.
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.98\linewidth}{\small
+    \emph{Callback (math, curse of dimensionality):} you can pack $e^{c\,p}$ \textbf{almost}
+    orthogonal directions into $\R^p$, but only $p$ truly orthogonal ones. High dimensions stop
+    being a curse and start being storage. Real models lean on this hard: a concept lives on a
+    direction, not on a neuron.}}
+\end{frame}
+
+\begin{frame}{The reframe: the activations \emph{are} the data}
+  \small
+  Every autoencoder so far ate \textbf{data} - digit images. A \textbf{sparse autoencoder}
+  (\textbf{SAE}) eats \textbf{another model's hidden vectors}.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{sae_pipeline.pdf}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.98\linewidth}{\small
+    Freeze the trained model. Push data through it. Collect the hidden vector $\mathbf{h}$ at
+    every step. \textbf{That pile of vectors is the training set.} Same encoder, decoder and
+    $L_1$ you already know - only the input distribution changed.}}
+\end{frame}
+
+\begin{frame}{Wide, not narrow}
+  \small
+  Every other autoencoder in this deck squeezed: $\dim(\mathbf{z}) < \dim(\mathbf{x})$. This one
+  \textbf{expands}, typically \textbf{4x to 256x} wider than the layer it reads.
+  \[
+    \mathbf{z} = \mathrm{ReLU}\!\left(\mathbf{W}_{\text{enc}}(\mathbf{h}-\mathbf{b})
+      + \mathbf{b}_{\text{enc}}\right),
+    \qquad
+    \hat{\mathbf{h}} \;=\; \mathbf{b} \;+\!\! \sum_{i \,:\, z_i > 0} \!\! z_i\, \mathbf{d}_i
+  \]
+  The decoder columns $\mathbf{d}_i$ are \textbf{unit vectors}: a \textbf{dictionary} of feature
+  directions. Each hidden state is rebuilt from the \textbf{few} entries switched on.
+  \[
+    \mathcal{L} \;=\; \underbrace{\|\mathbf{h}-\hat{\mathbf{h}}\|^2}_{\text{stay faithful}}
+    \;+\; \lambda \underbrace{\|\mathbf{z}\|_1}_{\text{stay sparse}}
+  \]
+  \fcolorbox{armred}{armred!8}{\parbox{0.98\linewidth}{\small
+    So what stops it copying the input? \textbf{Not} the width - there is room to spare. Only the
+    \textbf{sparsity}. The number that matters is $L_0$: how many features are on at once.}}
+\end{frame}
+
+\begin{frame}{Does it work? Score it against the truth}
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.97\linewidth]{sae_neuron_vs_sae.pdf}
+  \end{center}
+  \vskip -2pt
+  {\small A \textbf{512}-feature dictionary on the RNN's 32 numbers, $\lambda=0.2$, about
+  \textbf{13} features active at a time. We generated the corpus, so "is this feature the word
+  \emph{vuxjep}?" has a real answer: this is \textbf{scored}, not eyeballed.}
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.98\linewidth}{\small
+    The probe is \textbf{supervised} - we hand it the labels. The SAE is given \textbf{no labels
+    at all} and must find the concept unprompted. The probe is the \textbf{ceiling}, not a
+    competitor.}}
+\end{frame}
+
+\begin{frame}{The knob: how sparse is too sparse?}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{sae_sparsity.pdf}
+    \end{center}
+    \column{0.44\textwidth}
+    \small
+    Turn $\lambda$ up and $L_0$ falls: fewer features explain each vector.
+    \vskip 4pt
+    \textbf{Reconstruction} degrades gently. \textbf{Interpretability} does not - it peaks and
+    then falls, because once too few features remain, one feature must cover several concepts
+    again.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      There is no "just maximize sparsity". The useful setting is a \textbf{middle} one, and
+      nothing in the loss tells you where it is - the loss cannot see interpretability.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Naming a feature is a guess. Ablating it is a test.}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \small
+    Look at a feature's \textbf{top-activating inputs}, see they are all the same word, and you
+    have a \textbf{hypothesis}.
+    \vskip 4pt
+    To make it a \textbf{claim}, intervene: set that one feature to zero, rebuild the hidden
+    state, and let the RNN keep spelling.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!10}{\parbox{0.95\linewidth}{\small
+      \textbf{Golden Gate Claude} (Anthropic, May 2024): they clamped one feature to about
+      \textbf{10x} its usual peak and released it publicly for 24 hours. It steered every
+      conversation to the bridge. Same move, bigger model.}}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{sae_ablation.pdf}
+    \end{center}
+    {\scriptsize Feature \#299 fires on the 4th letter of \emph{iixxz}. Delete it and
+    P(correct next character) falls $0.92 \to 0.81$; delete a random feature and it does not move
+    at all. The flat control is what makes this evidence.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Does it scale? And what it still gets wrong}
+  \small
+  \begin{center}\small
+    \begin{tabular}{@{}llll@{}}
+      \textbf{Work} & \textbf{Read from} & \textbf{Features} & \textbf{Year}\\
+      \hline
+      Towards Monosemanticity & 1-layer transformer, 512 neurons & up to $\sim$13{,}000 & 2023\\
+      Scaling Monosemanticity & Claude 3 Sonnet & 34 million & 2024\\
+      Scaling and evaluating SAEs & GPT-4 & 16 million & 2024\\
+    \end{tabular}
+  \end{center}
+  \vskip 5pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.98\linewidth}{\small
+    \textbf{Not a solved problem.} \textbf{Dead features} never fire and waste the dictionary.
+    The $L_1$ penalty causes \textbf{shrinkage}: it drags down the very activations it is
+    measuring. Widen the dictionary and broad features \textbf{split} into narrow ones, so the
+    "true" feature count is not well defined. An ICLR 2025 paper is titled, flatly,
+    \emph{Sparse Autoencoders Do Not Find Canonical Units of Analysis}.}}
+  \vskip 4pt
+  {\scriptsize Since 2025 the frontier has moved on to \textbf{transcoders} and
+  \textbf{attribution graphs}, which trace how features \emph{cause} one another rather than
+  only listing which exist.}
+\end{frame}
+
+% ================================================================
 \section*{Recap}
 
 \begin{frame}{Recap: autoencoders}

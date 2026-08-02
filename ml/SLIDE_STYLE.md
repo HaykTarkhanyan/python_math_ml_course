@@ -82,13 +82,19 @@ Callout boxes via `fcolorbox{COLOR}{COLOR!8}{\parbox...}`:
 - **Misconception pre-empts** where a confusion is common (e.g. "0.5 is the default threshold, not a law"; "score vs calibrated probability").
 - **Cite the source (convention).** For each named method/algorithm, cite the originating paper as **author(s) + year** (e.g. "AdaBoost (Freund & Schapire, 1997)", "gradient boosting (Friedman, 2001)"). For a **library/model**, give it a transition **card** (`\modeltransition` in `20_advanced_boosting.tex`) showing **year · company/authors · GitHub repo** (e.g. "LightGBM — 2017 · Ke et al. (Microsoft) · github.com/microsoft/LightGBM"). Verify years by web search before baking them in.
 - **Abbreviations (convention).** Spell the **full name on first use, then introduce the abbreviation**, e.g. "Gradient-based One-Side Sampling (GOSS)", "Exclusive Feature Bundling (EFB)", "DART (Dropouts meet Multiple Additive Regression Trees)". After that, the abbreviation alone is fine.
+  - **Exempt: obvious and already-taught acronyms (added 2026-08-02, instructor).** Do **not** expand terms that every reader of these decks already knows, or that the course itself has taught in an earlier chapter. Expanding them is noise, not rigor. The exempt set:
+    - **Universal technical:** `ML`, `AI`, `CPU`, `GPU`, `API`, `PDF`, `HTML`, `CSV`, `SQL`, `IID`, `US`.
+    - **Standard metrics and math:** `MSE`, `MAE`, `RMSE`, `MAPE`, `AUC`, `ROC`, `KL`, `MLE`, `MAP`, `ELBO`, `SGD`, `PDF`/`CDF`.
+    - **Methods the course has already taught:** `PCA`, `CNN`, `RNN`, `LSTM`, `GRU`, `VAE`, `AE`, `SAE`, `SVM`, `KNN`, `NLP`, `LLM` - once the chapter that introduced them has been delivered. Signpost with the chapter on first cross-chapter use ("the RNN from ch7") instead of re-expanding.
+    - **Named entities, venues, licenses, datasets:** `GPT`, `BERT`, `LMU`, `ICLR`, `NeurIPS`, `CC BY`, `MNIST`, `CIFAR`, `IMDB`.
+  - The rule exists for terms a reader **cannot** look up from context - method names lifted from a paper (`SAGE`, `LOCO`, `GOSS`, `EFB`), or coined in the deck. Apply it there and nowhere else.
   - **This rule keeps getting broken, so verify it mechanically** - don't trust a read-through. Before a deck is done, run:
 
     ```bash
     sed 's/%.*//' DECK.tex | grep -oE '\b[A-Z]{2,6}\b' | sort -u
     ```
 
-    Then, for **every** acronym in that list, confirm the deck expands it *somewhere* (`grep -i "full name" DECK.tex`). Ignore obvious noise (`CC`, `BY`, code keywords, LaTeX markup).
+    Then, for every acronym in that list **that is not in the exempt set above**, confirm the deck expands it *somewhere* (`grep -i "full name" DECK.tex`). Ignore LaTeX markup and code keywords. If the check flags only exempt terms, the deck passes - do not "fix" it.
   - **Where it actually goes wrong** (all observed, 2026-07-28, in the interpretability chapter): the "big" concepts get expanded and the ones added *later* do not. Watch especially for (a) methods introduced mid-deck as a list of names, (b) **frame titles** - a title like "Repair 1 - CFI" defines nothing, (c) **forward references** ("next slides: CFI and LOCO") which use the acronym before its own frame, (d) acronyms borrowed from a cited paper (`SAGE`, `LOCO`), and (e) terms the course never taught at all (`GAM`).
   - A **forward reference must not carry an undefined acronym** - describe the thing in words instead ("two repairs: permuting more carefully, and not permuting at all").
   - **Write the expansion as a plain phrase, then the acronym in parentheses** - `\textbf{Leave-One-Covariate-Out} (\textbf{LOCO})`. Do **not** highlight the initials inside the words (`\textbf{L}eave \textbf{o}ne \textbf{co}variate...`): it looks clever, but the markup splits the words so neither the grep above nor a reader searching the PDF can find the definition.

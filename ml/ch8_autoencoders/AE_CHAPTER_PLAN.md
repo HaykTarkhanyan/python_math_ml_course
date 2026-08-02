@@ -163,6 +163,66 @@ Per style guide, HW lives on the chapter `.qmd` page (written later, not part of
       (deferred; no HW per chapter scope).
 - [ ] Instructor review of the two PDFs.
 
+## SAE expansion + HW1 (2026-08-02)
+
+Instructor asked to deepen the sparse-autoencoder coverage and add a mech-interp style exercise
+using RNNs (students have not seen transformers). Three choices confirmed by interview: synthetic
+task with exact ground truth, a full ~9-frame L22 section, and a task/solution homework pair.
+
+### What L22 gained
+
+A new `\section{Sparse autoencoders and interpretability}` between anomaly detection and the
+recap, so SAE-for-interpretability lands as application #4. The existing one-frame sparse AE
+(L1-as-regularizer) stays where it is and now sets up the payoff. Nine frames: read-a-neuron
+(predict-first), why-not (axis alignment + superposition), the activations-are-the-data reframe,
+wide-not-narrow + the dictionary, scored results, the sparsity knob, ablation vs control, scale +
+honest limits.
+
+**Superposition ownership.** `ch9_genai/ATTENTION_CHAPTER_PLAN.md` never mentions superposition,
+though `fig/borrowed/3b1b/README.md` stages JL-lemma stills "for L26 superposition". It was
+unowned, so ch8 takes the phenomenon and the tool. The geometry is a **callback to
+`math/Lectures/curse_of_dimensionality/cod.tex:125`**, which already teaches near-orthogonality
+and names LLM superposition, and which has been delivered (a `cod_notes.pdf` exists). ch9 can
+still do the JL-lemma visuals without collision.
+
+### The homework: `HW1_sae_rnn[_solution].ipynb`
+
+A GRU (hidden 32) learns to spell words from a 40-word lexicon; an SAE is trained on its harvested
+hidden states; features are read, scored against exact ground truth, and causally ablated.
+
+### MEASURED (all from py_src/sae_rnn_lab.py, seed 509, logs/sae_rnn_lab.log)
+
+1. **The headline.** best single neuron F1 **0.567** | best SAE feature **0.730** | linear probe
+   **0.986**. The probe is supervised and is the ceiling, NOT a rival - stated explicitly on the
+   slide and in the notebook, because "SAE < probe" otherwise reads as failure.
+2. **Interpretability peaks; reconstruction does not.** Sweeping lambda at width 512:
+   L0 108.9 -> F1 0.701 | **L0 59.0 -> F1 0.754 (peak)** | L0 37.1 -> 0.743 | L0 13.2 -> 0.730 |
+   L0 5.7 -> 0.703 | L0 3.8 -> 0.665 | L0 2.7 -> 0.615. Variance explained falls monotonically
+   0.999 -> 0.943. So the loss cannot choose lambda: minimizing it pushes toward a dense,
+   uninterpretable code. The first sweep stopped at lambda=0.05 and showed no peak - the slide
+   claim was only earned after extending the sweep to lambda=0.01.
+3. **Causal ablation is clean.** Feature #299 fires on the 4th letter of `iixxz` (all 12 top
+   contexts are `iix[x]z`). Ablating it: P(correct next char) 0.920 -> 0.814. Ablating a random
+   feature: 0.920 -> 0.920. The flat control is what makes it evidence.
+4. **The negative result, kept on purpose.** The first design used nesting depth in a bracket
+   language. It FAILED: depth and stack-top are dense (20-50% of positions), and the SAE lost to a
+   single neuron at every lambda. Sparse dictionary learning needs sparse concepts. This is now
+   Part 7 of the notebook ("when SAEs do not help") rather than being discarded - most SAE
+   tutorials skip it.
+
+### Gotchas worth not re-learning
+
+- An SAE needs **sparse** concepts. Dense ones (a depth counter, a parity bit) give it nothing to
+  exploit and it quietly underperforms a single neuron - failing with plausible features, not an
+  error.
+- The RNN must actually learn, or there is nothing to interpret. The bracket lab's first RNN sat
+  at loss 1.946 vs 2.079 for uniform guessing. `sae_rnn_lab.py` now computes an oracle/stack-blind
+  entropy floor and RAISES if the model has not beaten the blind baseline.
+- Score only where the label is knowable (offset >= 2). At offset 0-1 several words share a prefix,
+  so the question is unanswerable and every method looks bad for the wrong reason.
+- Unit-norm the decoder columns every step, or the net shrinks the code to dodge L1 and grows the
+  decoder to compensate.
+
 ## Support files in `practical/`
 
 - `train_ae_vae.py` - the figure engine (source of truth for the 10 `fig/*.pdf`). Rerun to
