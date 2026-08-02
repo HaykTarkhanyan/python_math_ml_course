@@ -109,14 +109,14 @@ def fig_sparsity(rows):
     log.info("saved sae_sparsity.pdf")
 
 
-def fig_ablation(drop_feat, drop_rand, word):
+def fig_ablation(drop_feat, drop_rand, label):
     """The causal test: correlation says the feature marks the word, ablation says it CAUSES it."""
     fig, ax = plt.subplots(figsize=(5.6, 3.2))
     bars = ax.bar(["ablate the\nword feature", "ablate a random\nfeature (control)"],
                   [drop_feat, drop_rand], color=[RED, "#999999"], alpha=0.85)
     ax.bar_label(bars, fmt="%.3f", fontsize=10)
     ax.set_ylabel("drop in P(correct next character)")
-    ax.set_title(f"deleting one feature while the RNN spells \"{word}\"", fontsize=9.5)
+    ax.set_title(f"deleting one feature while the RNN spells {label}", fontsize=9.5)
     ax.grid(alpha=0.3, axis="y")
     ax.set_ylim(0, max(drop_feat, drop_rand) * 1.35 + 1e-3)
     fig.tight_layout()
@@ -189,38 +189,33 @@ def main():
     fig_sparsity(rows)
 
     # ---- causal ablation on the best-identified word
-    names = list(concepts)
-    # The ablation needs a position that is mid-word AND has another in-word character after it,
-    # so the word must be long enough: with a 3-letter word, offset>=2 is the final character and
-    # the next symbol is always a space, which leaves nothing to measure.
-    eligible = [i for i, nm in enumerate(names) if len(lex[int(nm[1:])]) >= 5]
-    if not eligible:
-        raise SystemExit("no lexicon word is long enough for a mid-word ablation")
-    k_best = max(eligible, key=lambda i: sae_best[i])
-    word_idx = int(names[k_best][1:])
-    feat = int(np.where(alive, f1[names[k_best]], -1).argmax())
-    log.info("causal test on word '%s' (F1 %.3f) via feature #%d", lex[word_idx],
-             sae_best[k_best], feat)
-
-    # positions inside that word, offset>=2, where the next character is inside the word too
-    cand = np.where((w == word_idx) & (o >= 2))[0]
-    cand = cand[(cand + 1 < len(w)) & (o[np.minimum(cand + 1, len(o) - 1)] > 0)]
-    if len(cand) == 0:
-        raise SystemExit(f"no mid-word positions found for '{lex[word_idx]}' - cannot ablate")
+    # The causal test needs a POSITION-SPECIFIC concept. "Somewhere inside word k" is not what
+    # decides the next character - "at letter j of word k" is. Selecting on the word-level concept
+    # can pick a feature whose ablation barely moves the prediction, which reads as a clean null
+    # result rather than a bad choice of feature. (Measured: 0.002 drop that way, 0.09 this way.)
+    ws_, os_ = w_in[score_idx], o_in[score_idx]
+    pos_con = {}
+    for k in range(N_WORDS):
+        for j in range(2, len(lex[k]) - 1):        # need another in-word character after it
+            m = ((ws_ == k) & (os_ == j)).astype(np.int8)
+            if m.sum() >= 25:
+                pos_con[f"w{k}@{j}"] = m
+    if not pos_con:
+        raise SystemExit("no (word, offset) concept has enough support for a causal test")
+    pf1 = f1_all_concepts(Z[score_idx], pos_con)
+    best_key = max(pos_con, key=lambda kk: np.where(alive, pf1[kk], -1).max())
+    feat = int(np.where(alive, pf1[best_key], -1).argmax())
+    word_idx, off_j = int(best_key[1:].split("@")[0]), int(best_key.split("@")[1])
+    log.info("causal test: letter %d of '%s' via feature #%d (F1 %.3f)", off_j + 1,
+             lex[word_idx], feat, float(np.where(alive, pf1[best_key], -1).max()))
 
     scale = np.sqrt(HIDDEN) / np.linalg.norm(H_in - H_in.mean(0), axis=1).mean()
     mu = torch.tensor(H_in.mean(0), dtype=torch.float32)
 
-    # A feature can only be tested where it is ON. Zeroing an already-zero activation does
-    # nothing, and averaging those positions in washes out a real effect - which is exactly how
-    # this measurement silently returned "no effect" before the filter was added.
-    with torch.no_grad():
-        z_probe = sae.encode((torch.tensor(H[cand], dtype=torch.float32) - mu) * scale)
-    on = (z_probe[:, feat] > 0).numpy()
-    log.info("feature #%d active at %d/%d candidate positions", feat, int(on.sum()), len(cand))
-    cand = cand[on][:400]
+    cand = np.where((w == word_idx) & (o == off_j))[0]
+    cand = cand[cand + 1 < len(w)][:400]
     if len(cand) == 0:
-        raise SystemExit(f"feature #{feat} never fires mid-word - cannot ablate")
+        raise SystemExit(f"no positions found for {best_key} - cannot ablate")
     nxt = torch.tensor([stoi[text[i + 1]] for i in cand], dtype=torch.long)
     Hc = torch.tensor(H[cand], dtype=torch.float32)
 
@@ -242,7 +237,7 @@ def main():
     p_base, p_abl, p_rnd = p_correct(base), p_correct(abl), p_correct(rnd)
     log.info("P(correct next char): reconstruction %.3f | ablate feature #%d %.3f | "
              "ablate random #%d %.3f", p_base, feat, p_abl, rand_feat, p_rnd)
-    fig_ablation(p_base - p_abl, p_base - p_rnd, lex[word_idx])
+    fig_ablation(p_base - p_abl, p_base - p_rnd, f"letter {off_j + 1} of \"{lex[word_idx]}\"")
 
     # ---- max-activating contexts, for the notebook's feature dashboard
     acts = Z[:, feat]

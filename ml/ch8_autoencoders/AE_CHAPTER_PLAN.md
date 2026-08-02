@@ -201,9 +201,15 @@ hidden states; features are read, scored against exact ground truth, and causall
    0.999 -> 0.943. So the loss cannot choose lambda: minimizing it pushes toward a dense,
    uninterpretable code. The first sweep stopped at lambda=0.05 and showed no peak - the slide
    claim was only earned after extending the sweep to lambda=0.01.
-3. **Causal ablation is clean.** Feature #299 fires on the 4th letter of `iixxz` (all 12 top
-   contexts are `iix[x]z`). Ablating it: P(correct next char) 0.920 -> 0.814. Ablating a random
-   feature: 0.920 -> 0.920. The flat control is what makes it evidence.
+3. **Causal ablation is clean, but only if you ablate the right kind of feature.** Feature #83
+   detects "letter 4 of `kizjon`" at F1 **1.000**. Ablating it: P(correct next char)
+   **0.935 -> 0.317**. Random-feature control: 0.935 -> 0.935.
+   **The trap:** selecting the feature on a WORD-level concept ("somewhere inside `fehhzk`")
+   gives a drop of **0.002** against a 0.000 control - which reads as a clean null result, not as
+   a badly chosen feature. Word identity is not what decides the next character; position within
+   the word is. Both the lab and the notebook now score `(word, offset)` concepts for the causal
+   test. Filtering to positions where the feature is actually ON was tried first and did NOT fix
+   it (0.001 -> 0.002), so the fix is the concept definition, not the position mask.
 4. **The negative result, kept on purpose.** The first design used nesting depth in a bracket
    language. It FAILED: depth and stack-top are dense (20-50% of positions), and the SAE lost to a
    single neuron at every lambda. Sparse dictionary learning needs sparse concepts. This is now
