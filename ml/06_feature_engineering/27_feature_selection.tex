@@ -1,0 +1,777 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepgfplotslibrary{groupplots, fillbetween}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\newcommand{\callout}[2]{%
+  \fcolorbox{#1}{#1!8}{\parbox{0.96\linewidth}{\small #2}}}
+
+\title{Feature Selection}
+\subtitle{A ranking is not a decision}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% COLD OPEN
+% ================================================================
+\begin{frame}{Lecture 23 told you to drop \texttt{atemp}. Should you?}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+    \vskip 4pt
+    Two measurements on the \emph{same} bike model, from the interpretability chapter:
+    \vskip 8pt
+    \begin{itemize}\small
+      \item \textbf{Permutation importance} ranks \texttt{atemp} \textbf{second} of eleven
+        (413, behind \texttt{yr} at 766). Shuffle it and the model gets much worse.
+      \item \textbf{Leave-One-Covariate-Out} says $\mathbf{-0.7}$. Delete the column, refit, and
+        the model gets \emph{very slightly better}.
+    \end{itemize}
+    \vskip 8pt
+    \textbf{So: do we drop it?}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{../05_interpretability/fig/pfi_cfi_loco_bike.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Neither number answers the question}
+  \begin{itemize}
+    \item Permutation importance says \textbf{the model leans on it}.
+    \item Leave-One-Covariate-Out says \textbf{the model copes without it}.
+  \end{itemize}
+  \vskip 4pt
+  Both are true. \texttt{temp} carries almost the same signal, so removing \texttt{atemp} costs
+  nothing --- that is the ``correlated features split the credit'' result from lecture 22, seen from
+  a different angle.
+  \vfill
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.9\linewidth}{\centering
+      \textbf{\large A ranking tells you the \emph{order}.}\\[3pt]
+      \textbf{\large It does not tell you where to \emph{cut}.}}}
+  \end{center}
+  \vfill
+  \footnotesize Every tool in chapter 5 --- permutation importance, SHAP, Lasso --- produces an
+  ordered list. Not one of them produces a \emph{subset}. That gap is this entire lecture.
+\end{frame}
+
+\begin{frame}{And now you have 230 of them}
+  Last lecture ended by mechanically generating \textbf{230 candidate features} from the original
+  eleven, in about thirty lines of code.
+  \vfill
+  \begin{center}
+    \begin{tikzpicture}[font=\small, >=stealth]
+      \node[draw=armblue, very thick, rounded corners=2pt, fill=armblue!10,
+            minimum height=0.9cm, minimum width=2.6cm, align=center] (a) at (0,0)
+            {11 raw\\features};
+      \node[draw=armorange, very thick, rounded corners=2pt, fill=armorange!15,
+            minimum height=0.9cm, minimum width=2.6cm, align=center] (b) at (4.2,0)
+            {\textbf{230}\\candidates};
+      \node[draw=paramgreen, very thick, rounded corners=2pt, fill=paramgreen!10,
+            minimum height=0.9cm, minimum width=2.6cm, align=center] (c) at (8.6,0)
+            {how many\\ship?};
+      \draw[->, very thick, armblue] (a) -- node[above, font=\scriptsize]{lecture 26} (b);
+      \draw[->, very thick, armred] (b) -- node[above, font=\scriptsize]{\textbf{this lecture}}
+        node[below, font=\scriptsize]{???} (c);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  \callout{paramgreen}{Ranking 230 features is easy --- one line of \texttt{sklearn}. Deciding
+  which \emph{fifteen} go into production is not. That is the second half of last lecture's thesis:
+  \emph{generate cheaply, \textbf{select ruthlessly}}.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Why select, and when not to}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Fewer features, on purpose}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Five good reasons --- and one honest reason not to bother.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Five reasons to drop features}
+  \begin{enumerate}\small
+    \item \textbf{The curse of dimensionality} (math module 30). Volume grows exponentially with
+      $p$; with $n$ fixed, your data gets sparser with every column you add.
+    \item \textbf{Multicollinearity} (lecture 22). Correlated features make coefficients unstable
+      --- exactly the \texttt{temp}/\texttt{atemp} problem from slide 1.
+    \item \textbf{Variance.} More features means more flexibility means more overfitting.
+      Regularization helps; it does not eliminate.
+    \item \textbf{Compute and latency.} Every feature must be computed, stored, and served ---
+      forever, for every prediction, including the useless ones.
+    \item \textbf{Interpretability and audit.} ``We use 8 features'' defends far better than
+      ``we use 800''. In credit, healthcare and insurance this is not optional.
+  \end{enumerate}
+  \vfill
+  \callout{armorange}{Reason 4 is the one students underrate. A feature is not free once it is
+  chosen --- somebody maintains that pipeline at 3am when the upstream source changes.}
+\end{frame}
+
+\begin{frame}{Predict-first: does adding features always help?}
+  You add candidates one at a time, best-first, refitting Ridge after each.
+  \vfill
+  \textbf{What happens to (a) the training error, (b) the test error?}
+  \pause
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.66\linewidth]{fig/fs_add_features_ucurve.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{paramgreen}{\textbf{Training error falls forever} --- more columns can only fit the
+  training set better. \textbf{Test error is U-shaped}: down while features carry signal, then up
+  as they bring more variance than they remove bias. Selection is the search for that minimum.}
+\end{frame}
+
+\begin{frame}{So how much does selection actually buy?}
+  Two regimes, same data, same model, same split:
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.76\linewidth]{fig/fs_both_regimes.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \footnotesize \textbf{Eleven honest features.} Recursive elimination with cross-validation
+    kept \textbf{all eleven}. Selection bought \textbf{exactly nothing} --- not ``a little'',
+    \emph{zero}.
+    \column{0.49\textwidth}
+    \footnotesize \textbf{Two hundred and thirty candidates.} It kept \textbf{45} and bought
+    $\mathbf{+68.2}$ mean absolute error (MAE).
+  \end{columns}
+\end{frame}
+
+\begin{frame}{When \emph{not} to select}
+  \callout{paramgreen}{\textbf{Selection pays in proportion to how much junk you generated.} If you
+  did not mass-produce candidates, you probably do not need this lecture's machinery --- fit the
+  model on everything and regularize.}
+  \vfill
+  Three cases where selection is not worth it:
+  \begin{itemize}\small
+    \item \textbf{$p$ is small and every feature was chosen deliberately.} The bike eleven.
+    \item \textbf{You are already regularizing hard.} Ridge and Lasso select \emph{softly}
+      (lecture 7); a hard cut can only lose the small-but-real signal they were keeping.
+    \item \textbf{$n \gg p$.} With plenty of rows, the variance cost of a weak feature is small.
+  \end{itemize}
+  \vfill
+  \callout{armred}{And note the orange line on the previous slide. Engineering 219 features and
+  selecting the best 45 got Ridge to $505.5$. A \textbf{random forest on the raw eleven}, with no
+  feature engineering and no selection at all, gets $\mathbf{455.1}$. Sometimes the answer is
+  ``change the model'', not ``change the features''.}
+\end{frame}
+
+% ================================================================
+\section{You already own half the toolkit}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{You have done this before}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      without calling it selection.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Refresher: what each chapter-5 tool measures}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{@{}l l l@{}}
+      \textbf{Tool} & \textbf{The question it answers} & \textbf{From} \\ \hline
+      \textbf{Permutation feature importance} (PFI) & how much does the model \emph{rely} on it? & L23 \\
+      \textbf{Conditional feature importance} (CFI) & \ldots\ beyond what its correlated partners give? & L23 \\
+      \textbf{Leave-One-Covariate-Out} (LOCO) & how much worse if I \emph{delete} it and refit? & L23 \\
+      \textbf{Shapley Additive Global importance} (SAGE) & what is its fair share of the performance? & L23 \\
+      \textbf{SHapley Additive exPlanations} (SHAP) & how much did it move \emph{this} prediction? & L24 \\
+      \textbf{Lasso} coefficient path & is it worth a non-zero coefficient? & L7, L22 \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \callout{armblue}{Six tools, six different questions --- and \textbf{six ordered lists}. Slide 1
+  is what happens when two of them disagree: they were never answering the same question.}
+\end{frame}
+
+\begin{frame}{Read them again as selection algorithms}
+  \begin{itemize}\small
+    \item \textbf{Leave-One-Covariate-Out is one step of backward elimination.} Drop a feature,
+      refit, measure. You have already run it. Repeat it $p$ times greedily and you have
+      \emph{recursive feature elimination} (section 4).
+    \item \textbf{The Lasso path is embedded selection.} A coefficient hitting exactly zero
+      \emph{is} the feature being dropped. You have watched this happen since lecture 7.
+    \item \textbf{Impurity and permutation importance are the input} that wrapper methods consume
+      --- they decide \emph{which} feature to drop next.
+    \item \textbf{Boruta's shadow features} (section 4) are permutation importance with a null
+      distribution bolted on: instead of ``how important?'', ask ``more important than a
+      \emph{shuffled copy} of itself?''
+  \end{itemize}
+  \vfill
+  \callout{paramgreen}{You are not starting from zero. You are missing exactly three things ---
+  and the next slides are those three.}
+\end{frame}
+
+\begin{frame}{Two different goals, and students conflate them}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{Minimal-optimal}
+    \vskip 3pt
+    \footnotesize The \emph{smallest} subset that predicts as well as the full set.
+    \begin{itemize}\scriptsize
+      \item Lasso, recursive elimination, stability selection
+      \item correlated duplicates get dropped \emph{arbitrarily}
+      \item what you want when you \textbf{ship a model}
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{All-relevant}
+    \vskip 3pt
+    \footnotesize \emph{Every} feature carrying signal about $y$, duplicates included.
+    \begin{itemize}\scriptsize
+      \item Boruta
+      \item keeps both members of a correlated pair
+      \item what you want when you are \textbf{doing science}
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \callout{armorange}{\textbf{Bike makes this concrete, and it finally answers slide 1.}
+  Minimal-optimal \emph{drops} \texttt{atemp} --- given \texttt{temp}, it adds nothing.
+  All-relevant \emph{keeps} it --- it genuinely predicts bike rentals. \textbf{Same data, both
+  answers correct, different question.} You cannot pick a method until you know which one you are
+  asking.}
+  \vskip 3pt
+  \footnotesize \scriptsize The distinction is due to Nilsson et al.\ (2007).
+\end{frame}
+
+\begin{frame}{So what is actually left to learn?}
+  A ranking gives you an order. It does not give you:
+  \vfill
+  \begin{enumerate}
+    \item \textbf{A cutoff.} Where does the list stop? \emph{(sections 3 and 4)}
+    \item \textbf{A way to score a \emph{subset} rather than a feature.} Features interact; the
+      best three individually are rarely the best three together. \emph{(section 4)}
+    \item \textbf{A guarantee the answer is stable.} Run it on a slightly different sample --- do
+      you get the same list? \emph{(section 5)}
+  \end{enumerate}
+  \vfill
+  \callout{armblue}{Three families of methods map onto these: \textbf{filter} (cheap, one feature
+  at a time), \textbf{embedded} (free with the model --- that is chapter 5), and \textbf{wrapper}
+  (expensive, scores subsets). We spend the rest of the lecture on filter and wrapper, because you
+  already have embedded.}
+\end{frame}
+
+% ================================================================
+\section{Filter methods}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Score every feature once}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Before you fit anything at all.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The three families}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{@{}p{2.4cm} p{5.0cm} p{5.4cm}@{}}
+      \textbf{Family} & \textbf{How it works} & \textbf{Trade-off} \\ \hline
+      \textbf{Filter} & score each feature \emph{independently} against $y$, keep the top $k$
+        & fast, model-agnostic. \textbf{Blind to interactions.} \\
+      \textbf{Embedded} & the model selects \emph{while} fitting (Lasso, tree importances)
+        & cheap, model-aware. Tied to that one model. \\
+      \textbf{Wrapper} & search over \emph{subsets}, score each by cross-validation
+        & most accurate. Refits the model $\mathcal{O}(p)$ times. \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \textbf{The standard funnel} --- cost rises left to right, so spend it late:
+  \begin{center}\small
+    $10{,}000 \;\xrightarrow[\text{filter}]{}\; 500
+     \;\xrightarrow[\text{embedded}]{}\; 50
+     \;\xrightarrow[\text{wrapper}]{}\; 15$
+  \end{center}
+  \vfill
+  \footnotesize The canonical survey is Guyon \& Elisseeff (2003), still worth reading.
+\end{frame}
+
+\begin{frame}[fragile]{Variance thresholds and univariate filters}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    \textbf{Step 1: drop the near-constants.} A column that never varies cannot predict anything.
+    Free, and always worth doing.
+    \vskip 5pt
+    \textbf{Step 2: score each feature against $y$.}
+    \begin{itemize}\scriptsize
+      \item \textbf{Regression:} \texttt{f\_regression} (linear association only),
+        \texttt{mutual\_info\_regression} (\emph{any} dependence)
+      \item \textbf{Classification:} \texttt{f\_classif}, \texttt{chi2},
+        \texttt{mutual\_info\_classif}
+    \end{itemize}
+    \column{0.46\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+X = VarianceThreshold(0.01).fit_transform(X)
+
+# top 20 by linear association
+SelectKBest(f_regression, k=20).fit(X, y)
+
+# top 20 by ANY dependence
+SelectKBest(mutual_info_regression,
+            k=20).fit(X, y)
+\end{lstlisting}}
+  \end{columns}
+  \vfill
+  \callout{armorange}{The choice between those two scores is not cosmetic. \texttt{f\_regression}
+  measures \emph{linear} association only --- it is blind to exactly the effects lecture 26 spent a
+  slide binning.}
+\end{frame}
+
+\begin{frame}{Where the two scores disagree}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/fs_filter_scores.pdf}
+    \end{center}
+    \column{0.52\textwidth}
+    \vskip 6pt
+    Ten of the eleven features rank almost identically under both scores. \textbf{One moves three
+    places: \texttt{mnth}.}
+    \vskip 6pt
+    \footnotesize
+    F-test rank \textbf{6} $\rightarrow$ mutual-information rank \textbf{3}.
+    \vskip 6pt
+    Why: month is \textbf{cyclic}. Rentals are low in January, high in July, low again in December,
+    so the \emph{linear} association is weak while the actual dependence is strong. The F-test
+    cannot see a shape it cannot draw with a straight line.
+    \vskip 6pt
+    This is exactly what the cyclic $\sin/\cos$ encoding from lecture 3 exists to fix.
+  \end{columns}
+  \vfill
+  \callout{armblue}{If you had filtered on \texttt{f\_regression} alone at $k=5$, you would have
+  thrown away \texttt{mnth} --- the third most informative column you had.}
+\end{frame}
+
+\begin{frame}{The independence trap}
+  Filters score each feature \emph{alone}. Consider two binary features with $y = x_1 \oplus x_2$:
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/fs_xor_trap.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \footnotesize Each feature alone: \textbf{no signal}. Mean $y$ is the same whether $x_1$ is 0
+    or 1. Correlation $\approx 0$, mutual information $\approx 0$.
+    \column{0.49\textwidth}
+    \footnotesize Together: \textbf{a perfect predictor.} Any filter, univariate or not, deletes
+    both features before the model ever sees them.
+  \end{columns}
+  \vskip 3pt
+  \callout{armred}{\textbf{A filter is a screen, not a decision.} Use it to go from 10{,}000 to
+  500, never from 500 to 15. A feature that fails on its own may be indispensable in company.}
+\end{frame}
+
+\begin{frame}{Multivariate filters}
+  Filters that look at features \emph{together}, without the cost of a wrapper:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Minimum Redundancy Maximum Relevance} (mRMR). Greedily pick the feature
+      maximising (relevance to $y$) $-$ (mean correlation with what you already picked). Directly
+      attacks the \texttt{temp}/\texttt{atemp} problem: the second one adds relevance but also
+      redundancy.
+    \item \textbf{Cluster-and-represent.} Hierarchically cluster the features by correlation, keep
+      one representative per cluster. Crude, cheap, effective when $p$ is huge.
+    \item \textbf{Hilbert-Schmidt Independence Criterion Lasso} (HSIC-Lasso). Kernel-based, catches
+      non-linear dependence, scales to many thousands of features.
+  \end{itemize}
+  \vfill
+  \footnotesize Libraries: \texttt{mrmr-selection}, \texttt{scikit-feature}. These are not the main
+  event in most projects, but they earn their keep in genomics and sensor data, where $p$ is in the
+  tens of thousands and half the columns are near-duplicates.
+\end{frame}
+
+\begin{frame}{How many features pass by pure chance?}
+  Score \textbf{10{,}000 columns of random numbers} against the bike target:
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{fig/fs_multiple_testing.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.53\textwidth}
+    \footnotesize \textbf{528} clear $\alpha = 0.05$. The best random column reaches
+    $p = 1.17 \times 10^{-4}$ --- a number most people would call significant without blinking.
+    \column{0.45\textwidth}
+    \footnotesize The $p$-values are \emph{uniform}, exactly as theory says. 5\% of them land below
+    $0.05$ because that is what $0.05$ \emph{means}.
+  \end{columns}
+  \vskip 3pt
+  \callout{armred}{Control the family-wise error rate with \textbf{Bonferroni} ($\alpha/m$) or the
+  false discovery rate with \textbf{Benjamini-Hochberg} (1995) --- \texttt{SelectFwe},
+  \texttt{SelectFdr}. Both remove all 528. \textbf{Almost nobody applies them to a feature pool},
+  and last lecture's 230 mechanical candidates are exactly this problem at smaller scale.}
+\end{frame}
+
+% ================================================================
+\section{Wrapper methods}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Stop scoring features}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Start scoring subsets.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}[fragile]{Recursive Feature Elimination}
+  \textbf{Recursive Feature Elimination (RFE).} Fit the model. Rank the features. Drop the weakest.
+  \emph{Refit.} Repeat.
+  \vfill
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+    \footnotesize
+    \textbf{Why the refit matters.} Importances are not fixed --- they change as features leave.
+    Drop \texttt{atemp} and \texttt{temp}'s importance \emph{jumps}, because it is no longer
+    splitting the credit with a near-duplicate (lecture 22).
+    \vskip 4pt
+    A one-shot ranking cannot see that. Recursive elimination re-measures after every removal,
+    which is exactly why it beats ``keep the top $k$ of a single ranking''.
+    \column{0.48\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+from sklearn.feature_selection import RFE
+
+rfe = RFE(Ridge(),
+          n_features_to_select=15,
+          step=1).fit(X, y)
+X_sel = X[:, rfe.support_]
+\end{lstlisting}}
+    \vskip 2pt
+    \footnotesize \textbf{Cost:} $\mathcal{O}(p)$ refits. Use a fast model, or pre-filter first.
+  \end{columns}
+  \vfill
+  \footnotesize Introduced for gene selection with support vector machines by Guyon et al.\ (2002),
+  where $p$ was in the thousands and $n$ in the dozens.
+\end{frame}
+
+\begin{frame}{Where the cutoff finally comes from}
+  \texttt{RFECV} cross-validates \emph{at every subset size} and keeps the best one. The cutoff is
+  no longer your judgement call --- it is a measurement.
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{fig/fs_rfecv_curve.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{paramgreen}{On the 230 candidates it chose $\mathbf{k = 45}$. \textbf{This slide answers
+  slide 2:} you do not read the cutoff off a bar chart, you find it with cross-validation.
+  \emph{Hand-designed} features survived at the highest rate of any kind ($2$ of $3$, versus $13\%$
+  of the ratios) --- but there were only three of them to begin with.}
+\end{frame}
+
+\begin{frame}[fragile]{Sequential selection: forward and backward}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    \textbf{Forward} --- start empty, repeatedly add the feature that most improves
+    cross-validation. Fast when you want \emph{few} features.
+    \vskip 4pt
+    \textbf{Backward} --- start full, repeatedly drop the one whose removal hurts least. Fast when
+    you want to drop only a few. \emph{This is Leave-One-Covariate-Out, run greedily to
+    exhaustion.}
+    \column{0.46\textwidth}
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+SequentialFeatureSelector(
+    Ridge(),
+    n_features_to_select=15,
+    direction="forward",   # or "backward"
+    cv=5).fit(X, y)
+\end{lstlisting}}
+  \end{columns}
+  \vfill
+  \callout{armred}{\textbf{Both are greedy, and greedy fails on the exclusive-or (XOR) trap.}
+  Forward selection
+  evaluates $x_1$ alone (useless), then $x_2$ alone (useless), and never adds either --- so it
+  never discovers that together they are perfect. Backward selection has the mirror problem. When
+  features only pay off jointly, \emph{no} greedy method finds them.}
+\end{frame}
+
+\begin{frame}{Boruta: asking a different question}
+  Every method so far asks ``which features are \emph{best}?'' Boruta asks
+  \textbf{``which features are better than \emph{nothing}?''}
+  \vfill
+  \textbf{The algorithm} (Kursa \& Rudnicki, 2010):
+  \begin{enumerate}\small
+    \item For every real feature, add a \textbf{shadow} --- a shuffled copy of that same column.
+      It has the same distribution and, by construction, \emph{no relationship to $y$}.
+    \item Fit a random forest on real $+$ shadow features together.
+    \item Any real feature scoring above the \textbf{maximum} shadow importance gets a hit.
+      (The maximum, not the mean --- this is the multiple-testing correction from slide 20, built in.)
+    \item Repeat with fresh shuffles. Over many iterations, a feature that consistently beats the
+      best shadow is \textbf{confirmed}; one that consistently loses is \textbf{rejected}.
+  \end{enumerate}
+  \vfill
+  \callout{armblue}{This is the \textbf{all-relevant} method from slide 12. It is not trying to
+  find a small set --- it is trying to find \emph{every} column that carries signal.}
+\end{frame}
+
+\begin{frame}{Boruta on bike --- and a flat contradiction}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{fig/fs_boruta_shadow.pdf}
+    \end{center}
+    \column{0.43\textwidth}
+    \vskip 4pt
+    \footnotesize
+    \textbf{Both \texttt{temp} and \texttt{atemp} confirmed} --- as slide 12 predicted, all-relevant
+    keeps the correlated pair that recursive elimination throws half of away.
+    \vskip 6pt
+    \textbf{But look at the bottom three.} Boruta \emph{rejects} \texttt{holiday},
+    \texttt{weekday} and \texttt{workingday}: no better than a shuffled column.
+  \end{columns}
+  \vskip 2pt
+  \callout{armred}{\textbf{And the next slide will show Lasso keeping \texttt{weekday} in 100\% of
+  bootstrap samples.} Same eleven features, same data, opposite verdicts. Not a bug: Boruta asks
+  ``does this beat noise \emph{inside a forest}?'' while Lasso asks ``does this earn a coefficient
+  in a \emph{linear} model?'' A weekday effect a tree already absorbs through \texttt{season} and
+  \texttt{temp} can still be worth its own coefficient.}
+\end{frame}
+
+% ================================================================
+\section{Stability: is the answer real?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Run it twice}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Do you get the same features?
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Stability selection}
+  One Lasso fit gives one answer. Fit it on \textbf{100 bootstrap resamples} and count how often
+  each feature survives (Meinshausen \& B\"uhlmann, 2010):
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.72\linewidth]{fig/fs_stability.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{armorange}{\textbf{\texttt{atemp} 99\%, \texttt{temp} 68\% --- but one of the two is
+  selected in 100\% of resamples.} They are not splitting the credit evenly; \texttt{atemp} is
+  marginally the better predictor, so Lasso reaches for it first and \texttt{temp} only gets in
+  when the resample happens to favour it. \textbf{Correlated features split credit in proportion to
+  a small edge}, and the weaker one then looks dispensable when it is not.}
+\end{frame}
+
+\begin{frame}{What stability tells you that a single fit cannot}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{The pair}
+    \vskip 3pt
+    \footnotesize Report the \emph{union}, not the members. ``One temperature column, always'' is
+    the true finding; ``\texttt{temp} is borderline at 68\%'' is an artefact of having two.
+    \column{0.50\textwidth}
+    \textbf{The genuinely unstable one}
+    \vskip 3pt
+    \footnotesize \texttt{mnth} survives in \textbf{9\%} of resamples --- it flickers in and out.
+    And it is the same column that the F-test undersold on slide 17. A feature a \emph{linear}
+    model can barely use is exactly the one a \emph{linear} selector cannot make its mind up about.
+  \end{columns}
+  \vfill
+  \callout{paramgreen}{Stability selection also answers \emph{how many} for free: $k$ is however
+  many features clear your threshold. No elbow to eyeball, no $k$ to guess.}
+  \vfill
+  \footnotesize \textbf{Four ways to pick $k$, in practice:} the \texttt{RFECV} curve, a stability
+  threshold, Boruta's shadow cutoff --- and \textbf{a hard business constraint}. ``The credit model
+  ships with twelve features because a regulator reads all of them'' is a real reason, and it
+  overrules all three of the others.
+\end{frame}
+
+% ================================================================
+\section{Pitfalls}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The mistake that makes everything look great}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      And it is the same mistake as last lecture's, one level up.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Selection bias: selecting outside the loop}
+  Rank all 230 features on the \textbf{whole dataset}, keep the top 20, \emph{then} cross-validate
+  them. The selection already saw the test rows.
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.74\linewidth]{fig/fs_selection_bias.pdf}
+  \end{center}
+  \vskip -2pt
+  \callout{armred}{On real candidates the lie is worth $+5.8$ MAE --- unpleasant but survivable.
+  On \textbf{500 columns of pure noise} it is worth $\mathbf{+201.1}$, and the model looks
+  respectable \emph{on data containing no signal whatsoever}. \textbf{The bias is worst exactly
+  when you have the most junk} --- which is to say, right after last lecture.}
+\end{frame}
+
+\begin{frame}[fragile]{The fix is the same rule as lecture 6}
+  Cross-validation estimates the performance of a \textbf{procedure}, not of a fitted model. If
+  selection is part of your procedure, it goes \emph{inside} the loop.
+  \vfill
+{\lstset{basicstyle=\ttfamily\scriptsize}
+\begin{lstlisting}
+# WRONG - selection saw every row before the split
+X_sel = SelectKBest(f_regression, k=20).fit_transform(X, y)
+cross_val_score(Ridge(), X_sel, y, cv=5)
+
+# RIGHT - selection is refitted inside every fold
+pipe = Pipeline([("sel", SelectKBest(f_regression, k=20)),
+                 ("sc",  StandardScaler()),
+                 ("m",   Ridge())])
+cross_val_score(pipe, X, y, cv=5)
+\end{lstlisting}}
+  \vfill
+  \callout{paramgreen}{Identical in shape to lecture 26's rule for engineered features: \textbf{if
+  it learns anything from the data, it belongs inside the \texttt{Pipeline}.} A selector learns
+  \emph{which columns to keep} --- that is learning, and it leaks.}
+  \vskip 3pt
+  \footnotesize And if you tune hyperparameters \emph{and} select features, you need
+  \textbf{nested} cross-validation --- an outer loop for the estimate, an inner one for the choices.
+\end{frame}
+
+\begin{frame}{Four more pitfalls}
+  \begin{enumerate}\small
+    \item \textbf{Leakage through the encoder.} If a feature was target-encoded without
+      out-of-fold discipline (lecture 26), selection just ranks the leak highest. Fix the encoder
+      before you trust the ranking.
+    \item \textbf{Model-dependence.} Lasso's picks are not the forest's picks --- slide 26 is a
+      whole slide about that. \textbf{Selection results do not transfer across model classes.}
+      Change the model, redo the selection.
+    \item \textbf{Arbitrary thresholds.} ``Keep importance $> 0.01$'' is a number somebody made up.
+      Use a cross-validated curve, a stability frequency, or a shadow comparison --- all three are
+      defensible, and $0.01$ is not.
+    \item \textbf{Forgetting the baseline.} Always compare against keeping everything. Slide 8 did
+      exactly this and found selection was worth \emph{zero} on the raw eleven. \textbf{Selection
+      that does not beat keep-all was not worth doing.}
+  \end{enumerate}
+\end{frame}
+
+% ================================================================
+\section*{}
+
+\begin{frame}{Which method, when?}
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize, >=stealth, node distance=0.34cm and 0.75cm,
+      q/.style={draw=armblue, very thick, rounded corners=2pt, fill=armblue!6,
+                text width=3.1cm, align=center, minimum height=0.75cm},
+      r/.style={draw=paramgreen, very thick, rounded corners=2pt, fill=paramgreen!10,
+                text width=3.5cm, align=center, minimum height=0.75cm},
+      a/.style={->, thick, armblue}]
+      \node[q] (p) {$p >$ a few thousand?};
+      \node[r, right=of p] (pf) {filter first: variance $+$ mutual information $+$ false discovery rate};
+      \node[q, below=of p] (goal) {minimal set, or \emph{all} relevant?};
+      \node[r, right=of goal] (bor) {all-relevant $\rightarrow$ \textbf{Boruta}};
+      \node[q, below=of goal] (cost) {can you afford $\mathcal{O}(p)$ refits?};
+      \node[r, right=of cost] (rfe) {\textbf{RFECV} --- it also picks $k$};
+      \node[q, below=of cost] (stab) {need a robustness claim?};
+      \node[r, right=of stab] (ss) {\textbf{stability selection}};
+      \node[r, below=of stab] (las) {no $\rightarrow$ \textbf{Lasso} and stop};
+      \draw[a] (p) -- node[above, font=\tiny]{yes} (pf);
+      \draw[a] (p) -- (goal);
+      \draw[a] (goal) -- node[above, font=\tiny]{all} (bor);
+      \draw[a] (goal) -- (cost);
+      \draw[a] (cost) -- node[above, font=\tiny]{yes} (rfe);
+      \draw[a] (cost) -- (stab);
+      \draw[a] (stab) -- node[above, font=\tiny]{yes} (ss);
+      \draw[a] (stab) -- (las);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 2pt
+  \callout{armred}{Whichever branch you take: do the selection \textbf{inside} the
+  cross-validation loop, and compare against keeping everything.}
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{A ranking is not a decision.} Chapter 5's tools order features; none of them
+      picks a cutoff. That is what filter and wrapper methods are for.
+    \item \textbf{Selection pays in proportion to the junk you generated:} $+0.0$ MAE on the
+      honest eleven, $+68.2$ on 230 mechanical candidates.
+    \item \textbf{Filter is a screen, not a decision} --- fast, but blind to interactions (XOR)
+      and to non-linear effects (\texttt{mnth}, rank 6 by F-test and rank 3 by mutual information).
+    \item \textbf{Wrappers score subsets.} \texttt{RFECV} finds the cutoff by cross-validation;
+      it chose $k=45$. Greedy sequential methods still miss jointly-useful pairs.
+    \item \textbf{Minimal-optimal $\neq$ all-relevant.} Recursive elimination drops \texttt{atemp};
+      Boruta keeps it. \textbf{Both are right} --- so answer slide 1 by naming your question.
+    \item \textbf{Check stability.} \texttt{atemp} 99\%, \texttt{temp} 68\%, but one of them is in
+      100\% of resamples. Report the union.
+    \item \textbf{Select inside the cross-validation loop.} Outside it, 500 pure-noise columns
+      produced a respectable-looking model.
+  \end{itemize}
+  \vfill
+  \callout{paramgreen}{\textbf{Next: classic methods} --- k-nearest neighbours, naive Bayes,
+  discriminant analysis, support vector machines and Gaussian processes. Models where, unlike
+  trees, the features you feed in are the features it gets.}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Replaces L01h_feature_selection.tex (2026-06-05), which predated the interpretability
+%     chapter and spent 5 of its 20 frames re-teaching PFI / SHAP / Lasso / impurity importance
+%     that decks 22-24 now cover far more deeply. Those 5 frames are cut; the recap frame and
+%     the "re-read as selection algorithms" frame replace them.
+%   - Outline + locked decisions: 27_feature_selection_OUTLINE.md (v3).
+%   - EVERY number is measured by py_src/fe_measure.py and re-derived at render time by
+%     py_src/fs_figs.py. Logs: logs/fe_measure.log, logs/fs_figs.log. Same split/seed as
+%     decks 22-26 (test_size=0.3, random_state=509).
+%   - CHAINED TO DECK 26: fs_figs.py LOADS data/bike_candidates.csv (230 columns) rather than
+%     regenerating it, so this deck prunes exactly the pool deck 26 built. That file is
+%     gitignored - run fe_measure.py first if it is missing.
+%   - Two of my own predictions were wrong and the measurements corrected them, both now taught
+%     as the measured result: the F-vs-MI disagreement is mnth (not temp), and the temp/atemp
+%     stability split is 68/99 (not 50/50).
+%   - Unplanned finding promoted to a frame: Boruta rejects holiday/weekday/workingday while
+%     stability selection keeps weekday at 100%. Same data, opposite verdicts, different questions.
+%   - Deliberately NOT covered (chapter 5 owns them): PFI, CFI, LOCO, SAGE, SHAP mechanics.
+%   - Scope: regression only, matching deck 26, by instructor decision.
+% =============================================================
