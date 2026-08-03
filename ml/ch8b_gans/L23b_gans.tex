@@ -1,0 +1,399 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 23b: Generative Adversarial Networks}
+\subtitle{Two networks, one game}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{A different bet entirely}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    L23 ended with a working generative model and an honest complaint: the VAE's samples
+    are \textbf{blurry}. The cause was structural - we maximized a likelihood bound, and
+    an averaged prediction scores well on it.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{The GAN's bet:} stop measuring likelihood altogether. Instead, train a
+      \emph{second} network to tell real images from generated ones - and use its verdict
+      as the loss.}}
+    \column{0.46\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      If a critic cannot distinguish your output from real data, your output is
+      indistinguishable from real data. \textbf{That is the whole idea}, and it is a
+      remarkably direct answer to "what makes an image look real?"}}
+    \vskip 5pt
+    \footnotesize
+    \textcolor{gray}{\textbf{Generative Adversarial Networks} (Goodfellow et al., 2014).}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The adversarial idea}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The adversarial idea}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Replace the loss function with an opponent.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The forger and the inspector}
+  \small
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=0.92\linewidth]{lmu_counterfeiters.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \column{0.54\textwidth}
+    \footnotesize
+    \textbf{Generator} $G$: takes a random vector $\mathbf{z}$ and produces an image. It
+    never sees the training data. It only ever learns from the critic's reaction.
+    \vskip 4pt
+    \textbf{Discriminator} $D$: takes an image and outputs one number - the probability
+    that this image is real.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      They are trained \textbf{alternately} and want opposite things. $D$ improves at
+      spotting fakes; $G$ improves at fooling $D$. Each one's progress is the other's
+      problem.}}
+    \vskip 4pt
+    \textcolor{gray}{Note what is absent: no reconstruction term, no likelihood, no
+    encoder. $G$ is judged only on whether its output passes.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One training step, concretely}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Update $D$}: show it a batch of real images (label 1) and a batch of generated
+    ones (label 0). Plain binary classification.
+    \vskip 4pt
+    \textbf{Update $G$}: generate a fresh batch, push it through $D$, and change $G$ so
+    that $D$ calls them \emph{real}.
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      The gradient reaching $G$ flows \textbf{through} $D$. That is why $D$ must be
+      trained too, and why a $D$ that is too good or too weak both break learning.}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{lmu_gan_pseudocode.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{What is actually being optimized}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What is actually being optimized}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A game has no loss function. It has an equilibrium.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The minimax objective}
+  \small
+  \[
+    \min_{G}\ \max_{D}\quad
+      \E_{\xv \sim p_{\text{data}}}\big[\log D(\xv)\big]
+      \;+\;
+      \E_{\mathbf{z} \sim p(\mathbf{z})}\big[\log\big(1 - D(G(\mathbf{z}))\big)\big]
+  \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Read it in two halves. $D$ wants the first term large (call real images real) and
+      the second large (call fakes fake). $G$ can only touch the second term, and wants
+      it \emph{small}.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Notice what this is not.} There is no single quantity being minimized. Two
+      players move in opposite directions on the same number.
+      \vskip 3pt
+      Everything difficult about GANs follows from that one fact.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{If the discriminator were perfect}
+  \small
+  Hold $G$ fixed and solve for the best possible $D$. It is a calculus exercise, and the
+  answer is clean:
+  \[
+    D^{*}(\xv) \;=\; \frac{p_{\text{data}}(\xv)}{p_{\text{data}}(\xv) + p_{G}(\xv)}
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    Sanity-check it. Where only real data lives, $p_G = 0$ and $D^*=1$. Where only fakes
+    live, $D^*=0$. Where the two distributions agree, $D^* = \tfrac{1}{2}$ - the critic
+    is reduced to guessing.
+    \vskip 4pt
+    Substituting $D^*$ back in, the generator turns out to be minimizing the
+    \textbf{Jensen-Shannon divergence} between $p_{\text{data}}$ and $p_G$ - a symmetric
+    cousin of the KL divergence from L23.
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{So GANs do minimize a divergence after all} - just never one you can
+      evaluate. The loss you watch during training is not it.}}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{And the theory quietly assumes too much:} that $D$ is optimal at every step,
+      and that $G$ can represent any distribution. Neither holds. The equilibrium argument
+      is a guide, not a guarantee.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The first thing that breaks}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Early in training $G$ is terrible, so $D$ rejects everything and
+    $D(G(\mathbf{z}))\approx 0$.
+    \vskip 4pt
+    Look at what happens to $G$'s gradient there: $\log(1-D(G(\mathbf{z})))$ is
+    \textbf{flat} near $0$. The generator is losing badly and learning nothing - exactly
+    when it most needs signal.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The fix (same paper):} have $G$ \emph{maximize} $\log D(G(\mathbf{z}))$
+      instead of minimizing $\log(1-D(G(\mathbf{z})))$. Same fixed point, steep gradient
+      where it matters. This is the \textbf{non-saturating} loss, and essentially every
+      implementation uses it.}}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{lmu_ns_loss.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \vskip -2pt
+    \footnotesize
+    \textcolor{gray}{Our own implementation uses it too - see the comment in
+    \texttt{py\_src/gan\_digits.py}.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Why this is hard: our own run}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Why this is hard: our own run}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Everything from here is measured on a GAN trained for these slides.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The loss tells you nothing}
+  \small
+  A GAN on 8x8 handwritten digits - the same dataset a later chapter will reuse, so the
+  two families can be compared on identical data - 8000 steps on a laptop:
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{gan_training.pdf}
+  \end{center}
+  \vskip -3pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Left:} the two losses wander and cross. Neither descends. If you are used to
+    watching a training curve to decide when to stop, that instinct is now useless.
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Right:} discriminator accuracy is the one readable signal. Theory says it
+    should settle at $0.5$. Ours peaks at $\mathbf{0.92}$, then drifts down to $0.67$ -
+    and never reaches equilibrium.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Mode collapse, as it happens}
+  \small
+  The same ten latent vectors $\mathbf{z}$, decoded at four points in training:
+  \begin{center}
+    \includegraphics[width=0.78\linewidth]{gan_samples.pdf}
+  \end{center}
+  \vskip -3pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{Look at step 500.} Ten \emph{different} inputs produce essentially the
+    \emph{same} output. The generator has found one image that fools $D$ and stopped
+    exploring - textbook \textbf{mode collapse}. By step 2000 it has recovered to roughly
+    two recurring shapes - better, still far short of ten digits. By 8000 it has escaped
+    into real variety.
+    \vskip 3pt
+    Compare with the accuracy curve: the collapse sits exactly where $D$ was dominating
+    at $0.92$. \textbf{An overpowering critic causes collapse.}}}
+\end{frame}
+
+\begin{frame}{Mode collapse you cannot see}
+  \small
+  Escaping visible collapse is not the same as covering the data. Train a plain classifier
+  on the \emph{real} digits (accuracy $0.996$), then use it to label 2000 generated ones:
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{gan_coverage.pdf}
+  \end{center}
+  \vskip -3pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    Overall coverage is decent - total variation $0.079$. This run did \textbf{not}
+    catastrophically collapse, and I am not going to pretend it did.
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      But look at digit \textbf{8}: $0.060$ generated against $0.097$ real. Roughly
+      \textbf{38\% of the 8s are missing}, and no amount of staring at the samples
+      would have told you.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The failure modes, named}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Mode collapse.} $G$ maps many $\mathbf{z}$ to few outputs. Sharp images,
+      no diversity. Ours did it at step 500 and partly recovered.}}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Non-convergence.} The pair oscillates instead of settling. $G$ fixes what
+      $D$ just learned, $D$ learns the new tell, forever.}}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Vanishing gradient.} $D$ wins outright, $G$ gets no signal. The
+      non-saturating loss helps but does not eliminate it.}}
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{The simplest possible example.} Take the toy game $V(x,y) = xy$, where one
+    player lowers $V$ by moving $x$ and the other raises it by moving $y$. The unique
+    equilibrium is $(0,0)$.
+    \vskip 3pt
+    Follow gradient steps and you get this: five states, and state 5 is state 1 again.
+    \begin{center}
+      \includegraphics[width=0.99\linewidth]{lmu_nonconverge.png}\\[1pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \vskip -1pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      It \textbf{orbits the solution forever} - in a game with two variables and no
+      networks at all. All three failures share one root: \textbf{no fixed objective to
+      descend}.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What actually makes it train}
+  \small
+  A decade of empirical folklore, most of it from \textbf{DCGAN} - \textbf{Deep
+  Convolutional GAN} (Radford et al., 2015):
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    \begin{itemize}\setlength\itemsep{2pt}
+      \item strided convolutions instead of pooling, both directions
+      \item batch normalization in both networks
+      \item \textbf{LeakyReLU} in $D$ - a dead ReLU kills the gradient $G$ depends on
+      \item Adam with $\beta_1 = 0.5$, not the usual $0.9$
+      \item balance the two updates; never let one race ahead
+    \end{itemize}
+    \vskip 4pt
+    \textcolor{gray}{Our run uses the LeakyReLU, dropout and $\beta_1=0.5$ items. They are
+    not optional decoration - $\beta_1=0.9$ diverges.}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{This list is the tell.} A method that needs five architectural
+      superstitions to converge is a method fighting its own formulation.
+      \vskip 3pt
+      Later work attacked the root instead - Wasserstein GAN (Arjovsky et al., 2017)
+      replaces the divergence; spectral normalization constrains $D$.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\setlength\itemsep{2pt}
+      \item A GAN replaces the loss function with a second network.
+      \item The objective is a \textbf{minimax game}, not a minimization - there is no
+        number that going down means progress.
+      \item With an optimal $D$, $G$ minimizes the Jensen-Shannon divergence - which you
+        can never evaluate.
+      \item The naive generator loss saturates; everyone uses the non-saturating form.
+      \item Our own run: losses that wander, $D$ accuracy peaking at $0.92$, visible mode
+        collapse at step 500, and $38\%$ of the 8s still missing at the end.
+      \item Training is stabilized by a list of tricks, which is itself a diagnosis.
+    \end{enumerate}
+    \column{0.46\textwidth}
+    \vskip 8pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} everything above is the unconditional case - a GAN that draws
+      \emph{something}.
+      \vskip 4pt
+      L23c is what people actually built with these: asking for a specific class, turning
+      sketches into photographs, editing faces by moving in latent space - and how you
+      evaluate any of it when likelihood is unavailable.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L23b Generative Adversarial Networks (ch8b_gans). Built 2026-08-03.
+%   Placement decided with the instructor: the generative thread runs
+%   L22 (AE) -> L23 (VAE) -> L23b/L23c (GAN) -> L27-L31 (diffusion). See DECISIONS.md #5.
+%
+%   Sources:
+%     - Goodfellow et al. (2014); Radford et al. (2015) DCGAN; Arjovsky et al. (2017) WGAN.
+%     - LMU I2DL gan1 slide assets (CC BY 4.0), vendored to fig/borrowed/ as lmu_*.png.
+%
+%   Figures (ours, py_src/gan_digits.py -> fig/): gan_training.pdf, gan_samples.pdf,
+%   gan_coverage.pdf. Every number quoted on the slides comes from logs/gan_digits.log:
+%     D-accuracy peak 0.922 at step ~1006, final smoothed 0.674;
+%     class-probe accuracy on real digits 0.996;
+%     digit 8 generated 0.060 vs real 0.097; total variation 0.079.
+%
+%   Pedagogical decisions:
+%     - This deck EXISTS because L19, L23 and L28 all reference GAN instability while no
+%       deck ever taught it. L28's GAN frame can now be demoted to a callback.
+%     - The instability argument is made from our own training run, not asserted. The
+%       mode-collapse frame works because the run genuinely collapsed at step 500 and
+%       recovered - that was observed, not engineered.
+%     - The coverage frame states plainly that this run did NOT catastrophically collapse.
+%       Claiming otherwise would have been fabricating a result. The surviving finding -
+%       a third of the 8s missing, invisible to the eye - is the stronger lesson anyway.
+%     - The JS-divergence result is given WITH its two false assumptions, because the
+%       "GANs minimize JS" line is usually taught as if the theory applied in practice.
+%     - The DCGAN trick list is framed as a diagnosis of the formulation, which sets up
+%       why diffusion's single stationary loss mattered so much (L28).
+%
+%   Next deck: L23c_gan_applications.tex.

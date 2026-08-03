@@ -1,0 +1,460 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 23c: GANs in practice}
+\subtitle{Control, translation, and how to score a generator}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Parts of this chapter adapt LMU I2DL (slds-lmu), CC BY 4.0.
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{From "something" to "that"}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    L23b left us with a generator that draws \emph{a} digit. Useful as a demonstration,
+    useless as a tool - you cannot ask it for anything.
+    \vskip 5pt
+    Everything GANs became famous for is about \textbf{control}: give me a seven, turn
+    this sketch into a photograph, make this face older.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      And one problem we have been dodging since L23: with no likelihood to report,
+      \textbf{how does anyone claim one generator is better than another?}}}
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\linewidth]{lmu_named_gans.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \vskip -2pt
+    \footnotesize
+    \textcolor{gray}{A few years of the literature. We take four ideas from it, not forty.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Asking for something specific}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Asking for something specific}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One extra input, in both networks.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Conditional GANs}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Feed the label $\mathbf{y}$ to the generator alongside $\mathbf{z}$, so it knows what
+    to draw. That alone is not enough.
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The label must go into $D$ as well.} Otherwise $D$ only asks "is this a real
+      digit?", $G$ can answer with any digit, and the label is free to ignore.
+      \vskip 3pt
+      Conditioning $D$ changes the question to "is this a real \emph{seven}?" - and now
+      ignoring the label costs $G$ something.}}
+    \vskip 4pt
+    \footnotesize
+    \textcolor{gray}{Mirza \& Osindero (2014). Compare with L30: diffusion had the same
+    problem and needed guidance on top. A GAN gets obedience from the critic instead.}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=0.96\linewidth]{lmu_cgan_arch.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Our own conditional GAN}
+  \small
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \begin{center}
+      \includegraphics[height=0.68\paperheight]{cgan_samples.pdf}
+    \end{center}
+    \column{0.58\textwidth}
+    \vskip 10pt
+    Same 8x8 digits, same architecture as L23b, with the label added to both networks.
+    Rows are the \textbf{requested} class; columns are different $\mathbf{z}$.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      It obeys. And within each row the samples genuinely differ - conditioning bought
+      control \emph{without} collapsing variety.}}
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Look at row 8.} Mushier and less consistent than the rest - the same class
+      the unconditional model under-covered in L23b.
+      \vskip 3pt
+      Two independent runs agreeing on which digit is hardest is not a coincidence; 8 is
+      the most structurally complex glyph at this resolution.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The latent space is smooth}
+  \small
+  Walk in a straight line from one latent code to another and decode every point on the way:
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{gan_interpolation.pdf}
+  \end{center}
+  \vskip -3pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    Nothing forced this. We never trained on intermediate points. Yet the path between two
+    digits passes through plausible digits rather than noise.
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      This is what makes latent-space \textbf{editing} possible at all, and it is the
+      property StyleGAN later industrialized. \textbf{Directions in $\mathbf{z}$ mean
+      something.}}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Directions carry meaning}
+  \small
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{lmu_dcgan_vec.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \column{0.45\textwidth}
+    \vskip 6pt
+    \footnotesize
+    Average the latent codes of several "man with glasses", subtract "man without
+    glasses", add "woman without glasses" - and decode. You get a woman with glasses.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{You have seen this structure before} - in L21, where
+      \emph{king} $-$ \emph{man} $+$ \emph{woman} $\approx$ \emph{queen} in a word-embedding
+      space trained on nothing but next-word prediction.
+      \vskip 3pt
+      \textbf{And you will meet it again} in L30, where an image-text model learns a space
+      in which (hat) $-$ (no hat) picks out the word "hat".
+      \vskip 3pt
+      Three unrelated training objectives, all producing spaces where \emph{directions
+      are concepts}. Nobody designed that in.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Translating images}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Translating images}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      If the input is an image instead of noise, the same machinery does something else.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Paired translation}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{lmu_sem_to_img.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \column{0.48\textwidth}
+    \vskip 4pt
+    \footnotesize
+    Replace $G$'s noise input with an \textbf{image}: a segmentation map, a sketch, a
+    daytime photo. $D$ sees the \emph{pair} and judges whether the output belongs with
+    that input.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{pix2pix} (Isola et al., 2017). Add a reconstruction term so the output stays
+      faithful, and let the adversarial term supply the realism the reconstruction term
+      would have blurred away.}}
+    \vskip 4pt
+    \textcolor{gray}{That split is worth noticing: the L1 term handles \emph{correctness},
+    the critic handles \emph{plausibility}. It is a direct answer to the VAE's blur.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Unpaired translation, and the trick that made it work}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    pix2pix needs matched pairs of the same scene. For horses and zebras, no such dataset
+    exists.
+    \vskip 4pt
+    \textbf{CycleGAN} (Zhu et al., 2017) trains two generators, $G: X\!\to\!Y$ and
+    $F: Y\!\to\!X$, and adds one constraint:
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, node distance=1.5cm, >=Latex]
+        \node[draw, rounded corners, fill=armblue!12, minimum height=0.6cm] (x) {horse};
+        \node[draw, rounded corners, fill=armorange!14, right=of x, minimum height=0.6cm] (y) {zebra};
+        \node[draw, rounded corners, fill=armblue!12, right=of y, minimum height=0.6cm] (x2) {horse again};
+        \draw[->, thick] (x) -- node[above]{$G$} (y);
+        \draw[->, thick] (y) -- node[above]{$F$} (x2);
+        \draw[<->, thick, paramgreen] ($(x.south)+(0,-0.2)$) to[bend right=18]
+          node[below, font=\tiny\bfseries]{must match} ($(x2.south)+(0,-0.2)$);
+      \end{tikzpicture}
+    \end{center}
+    \vskip 2pt
+    \footnotesize
+    \textbf{Cycle consistency}: translate there and back, and you must land where you
+    started. Without it, $G$ could map every horse to the same zebra and still fool $D$ -
+    mode collapse with extra steps.
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\linewidth]{lmu_inpainting.png}\\[2pt]
+      {\scriptsize\color{gray} \textbf{Inpainting.} The white squares are holes cut out of
+      the photo - the input. LMU I2DL, CC BY 4.0}
+    \end{center}
+    \vskip -2pt
+    \footnotesize
+    The same image-in, image-out setup covers \textbf{inpainting} (fill the hole),
+    super-resolution and colourization. Adversarial losses are still standard in
+    super-resolution today.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Scaling up}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Scaling up}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      How GANs got from blurry 32x32 to photorealistic faces.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Grow the problem gradually}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{lmu_prog_gan.png}\\[2pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+    \column{0.48\textwidth}
+    \vskip 6pt
+    \footnotesize
+    Training a GAN directly at $1024^2$ fails - $D$ finds trivial tells and $G$ never
+    catches up.
+    \vskip 4pt
+    \textbf{Progressive growing} (Karras et al., 2017): start both networks at $4\times4$,
+    train to convergence, then fade in another layer at double the resolution. Repeat.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Each stage is an easy problem given the one before it. A curriculum, applied to a
+      training procedure that cannot handle the full task cold.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{StyleGAN, and the peak of the GAN era}
+  \small
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\linewidth]{stylegan_faces.png}\\[2pt]
+      {\scriptsize\color{gray} StyleGAN (Karras et al., 2019). None of these people exist.}
+    \end{center}
+    \column{0.54\textwidth}
+    \vskip 4pt
+    \footnotesize
+    \textbf{StyleGAN} restructured the generator: instead of feeding $\mathbf{z}$ in at
+    the bottom, it maps $\mathbf{z}$ to an intermediate space $\mathbf{w}$ and injects it
+    at \emph{every} resolution.
+    \vskip 4pt
+    Coarse layers control pose and face shape; fine layers control hair texture and
+    freckles. So you can change one without disturbing the other.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{This is when GANs were unambiguously state of the art for images} - roughly
+      2019 to 2021. You already saw these faces in L19, unexplained. Now you know what
+      produced them.}}
+    \vskip 4pt
+    \textcolor{gray}{And you know why they were hard to train, which is why what came next
+    displaced them.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Scoring a generator}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Scoring a generator}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      No likelihood, no validation loss. Now what?
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Why the usual tools are unavailable}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      A GAN never defines $p_G(\xv)$ explicitly. You can \emph{sample} from it and nothing
+      else - it is an \textbf{implicit} model.
+      \vskip 3pt
+      So: no held-out likelihood, no perplexity, and as we saw, the training loss is not
+      a quality signal either.}}
+    \column{0.5\textwidth}
+    \footnotesize
+    We need something computed from \textbf{samples alone}, and it has to punish both
+    failure modes:
+    \vskip 3pt
+    \begin{itemize}\setlength\itemsep{1pt}
+      \item outputs that do not look real
+      \item outputs that look real but are all the same
+    \end{itemize}
+    \vskip 3pt
+    A metric blind to the second would have scored our step-500 collapse as excellent.
+  \end{columns}
+  \vskip 5pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{Fr\'echet Inception Distance (FID)} - the standard answer. Push real and
+    generated images through a pretrained vision network, fit a Gaussian to each set of
+    features, and measure the distance between those two Gaussians. Lower is better.}}
+\end{frame}
+
+\begin{frame}{What FID does and does not tell you}
+  \small
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    \vskip 2pt
+    \footnotesize
+    FID collapses two different failures into one number. A model with poor realism and a
+    model with poor diversity can score the same.
+    \vskip 4pt
+    All four panels generate triangles. \textbf{(b)} draws them well but in one
+    orientation - realistic, no coverage. \textbf{(c)} covers every orientation but draws
+    them badly.
+    \vskip 4pt
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Hence \textbf{precision and recall for generative models} (Sajjadi et al., 2018):
+      \textbf{precision} = are the samples realistic, \textbf{recall} = does the model
+      cover the data. Two axes, separately reportable.
+      \vskip 3pt
+      Our digit GAN: decent precision, slightly weak recall - the missing 8s.}}
+    \vskip 3pt
+    {\scriptsize\textcolor{gray}{FID is a comparator, not a constant: it inherits its
+    feature network's biases.}}
+    \column{0.60\textwidth}
+    \begin{center}
+      \includegraphics[width=0.70\linewidth]{lmu_areallgans_pr.png}\\[1pt]
+      {\scriptsize\color{gray} LMU I2DL, CC BY 4.0}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Where this leaves GANs}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Still winning:} anything that needs \textbf{one forward pass}. Real-time
+      super-resolution, upscaling in games, on-device photo enhancement, audio synthesis.
+      \vskip 3pt
+      A GAN generates in a single pass. Diffusion needs tens.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Displaced for text-to-image}, and the reason is the whole of L23b: an
+      unstable objective that resists scaling.
+      \vskip 3pt
+      Diffusion offered a \textbf{stationary loss} that reliably improves with compute -
+      exactly what a lab with a large budget wants.}}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{The lesson is not "GANs lost".} It is that a method's ceiling is often set by
+    how reliably it trains, not by how good its best result is. GANs produced
+    photorealistic faces before diffusion did - and lost anyway, on trainability.}}
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\setlength\itemsep{2pt}
+      \item Conditioning needs the label in \textbf{both} networks, or the generator
+        ignores it.
+      \item Our conditional GAN obeys, keeps variety, and is weakest on the same digit the
+        unconditional one under-covered.
+      \item Latent space is smooth and its directions carry meaning - the third time this
+        course has met that structure.
+      \item Image-in instead of noise-in gives translation; cycle consistency makes it work
+        without paired data.
+      \item Progressive growing and StyleGAN took GANs to photorealism.
+      \item With no likelihood, quality is measured from samples: FID, and better,
+        precision/recall as separate axes.
+    \end{enumerate}
+    \column{0.46\textwidth}
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} you now have two of the three generative families - the VAE's blur
+      and the GAN's instability.
+      \vskip 4pt
+      Both are solved by a third approach that trains as simply as the VAE and generates
+      as sharply as a GAN. That is the diffusion chapter (L27-L31).
+      \vskip 4pt
+      Before it, the attention chapter (L24) picks up the other thread from L21.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L23c GANs in practice (ch8b_gans). Built 2026-08-03.
+%
+%   Sources:
+%     - Mirza & Osindero (2014) cGAN; Isola et al. (2017) pix2pix; Zhu et al. (2017)
+%       CycleGAN; Karras et al. (2017) progressive growing, (2019) StyleGAN;
+%       Sajjadi et al. (2018) precision/recall for generative models; Heusel et al. (2017) FID.
+%     - LMU I2DL gan1 assets (CC BY 4.0) in fig/borrowed/ as lmu_*.png.
+%     - stylegan_faces.png reused from ch6_cnn, where L19 showed it without explanation.
+%
+%   Figures (ours, py_src/cgan_digits.py -> fig/): cgan_samples.pdf, gan_interpolation.pdf.
+%
+%   Pedagogical decisions:
+%     - The interpolation figure blends the class EMBEDDING continuously rather than
+%       flipping the label index at t=0.5. The first version flipped, which produced a
+%       hard jump mid-row and contradicted the caption claiming smooth movement.
+%     - The "digit 8 is weakest" observation appears in BOTH our runs (unconditional
+%       coverage 0.060 vs 0.097; conditional row 8 visibly mushier). Two independent
+%       observations of the same thing, so it is stated as a finding rather than a hunch.
+%     - Latent arithmetic is explicitly tied to L21 word embeddings and L30 CLIP. Three
+%       different objectives, same emergent structure - worth naming as a pattern.
+%     - CycleGAN's cycle-consistency constraint is motivated as anti-mode-collapse, which
+%       connects it back to L23b rather than presenting it as an unrelated trick.
+%     - The closing frame deliberately refuses "GANs lost": the honest lesson is that
+%       trainability set the ceiling, which is the argument L28 makes from the other side.
+%
+%   Next in the generative thread: L27-L31 (diffusion). Next in course order: L24 attention.
