@@ -1,4 +1,55 @@
-# Missing Topics — Gap Analysis vs Current `ml_new/` Outline
+# Missing Topics — Gap Analysis
+
+> ## ⚠️ Status refresh — 2026-08-04
+>
+> **The 2026-05-26 analysis below is an archive. Nearly all of it has been executed.**
+> It is kept for the record (what was considered, what was deliberately cut, and why), but
+> **do not read it as a current TODO** — it lists CNN, RNN, attention, VAE, GAN and diffusion
+> as missing, and all six now exist. The live gap list is this section.
+>
+> ### Still open
+>
+> | Gap | Status | Notes |
+> |---|---|---|
+> | **Transformers — L25, L26** | **the only hole in the built sequence** | `ch9_attention/` holds 1 deck of a planned 3. L24 stops after a single attention head; L30 (diffusion) had to build cross-attention itself because L26 does not exist (`DECISIONS.md` #4). Source largely exists: `misc/dl4nlp/02_transformers.tex`, 28 frames, already in the house palette. Outline drafted in `ch9_attention/ATTENTION_CHAPTER_PLAN.md`. |
+> | Chapter pages for 4 folders | 6 compiled decks are invisible on the site | No `.qmd` for `06_feature_engineering`, `07_classic_methods`, `ch7_rnn`, `ch9_attention`. |
+> | Duplicate decks in `06_feature_engineering` | unresolved | `26_`/`27_` vs legacy `L01g_`/`L01h_` — same two topics, two numbering schemes. Decide which pair is live and demote the other. |
+>
+> ### Deliberately out of scope (unchanged since 2026-05-26)
+>
+> Recommender systems, reinforcement learning, MLOps/deployment, Gaussian processes, survival
+> analysis, online learning, multi-target regression. Each is a separate course.
+>
+> ### Closed since the original analysis
+>
+> Everything in the old "Tier 1" and "Tier 2" lists, plus most of Tier 3:
+>
+> - **SVM (linear + kernel), k-NN, Naive Bayes, LDA/QDA** → `07_classic_methods/L12b_svm_and_classic_methods.tex`
+> - **PCA / dimensionality reduction** → `ch4b_dimensionality_reduction/L13b`
+> - **Nested resampling** → folded into `02_main_concepts/08_hyperparameter_tuning.tex`
+> - **CNNs** → `ch6_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
+> - **RNN / LSTM** → `ch7_rnn/` L20, L21
+> - **Modern optimizers, init, BatchNorm** → `ch5_neural_networks/dl_optimization*`
+> - **Attention** → `ch9_attention/L24` (partial — see "still open")
+> - **Autoencoders / VAE** → `ch8_autoencoders/` L22, L23
+> - **GANs** → `ch8b_gans/` L23b, L23c
+> - **Diffusion** → `ch10_diffusion/` L27–L31
+> - **LLM pretraining, RLHF, scaling laws** → `ml/llm_training/`, a 12-paper seminar track
+> - **Interpretable ML** — the old doc records this as "explicitly skipped per instructor"; it was
+>   later reversed and built as `05_interpretability/` 22–24 (SHAP, LIME, PFI, PDP/ICE/ALE)
+> - **Calibration** → `03_classification/14`; **class imbalance** → `03_classification/15`
+> - **Feature selection** → `06_feature_engineering/27`; **time series** → `08_time_series/` 30, 31
+> - **Curse of dimensionality, information theory** → moved to the math track
+>   (`math/30`, `math/28`, `math/29`)
+> - **Anomaly detection** → sections in `ch4_clustering/L13` and `ch8_autoencoders/L22`
+>
+> One structural caveat this table does not capture: the DL track uses `LNN_topic.tex` inside
+> `chN_name/` folders, which `CONVENTIONS.md` calls legacy and "being phased out". Nine chapters
+> now use it. Either the convention or the filenames need to change; not decided.
+
+---
+
+## Archive — original analysis, 2026-05-26
 
 Date: 2026-05-26.
 Method: cross-referenced the current 16-lecture skeleton against (a) what's available in `_reference/lecture_i2ml/` and `_reference/lecture_sl/`, and (b) standard intro-ML / deep-learning curricula from Stanford CS229, Stanford CS231n, DeepLearning.AI Deep Learning Specialization, and common public syllabi.
