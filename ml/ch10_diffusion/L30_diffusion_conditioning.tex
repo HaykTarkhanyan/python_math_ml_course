@@ -1,0 +1,666 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 30: Diffusion IV}
+\subtitle{Text to image: conditioning and guidance}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Some panels are stills from Welch Labs / 3Blue1Brown (2025).
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Everything so far has been unconditional}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    We can start from noise and land on the data. The digits in L29 were digits - but we
+    could not ask for a \textbf{seven}.
+    \vskip 6pt
+    Every model in this chapter has drawn \emph{a} sample from $p(\xv)$. What people
+    actually want is a sample from
+    \[ p(\xv \mid \text{"a lone tree in the desert"}) \]
+    \column{0.46\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      Two problems, and they are separate:
+      \begin{enumerate}\setlength\itemsep{2pt}
+        \item How does a \textbf{sentence} become something a convolutional network can
+          use?
+        \item Once it is in there, how do we make the model actually \textbf{obey} it?
+      \end{enumerate}}}
+    \vskip 4pt
+    \footnotesize
+    \textcolor{gray}{The second turns out to be the harder one, and the answer is
+    surprisingly blunt.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{One space for words and pictures}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{One space for words and pictures}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Before we can steer with text, text and images must live somewhere in common.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{CLIP: two encoders, one destination}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_clip_encoders.jpg}\\[2pt]
+      {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+    \end{center}
+    \column{0.5\textwidth}
+    \vskip 4pt
+    \textbf{CLIP} - \textbf{Contrastive Language-Image Pre-training} (Radford et al., 2021)
+    - is two separate networks:
+    \begin{itemize}\setlength\itemsep{2pt}
+      \item a \textbf{text} encoder: caption $\to$ vector
+      \item an \textbf{image} encoder: picture $\to$ vector
+    \end{itemize}
+    \vskip 4pt
+    Both output vectors of the same length (512 in the original), into the same space.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The goal: an image and \emph{its own caption} should land in nearly the same place.
+      Trained on 400 million image-caption pairs scraped from the web.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Contrastive learning, in one idea}
+  \small
+  We have no labels saying "this vector should be at coordinates $(0.3, -1.1, \dots)$".
+  All we have is which caption belongs to which image. That is enough.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Pull together} what belongs together. \textbf{Push apart} everything else.}}
+    \vskip 6pt
+    \footnotesize
+    Nobody says where anything goes. The geometry is a \emph{consequence} of thousands of
+    these pulls and pushes settling against each other.
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Where the negatives come from is the clever part.} Take a batch of $N$ pairs.
+      Each image has one correct caption and $N-1$ wrong ones - already in the batch, free.
+      \vskip 3pt
+      Bigger batches mean harder negatives, which is one reason CLIP needed to be trained
+      at scale.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The training objective is a matrix}
+  \small
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_clip_matrix.jpg}\\[2pt]
+      {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+    \end{center}
+    \column{0.54\textwidth}
+    \footnotesize
+    Images as columns, captions as rows. Every cell is the similarity of one image with one
+    caption.
+    \vskip 5pt
+    \begin{itemize}\setlength\itemsep{2pt}
+      \item the \textbf{diagonal} holds the true pairs $\to$ maximize
+      \item everything \textbf{off-diagonal} is a mismatch $\to$ minimize
+    \end{itemize}
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      That is the whole loss: a classification problem where the "classes" are "which of
+      these $N$ captions is mine?", run in both directions at once.
+      \vskip 3pt
+      The \textbf{C} in CLIP is this contrast.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The similarity is one you already know}
+  \small
+  CLIP scores a pair with \textbf{cosine similarity} - the cosine of the angle between the
+  two vectors:
+  \[
+    \mathrm{sim}(\mathbf{u},\mathbf{v})
+      = \frac{\mathbf{u}^\top \mathbf{v}}{\|\mathbf{u}\|\,\|\mathbf{v}\|}
+      \;=\; \cos\vartheta
+  \]
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{This is the dot product from L24}, normalized. There we used it to ask how
+      much one token should attend to another; here we ask how much a caption matches a
+      picture. Same operation, same meaning: \emph{alignment}.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      Dividing out the magnitudes means only \textbf{direction} carries meaning. Two
+      vectors pointing the same way are "the same idea", regardless of length.}}
+  \end{columns}
+  \vskip 5pt
+  \footnotesize
+  \textcolor{gray}{You met cosine once before as a distance option in clustering (L13).
+  This is where it starts earning its keep.}
+\end{frame}
+
+\begin{frame}{The space learned arithmetic nobody asked for}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_clip_hat.jpg}\\[2pt]
+      {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+    \end{center}
+    \column{0.5\textwidth}
+    \footnotesize
+    Encode a photo of a person \textbf{wearing a hat}. Encode the same person
+    \textbf{without}. Subtract the two image vectors.
+    \vskip 4pt
+    Now search the \emph{text} side for the caption closest to that difference.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      The top match is "\textbf{hat}" ($0.165$), then "cap", then "helmet".
+      \vskip 3pt
+      Nothing in the training objective asked for this. Pull matches together, push
+      mismatches apart, and a space falls out where \textbf{directions correspond to
+      concepts} - and where you can cross from images to words and back.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Two consequences}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Classification for free.} Encode an image. Encode "a photo of a \{cat, dog,
+      truck, \dots\}". Pick the caption with the highest similarity.
+      \vskip 3pt
+      No training on those classes - \textbf{zero-shot}. CLIP was competitive with
+      supervised models on datasets it had never been fitted to.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{But it only goes one way.} Both encoders map \emph{into} the space. Neither
+      comes back out.
+      \vskip 3pt
+      CLIP can tell you an image matches "a lone tree in the desert". It cannot draw one.}}
+  \end{columns}
+  \vskip 8pt
+  \begin{center}\small
+    We have a model that turns pictures into meaning, and a model that turns noise into
+    pictures. \textcolor{paramgreen}{\textbf{Bolt them together.}}
+  \end{center}
+\end{frame}
+
+% ================================================================
+\section{Conditioning}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Conditioning}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Getting the prompt inside the network. The easy half.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Give the denoiser one more input}
+  \small
+  The network so far is $\eps_{\thetav}(\xv_t, t)$. Add the prompt as a third argument:
+  \[
+    \eps_{\thetav}(\xv_t,\ t,\ \mathbf{c})
+  \]
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Train exactly as before, on image-caption pairs, with the same
+    $\mathcal{L}_{\text{simple}}$ from L28.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The bet: knowing the image is \emph{of a tree} should help the model predict which
+      noise was added to it. Better denoising, and a model that has learned to use text.}}
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{We have done this before.} Conditioning on $t$ in L27 was the same move: an
+      extra input that tells the network which situation it is in. Text is just a much
+      richer $t$.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What exactly goes in?}
+  \small
+  The obvious answer - "the CLIP text vector" - is \textbf{not} what production models do.
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      A single pooled 512-d vector squeezes the whole sentence into one point. "A dog
+      chasing a cat" and "a cat chasing a dog" become nearly identical.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Stable Diffusion takes the layer \emph{before} the pooling: a \textbf{sequence} of
+      per-token vectors, $\mathbf{77\times768}$. One vector per token, not one per
+      sentence.}}
+  \end{columns}
+  \vskip 4pt
+  \footnotesize
+  \textcolor{gray}{Why 768 and not the 512 from two slides ago: Stable Diffusion uses a
+  larger CLIP variant (ViT-L/14, width 768) than the one in the original zero-shot demos
+  (ViT-B/32, width 512). The $77$ is CLIP's fixed maximum token count - prompts are padded
+  or truncated to it.}
+  \vskip 6pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.985\linewidth}{\footnotesize
+    This is not a detail. The mechanism on the next slide \textbf{needs} a sequence to work
+    at all - there is nothing to look across if the prompt is a single point.}}
+\end{frame}
+
+\begin{frame}{Cross-attention: how the pixels read the prompt}
+  \small
+  In L24 attention let each token look at every other token, by matching a \textbf{query}
+  against \textbf{keys} and taking a weighted sum of \textbf{values}. Same machinery here -
+  but the queries and the keys come from different places.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[every node/.style={font=\scriptsize}, node distance=0.7cm]
+        \node[draw, rounded corners, fill=armblue!12, minimum width=2.3cm, minimum height=0.6cm] (img) {image patch $\to$ \textbf{query}};
+        \node[draw, rounded corners, fill=armorange!16, below=1.1cm of img, minimum width=2.3cm, minimum height=0.6cm] (txt) {77 text tokens $\to$ \textbf{keys}, \textbf{values}};
+        \node[draw, rounded corners, fill=paramgreen!14, right=2.0cm of img, minimum width=2.1cm, minimum height=0.6cm] (out) {updated patch};
+        \draw[-{Latex}, thick] (img) -- (out);
+        \draw[-{Latex}, thick, armorange] (txt) -| node[pos=0.25, below, font=\tiny]{which words matter here?} ($(out.south)+(0,-0.0)$);
+      \end{tikzpicture}
+    \end{center}
+    \vskip 4pt
+    \footnotesize
+    Every patch of the image asks: \emph{which words in this prompt are about me?} A patch
+    that is becoming sky attends to "sky"; a patch becoming bark attends to "tree".
+    \column{0.45\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Self}-attention (L24): queries, keys and values all from one sequence.
+      \vskip 3pt
+      \textbf{Cross}-attention: queries from the image, keys and values from the text.
+      That is the only difference.}}
+    \vskip 4pt
+    \footnotesize
+    These layers sit inside the UNet blocks from L28. Simpler alternatives exist -
+    concatenating the text vector, or adding it like the time embedding - and many models
+    use several routes at once.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Doing it properly: DALL$\cdot$E 2}
+  \small
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    OpenAI trained a diffusion model to \textbf{invert the CLIP image encoder}: given a CLIP
+    embedding, produce an image that would encode to it.
+    \vskip 5pt
+    CLIP maps pictures to meaning; the diffusion model maps meaning back to pictures. They
+    called it \textbf{unCLIP} (Ramesh et al., 2022); the product was \textbf{DALL$\cdot$E 2}.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Prompt adherence jumped far beyond anything before it. This is the moment
+      text-to-image stopped being a demo.}}
+    \column{0.45\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Stable Diffusion} (Rombach et al., 2022) arrived around the same time from
+      Heidelberg, worked differently in an important way - the subject of L31 - and was
+      \textbf{open source}, which is why it is the model everyone experiments with.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Is that enough?}
+  \small
+  \textbf{Predict first:} we have a well-trained conditional model. Prompt: \emph{"a lone
+  tree standing in the middle of a desert, under the harsh light of midday, casting a long
+  shadow on the sand."} What comes out?
+  \vskip 4pt
+  \pause
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_no_tree.jpg}\\[2pt]
+      {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+    \end{center}
+    \column{0.56\textwidth}
+    \vskip 4pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      A desert. Harsh midday light. A long shadow on the sand.
+      \vskip 4pt
+      \textbf{No tree.}}}
+    \vskip 6pt
+    \footnotesize
+    The model used the prompt - the scene is right. But it is behaving like a model that
+    was asked for a \emph{plausible image, given} the text, and plausible desert
+    photographs often have no tree in them.
+    \vskip 4pt
+    Conditioning tells the model what the prompt \emph{is}. It does not make the model
+    \textbf{care}.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Classifier-free guidance}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Classifier-free guidance}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One idea, three lines of code, and the reason your prompts work.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Back to the spiral, with labels}
+  \small
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \begin{center}
+      \includegraphics[width=0.86\linewidth]{spiral_classes.pdf}
+    \end{center}
+    \column{0.58\textwidth}
+    \vskip 6pt
+    Split the spiral into three regions and call them classes - our stand-in for a prompt.
+    Train exactly as in L28, with the class as an extra input.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The model now has two jobs at once: \textbf{land on the spiral} (all classes) and
+      \textbf{land on the right part of it} (this class).}}
+    \vskip 6pt
+    \footnotesize
+    The first job is easy and dominates the loss - most of the error is in getting near the
+    data at all. The second is a small correction on top, and it gets drowned out. That is
+    the missing tree, in miniature.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The trick: train one model to be two models}
+  \small
+  During training, \textbf{throw the label away} on a fraction of examples (around 10-20\%)
+  and replace it with a "no class" token.
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      One set of weights, two behaviours:
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item $\eps_{\thetav}(\xv_t,t,\mathbf{c})$ - "draw a cat"
+        \item $\eps_{\thetav}(\xv_t,t)$ - "draw anything"
+      \end{itemize}}}
+    \column{0.5\textwidth}
+    \footnotesize
+    You could train two separate networks. Dropping the label is free and gives the same
+    thing, which is why it is universal.
+    \vskip 4pt
+    \textbf{Ho \& Salimans (2022)} - "classifier-free" because earlier work steered
+    diffusion with a separately trained classifier, and this needs none.
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    Now we have both a general direction and a class-specific one, and we can compare them.
+    \textbf{The difference between them is the part of the prediction that is about the
+    prompt.}}}
+\end{frame}
+
+\begin{frame}{Isolate the prompt's contribution, then exaggerate it}
+  \small
+  \begin{center}
+    \includegraphics[width=0.94\linewidth]{spiral_cfg_fields.pdf}
+  \end{center}
+  \vskip -3pt
+  \footnotesize
+  Left: without a class, the field points at the spiral in general. Middle: told "cat", it
+  leans outward. Right: subtract them and what remains is \textbf{only} the cat-ness -
+  the generic "get to the data" part has cancelled out.
+\end{frame}
+
+\begin{frame}{The guidance formula}
+  \small
+  Scale that difference by $\alpha$ and add it back:
+  \[
+    \boxed{\ \tilde{\eps} \;=\; \eps_{\thetav}(\xv_t,t)
+      \;+\; \alpha\,\Big(\eps_{\thetav}(\xv_t,t,\mathbf{c}) - \eps_{\thetav}(\xv_t,t)\Big)\ }
+  \]
+  Use $\tilde\eps$ in the sampler in place of the model's raw output.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Read off the special cases:}
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item $\alpha = 0$: ignore the prompt entirely
+        \item $\alpha = \mathbf{1}$: exactly the plain conditional model - \textbf{no
+          guidance}
+        \item $\alpha > 1$: push further in the prompt's direction than the model itself
+          would
+      \end{itemize}}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Watch the convention.} Some papers put the \emph{conditional} prediction as
+      the base term, which shifts what "no guidance" means. In the form above - the one
+      \texttt{diffusers} uses - $\alpha=1$ is neutral, and its default
+      \texttt{guidance\_scale} is $7.5$.
+      \vskip 3pt
+      Always check which convention a codebase means before comparing numbers.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{By hand: one guidance step}
+  \small
+  One pixel. The unconditional model predicts $\eps_{\thetav}(\xv_t,t) = 0.90$; told the
+  prompt, it predicts $\eps_{\thetav}(\xv_t,t,\mathbf{c}) = 1.15$.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    {\footnotesize
+    The prompt's own contribution is the difference:
+    \[ 1.15 - 0.90 = 0.25 \]
+    Guidance scales \emph{that}, and adds it back:
+    \vskip 3pt
+    \begin{tabular}{@{}l@{\hskip 8pt}l@{\hskip 6pt}l@{}}
+      $\alpha$ & $\tilde\eps = 0.90 + \alpha(0.25)$ & \\\hline
+      $0$   & $0.900$ & prompt ignored \\
+      $1$   & $1.150$ & \textbf{= the conditional model} \\
+      $3$   & $1.650$ & \\
+      $7.5$ & $2.775$ & the usual working range \\
+    \end{tabular}}
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Check the $\alpha=1$ row against the formula on the last slide: the base term and
+      the subtracted term cancel, leaving exactly
+      $\eps_{\thetav}(\xv_t,t,\mathbf{c})$. \textbf{That is why $\alpha=1$ means no
+      guidance}, and not $\alpha=0$.}}
+    \vskip 5pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      Note how far $\alpha=7.5$ pushes: $2.775$ against a raw prediction of $1.15$. We are
+      asking the sampler to remove more than twice the noise the model actually thinks is
+      there. It works - but you can see why it eventually stops working.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{On the spiral: the cost curve}
+  \small
+  Sampling the outer class only, at three guidance strengths:
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{spiral_cfg_sweep.pdf}
+  \end{center}
+  \vskip -4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      Three classes split by radius is an \textbf{easy} problem, so conditioning alone
+      already lands on the right arm at $\alpha=1$. The toy does not reproduce the missing
+      tree - the Stable Diffusion image does that.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\scriptsize
+      What it \emph{does} show is overdoing it. At $\alpha=7.5$ the samples \textbf{leave
+      the spiral altogether} - mean radius $0.91 \to 1.10$, past the edge of the data.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{And on a real model}
+  \small
+  Same prompt, same weights, same sampler. \textbf{Only $\alpha$ changes.}
+  \vskip 3pt
+  \begin{columns}[T]
+    \column{0.37\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_alpha_1.jpg}\\[1pt]
+      {\scriptsize $\alpha = 1$ - no guidance. Desert, shadow, \textbf{no tree}.}
+    \end{center}
+    \column{0.37\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_alpha_8.jpg}\\[1pt]
+      {\scriptsize $\alpha = 8$ - the tree is there.}
+    \end{center}
+    \column{0.26\textwidth}
+    \vskip 2pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{We changed one number.} The prompt already pointed at a tree; guidance just
+      amplified that direction.}}
+    \vskip 4pt
+    \footnotesize
+    Practically every image model you have used runs with guidance on. It is the
+    difference between "vaguely related to your prompt" and "your prompt".
+  \end{columns}
+  \vskip 2pt
+  \begin{center}{\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}\end{center}
+\end{frame}
+
+\begin{frame}{Negative prompts: subtract what you do not want}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Nothing forces the base term to be the \emph{unconditional} prediction. Replace it with
+    the prediction for a prompt describing what you want to \textbf{avoid}:
+    \[
+      \tilde\eps = \eps_{\thetav}(\xv_t,t,\mathbf{c}_{\text{neg}})
+        + \alpha\big(\eps_{\thetav}(\xv_t,t,\mathbf{c})
+          - \eps_{\thetav}(\xv_t,t,\mathbf{c}_{\text{neg}})\big)
+    \]
+    \vskip 4pt
+    Now you are steering \emph{away} from a named region as well as toward one.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\linewidth]{wl_negative_prompt.jpg}\\[2pt]
+      {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+    \end{center}
+    \vskip -2pt
+    \footnotesize
+    Wan 2.1's standard negative prompt lists things like extra fingers, deformed limbs, and
+    people walking backwards - and is written in Chinese.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The bill for all this}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Guidance spends diversity to buy obedience.}
+      \vskip 4pt
+      High $\alpha$ concentrates samples in the region the prompt describes most typically.
+      Ask for "a cat" at $\alpha=15$ and you get the same few cats.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{And it doubles the cost.} Each step needs \emph{two} forward passes -
+      conditional and unconditional - so a guided 25-step sample is 50 network calls.}}
+    \vskip 5pt
+    \footnotesize
+    Typical values sit around 5-8. Beyond that images get oversaturated and start to look
+    the same.
+  \end{columns}
+  \vskip 6pt
+  \footnotesize
+  \textcolor{gray}{The spiral showed the far end of this: past a certain $\alpha$ the
+  samples stopped resembling the data at all. On real models the same overshoot shows up
+  as blown-out colour and hard edges rather than as points leaving a curve.}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\setlength\itemsep{2pt}
+      \item CLIP trains a text and an image encoder into one space, contrastively - pull
+        true pairs together, push the rest apart.
+      \item The resulting geometry supports arithmetic on concepts, and zero-shot
+        classification. But it only maps \emph{into} the space.
+      \item Conditioning feeds the prompt to the denoiser - as a \textbf{sequence} of token
+        vectors, read by \textbf{cross-attention}.
+      \item Conditioning alone is too weak: correct scene, missing subject.
+      \item Drop the label sometimes in training, and one model gives both a conditional
+        and an unconditional prediction.
+      \item Amplify the difference: \textbf{classifier-free guidance}. This is why prompts
+        work.
+    \end{enumerate}
+    \column{0.46\textwidth}
+    \vskip 10pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} we can now generate what we ask for.
+      \vskip 4pt
+      But all of this runs in full pixel space, with two network passes per step. At
+      $512\times512$ that is far beyond a laptop - and yet Stable Diffusion runs on one.
+      \vskip 4pt
+      L31: how, plus video, and what all this actually costs.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L30 Diffusion IV - conditioning and guidance (ch10_diffusion). Built 2026-08-03.
+%   Plan: ml/ch10_diffusion/DIFFUSION_CHAPTER_PLAN.md (post-review revision).
+%
+%   Sources:
+%     - Welch Labs / 3Blue1Brown (2025) - CLIP explanation, the missing-tree example, the
+%       alpha sweep, Wan's negative prompt.
+%     - Radford et al. (2021) CLIP; Ramesh et al. (2022) unCLIP/DALL-E 2;
+%       Ho & Salimans (2022) classifier-free guidance; Rombach et al. (2022) LDM.
+%
+%   Figures (Python-generated, py_src/spiral_cfg.py -> fig/):
+%     spiral_classes.pdf, spiral_cfg_fields.pdf, spiral_cfg_sweep.pdf.
+%
+%   Pedagogical decisions:
+%     - CROSS-ATTENTION IS BUILT HERE, not recalled. L24_attention.tex contains zero
+%       occurrences of "cross-atten", and L25/L26 do not exist yet - so a callback would
+%       have been false and would have blocked this chapter on ch9's backlog. It is
+%       constructed from L24's Q/K/V, which IS real (L24_attention.tex:534-552).
+%       See DECISIONS.md #4. If L26 ships first, demote this frame to a recap.
+%     - CLIP/contrastive/zero-shot are treated as NEW material (verified: they appear in no
+%       ml/ deck), hence a full section rather than the 2 frames a callback would need.
+%     - The cosine-similarity bridge points at L24's dot product, NOT L13b - L13b has zero
+%       occurrences of "cosine". L13 mentions it once, acknowledged as a mention only.
+%     - THE GUIDANCE FORMULA is written out in full with the base term present, the
+%       convention named, and alpha=1 flagged as neutral. The first draft of the plan said
+%       the difference "replaces" the conditional direction, which drops the base term and
+%       is wrong. The source (description.txt:56) explicitly warns that two conventions
+%       circulate.
+%     - Text conditioning is stated as a 77x512 SEQUENCE, not the pooled 512-d vector
+%       (description.txt:54) - cross-attention needs something to attend over, so the
+%       pooled-vector version would make the next frame incoherent.
+%     - The cost of guidance (diversity, and 2x forward passes) is stated plainly.
+%
+%   Next deck: L31_diffusion_practical.tex (latent diffusion, flow matching, video, ethics).

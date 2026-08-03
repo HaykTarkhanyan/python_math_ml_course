@@ -1,0 +1,690 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 28: Diffusion II}
+\subtitle{From maximum likelihood to predicting noise}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Derivation follows Ho, Jain \& Abbeel (2020). Some panels adapted from Deepia (2025).
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Where we stand}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Last lecture we built the forward process, and it has \textbf{no learned parameters}:
+    \[ \xv_t = \sqrt{\bar\alpha_t}\,\xv_0 + \sqrt{1-\bar\alpha_t}\ \eps \]
+    \vskip 4pt
+    We also found that the obvious training target - predict $\xv_{t-1}$ from $\xv_t$ -
+    is nearly pure noise and trains badly.
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Today:} start from the one principle we always start from - maximum
+      likelihood - and follow the algebra without shortcuts.
+      \vskip 4pt
+      It ends somewhere absurd: a plain mean squared error against the noise we
+      ourselves added.}}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{Notation, all of it, from L27.} $\beta_t$ is the noise added at step $t$;
+    $\alpha_t = 1-\beta_t$ is the signal kept at that step; $\bar\alpha_t =
+    \prod_{s\le t}\alpha_s$ is the signal kept in total, so
+    $\bar\alpha_t = \alpha_t\,\bar\alpha_{t-1}$.
+    \textbf{All three appear today} - the per-step ones show up as soon as we write a
+    single reverse step, and that last identity is what makes the algebra collapse.}}
+  \vskip 6pt
+  \footnotesize
+  \textcolor{gray}{This is the most mathematical lecture of the chapter. Every step is
+  either something you have seen in L23, or one line of algebra.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\begin{frame}{Where this ends up (so you can stop worrying about it)}
+  \small
+  Long derivations are easier to follow when you already know the destination. So here it
+  is, before we start:
+  \vskip 4pt
+  \[
+    \boxed{\ \mathcal{L} = \Big\|\ \eps - \eps_{\thetav}(\xv_t,\ t)\ \Big\|^{2}\ }
+  \]
+  \vskip -2pt
+  \begin{center}\footnotesize
+    Add noise to a training image. Ask the network which noise you added. Square the error.
+  \end{center}
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      That is the entire training objective. No adversarial game, no sampling from the
+      model during training, no likelihood evaluation.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{So why spend a lecture deriving it?} Because "predict the noise" is not
+      obviously the right thing to do, and the derivation is what tells us it is - plus
+      \emph{exactly} which approximations we accepted along the way. Two of them come back
+      to bite us in L29.}}
+  \end{columns}
+  \vskip 5pt
+  \footnotesize
+  \textcolor{gray}{If you get lost in the middle, come back to this slide. Everything
+  between here and frame 21 is a road from maximum likelihood to that one line.}
+\end{frame}
+
+% ================================================================
+\section{Maximum likelihood, and why it fails}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Maximum likelihood, and why it fails}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The right objective, in a form nobody can compute.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The objective we always want}
+  \small
+  Fit $\thetav$ so that real images are likely under our model. As in L23, minimize the
+  negative log-likelihood:
+  \[ \min_{\thetav}\ -\log p_{\thetav}(\xv_0) \]
+  \vskip 4pt
+  Our model generates by running the whole reverse chain, so $p_{\thetav}$ is defined
+  over the entire path $\xv_{0:T}$:
+  \[
+    p_{\thetav}(\xv_{0:T}) = p(\xv_T)\prod_{t=1}^{T} p_{\thetav}(\xv_{t-1}\mid \xv_t),
+    \qquad p(\xv_T) = \mathcal{N}(\mathbf{0},\id)
+  \]
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    We only care about $\xv_0$, the finished image. So to get $p_{\thetav}(\xv_0)$ we must
+    \textbf{marginalize away} every intermediate step $\xv_1,\dots,\xv_T$.}}
+\end{frame}
+
+\begin{frame}{Marginalizing is hopeless}
+  \small
+  \[
+    p_{\thetav}(\xv_0) = \int p_{\thetav}(\xv_{0:T})\ d\xv_{1:T}
+  \]
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{dp_paths.jpg}\\[2pt]
+      {\scriptsize\color{gray} Deepia (2025)}
+    \end{center}
+    \column{0.54\textwidth}
+    \vskip 4pt
+    Read the integral literally: to score \emph{one} image, sum over \textbf{every possible
+    route} from noise to that image.
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      There are unimaginably many such paths. The integral is \textbf{intractable} - not
+      slow, not approximate, simply not computable.}}
+    \vskip 6pt
+    \footnotesize
+    This is exactly the wall L23 hit with the VAE. And we get past it the same way.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{A bound we can actually optimize}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{A bound we can actually optimize}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      If you cannot compute the thing, compute something that hugs it from below.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The same trick as L23: multiply by one}
+  \small
+  The forward process $q$ is something we know exactly. Insert it, top and bottom:
+  \[
+    p_{\thetav}(\xv_0)
+    = \int q(\xv_{1:T}\mid \xv_0)\ \frac{p_{\thetav}(\xv_{0:T})}{q(\xv_{1:T}\mid \xv_0)}\ d\xv_{1:T}
+    = \E_{q}\!\left[\frac{p_{\thetav}(\xv_{0:T})}{q(\xv_{1:T}\mid \xv_0)}\right]
+  \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Nothing changed - we multiplied by $q/q$. But the intractable integral is now an
+      \textbf{expectation under a distribution we can sample from}, which is progress.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Recognize this.} It is move one of the VAE derivation in L23. The variable
+      names changed; the idea did not.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The bound, derived the way we did it in L23}
+  \small
+  Take logs and split off a divergence term. Exactly as in L23:
+  \[
+    \log p_{\thetav}(\xv_0)
+    \;=\;
+    \underbrace{\E_q\!\left[\log \frac{p_{\thetav}(\xv_{0:T})}{q(\xv_{1:T}\mid \xv_0)}\right]}_{\displaystyle \text{ELBO}}
+    \;+\;
+    \underbrace{D_{\mathrm{KL}}\!\left(q(\xv_{1:T}\mid \xv_0)\ \|\ p_{\thetav}(\xv_{1:T}\mid \xv_0)\right)}_{\displaystyle \ \geq\ 0\ \text{always}}
+  \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    A KL divergence is never negative. Drop it and the equality becomes an inequality:
+    \[ \log p_{\thetav}(\xv_0) \ \geq\ \text{ELBO} \]
+    \footnotesize
+    So maximizing the ELBO pushes up a \emph{floor} underneath the log-likelihood. The
+    gap we threw away is precisely how wrong our reverse process is.
+    \column{0.45\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      You may see this bound obtained in one line from \textbf{Jensen's inequality}
+      instead (that is how the DDPM paper writes it, and how you met Jensen in the
+      probability module).
+      \vskip 3pt
+      Same bound, same place. We use the decomposition because it also tells us
+      \emph{what} we gave up.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What the bound looks like once you expand it}
+  \small
+  Substituting the two Markov factorizations and grinding through Bayes' rule - the DDPM
+  paper does this in its appendix - the ELBO turns into:
+  \[
+    -\text{ELBO} = \E_q\Bigg[
+      \underbrace{D_{\mathrm{KL}}\big(q(\xv_T\mid \xv_0)\,\|\,p(\xv_T)\big)}_{\text{(1) no }\thetav}
+      + \sum_{t>1}\underbrace{D_{\mathrm{KL}}\big(q(\xv_{t-1}\mid \xv_t,\xv_0)\,\|\,p_{\thetav}(\xv_{t-1}\mid \xv_t)\big)}_{\text{(2) the real work}}
+      - \underbrace{\log p_{\thetav}(\xv_0\mid \xv_1)}_{\text{(3) reconstruction}}
+    \Bigg]
+  \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.33\textwidth}
+    \footnotesize
+    \textbf{(1)} compares "fully noised data" with $\mathcal{N}(\mathbf{0},\id)$. No
+    parameters in it. \textbf{Drop.}
+    \column{0.33\textwidth}
+    \footnotesize
+    \textbf{(3)} the very last denoising step, from $\xv_1$ to $\xv_0$. Almost no noise
+    is left; contributes little. \textbf{Drop.}
+    \column{0.34\textwidth}
+    \footnotesize
+    \textbf{(2)} a sum of $T-1$ KL divergences. Everything we care about is here.
+  \end{columns}
+  \vskip 5pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    The whole training objective is: \textbf{make each learned reverse step match some
+    reference reverse step}. Next question - what is that reference?}}
+\end{frame}
+
+\begin{frame}{A reminder of what KL measures}
+  \small
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{kl_gaussians.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    $D_{\mathrm{KL}}(q\,\|\,p)$ is a measure of how far apart two distributions are: zero
+    exactly when they are identical, larger as they separate. It is not symmetric and it
+    is not a metric, but here it behaves like one - \textbf{because we are about to fix
+    both variances to be equal.}}}
+\end{frame}
+
+% ================================================================
+\section{The true posterior}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The true posterior}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      There is an exact answer. It just cheats.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The exact reverse step, in closed form}
+  \small
+  The reference distribution inside term (2) is
+  $q(\xv_{t-1}\mid \xv_t, \xv_0)$ - the reverse step \emph{given the clean image}. Unlike
+  the reverse process in general, this one has an exact formula:
+  \[
+    q(\xv_{t-1}\mid \xv_t, \xv_0) = \mathcal{N}\!\big(\tilde{\bm\mu}_t(\xv_t,\xv_0),\ \tilde\beta_t \id\big)
+  \]
+  \vskip -2pt
+  \[
+    \tilde{\bm\mu}_t = \frac{\sqrt{\bar\alpha_{t-1}}\,\beta_t}{1-\bar\alpha_t}\,\xv_0
+      \;+\; \frac{\sqrt{\alpha_t}\,(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}\,\xv_t,
+    \qquad
+    \tilde\beta_t = \frac{1-\bar\alpha_{t-1}}{1-\bar\alpha_t}\,\beta_t
+  \]
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\footnotesize
+    Both forward Gaussians are known, so Bayes' rule gives this exactly. It is a Gaussian
+    whose mean is a weighted blend of \textbf{where you are} ($\xv_t$) and \textbf{where
+    you came from} ($\xv_0$).}}
+\end{frame}
+
+\begin{frame}{So why do we need a network at all?}
+  \small
+  \textbf{Predict first:} we just wrote down the exact reverse step. Why not simply use it
+  to generate images?
+  \vskip 5pt
+  \pause
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      Because it needs $\xv_0$ - and at generation time $\xv_0$ is \textbf{exactly what we
+      are trying to produce}. Using it would be circular.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      But during \textbf{training} we do have $\xv_0$: it is the training image. So we can
+      use the true posterior as a \textbf{teacher}, and train the network to imitate it
+      from $\xv_t$ alone.}}
+  \end{columns}
+  \vskip 8pt
+  \begin{center}\small
+    Training: teacher sees $\xv_0$. \quad Generation: student does not. \quad
+    \textcolor{paramgreen}{\textbf{That gap is the entire job.}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Choosing the student's form}
+  \small
+  We make $p_{\thetav}$ Gaussian too - the reverse of a Gaussian Markov chain is Gaussian
+  for small steps, and it keeps the algebra finite:
+  \[
+    p_{\thetav}(\xv_{t-1}\mid \xv_t) = \mathcal{N}\!\big(\bm\mu_{\thetav}(\xv_t,t),\ \sigma_t^2\id\big)
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{And we fix the variance.} $\sigma_t^2$ is set from the schedule, not learned.
+      So the network's only job is the \textbf{mean}.
+      \vskip 3pt
+      Concretely, \textbf{take $\sigma_t^2 = \beta_t$} - the simpler of the two choices in
+      Ho et al.\ (2020). Their other choice is $\tilde\beta_t$ from the previous slide;
+      both work, and you need one of them the moment you actually sample.}}
+    \column{0.5\textwidth}
+    \footnotesize
+    Two Gaussians, same fixed variance, different means. The KL between them collapses to
+    something very simple.
+  \end{columns}
+  \vskip 6pt
+  \[
+    D_{\mathrm{KL}}\big(q(\xv_{t-1}\mid \xv_t,\xv_0)\,\|\,p_{\thetav}(\xv_{t-1}\mid \xv_t)\big)
+    \;=\;
+    \frac{1}{2\sigma_t^2}\,\big\|\tilde{\bm\mu}_t - \bm\mu_{\thetav}(\xv_t,t)\big\|^2
+  \]
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    Keep the $\tfrac{1}{2\sigma_t^2}$ in view - it comes back at the end and we will
+    deliberately throw it away. \textbf{The objective is now a squared distance between
+    two means.}}}
+\end{frame}
+
+% ================================================================
+\section{Reparameterization: the collapse}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Reparameterization: the collapse}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Four lines of algebra turn a variational bound into a mean squared error.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The teacher's mean is in awkward coordinates}
+  \small
+  \[
+    \tilde{\bm\mu}_t = \frac{\sqrt{\bar\alpha_{t-1}}\,\beta_t}{1-\bar\alpha_t}\,\xv_0
+      + \frac{\sqrt{\alpha_t}(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}\,\xv_t
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    It depends on $\xv_0$, which the student never sees. Asking the network to match this
+    directly means asking it to reconstruct $\xv_0$.
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The idea:} rewrite $\tilde{\bm\mu}_t$ in terms of things the student
+      \emph{does} see. It sees $\xv_t$. So express everything with $\xv_t$ and the noise.}}
+  \end{columns}
+  \vskip 8pt
+  Recall the forward closed form from L27 - the \textbf{reparameterization trick}, the
+  same one that made the VAE trainable:
+  \[
+    \xv_t = \sqrt{\bar\alpha_t}\,\xv_0 + \sqrt{1-\bar\alpha_t}\ \eps
+    \qquad\Longrightarrow\qquad
+    \xv_0 = \frac{1}{\sqrt{\bar\alpha_t}}\Big(\xv_t - \sqrt{1-\bar\alpha_t}\ \eps\Big)
+  \]
+\end{frame}
+
+\begin{frame}{Substituting, and watching it simplify}
+  \small
+  Put that expression for $\xv_0$ into $\tilde{\bm\mu}_t$. The $\xv_t$ terms combine, and
+  after simplification everything collapses to:
+  \[
+    \boxed{\ \tilde{\bm\mu}_t
+      = \frac{1}{\sqrt{\alpha_t}}\left(\xv_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\ \eps\right)}
+  \]
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    Look at what survived. The teacher's mean is $\xv_t$ - which the student already has -
+    \textbf{minus a multiple of the noise $\eps$}. The only unknown left in the whole
+    expression is $\eps$.}}
+  \vskip 6pt
+  So give the student the same shape, with a network in place of the unknown noise:
+  \[
+    \bm\mu_{\thetav}(\xv_t,t)
+      = \frac{1}{\sqrt{\alpha_t}}\left(\xv_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\ \eps_{\thetav}(\xv_t,t)\right)
+  \]
+\end{frame}
+
+\begin{frame}{The cancellation}
+  \small
+  Now subtract the two means. Everything matches except one factor:
+  \[
+    \tilde{\bm\mu}_t - \bm\mu_{\thetav}(\xv_t,t)
+    = \frac{1}{\sqrt{\alpha_t}}\cdot\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}
+      \Big(\eps_{\thetav}(\xv_t,t) - \eps\Big)
+  \]
+  \vskip -2pt
+  Square it, put back the $\tfrac{1}{2\sigma_t^2}$, and the $t$-th term of the objective is
+  \[
+    \frac{\beta_t^{2}}{2\sigma_t^{2}\,\alpha_t\,(1-\bar\alpha_t)}
+    \Big\|\ \eps - \eps_{\thetav}(\xv_t,t)\ \Big\|^{2}
+  \]
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\small
+    \textbf{The network's job is to look at a noisy image and say which noise was added.}
+    Every $\xv_t$ cancelled. What began as an intractable likelihood over all paths is a
+    squared error against a vector we drew ourselves.}}
+\end{frame}
+
+% ================================================================
+\section{From objective to practice}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{From objective to practice}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Two more simplifications. One is free, one is not.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Simplification 1: stop summing over $t$}
+  \small
+  The objective sums $T-1$ terms per training example, with $T$ around $1000$. Instead,
+  \textbf{sample one $t$ uniformly per example}:
+  \[
+    \E_{t\sim \mathcal{U}\{1,\dots,T\}}\big[\,\cdot\,\big]
+    \quad\text{estimated with a single draw}
+  \]
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{This one is free.} It is an unbiased Monte-Carlo estimate of the same
+      objective. Over many minibatches it converges to the full sum, at $1/T$ the cost.}}
+    \column{0.5\textwidth}
+    \footnotesize
+    This is why the closed-form $\xv_t$ from L27 mattered so much: a random $t$ is
+    useless if reaching it costs $t$ simulation steps.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Simplification 2: throw away the weights}
+  \small
+  Each term carries the prefactor
+  $\tfrac{\beta_t^2}{2\sigma_t^2\alpha_t(1-\bar\alpha_t)}$. Ho et al.\ set it to $1$:
+  \[
+    \boxed{\ \mathcal{L}_{\text{simple}}
+      = \E_{t,\ \xv_0,\ \eps}
+      \Big\|\ \eps - \eps_{\thetav}\big(\sqrt{\bar\alpha_t}\xv_0 + \sqrt{1-\bar\alpha_t}\eps,\ t\big)\Big\|^{2}\ }
+  \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{This one is not free.} With the weights gone, $\mathcal{L}_{\text{simple}}$
+      is \textbf{no longer the ELBO}. We are no longer maximizing a likelihood bound.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      And it is \textbf{better} - for samples. Ho et al.\ report visibly better images and
+      \emph{worse} likelihood. The reweighting quietly tells the model to care more about
+      the noisy steps, which is where perceptual quality is decided.}}
+  \end{columns}
+  \vskip 5pt
+  \footnotesize
+  \textcolor{gray}{We take the trade deliberately. In L29 we come back and ask how anyone
+  measures "better images" in the first place.}
+\end{frame}
+
+\begin{frame}{The whole road, on one slide}
+  \small
+  \begin{center}
+    \begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize}]
+      \node[draw, rounded corners, fill=armred!10, text width=2.1cm, align=center, minimum height=1.0cm] (a)
+        {$-\log p_{\thetav}(\xv_0)$\\[2pt] \textcolor{armred}{intractable}};
+      \node[draw, rounded corners, fill=armblue!10, right=of a, text width=2.1cm, align=center, minimum height=1.0cm] (b)
+        {ELBO\\[2pt] \textcolor{gray}{drop $\mathrm{KL}\!\geq\!0$}};
+      \node[draw, rounded corners, fill=armblue!10, right=of b, text width=2.1cm, align=center, minimum height=1.0cm] (c)
+        {$\sum_t D_{\mathrm{KL}}$\\[2pt] \textcolor{gray}{drop 2 terms}};
+      \node[draw, rounded corners, fill=armorange!14, right=of c, text width=2.1cm, align=center, minimum height=1.0cm] (d)
+        {$\|\tilde{\bm\mu}_t-\bm\mu_{\thetav}\|^2$\\[2pt] \textcolor{gray}{fixed variance}};
+      \node[draw, rounded corners, fill=paramgreen!14, right=of d, text width=2.1cm, align=center, minimum height=1.0cm] (e)
+        {$\|\eps-\eps_{\thetav}\|^2$\\[2pt] \textcolor{paramgreen}{\textbf{an MSE}}};
+      \draw[-{Latex}, thick] (a) -- (b);
+      \draw[-{Latex}, thick] (b) -- (c);
+      \draw[-{Latex}, thick] (c) -- (d);
+      \draw[-{Latex}, thick] (d) -- node[above, font=\tiny]{reparam.} (e);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\small
+    Five steps. Nothing exotic: one algebraic insertion, one non-negativity argument, two
+    terms dropped for good reasons, one change of variables. The reward is an objective a
+    first-year student could implement.}}
+\end{frame}
+
+% ================================================================
+\section{It is twelve lines of code}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{It is twelve lines of code}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The payoff for sitting through the algebra.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}[fragile]{The training loop, in full}
+  \small
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+\begin{semiverbatim}\scriptsize
+\textcolor{gray}{# betas: the schedule. abar = cumprod(1 - betas)}
+for step in range(n_steps):
+    x0  = next_batch()
+    t   = randint(0, T, size=len(x0))
+    eps = randn_like(x0)
+
+    a  = abar[t]
+    xt = sqrt(a)*x0 + sqrt(1 - a)*eps
+
+    loss = mse(eps, model(xt, t))
+
+    loss.backward()
+    opt.step(); opt.zero\_grad()
+\end{semiverbatim}
+    \column{0.44\textwidth}
+    \vskip 10pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      That is the entire derivation, implemented. Lines 7-8 are the L27 closed form; line
+      10 is $\mathcal{L}_{\text{simple}}$.
+      \vskip 4pt
+      \textbf{No adversarial game, no discriminator, no balancing act.} Just a regression
+      onto noise.}}
+    \vskip 6pt
+    \footnotesize
+    \textcolor{gray}{Compare with training a GAN, where the loss going down tells you
+    almost nothing about whether the samples are improving.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{And it works}
+  \small
+  Trained here, on this laptop, on the 8x8 handwritten digits from \texttt{sklearn}:
+  \begin{center}
+    \includegraphics[width=0.96\linewidth]{digits_training.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{Read this honestly.} A deliberately tiny model on tiny images, minutes of CPU.
+    The point is not the quality - it is that at low noise the denoiser recovers the digit
+    almost perfectly, and degrades gracefully as $t$ grows. That degradation is not a bug;
+    it is what the model is supposed to do.}}
+\end{frame}
+
+\begin{frame}{What is $\eps_{\thetav}$ actually?}
+  \small
+  We have said "a network" for two lectures. It has to satisfy three constraints:
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \footnotesize
+    \begin{enumerate}\setlength\itemsep{2pt}
+      \item \textbf{Image in, image out} at the same resolution - the output $\eps$ has the
+        shape of the input.
+      \item \textbf{Conditioned on $t$} - one network must serve every noise level.
+      \item Later: \textbf{a place to inject text}.
+    \end{enumerate}
+    \vskip 6pt
+    The standard answer is a \textbf{UNet}: downsample through convolutions, process, upsample
+    back, with \textbf{skip connections} joining matching resolutions so fine detail is not
+    lost in the bottleneck.
+    \column{0.45\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{You have met every piece:}
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item convolutions and transposed convolutions - L16, L19
+        \item skip connections - L17 (ResNet)
+        \item encoder-decoder with a bottleneck - L22
+        \item sinusoidal position encoding, reused here for $t$ - ch9
+      \end{itemize}}}
+    \vskip 4pt
+    \footnotesize
+    \textcolor{gray}{The digits model above is a miniature of exactly this.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why "just an MSE" is a big deal}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Recall L23b.} Training a GAN is a two-player game: the generator improves
+      against a discriminator that is itself moving.
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item no stationary loss to watch - we saw both curves wander and cross
+        \item \textbf{mode collapse} - visible at step 500 of our own run
+        \item no reliable signal for when to stop; discriminator accuracy never settled
+      \end{itemize}}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Training a diffusion model} is a regression onto a fixed target.
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item the loss is stationary and interpretable
+        \item more compute reliably helps
+        \item essentially no instability to manage
+      \end{itemize}}}
+    \vskip 6pt
+    \footnotesize
+    This stability, more than any single quality result, is why the field switched.
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\setlength\itemsep{2pt}
+      \item Maximum likelihood needs an integral over all paths: intractable.
+      \item Insert $q/q$, drop a non-negative KL, get the ELBO - the L23 move.
+      \item Expanded, it is a sum of KLs against the \textbf{true posterior}, which is
+        exact but needs $\xv_0$.
+      \item Fix the variance: KL becomes a squared distance of means.
+      \item Reparameterize; the $\xv_t$ terms cancel; what is left is
+        $\|\eps-\eps_{\thetav}\|^2$.
+      \item Sample one $t$ (free), drop the weights (not free, but better samples).
+    \end{enumerate}
+    \column{0.46\textwidth}
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} we can train. We cannot yet \emph{generate} - running the chain
+      backwards has a surprise in it.
+      \vskip 4pt
+      L29 shows the sampler, and asks why it insists on adding fresh random noise at every
+      step when its whole job is removing noise.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L28 Diffusion II - the loss (ch10_diffusion). Built 2026-08-03.
+%   Plan: ml/ch10_diffusion/DIFFUSION_CHAPTER_PLAN.md (post-review revision).
+%
+%   Sources:
+%     - Ho, Jain & Abbeel (2020), DDPM - the derivation and L_simple.
+%     - Deepia (2025) - the step-by-step visual route; dp_paths.jpg used directly.
+%     - Nichol & Dhariwal (2021) for the likelihood-vs-sample-quality trade.
+%
+%   Figures (Python-generated, py_src/ -> fig/):
+%     kl_gaussians.pdf, digits_training.pdf (digits_ddpm.py trains a real DDPM here).
+%
+%   Pedagogical decisions:
+%     - The bound is derived via the KL >= 0 DECOMPOSITION, not Jensen, because that is
+%       the route L23_vae.tex:200-222 actually used. Jensen is mentioned as an aside and
+%       pointed at the probability module - it appears in NO built deck, so claiming it as
+%       a callback would have been false. (Caught in review, 2026-08-03.)
+%     - The 1/(2 sigma_t^2) prefactor is kept visible from the Gaussian-KL frame onward so
+%       that "drop the weights" later has something concrete to drop.
+%     - L_simple is explicitly flagged as NOT the ELBO, with the honest samples-vs-
+%       likelihood trade stated. Sets up the FID frame in L29.
+%     - The substitution is split across three frames (awkward coordinates -> substitute ->
+%       cancel). One frame for all of it violates one-idea-per-frame.
+%     - The UNet frame exists because L30 needs somewhere to attach cross-attention, and
+%       because every component is an earned callback (L16/L17/L19/L22/ch9).
+%     - GAN instability is now a CALLBACK to L23b (built 2026-08-03), not new teaching.
+%       Before ch8b_gans existed this frame had to teach it from scratch.
+%
+%   Next deck: L29_diffusion_sampling.tex (DDPM sampler, the score field, DDIM, FID).

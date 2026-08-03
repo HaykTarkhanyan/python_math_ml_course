@@ -1,0 +1,605 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+% Full-bleed still for the dense borrowed panels. These are paper-style screenshots that
+% are legible full-screen and illegible in a half-width column (noted in
+% _reference_welchlabs_diffusion/README.md). 16:9 deck, so the image fills exactly.
+\newcommand{\wlslide}[1]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      % Backing box: these stills already carry text near the bottom edge, so a bare
+      % caption collides with it and neither line is readable (caught in student review).
+      \node[anchor=south east, font=\tiny, text=white!85,
+            fill=black, fill opacity=0.6, text opacity=1, inner sep=3pt]
+        at ([shift={(-0.28cm,0.18cm)}]current page.south east)
+        {Welch Labs / 3Blue1Brown (2025)};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+\title{Lecture 29: Diffusion III}
+\subtitle{Sampling, and why the noise comes back}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Some panels are stills from Welch Labs / 3Blue1Brown (2025).
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{We can train. Can we generate?}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    L28 ended with a trained network $\eps_{\thetav}(\xv_t, t)$ that answers one question:
+    \emph{given this noisy image and this noise level, which noise was added?}
+    \vskip 6pt
+    Generation should now be mechanical. Start from
+    $\xv_T \sim \mathcal{N}(\mathbf{0},\id)$, ask the network what the noise is, subtract
+    some of it, repeat.
+    \column{0.46\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      It is almost that. But the actual sampler in the DDPM paper does something that
+      looks like a typo the first time you read it, and today we find out why it is not.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The sampler, and a question}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The sampler, and a question}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Read the algorithm carefully. Something in it should bother you.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\wlslide{wl_algorithms.jpg}
+
+\begin{frame}{The DDPM sampler}
+  \small
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \footnotesize
+    The two algorithms from Ho et al.\ (2020), side by side on the previous slide.
+    \vskip 4pt
+    \textbf{Algorithm 1} is training - the loop we wrote in L28.
+    \vskip 4pt
+    \textbf{Algorithm 2} is sampling, and it is the one to read carefully.
+    \column{0.58\textwidth}
+    \footnotesize
+    Reading the sampling algorithm, one step:
+    \[
+      \xv_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(\xv_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\ \eps_{\thetav}(\xv_t,t)\right)
+        \;+\; \sigma_t \mathbf{z}
+    \]
+    \vskip 3pt
+    The bracket is exactly $\bm\mu_{\thetav}$ from L28 - the model's best guess at where
+    the previous image was.
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      Then there is $+\ \sigma_t\mathbf{z}$, with $\mathbf{z}\sim\mathcal{N}(\mathbf{0},\id)$
+      drawn fresh, and $\sigma_t^2=\beta_t$ as fixed in L28.
+      \textbf{The sampler adds new random noise at every step.}}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Hold that thought}
+  \small
+  \textbf{Predict first.} Our network was trained for one job: remove noise. The sampler
+  then puts noise \emph{back}, a thousand times over.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.86\linewidth}{\centering
+      What happens if we simply delete that term?}}
+  \end{center}
+  \vskip 8pt
+  \small
+  Most people's first guess is "nothing much, maybe slightly less variety." The truth is
+  more interesting, and it tells us what the model actually learned.
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\small
+    \textbf{We will answer this in Section 3.} First we need a picture of what
+    $\eps_{\thetav}$ has learned - and for that we shrink images down to two pixels.}}
+\end{frame}
+
+\begin{frame}{By hand: one step of the sampler}
+  \small
+  Take the constant $\beta=0.02$ from L27, so $\alpha_t = 0.98$ and
+  $\bar\alpha_t = 0.98^{\,t}$. We are at $t=100$. One pixel of $\xv_{100}$ reads
+  $1.300$, and the network predicts $\eps_{\thetav} = 1.150$ for it.
+  \vskip 3pt
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    {\footnotesize
+    \begin{tabular}{@{}ll@{}}
+      $\bar\alpha_{100} = 0.98^{100}$ & $= 0.13262$ \\
+      $\sqrt{1-\bar\alpha_{100}}$ & $= 0.93133$ \\
+      $\beta_t / \sqrt{1-\bar\alpha_t}$ & $= 0.02/0.93133 = 0.02147$ \\[3pt]
+      $\xv_t - 0.02147 \times 1.150$ & $= 1.27530$ \\
+      $\div \sqrt{0.98}$ & $= 1.28825$ \quad\textcolor{gray}{\tiny(model's move)} \\[3pt]
+      $\sigma_t = \sqrt{\beta_t}$ & $= 0.14142$ \\
+      draw $\mathbf{z} = -0.30$, add $\sigma_t \mathbf{z}$ & $= -0.04243$ \\[2pt]
+      \hline
+      $\xv_{99}$ & $= \mathbf{1.246}$ \\
+    \end{tabular}}
+    \column{0.44\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Look at the two moves.}
+      \vskip 3pt
+      The model shifted the pixel by $1.288 - 1.300 = \mathbf{-0.012}$.
+      \vskip 3pt
+      The noise shifted it by $\mathbf{-0.042}$ - about \textbf{3.5 times further}.}}
+    \vskip 5pt
+    \footnotesize
+    At this noise level the random term is not a small correction on top of the model's
+    answer. It \emph{dominates} the step.
+    \vskip 4pt
+    \textcolor{gray}{Which makes the question on the last slide sharper, not softer: why
+    would you let noise do most of the moving in a process whose job is removing noise?}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{It does work}
+  \small
+  The sampler, run on the little digit model we trained in L28:
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{digits_samples.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    On the right, one run followed down the chain. For most of the trajectory there is
+    nothing to see - the structure appears late, in the last couple of hundred steps.
+    That is characteristic, and it is a hint about where the model spends its capacity.}}
+\end{frame}
+
+% ================================================================
+\section{What the model actually learned}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What the model actually learned}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Two pixels instead of a million, so we can draw the whole thing.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Shrink the image until you can plot it}
+  \small
+  An image is a point in pixel space. With two pixels, that space is a sheet of paper: the
+  first pixel's brightness on one axis, the second on the other.
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{spiral_data.pdf}
+  \end{center}
+  \vskip -3pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    Real images occupy a thin, highly structured set inside a huge space. We fake that
+    with a spiral: most of the plane is not data, and the data is curved and connected.
+    \textbf{Every claim from here on is visible.}}}
+\end{frame}
+
+\begin{frame}{Adding noise is a random walk with a leash}
+  \small
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    In the middle panel, one point takes 300 forward steps. Each step is
+    \[ \xv_t = \sqrt{1-\beta_t}\ \xv_{t-1} + \sqrt{\beta_t}\ \eps \]
+    which is a random jump \emph{plus} a small pull back toward the origin.
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{A precise word on names.} Pure Brownian motion has no pull - that is the
+      variance-exploding process we rejected in L27. With the $\sqrt{1-\beta}$ drift this
+      is an \textbf{Ornstein-Uhlenbeck} process: it wanders, but it is on a leash, so it
+      settles into $\mathcal{N}(\mathbf{0},\id)$ instead of drifting forever.}}
+    \column{0.44\textwidth}
+    \footnotesize
+    "Diffusion" is still the right name - the field takes it from
+    \textbf{Sohl-Dickstein et al.\ (2015)}, who built the idea on non-equilibrium
+    thermodynamics.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Generating an image is asking: given a point that has wandered off, \textbf{which way
+      is back?}}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The network is a direction field}
+  \small
+  Ask $\eps_{\thetav}$ at every point on a grid, and plot which way it says to move:
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{spiral_score_field.pdf}
+  \end{center}
+  \vskip -4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{High noise} ($t=900$): a broad field pointing at the data in general. It has no
+    idea which arm you belong to, and it should not.
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Low noise} ($t=50$): the field has resolved into the spiral's fine structure and
+    points at the nearest arm.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{That field has a name}
+  \small
+  Up to a constant, the direction the model gives is the \textbf{score} of the noisy data
+  distribution:
+  \[
+    \nabla_{\xv_t} \log p(\xv_t)
+    \;=\; -\,\frac{\eps_{\thetav}(\xv_t, t)}{\sqrt{1-\bar\alpha_t}}
+  \]
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The gradient of the log-density: the direction in which data becomes \emph{more
+      likely}. Note the \textbf{minus sign} - moving away from the predicted noise is
+      moving toward the data - and the $1/\sqrt{1-\bar\alpha_t}$ scale.}}
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Why this matters:} predicting noise, predicting the score, and predicting the
+      clean image are the same task in different coordinates. It also connects DDPM to a
+      separate line of work (Song \& Ermon, 2019) - and we use that connection at the end
+      of this lecture.}}
+  \end{columns}
+  \vskip 5pt
+  \footnotesize
+  \textcolor{gray}{This is also why conditioning on $t$ was essential: one network has to
+  represent all of these fields, and they are very different at $t=900$ and $t=50$.}
+\end{frame}
+
+% ================================================================
+\section{Why the noise comes back}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Why the noise comes back}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The question from Section 1, answered.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Run it three ways}
+  \small
+  Same trained model, same starting noise. Only the sampler changes.
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{spiral_samplers.pdf}
+  \end{center}
+  \vskip -4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Left:} the real sampler. Points land across the whole spiral.
+    Measured spread: $0.68$.
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Middle:} the noise term deleted. Every one of the 700 points lands in
+    essentially the same place. Measured spread: $\mathbf{0.003}$.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The same failure, on a real model}
+  \small
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_tree_good.jpg}\\[3pt]
+      {\scriptsize with the noise step}
+    \end{center}
+    \column{0.32\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{wl_tree_blurry.jpg}\\[3pt]
+      {\scriptsize noise step deleted}
+    \end{center}
+    \column{0.36\textwidth}
+    \vskip 6pt
+    \footnotesize
+    Stable Diffusion, same prompt, same seed. Delete the noise term and you get a brown
+    smear.
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      The spiral collapsed to a point. The image collapses to a \textbf{blur} - which is
+      what the average of many images looks like.}}
+    \vskip 4pt
+    {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why: the denoiser is being fed inputs it never saw}
+  \small
+  The network was trained at specific noise levels. At step $t$ it expects its input to
+  carry exactly the amount of noise the forward process puts there, $1-\bar\alpha_t$.
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      Delete the $\sigma_t\mathbf{z}$ term and $\xv_{t-1}$ comes out \textbf{cleaner} than
+      $\sigma_{t-1}$ demands. On the next call the network sees an input that is less noisy
+      than anything in its training set.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      Believing there is more noise than there is, it \textbf{removes too much} - and
+      "remove as much as possible" points at the average of the training data. Repeat a
+      thousand times and every trajectory ends up at that average.}}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\small
+    \textbf{The noise is not decoration - it is bookkeeping.} It keeps each step's input at
+    the noise level the next step was trained for. That, and not any deep need for
+    randomness, is why it is there.}}
+  \vskip 3pt
+  \footnotesize
+  \textcolor{gray}{Keep that phrasing in mind: it tells us immediately how to build a
+  \emph{deterministic} sampler that does not blur.}
+\end{frame}
+
+\begin{frame}{One honest caveat about the toy}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    On the spiral, the collapsed points still land \emph{on} the data - just all in one
+    spot. So the toy shows lost \textbf{variety}, not lost \textbf{realism}.
+    \vskip 5pt
+    In the space of real images, the average of many trees is not a tree at all. There the
+    collapse leaves the set of realistic images entirely, which is why the output is a
+    smear rather than one particular tree.
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Where the analogy stops.} A 2-D picture cannot show what "off the manifold"
+      means in a million dimensions. Take the mechanism from the spiral, take the severity
+      from the tree.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What this looks like when you get it wrong}
+  \small
+  You will implement this. Here is the same correctly-trained digit model, sampled three
+  wrong ways - every fault below is at \textbf{sampling} time, not in the weights.
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{digits_failures.pdf}
+  \end{center}
+  \vskip -4pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \scriptsize
+    \textbf{Skipping steps} and \textbf{too much noise} are the fault we just diagnosed,
+    in the other direction: the input reaches a noise level the network never trained on,
+    and it breaks loudly.
+    \column{0.48\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{The middle panel is the dangerous one.} The wrong schedule gives clean,
+      plausible digits - \emph{different} ones, but nothing looks broken. A bug you can
+      see costs an afternoon; a bug you cannot see ships.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Deterministic sampling}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Deterministic sampling}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A thousand network calls per image is a problem worth solving.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The cost problem}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    The DDPM sampler runs the full chain: with $T=1000$, that is \textbf{one thousand
+    forward passes} of a large network per image.
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      For a while this was the reason diffusion stayed a research curiosity while GANs -
+      one forward pass - shipped in products.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Do not attach "1000 steps" to Stable Diffusion.} Shipping models use 20-50.
+      The rest of this section is how they got there.}}
+  \end{columns}
+  \vskip 8pt
+  \textbf{Predict first:} we just spent a whole section proving that removing the noise
+  ruins everything. So how can a \emph{deterministic} sampler possibly work?
+\end{frame}
+
+\begin{frame}{The resolution}
+  \small
+  \pause
+  \begin{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.9\linewidth}{\centering
+      Do not \emph{delete} the noise. \textbf{Rescale the step} so the noise level stays
+      where the network expects it.}}
+  \end{center}
+  \vskip 6pt
+  \small
+  Our failed experiment kept the DDPM step size and dropped the noise, so the noise level
+  fell out of sync. Instead, jump directly between consistent noise levels: predict the
+  clean image, then re-noise it to exactly the level of the step you are moving to.
+  \[
+    \hat{\xv}_0 = \frac{\xv_t - \sqrt{1-\bar\alpha_t}\ \eps_{\thetav}}{\sqrt{\bar\alpha_t}},
+    \qquad
+    \xv_{t-1} = \sqrt{\bar\alpha_{t-1}}\ \hat{\xv}_0 + \sqrt{1-\bar\alpha_{t-1}}\ \eps_{\thetav}
+  \]
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    No random draw anywhere, yet every input is at a noise level the network trained on.
+    This is \textbf{DDIM} - \textbf{Denoising Diffusion Implicit Models} (Song et al., 2020).
+    \textbf{It needs no retraining}: same weights, different sampler.}}
+\end{frame}
+
+\begin{frame}{It works, and it skips}
+  \small
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Because consecutive $\bar\alpha$ values no longer have to be adjacent, you can take
+    \textbf{25 steps instead of 1000} by striding through the schedule.
+    \vskip 5pt
+    In the right-hand panel of the sampler figure: 25 steps, deterministic, measured spread
+    $0.64$ against DDPM's $0.68$.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{40x fewer network calls, same distribution, same weights.} This is what made
+      diffusion practical.}}
+    \column{0.54\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Two caveats worth stating.}
+      \begin{enumerate}\setlength\itemsep{2pt}
+        \item The theory promises the same \emph{distribution}, not the same image. A
+          given starting noise gives different pictures under the two samplers.
+        \item The guarantee holds in the continuous limit. At 20 steps the
+          discretization error is real and visible - very-low-step samples have a
+          recognizable look.
+      \end{enumerate}}}
+  \end{columns}
+\end{frame}
+
+\wlslide{wl_sde_ode.jpg}
+
+\begin{frame}{A note on where the theory came from}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    You will often see DDIM introduced through \textbf{stochastic differential equations},
+    as on the previous slide: the DDPM sampler is an SDE; a result from statistical
+    mechanics (the Fokker-Planck equation) gives an \textbf{ordinary} differential
+    equation - the \emph{probability-flow ODE} - whose distribution at every time is the
+    same.
+    \vskip 5pt
+    \footnotesize
+    Both update rules end up looking almost identical. The stochastic one has a random
+    term; the deterministic one has a different step scaling instead.
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{That is not how DDIM was found.} Song et al.\ (2020) derived it from a
+      non-Markovian forward process, with no SDE anywhere.
+      \vskip 3pt
+      The ODE connection came from Song et al.\ (2021), \emph{afterwards}, and showed
+      DDIM is roughly a first-order discretization of it.}}
+    \vskip 5pt
+    \footnotesize
+    \textcolor{gray}{Worth knowing both framings, and worth not confusing the order they
+    happened in.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How would we even know which sampler is better?}
+  \small
+  We have been saying "better samples" for two lectures while judging by eye.
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    The standard answer is \textbf{FID} (\textbf{Fr\'echet Inception Distance}): push real
+    and generated images through a pretrained vision network, fit a Gaussian to each set of
+    features, and measure the distance between them.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      It rewards both \textbf{realism} and \textbf{variety}: a model producing one perfect
+      image every time scores badly, which is exactly the failure we just watched.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{What it misses:} it says nothing about whether the image matches a
+      \emph{prompt}, it depends on the feature network, and it is unstable on small
+      sample counts.}}
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      This closes the loop on L28: dropping the weights from the loss made the likelihood
+      \emph{worse} and FID \emph{better}. Different objectives, and the field chose the
+      one matching what people look at.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\setlength\itemsep{2pt}
+      \item The DDPM sampler subtracts predicted noise, then adds fresh noise back.
+      \item Shrunk to two pixels, the trained network is a \textbf{direction field} -
+        the score - that sharpens as $t\to 0$.
+      \item Delete the added noise and everything collapses to the data mean: blurry.
+      \item Because the denoiser is then fed inputs \textbf{cleaner than it was trained
+        for}, and over-denoises.
+      \item DDIM fixes it by rescaling the step, not deleting the noise: deterministic,
+        25 steps, no retraining.
+      \item FID is how the field measures any of this.
+    \end{enumerate}
+    \column{0.46\textwidth}
+    \vskip 8pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} we can generate good images, quickly, from noise.
+      \vskip 4pt
+      We still have no way to ask for anything. Every image so far has been whatever the
+      model felt like producing.
+      \vskip 4pt
+      L30 connects text to pixels.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L29 Diffusion III - sampling (ch10_diffusion). Built 2026-08-03.
+%   Plan: ml/ch10_diffusion/DIFFUSION_CHAPTER_PLAN.md (post-review revision).
+%
+%   Sources:
+%     - Welch Labs / 3Blue1Brown (2025) - the spiral/vector-field spine, the tree example,
+%       the SDE/ODE panel.
+%     - Ho et al. (2020) Algorithm 2; Song et al. (2020) DDIM; Song et al. (2021) score-SDE.
+%     - Heusel et al. (2017) for FID.
+%
+%   Figures (Python-generated, py_src/ -> fig/):
+%     spiral_data.pdf, spiral_score_field.pdf, spiral_samplers.pdf (spiral_figures.py);
+%     digits_samples.pdf (digits_ddpm.py). All numbers quoted on slides come from
+%     logs/spiral_figures.log - DDPM spread 0.682, naive 0.003, DDIM-25 0.642.
+%
+%   Pedagogical decisions:
+%     - THE KEY CORRECTION (from review, 2026-08-03). The blur is explained as a
+%       train/test NOISE-LEVEL MISMATCH: deleting sigma_t*z leaves x_{t-1} cleaner than
+%       sigma_{t-1}, the denoiser sees out-of-distribution input and over-denoises toward
+%       the dataset mean. The video's on-screen story ("the model learns a Gaussian mean,
+%       so add the spread back") is weaker AND is contradicted by DDIM four frames later.
+%       Source for the correction: _reference_welchlabs_diffusion/description.txt:52,
+%       credited to Chenyang Yuan. This framing makes DDIM the natural next beat: DDIM
+%       does not delete the noise, it rescales the step to keep levels consistent.
+%     - The suspense device (question posed in Sec 1, answered in Sec 3) is explicitly
+%       announced so it reads as suspense, not confusion.
+%     - Ornstein-Uhlenbeck, not Brownian motion: the sqrt(1-beta) drift is the whole
+%       difference, and calling it Brownian would re-teach the VE process L27 discarded.
+%     - The score identity is stated WITH its sign and scale; "the direction is the score"
+%       alone is the elision the SDE frame later depends on.
+%     - DDIM's actual derivation history (non-Markovian forward process) is separated from
+%       the later ODE reinterpretation.
+%     - FID added so "better samples" stops being an eye-judgement, and to close the
+%       L_simple likelihood-vs-quality trade opened in L28.
+%
+%   Next deck: L30_diffusion_conditioning.tex (CLIP, conditioning, classifier-free guidance).

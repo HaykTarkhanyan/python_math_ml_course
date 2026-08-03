@@ -1,0 +1,484 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}{fig/borrowed/}}
+
+\title{Lecture 31: Diffusion V}
+\subtitle{Latent diffusion, video, and what it costs}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Some panels are stills from Welch Labs / 3Blue1Brown (2025).
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Let us count what we have built}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    A guided sample at $512\times512$ costs:
+    \vskip 4pt
+    \begin{itemize}\setlength\itemsep{2pt}
+      \item $25$ sampling steps (DDIM, L29)
+      \item $\times\ 2$ forward passes each, for guidance (L30)
+      \item $=\ 50$ passes of a network operating on $786{,}432$ numbers
+    \end{itemize}
+    \vskip 6pt
+    Every one of those passes runs convolutions and attention over the full image.
+    \column{0.46\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      Done naively this needs a datacentre for one picture.}}
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      And yet Stable Diffusion runs on a gaming laptop, in seconds.
+      \vskip 4pt
+      \textbf{One idea closes that gap} - and you already own it.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Latent diffusion}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Latent diffusion}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The chapter that looked like a detour turns out to be load-bearing.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{You already know the punchline}
+  \small
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    In L23 we closed the autoencoder chapter with a frame titled \emph{"the VAE is inside
+    modern image generators"}, and this claim:
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      The VAE compresses a $512\times512\times3$ image to $64\times64\times4$ - about
+      $48\times$ fewer numbers. The diffusion model works in \emph{that}, and the VAE
+      decoder paints the final image.
+      \vskip 4pt
+      \textbf{The VAE did not lose to diffusion. It became the compression layer inside
+      it.}}}
+    \column{0.45\textwidth}
+    \vskip 6pt
+    \footnotesize
+    At the time that was a promise. Now you have everything needed to see why it works, and
+    why it is the difference between a research result and a product.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Latent diffusion} (Rombach et al., 2022): run the entire process of L27-L30
+      inside the autoencoder's latent space instead of on pixels.
+      \vskip 3pt
+      Nothing about the maths changes. Only where it happens.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What L23 did not tell you: the latent is an image}
+  \small
+  \begin{center}
+    \includegraphics[width=0.95\linewidth]{latent_spatial.pdf}
+  \end{center}
+  \vskip -3pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    The MNIST autoencoder in L22 squeezed a digit to \textbf{two numbers} - a flat code
+    with no geometry. Latent diffusion does not do that.
+    \column{0.5\textwidth}
+    \footnotesize
+    Its latent is a small \textbf{feature map}: neighbouring cells still correspond to
+    neighbouring patches of the picture.
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{That is the whole trick.} Because the latent keeps its spatial layout,
+    convolutions and cross-attention still mean something inside it - so the UNet from L28
+    works unchanged. Compress to a flat vector and none of it would.}}
+\end{frame}
+
+\begin{frame}{Where the saving actually comes from}
+  \small
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{cost_breakdown.pdf}
+  \end{center}
+  \vskip -3pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Element count drops $48\times$. That is the number usually quoted, and it is the
+      \emph{smaller} of the two effects.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Attention cost grows with the \textbf{square} of the number of positions. Going from
+      $262{,}144$ positions to $4{,}096$ cuts it by about $\mathbf{4096\times}$.}}
+  \end{columns}
+  \vskip 4pt
+  \footnotesize
+  \textcolor{gray}{This is why full-resolution pixel-space attention was never really on
+  the table, and why the encoder is not just an optimization but an enabler.}
+\end{frame}
+
+\begin{frame}{The full picture, and a loose end}
+  \small
+  \begin{center}
+    \begin{tikzpicture}[every node/.style={font=\scriptsize}, node distance=0.55cm]
+      \node[draw, rounded corners, fill=armorange!16, minimum height=0.75cm, text width=1.5cm, align=center] (txt) {prompt};
+      \node[draw, rounded corners, fill=armorange!10, right=of txt, minimum height=0.75cm, text width=1.5cm, align=center] (clip) {text encoder};
+      \node[draw, rounded corners, fill=armred!10, right=1.3cm of clip, minimum height=0.75cm, text width=1.7cm, align=center] (noise) {latent noise\\$64\times64\times4$};
+      \node[draw, rounded corners, fill=armblue!14, right=of noise, minimum height=0.75cm, text width=1.7cm, align=center] (unet) {UNet\\$\times$ 25 steps};
+      \node[draw, rounded corners, fill=paramgreen!14, right=of unet, minimum height=0.75cm, text width=1.5cm, align=center] (dec) {VAE decoder};
+      \node[draw, rounded corners, fill=paramgreen!8, right=of dec, minimum height=0.75cm, text width=1.4cm, align=center] (img) {image\\$512^2\times3$};
+      \draw[-{Latex}, thick] (txt) -- (clip);
+      \draw[-{Latex}, thick, armorange] (clip) -| node[pos=0.3, above, font=\tiny]{cross-attention} ($(unet.north)+(0,0)$);
+      \draw[-{Latex}, thick] (noise) -- (unet);
+      \draw[-{Latex}, thick] (unet) -- (dec);
+      \draw[-{Latex}, thick] (dec) -- (img);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \footnotesize
+    Every box is something we built: the UNet in L28, the sampler in L29, the text encoder
+    and cross-attention in L30, the autoencoder back in L22-L23.
+    \vskip 4pt
+    The decoder runs \textbf{once}, at the very end.
+    \column{0.45\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{A loose end from L27.} The "pure noise" video in our opening slide did not
+      look like television static. Now you know why: it was noise \emph{in the latent},
+      pushed through the decoder.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Flow matching}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Flow matching}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      If the path is going to be deterministic, why not make it straight?
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Straighten the path}
+  \small
+  DDIM showed the reverse process can be a deterministic trajectory from noise to data.
+  But it is a \textbf{curved} one - it inherits its shape from the noise schedule, and
+  curvature is what forces many small steps.
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Flow matching} (Lipman et al., 2022; Liu et al., 2022) trains the network to
+      predict a \textbf{velocity} - which way and how fast to move - rather than the noise,
+      and picks a target path that is as close to a straight line as possible.}}
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      A straight path can be crossed in a few large steps without much error. Fewer steps,
+      same quality.}}
+  \end{columns}
+  \vskip 6pt
+  \footnotesize
+  The training loop barely changes: sample a time, interpolate between noise and data,
+  regress onto the target velocity. Still a mean squared error, still no adversarial game.
+  \vskip 4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.985\linewidth}{\footnotesize
+    \textbf{This is not a historical footnote.} Stable Diffusion 3, Flux and Wan are all
+    flow-matching models. If you read a 2025-onward paper, expect this formulation rather
+    than the DDPM one - which is exactly why we derived DDPM first: flow matching is the
+    same skeleton with a different target.}}
+\end{frame}
+
+% ================================================================
+\section{Video}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Video}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One more axis on the tensor, and remarkably little else.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Video is the same loop with another dimension}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    An image is $H\times W\times C$. A video is $F\times H\times W\times C$. Noise the whole
+    tensor, denoise the whole tensor.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Everything transfers: the closed-form forward process, $\mathcal{L}_{\text{simple}}$,
+      the sampler, cross-attention on the prompt, classifier-free guidance.}}
+    \vskip 5pt
+    \footnotesize
+    What changes is that the network must attend \textbf{across frames} as well as within
+    them - otherwise each frame is a plausible image and the sequence flickers. That is
+    where the engineering effort goes, and it is why video models are so much more
+    expensive.
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=0.9\linewidth]{wl_negative_prompt.jpg}\\[2pt]
+      {\scriptsize\color{gray} Welch Labs / 3Blue1Brown (2025)}
+    \end{center}
+    \vskip -2pt
+    \footnotesize
+    Wan 2.1's shipped negative prompt is a list of everything that tends to go wrong:
+    extra fingers, deformed limbs, cluttered backgrounds, people walking backwards.
+    \vskip 3pt
+    \textcolor{gray}{A reminder that a large part of production quality is guidance
+    engineering, not architecture.}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Where this leaves us}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Where this leaves us}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The trade the field made, and the parts that are not technical.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The generative landscape}
+  \small
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{gen_landscape.pdf}
+  \end{center}
+  \vskip -4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.985\linewidth}{\footnotesize
+    L23 compared these families on \emph{what they are}. This is the axis that explains the
+    \textbf{history}: VAEs and GANs generate in one pass, diffusion needed a thousand and
+    bought quality with them - then DDIM and flow matching won most of that cost back
+    without giving up the quality.}}
+\end{frame}
+
+\begin{frame}{Why images, and not text?}
+  \small
+  A fair question after a whole chapter on transformers: language models generate one token
+  at a time, image models denoise. Why not diffuse text?
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      Everything in L27-L28 rests on \textbf{continuous} data: add a little Gaussian noise,
+      get something slightly different but still meaningful.
+      \vskip 3pt
+      Tokens are \textbf{discrete}. "Slightly noisy" is not a word. There is no
+      halfway point between \emph{cat} and \emph{dog}.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      There is active work on discrete diffusion and on diffusing in embedding space, and
+      some genuinely promising results. But it is not why your chatbot works.
+      \vskip 3pt
+      \textbf{Continuous data: diffusion. Discrete sequences: autoregression.} That split
+      still holds.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What it actually costs}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Our thesis has been "diffusion buys quality with compute". It is worth putting a number
+    on that.
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      Stable Diffusion 1.x was reported by its authors as roughly \textbf{150{,}000
+      A100-hours} of training - about $17$ GPU-years, run in parallel.
+      \vskip 3pt
+      Inference is cheap; \textbf{training is not}, and it is concentrated in very few
+      hands.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Which is also why open weights matter so much here. Almost nobody can train one of
+      these; a great many people can fine-tune, sample from, and study one.
+      \vskip 3pt
+      Everything we did this chapter used a released model or a toy we trained in minutes.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The parts that are not technical}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Where the data came from.} These models are trained on hundreds of millions
+      of images scraped from the web, largely without the consent of the people who made
+      them. Whether that is fair use is being litigated right now, in several countries,
+      with no settled answer.}}
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{What they are used for.} The same guidance machinery that puts a tree in a
+      desert puts a real person in a video they were never in. Detection is losing to
+      generation.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Why this is in a technical lecture.} You now know how these systems work
+      well enough to build one. That is exactly the point at which the question stops
+      being someone else's.
+      \vskip 4pt
+      I am not going to tell you what to conclude. I am telling you not to skip the
+      question.}}
+    \vskip 5pt
+    \footnotesize
+    \textcolor{gray}{Watermarking, provenance standards and dataset opt-outs all exist and
+    are all partial. This is unsettled, and you will be working in it.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What we deliberately skipped}
+  \small
+  Honest map of the edges of this chapter:
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\setlength\itemsep{2pt}
+      \item \textbf{Score matching} as its own route to the same models (Song \& Ermon,
+        2019) - we touched the score in L29 and went no further.
+      \item \textbf{Consistency and distillation models}, which push sampling toward one or
+        two steps.
+      \item \textbf{Fine-tuning and control}: LoRA, ControlNet, inpainting.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\setlength\itemsep{2pt}
+      \item The full \textbf{SDE formulation} and its solvers.
+      \item \textbf{Discrete diffusion} for text.
+      \item Everything about \textbf{serving} these models in production.
+    \end{itemize}
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      All of it is readable now. The vocabulary is the barrier, and you have it.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Check yourself}
+  \small
+  There is no homework for this chapter, so here is how to find out whether it landed. If
+  you can answer these without looking, you have it.
+  \vskip 5pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{enumerate}\setlength\itemsep{3pt}
+      \item Why does the forward process shrink the mean by $\sqrt{1-\beta_t}$ instead of
+        just adding noise?
+      \item The training loss is $\|\eps-\eps_{\thetav}\|^2$. Where did the likelihood go?
+      \item The sampler removes noise, then adds fresh noise. Why is that not a
+        contradiction?
+      \item DDIM has no noise term at all. Why does \emph{it} not blur?
+    \end{enumerate}
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{enumerate}\setlength\itemsep{3pt}
+      \setcounter{enumi}{4}
+      \item In classifier-free guidance, what does $\alpha=1$ do, and why is that the
+        neutral value rather than $\alpha=0$?
+      \item Conditioning already tells the model the prompt. So what is guidance for?
+      \item Why does latent diffusion need the latent to be \textbf{spatial}?
+      \item Where does the $4096\times$ come from, given the latent is only $48\times$
+        smaller?
+    \end{enumerate}
+  \end{columns}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.985\linewidth}{\footnotesize
+    If you want to go further than answering them: take the sampling loop from L29, get it
+    running on any small dataset, then deliberately break it in the three ways from that
+    lecture's failure slide. You will learn more from the broken runs than the working one.}}
+\end{frame}
+
+% ================================================================
+\begin{frame}{The chapter, end to end}
+  \small
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \begin{description}\footnotesize\setlength\itemsep{3pt}
+      \item[L27] Destroy an image in closed form, in a way that reliably lands on
+        $\mathcal{N}(\mathbf{0},\id)$.
+      \item[L28] Start from maximum likelihood, follow the algebra, arrive at
+        $\|\eps-\eps_{\thetav}\|^2$.
+      \item[L29] Sample - and discover the added noise is keeping the input at the level
+        the network was trained for. Then remove it properly, with DDIM.
+      \item[L30] Put a prompt in with cross-attention, and make the model obey it with
+        classifier-free guidance.
+      \item[L31] Do all of it in a compressed latent, and it fits on a laptop.
+    \end{description}
+    \column{0.44\textwidth}
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Five lectures ago, a text-to-video model was a black box.
+      \vskip 4pt
+      There is no step in it now that you have not seen derived, drawn, or run.}}
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      And the thing worth carrying forward is not DDPM specifically. It is the move:
+      \textbf{when a distribution is impossible to model directly, find a process that
+      destroys it in a way you control, and learn to run that process backwards.}}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L31 Diffusion V - latent diffusion, flow matching, video (ch10_diffusion).
+%   Built 2026-08-03. Plan: DIFFUSION_CHAPTER_PLAN.md (post-review revision).
+%
+%   Sources:
+%     - Rombach et al. (2022) latent diffusion; Lipman et al. (2022) and Liu et al. (2022)
+%       flow matching; Welch Labs / 3Blue1Brown (2025) for the Wan negative prompt and the
+%       latent-noise technical note (description.txt:48).
+%     - SD 1.x training cost: the CompVis/Stability model card figure (~150k A100-hours).
+%
+%   Figures (Python-generated, py_src/ -> fig/):
+%     latent_spatial.pdf, cost_breakdown.pdf, gen_landscape.pdf.
+%
+%   Pedagogical decisions:
+%     - L23_vae.tex:405-422 ALREADY delivers the 512x512x3 -> 64x64x4 / 48x reveal, with
+%       the same numbers and the same "the VAE became the compression layer" line. So this
+%       deck RECALLS it rather than staging it as a surprise (caught in review 2026-08-03),
+%       and spends the recovered frames on what L23 did not say: the latent is SPATIAL,
+%       which is the actual reason the UNet still works inside it.
+%     - The callback for latent diffusion is L23 (KL-regularized VAE), not L22 (plain
+%       autoencoder) - Stable Diffusion uses the VAE.
+%     - cost_breakdown separates the 48x element count from the ~4096x attention saving.
+%       Blurring them into one "48x" is the common error.
+%     - gen_landscape is a trade-off plot, not another comparison table, because L23:454
+%       already ships the table.
+%     - Flow matching is presented as current practice (SD3/Flux/Wan), not a footnote, and
+%       is why deriving DDPM first was worth it.
+%     - "Why not text" is answered because it is the first question a class fresh off the
+%       transformer chapter will ask.
+%     - The provenance/misuse frame is deliberately non-prescriptive: it names the open
+%       questions and explicitly declines to hand the students a conclusion.
+%
+%   End of chapter. No homework or practical deck by instructor decision (2026-08-03).
