@@ -61,7 +61,7 @@ Plus: the practical homeworks (in a chapter `.qmd`, see below) and three `HW{n}_
 
 ### Out of scope (YAGNI)
 
-- GANs / diffusion / Vision Transformer deep dives — these belong to the GenAI chapter (`ch6_genai`) and `misc/dl4nlp/`.
+- GANs / diffusion / Vision Transformer deep dives — ViT and GANs belong to `ml/ch9_attention/` and `misc/dl4nlp/`; **diffusion is now its own chapter, `ml/ch10_diffusion/`** (2026-08-03).
 - Full *implementations* of object detection / semantic segmentation — covered conceptually only.
 - Training from scratch on ImageNet.
 - Deriving the backward pass through a conv layer.

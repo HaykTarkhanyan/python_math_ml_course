@@ -33,7 +33,7 @@ Outlines live next to this file: `L16_cnn_foundations_OUTLINE.md`,
 | Framework | **PyTorch** on **Google Colab** free GPU (no CUDA locally) |
 | Math rigor | mechanics + intuition; conv backward pass = "autograd handles it" (callback to L15 comp-graph frames), not derived |
 | Per-lecture delivery | slide deck + practical homework (chapter `.qmd`) + `HW{n}_solution.ipynb` |
-| Out of scope | GANs/diffusion/ViT deep dives (GenAI chapter), full detection/segmentation implementations, ImageNet-scale training |
+| Out of scope | GANs/ViT deep dives (`ch9_attention`), **diffusion deep dive (`ch10_diffusion`)**, full detection/segmentation implementations, ImageNet-scale training |
 
 ## The four decks (restructured from 3 on 2026-07-13)
 

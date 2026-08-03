@@ -187,8 +187,8 @@ Target: ~27 frames, one ~90-min session.
   asks "what is this?", diffusion answers "draw me one" (Stable Diffusion, DALL-E, Flux;
   video followed with Sora and Veo). Plus foundation models for the classic tasks: SAM
   segments anything, promptable, no task-specific training. One intuition sentence on
-  diffusion (learn to undo noise, step by step) - the mechanics belong to the GenAI
-  chapter. `[paramgreen pointer: GenAI chapter]`
+  diffusion (learn to undo noise, step by step) - the mechanics belong to the diffusion
+  chapter, `ml/ch10_diffusion/` (L27-L31). `[paramgreen pointer: diffusion chapter]`
   `[link button: SAM demo page - "click an object, get its mask"]`
 - **And yet: CNNs did not die.** The honest close: on phones, cars, cameras and sorting
   lines (our pomegranate belt), CNNs and CNN hybrids remain the workhorse - cheap, fast,

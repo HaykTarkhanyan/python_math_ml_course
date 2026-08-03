@@ -178,7 +178,7 @@ recap, so SAE-for-interpretability lands as application #4. The existing one-fra
 wide-not-narrow + the dictionary, scored results, the sparsity knob, ablation vs control, scale +
 honest limits.
 
-**Superposition ownership.** `ch9_genai/ATTENTION_CHAPTER_PLAN.md` never mentions superposition,
+**Superposition ownership.** `ch9_attention/ATTENTION_CHAPTER_PLAN.md` never mentions superposition,
 though `fig/borrowed/3b1b/README.md` stages JL-lemma stills "for L26 superposition". It was
 unowned, so ch8 takes the phenomenon and the tool. The geometry is a **callback to
 `math/Lectures/curse_of_dimensionality/cod.tex:125`**, which already teaches near-orthogonality
