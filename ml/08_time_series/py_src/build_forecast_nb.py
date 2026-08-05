@@ -1215,14 +1215,23 @@ monthly_err.index = monthly_err.index.strftime("%b")
 monthly_err.round(2)
 """)
 
+md(r"""
+Six series of twelve bars is 72 bars, which is a wall. Plot the four that carry the argument -
+the baseline, the best classical model of each kind, and the ML entry - and keep the rest in the
+table above.
+""")
+
 code(r"""
-fig, ax = plt.subplots(figsize=(11, 3.8))
-monthly_err.plot(kind="bar", ax=ax, width=0.8,
-                 color=[ORANGE, BLUE, RED, "darkgreen", "purple", "0.45"])
-ax.axhline(0, color="black", lw=1)
-ax.set_title("Signed error by month, 2025  (above 0 = forecast too high)")
+show = ["seasonal naive", "SARIMA(0,1,1)(0,1,1)12", "Holt-Winters (mul)", "LightGBM (lag>=12)"]
+
+fig, ax = plt.subplots(figsize=(11, 4.2))
+monthly_err[show].plot(kind="bar", ax=ax, width=0.78,
+                       color=[ORANGE, BLUE, RED, "purple"])
+ax.axhline(0, color="black", lw=1.2)
+ax.set_title("Signed error by month, 2025  (bar above 0 = forecast was too high)")
 ax.set_ylabel("billion drams"); ax.set_xlabel("")
-ax.legend(fontsize=7, ncol=3)
+ax.tick_params(axis="x", rotation=0)
+ax.legend(fontsize=8, ncol=4, loc="upper center", bbox_to_anchor=(0.5, -0.08), frameon=False)
 plt.tight_layout(); plt.show()
 """)
 
