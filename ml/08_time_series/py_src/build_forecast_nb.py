@@ -62,6 +62,7 @@ Re-fetch it any time with `py_src/fetch_armstat_electricity.py`.
 |---|---|---|
 | 1 | Audit the data before modelling anything | - |
 | 2 | Decompose: trend, seasonality, noise | [30] |
+| 2b | Is the seasonality additive or multiplicative? | [30] |
 | 3 | Stationarity, differencing, reading ACF/PACF | [30] |
 | 4 | **Baseline first**, MASE by hand | [30] |
 | 5 | SARIMA and Holt-Winters | [30] |
@@ -867,11 +868,11 @@ problem and every tool from the rest of the course applies.
 
 ### The constraint that shapes everything
 
-We forecast **12 months ahead**. So at prediction time for 2025-07 we know nothing after
-2024-12. Any feature built from lag 1..11 would be *unavailable* - using it is leakage.
+We forecast the whole of 2025 from a standing start at **2024-12**. So the features have to be
+things we actually possess at that moment - and one model has to serve all twelve target months.
 
-The clean fix: **use only lags of 12 or more.** That makes this a direct 12-step forecast, with
-no recursive feeding of predictions back in.
+That constraint is sharper than it first looks, and the next cell is worth working through slowly
+rather than taking on trust.
 """)
 
 md(r"""
@@ -1176,13 +1177,18 @@ code(r"""
 fig, ax = plt.subplots(figsize=(11, 4.2))
 ax.plot(train.index[-36:], train.values[-36:], color="0.55", lw=1.2, label="train")
 ax.plot(test.index, test.values, color="black", lw=2.5, label="actual 2025")
+# draw the winner of each family, chosen from the scores rather than hard-coded
+best_sarima = min([("ARIMA(1,0,0)", sarima_a_fc), ("SARIMA(0,1,1)", sarima_b_fc)],
+                  key=lambda p: score(p[1], "")["MASE"])
+best_hw = min([("Holt-Winters add", hw_add_fc), ("Holt-Winters mul", hw_mul_fc)],
+              key=lambda p: score(p[1], "")["MASE"])
+
 for (name, fc), col, ls in [(("seasonal naive", naive), ORANGE, ":"),
-                            (("best SARIMA", sarima_a_fc if score(sarima_a_fc, "")["MASE"]
-                              < score(sarima_b_fc, "")["MASE"] else sarima_b_fc), BLUE, "--"),
-                            (("Holt-Winters", hw_fc), RED, "--"),
-                            (("LightGBM", lgb_fc), "purple", "-.")]:
+                            (best_sarima, BLUE, "--"),
+                            (best_hw, RED, "-"),
+                            (("LightGBM (lag>=12)", lgb_fc), "purple", "-.")]:
     ax.plot(test.index, np.asarray(fc), color=col, ls=ls, lw=1.8, label=name)
-ax.set_title("2025 forecasts, all models, same horizon")
+ax.set_title("2025 forecasts: the baseline and the best of each family, same 12-month horizon")
 ax.set_ylabel("billion drams"); ax.legend(fontsize=8, ncol=3)
 plt.tight_layout(); plt.show()
 """)
