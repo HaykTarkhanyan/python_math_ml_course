@@ -276,6 +276,66 @@ That is unusually clean, and it sets expectations: with seasonality this regular
 simply *copies last year* is going to be hard to beat. Part 4 makes that concrete.
 """)
 
+md(r"""
+## 2b. Additive or multiplicative?
+
+This is the question the chapter assignment asks first, and it decides real things later - which
+Holt-Winters variant to use, and whether to model the series in logs.
+
+- **Additive**: the winter bump is *the same number of drams* every year. Sawtooth of constant height.
+- **Multiplicative**: the winter bump is *the same percentage* every year. The sawtooth grows with
+  the level.
+
+You cannot settle this by staring at the plot, because the level also grows. Measure it: for each
+year, compute the seasonal swing (max - min) and the level (mean). If the swing is additive their
+ratio falls as the level rises; if multiplicative, the ratio stays flat.
+""")
+
+code(r"""
+per_year = s.groupby(s.index.year).agg(["mean", "max", "min"])
+per_year = per_year[per_year.index < 2026]           # 2026 is a half year, drop it
+per_year["swing"] = per_year["max"] - per_year["min"]
+per_year["swing_pct"] = per_year["swing"] / per_year["mean"] * 100
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 3.2))
+axes[0].plot(per_year.index, per_year["swing"], "o-", color=BLUE)
+axes[0].set_title("Seasonal swing, absolute (bn dram)")
+axes[1].plot(per_year.index, per_year["swing_pct"], "o-", color=RED)
+axes[1].set_title("Seasonal swing, as % of that year's level")
+for ax in axes:
+    ax.set_xlabel("year")
+plt.tight_layout(); plt.show()
+
+corr_abs = np.corrcoef(per_year["mean"], per_year["swing"])[0, 1]
+corr_pct = np.corrcoef(per_year["mean"], per_year["swing_pct"])[0, 1]
+print(f"corr(level, absolute swing) = {corr_abs:+.3f}")
+print(f"corr(level, % swing)        = {corr_pct:+.3f}")
+""")
+
+md(r"""
+### Reading it
+
+The rule: whichever quantity stays **constant** as the level rises is the one the seasonality is
+built from, and its correlation with the level should sit near zero.
+
+- `corr(level, absolute swing) = +0.83` - the absolute swing grows strongly with the level.
+- `corr(level, % swing) = +0.16` - the percentage swing is close to flat.
+
+So the **percentage** is the stable quantity, and the evidence points to **multiplicative**
+seasonality: the winter bump is roughly a fixed *fraction* of that year's level, not a fixed number
+of drams.
+
+That is a genuinely useful finding, and it is easy to get backwards by eye - the raw plot in Part 0
+looks like a constant sawtooth until you measure it against a rising level.
+
+### So which do we use?
+
+The honest answer is the same one Part 3 will reach about differencing: the diagnostic makes a
+recommendation, and the held-out year decides. Holt-Winters can do either, so in Part 5 we fit
+**both** `seasonal="add"` and `seasonal="mul"` and compare them on 2025 rather than arguing from
+this correlation alone.
+""")
+
 # ======================================================================================
 # Part 3 - stationarity
 # ======================================================================================
@@ -326,6 +386,36 @@ d_both = d_seasonal.diff(1)
 stationarity(s,          "raw")
 stationarity(d_seasonal, "(1-B^12)")
 stationarity(d_both,     "(1-B^12)(1-B)")
+""")
+
+md(r"""
+Do not take the p-values on trust - **look at what differencing did.** Stationary means the series
+has no trend and roughly constant variance: it should look like noise wobbling around a fixed
+level, with no memory of where it started.
+""")
+
+code(r"""
+fig, axes = plt.subplots(3, 1, figsize=(11, 6.5), sharex=True)
+for ax, (x, label, col) in zip(axes, [
+    (s, "raw - trends upward, repeats every 12 months", BLUE),
+    (d_seasonal, "(1-B^12) - seasonality gone, wobbles around a level", RED),
+    (d_both, "(1-B^12)(1-B) - flatter still, but choppier", ORANGE),
+]):
+    ax.plot(x.index, x.values, color=col, lw=1.1)
+    ax.axhline(0, color="0.4", lw=0.8, ls=":")
+    ax.set_title(label, fontsize=10, loc="left")
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+Panel 1 wanders - each year starts where the last ended. That memory is what a unit root *is*.
+
+Panel 2 has lost both the climb and the sawtooth; it oscillates around zero. That is what the test
+was telling us.
+
+Panel 3 is flatter again but visibly **choppier** - consecutive points now flip sign more often.
+That extra jitter is not information, it is the negative autocorrelation an extra difference
+injects. Keep it in mind: it is the cost side of the trade we are about to weigh.
 """)
 
 md(r"""
@@ -419,9 +509,45 @@ fitting. For a 12-month horizon from the end of the training set, that is exactl
 values - so it uses training data only, which makes it a legitimate forecast rather than a peek.
 """)
 
+md(r"""
+### Predict first
+
+We are about to forecast 2025 by **copying 2024, month for month**. No model, no parameters,
+no fitting.
+
+Part 2 showed the peak lands in December or January every single year and the seasonal amplitude
+is a steady 1.55x. So before running it:
+
+> *Roughly what percentage error do you expect from "just copy last year"?
+> And do you expect a fitted SARIMA to cut that in half?*
+
+Write down two numbers. Then continue.
+""")
+
 code(r"""
 naive = pd.Series(train[-12:].values, index=test.index, name="seasonal_naive")
 naive.round(1)
+""")
+
+md(r"""
+Plot it against what actually happened.
+""")
+
+code(r"""
+fig, ax = plt.subplots()
+ax.plot(train.index[-24:], train.values[-24:], color="0.55", lw=1.3, label="train")
+ax.plot(test.index, test.values, color=BLUE, lw=2.2, label="actual 2025")
+ax.plot(naive.index, naive.values, color=ORANGE, lw=2, ls=":", label="seasonal naive (= 2024)")
+ax.fill_between(test.index, naive.values, test.values, color=RED, alpha=0.15, label="error")
+ax.set_title("Seasonal naive: copy last year, shaded area is the error")
+ax.set_ylabel("billion drams"); ax.legend(fontsize=8)
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+The shape is right - every turn of the year is in roughly the correct place. What is wrong is the
+**level**: 2025 sits above 2024 almost everywhere. That is the part a real model can fix, and it
+is worth noticing *now* that the seasonal shape is already nearly free.
 """)
 
 md(r"""
@@ -437,10 +563,71 @@ MAPE is reported alongside only because people expect it; it is scale-free too b
 errors on small months harder than on large ones, which is not what we want on a seasonal series.
 """)
 
-code(r"""
-# denominator: how well seasonal-naive does INSIDE the training period
-scale = np.abs(train.values[12:] - train.values[:-12]).mean()
+md(r"""
+**Step 1 - the errors, one month at a time.** Nothing clever: actual minus forecast, absolute value.
+""")
 
+code(r"""
+by_hand = pd.DataFrame({
+    "actual": test.values,
+    "forecast": naive.values,
+}, index=test.index.strftime("%Y-%m"))
+by_hand["error"] = by_hand["actual"] - by_hand["forecast"]
+by_hand["abs_error"] = by_hand["error"].abs()
+by_hand.round(2)
+""")
+
+md(r"""
+**Step 2 - average them.** That is the MAE, in billions of drams. It is a real, interpretable
+quantity: *the typical miss.*
+""")
+
+code(r"""
+mae_by_hand = by_hand["abs_error"].mean()
+print(f"MAE = ({' + '.join(f'{v:.2f}' for v in by_hand['abs_error'][:3])} + ... ) / 12")
+print(f"    = {mae_by_hand:.3f} billion drams")
+""")
+
+md(r"""
+**Step 3 - but is 2.6 billion big?** On its own the number means nothing: it depends entirely on
+the units and the size of the series. We need something to divide by.
+
+MASE divides by *how well seasonal-naive would have done inside the training period.* Walk through
+the training data, at every point predict "same month last year", and average those errors:
+""")
+
+code(r"""
+insample_errors = np.abs(train.values[12:] - train.values[:-12])
+scale = insample_errors.mean()
+
+print(f"in-sample seasonal-naive errors: {len(insample_errors)} of them")
+print(f"first three: {', '.join(f'{v:.2f}' for v in insample_errors[:3])}")
+print(f"mean (this is the MASE scale) = {scale:.3f} billion drams")
+""")
+
+md(r"""
+**Step 4 - divide.**
+
+$$\text{MASE} = \frac{\text{MAE on the test set}}{\text{MAE of seasonal-naive in the training set}}$$
+""")
+
+code(r"""
+print(f"MASE = {mae_by_hand:.3f} / {scale:.3f} = {mae_by_hand / scale:.3f}")
+""")
+
+md(r"""
+Now the number means something, and it is unitless:
+
+- **MASE < 1** - better than seasonal-naive managed on the training data.
+- **MASE = 1** - exactly as good.
+- **MASE > 1** - worse.
+
+With the arithmetic understood, wrap it in a function so every later model gets scored identically.
+MAPE comes along only because people expect it; it is scale-free too, but it punishes errors in
+low months harder than in high months, which is the wrong emphasis on a seasonal series.
+""")
+
+code(r"""
 def score(pred, name):
     err = np.abs(test.values - np.asarray(pred))
     return {"model": name,
@@ -448,8 +635,8 @@ def score(pred, name):
             "MASE": err.mean() / scale,
             "MAPE_%": (err / test.values).mean() * 100}
 
-print(f"in-sample seasonal-naive MAE (the MASE scale) = {scale:.3f} bn dram\n")
 results = [score(naive, "seasonal naive")]
+assert abs(results[0]["MASE"] - mae_by_hand / scale) < 1e-9, "helper disagrees with the hand calc"
 pd.DataFrame(results).round(3)
 """)
 
@@ -493,21 +680,114 @@ sarima_b_fc = fits["SARIMA(0,1,1)(0,1,1)12"].forecast(steps=12)
 """)
 
 md(r"""
-Now Holt-Winters: no differencing, no correlograms. Level, trend and a seasonal component, each
-updated by exponentially weighted averaging. Additive seasonality, because the sawtooth amplitude
-looks roughly constant rather than growing with the level.
+### Read the coefficients, do not just collect them
+
+Each term has a plain-language meaning. Print them and say what each one claims about the series.
+""")
+
+code(r"""
+print(fits["SARIMA(0,1,1)(0,1,1)12"].summary().tables[1])
+""")
+
+md(r"""
+- **`ma.L1`** - the non-seasonal moving-average term. It says this month's value is partly a
+  correction of *last month's forecast error*. A large negative value means the series
+  over-corrects month to month, which is exactly the choppiness we saw in panel 3 of Part 3.
+- **`ma.S.L12`** - the seasonal moving-average term, the same idea one year back: this December
+  partly corrects the error made last December. When this sits close to -1, the model is saying
+  the seasonal pattern is close to a random walk that needs damping.
+- **`sigma2`** - the residual variance. Compare it to the raw variance of 32.4 from Part 3 to see
+  how much structure the model actually removed.
+
+The `P>|z|` column is the significance check. A term whose p-value is large is a term you did not
+need.
+""")
+
+md(r"""
+### Residual diagnostics: did the model capture the structure?
+
+A fitted ARIMA makes one strong promise - **the residuals should be white noise.** If any pattern
+is left in them, the model missed something and there is more signal on the table.
+
+The Ljung-Box test asks precisely that: is there autocorrelation in the residuals up to some lag?
+Its null hypothesis is "no autocorrelation", so here a **large p-value is good news**, which is the
+opposite of the usual reflex.
+""")
+
+code(r"""
+from statsmodels.stats.diagnostic import acorr_ljungbox
+
+resid = fits["SARIMA(0,1,1)(0,1,1)12"].resid[13:]     # drop the differencing warm-up
+lb = acorr_ljungbox(resid, lags=[6, 12, 24], return_df=True)
+print(lb.round(4).to_string())
+print()
+print("large p-value -> residuals look like white noise -> nothing obvious left to model")
+""")
+
+code(r"""
+fig, axes = plt.subplots(1, 3, figsize=(11, 3.0))
+axes[0].plot(resid.index, resid.values, color=BLUE, lw=1)
+axes[0].axhline(0, color="0.4", lw=0.8, ls=":")
+axes[0].set_title("Residuals over time", fontsize=10)
+plot_acf(resid, lags=24, ax=axes[1], color=BLUE, vlines_kwargs={"colors": BLUE})
+axes[1].set_title("Residual ACF", fontsize=10)
+axes[2].hist(resid.values, bins=18, color=BLUE, alpha=0.85)
+axes[2].set_title("Residual distribution", fontsize=10)
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+What you want to see: no drift or fanning in the first panel, ACF bars inside the blue band in the
+second (bar the trivial one at lag 0), and something roughly bell-shaped in the third.
+
+What would worry you: a spike at lag 12 in the ACF - that would mean *seasonal structure the model
+failed to absorb*, and the seasonal order needs another look.
+
+Note the honest limit of this check: passing it says the model left no obvious pattern **in the
+training data**. It says nothing about 2025. Part 5's punchline is about to make that distinction
+very concrete.
+""")
+
+md(r"""
+Now Holt-Winters, which comes at the problem from a completely different direction: **no
+differencing, no correlograms, no stationarity.**
+
+It keeps three running summaries of the series and updates each one every month as new data
+arrives, weighting recent observations more heavily than old ones:
+
+| Component | What it tracks | Smoothing parameter |
+|---|---|---|
+| **Level** | where the series is right now | `alpha` |
+| **Trend** | how fast it is climbing | `beta` |
+| **Seasonal** | the 12 monthly offsets | `gamma` |
+
+Each parameter runs from 0 to 1 and answers "how much do I trust the newest observation?"
+
+- near **0** - barely react, the component is nearly constant
+- near **1** - follow the latest data closely, forget the past quickly
+
+These are **estimated**, not chosen, which makes them worth reading afterwards: the fitted values
+tell you what the model concluded about the series. Watch `beta` in particular.
+
+Part 2b said the evidence points to **multiplicative** seasonality, so we fit both variants and
+let 2025 settle it - the same discipline we just applied to the two SARIMA readings.
 """)
 
 code(r"""
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-hw = ExponentialSmoothing(train, trend="add", seasonal="add", seasonal_periods=12,
-                          initialization_method="estimated").fit()
-hw_fc = hw.forecast(12)
+hw_fits = {}
+for kind in ("add", "mul"):
+    m = ExponentialSmoothing(train, trend="add", seasonal=kind, seasonal_periods=12,
+                             initialization_method="estimated").fit()
+    hw_fits[kind] = m
+    print(f"seasonal={kind}:  alpha={m.params['smoothing_level']:.3f}  "
+          f"beta={m.params['smoothing_trend']:.3f}  "
+          f"gamma={m.params['smoothing_seasonal']:.3f}  AIC={m.aic:.1f}")
 
-print(f"alpha (level)    = {hw.params['smoothing_level']:.3f}")
-print(f"beta  (trend)    = {hw.params['smoothing_trend']:.3f}")
-print(f"gamma (seasonal) = {hw.params['smoothing_seasonal']:.3f}")
+hw_add_fc = hw_fits["add"].forecast(12)
+hw_mul_fc = hw_fits["mul"].forecast(12)
+hw, hw_fc = hw_fits["add"], hw_add_fc      # kept for the plots below
 """)
 
 md(r"""
@@ -517,17 +797,24 @@ md(r"""
 code(r"""
 results.append(score(sarima_a_fc, "ARIMA(1,0,0)(0,1,1)12"))
 results.append(score(sarima_b_fc, "SARIMA(0,1,1)(0,1,1)12"))
-results.append(score(hw_fc, "Holt-Winters"))
+results.append(score(hw_add_fc, "Holt-Winters (add)"))
+results.append(score(hw_mul_fc, "Holt-Winters (mul)"))
 pd.DataFrame(results).round(3)
 """)
 
 md(r"""
-Two things worth noticing here.
+Three things worth noticing here.
 
-**Holt-Winters set `beta` to essentially zero.** Given the choice, it declined to use a trend
-component at all - it is running as a level-plus-seasonal model. That is an independent
-confirmation of what the differencing told us in Part 3: once you remove the seasonal pattern,
-there is not much systematic trend left to model in this window.
+**Both Holt-Winters variants set `beta` to zero.** Given a trend component, both declined to use
+it - they run as level-plus-seasonal models. That independently confirms what the differencing said
+in Part 3: strip the seasonal pattern out and there is little systematic trend left in this window.
+
+**The multiplicative variant went further and set `gamma` to zero too.** With `alpha` around 0.69
+doing all the work, that model is: *a level that tracks recent months, times a *fixed* seasonal
+profile.* It is the simplest thing in this entire notebook - and look where it lands in the table.
+
+**Part 2b's diagnostic was right.** The correlation check predicted multiplicative seasonality, and
+the multiplicative fit wins on the held-out year. AIC agrees with it too.
 
 **The two SARIMA readings do not score the same - and the "disciplined" one lost.**
 
@@ -547,6 +834,24 @@ This is the lesson, and it is worth more than the forecast:
 
 A tidy argument that loses out of sample is still a loss. Keep the argument in your notes, and
 keep the model the data chose.
+
+### But do not over-learn that either
+
+We have now run the same procedure twice, with opposite outcomes:
+
+| Diagnostic | Its recommendation | Held-out verdict |
+|---|---|---|
+| Part 2b correlation check | seasonality is **multiplicative** | **confirmed** - `mul` beats `add` |
+| Part 3 stationarity + variance | use **d = 0** | **refuted** - it finished last |
+
+So the moral is not "diagnostics are useless". One of them was right, and it saved us from picking
+the weaker Holt-Winters. The moral is narrower and more useful:
+
+> A diagnostic tells you what the training data looks like. That is a **hypothesis** about what will
+> forecast well, not an answer. It costs one extra fit to check, so check.
+
+The cost of checking here was two extra lines of code. The cost of not checking was, in one of the
+two cases, the worst model in the notebook.
 """)
 
 # ======================================================================================
@@ -569,25 +874,118 @@ The clean fix: **use only lags of 12 or more.** That makes this a direct 12-step
 no recursive feeding of predictions back in.
 """)
 
-code(r"""
-def make_features(y):
-    df = pd.DataFrame({"y": y})
-    # only lags >= 12: anything shorter is unknowable at a 12-month horizon
-    for lag in (12, 13, 14, 18, 24):
-        df[f"lag_{lag}"] = y.shift(lag)
-    df["roll12_mean"] = y.shift(12).rolling(12).mean()
-    df["roll12_std"] = y.shift(12).rolling(12).std()
-    df["yoy_diff_12_24"] = y.shift(12) - y.shift(24)
-    df["month"] = df.index.month
-    df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
-    df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
-    df["t"] = np.arange(len(df))
-    return df
+md(r"""
+### First, see the problem concretely
 
-feat = make_features(s).dropna()
+Stand at the end of the training data, **2024-12**. We must forecast all twelve months of 2025 from
+there, so the binding case is the **furthest** one: December 2025, a full 12 months out.
+""")
+
+code(r"""
+standing_at = pd.Timestamp("2024-12-01")
+
+for target_month in (pd.Timestamp("2025-07-01"), pd.Timestamp("2025-12-01")):
+    print(f"forecasting {target_month:%Y-%m}, standing at {standing_at:%Y-%m}:")
+    for lag in (1, 6, 11, 12, 24):
+        needed = target_month - pd.DateOffset(months=lag)
+        have = needed <= standing_at
+        print(f"   lag_{lag:<2d} needs {needed:%Y-%m}  ->  "
+              f"{'available' if have else 'NOT YET OBSERVED'}")
+    print()
+""")
+
+md(r"""
+Compare the two blocks, because they disagree - and the disagreement *is* the lesson.
+
+For **July 2025** even `lag_11` is fine: it reaches back to 2024-08, which we have. If July were
+the only target, short lags would be perfectly legal.
+
+For **December 2025** everything below `lag_12` is a value nobody has yet. And since one model has
+to serve the whole horizon, the *hardest* month sets the rule for all of them:
+
+> At a horizon of $h$ months, only lags of $h$ or more are safe.
+
+Putting `lag_1` in this model would be leakage. It would score beautifully in cross-validation and
+be unusable in reality, because when you forecast December 2025 nobody has November 2025's number.
+
+So: **lags of 12 or more only.** That also makes this a *direct* forecast - one model that jumps
+straight to 12 months ahead - rather than a *recursive* one that predicts 1 month, feeds its own
+prediction back in, and repeats 12 times. More on that trade-off at the end of this part.
+
+### Now build the features, one family at a time
+
+**Family 1 - lags.** The raw "what was it N months ago" values.
+""")
+
+code(r"""
+feat = pd.DataFrame({"y": s})
+for lag in (12, 13, 14, 18, 24):
+    feat[f"lag_{lag}"] = s.shift(lag)
+
+feat.loc["2016-01":"2016-03"].round(1)
+""")
+
+md(r"""
+Read one row: for 2016-01, `lag_12` is 2015-01 and `lag_24` is 2014-01 - the same month in
+previous years. Those are the most informative single numbers we have, because the series is
+strongly seasonal.
+
+**Family 2 - rolling summaries.** A single lag is noisy; an average over a window is steadier.
+The `.shift(12)` **before** `.rolling(12)` is the part that matters - it guarantees the window
+closes at least 12 months before the row it describes.
+""")
+
+code(r"""
+feat["roll12_mean"] = s.shift(12).rolling(12).mean()
+feat["roll12_std"] = s.shift(12).rolling(12).std()
+feat["yoy_diff_12_24"] = s.shift(12) - s.shift(24)
+
+feat.loc["2016-01":"2016-03", ["y", "lag_12", "roll12_mean", "roll12_std", "yoy_diff_12_24"]].round(2)
+""")
+
+md(r"""
+`roll12_mean` is the level of the year ending 12 months ago; `roll12_std` is how volatile that year
+was; `yoy_diff_12_24` is the change between the two previous same-months, which is the closest
+thing to a **trend** signal we can legally give the model.
+
+That last one matters more than it looks - hold onto it for Part 7.
+
+**Family 3 - calendar.** The month number itself, plus a trick.
+""")
+
+code(r"""
+feat["month"] = feat.index.month
+feat["month_sin"] = np.sin(2 * np.pi * feat["month"] / 12)
+feat["month_cos"] = np.cos(2 * np.pi * feat["month"] / 12)
+feat["t"] = np.arange(len(feat))
+
+feat.loc["2016-11":"2017-02", ["month", "month_sin", "month_cos"]].round(3)
+""")
+
+md(r"""
+Why `sin` and `cos` rather than just the month number? Because **December and January are
+neighbours**, but as plain integers 12 and 1 are as far apart as possible. A model splitting on
+`month <= 6` cuts the year at an arbitrary seam.
+
+Map the month onto a circle and that seam disappears: December and January land next to each other,
+which is what the physical calendar actually does. Look at the rows above - the `sin`/`cos` pair
+changes smoothly across the year boundary while `month` jumps from 12 to 1.
+
+`t` is a plain time index. We include it deliberately, because Part 7 is about what a tree does
+with it.
+""")
+
+code(r"""
+feat = feat.dropna()
 print(f"{len(feat)} usable rows, {feat.shape[1] - 1} features")
 print(f"first usable month: {feat.index[0]:%Y-%m}  (24 months lost to the longest lag)")
-feat.head(3)
+print(f"\nfeature names: {', '.join(c for c in feat.columns if c != 'y')}")
+""")
+
+md(r"""
+Note the cost that just got paid: **24 months are gone** because the longest lag needs two years of
+history before it can be computed. Every feature you add with a longer window shortens the usable
+table. On 150 months that is not free.
 """)
 
 md(r"""
@@ -650,6 +1048,33 @@ ax.bar_label(ax.containers[0], fmt="%.0f", fontsize=7, padding=2)
 ax.set_title("Which features the booster actually used")
 ax.margins(x=0.12)
 plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+Worth reading rather than admiring. LightGBM's default importance counts **how often** a feature
+was split on, which rewards features with many usable cut points - a continuous lag will always
+look busier than a 12-valued `month`. So read it as "what the trees kept reaching for", not as
+"what matters".
+
+Compare this with the interpretability chapter: this is impurity-style importance, and [23] spent
+a lecture on why that measure is biased. Permutation importance on the test window would be the
+honest version - though with 12 test points it would be extremely noisy.
+
+### Direct vs recursive, and why we chose direct
+
+There are two ways to forecast 12 months ahead, and the deck names both:
+
+| | How it works | Cost |
+|---|---|---|
+| **Recursive** | Train one 1-step model. Predict month 1, append that prediction, predict month 2 from it, repeat. | Errors **compound** - by step 12 you are forecasting from eleven of your own guesses. |
+| **Direct** | Train a model whose features are all >= 12 months old, so it jumps straight to the answer. | No compounding, but the model never sees recent months, so it throws away information. |
+
+We used **direct**, and the honest reason is that it makes the leakage question trivial: if no
+feature is younger than 12 months, no forecast can accidentally use the future. Recursive would be
+defensible too, and would probably do better at short horizons.
+
+A third option, used in practice, is to train **12 separate direct models**, one per horizon. That
+is often the strongest and it costs 12x the fitting.
 """)
 
 # ======================================================================================
@@ -762,6 +1187,63 @@ ax.set_ylabel("billion drams"); ax.legend(fontsize=8, ncol=3)
 plt.tight_layout(); plt.show()
 """)
 
+md(r"""
+### Where did they go wrong? A single MASE hides the answer.
+
+Break the error down month by month. A model that is uniformly a bit off is a very different
+animal from one that is perfect for ten months and catastrophic in two.
+""")
+
+code(r"""
+all_fc = pd.DataFrame({
+    "seasonal naive": naive.values,
+    "SARIMA(0,1,1)(0,1,1)12": np.asarray(sarima_b_fc),
+    "Holt-Winters (add)": np.asarray(hw_add_fc),
+    "Holt-Winters (mul)": np.asarray(hw_mul_fc),
+    "LightGBM (lag>=12)": lgb_fc.values,
+    "GBM on differences": fixed_fc.values,
+}, index=test.index)
+
+monthly_err = all_fc.sub(test.values, axis=0)          # signed: + means over-forecast
+monthly_err.index = monthly_err.index.strftime("%b")
+monthly_err.round(2)
+""")
+
+code(r"""
+fig, ax = plt.subplots(figsize=(11, 3.8))
+monthly_err.plot(kind="bar", ax=ax, width=0.8,
+                 color=[ORANGE, BLUE, RED, "darkgreen", "purple", "0.45"])
+ax.axhline(0, color="black", lw=1)
+ax.set_title("Signed error by month, 2025  (above 0 = forecast too high)")
+ax.set_ylabel("billion drams"); ax.set_xlabel("")
+ax.legend(fontsize=7, ncol=3)
+plt.tight_layout(); plt.show()
+""")
+
+code(r"""
+summary = pd.DataFrame({
+    "mean_signed_error": monthly_err.mean(),
+    "worst_month": monthly_err.abs().idxmax(),
+    "worst_error": monthly_err.abs().max(),
+})
+summary.round(2)
+""")
+
+md(r"""
+### What the breakdown shows
+
+Look at **`mean_signed_error`** first. If a model's errors were random noise this would sit near
+zero. A clearly negative value means the model **under-forecast almost every month** - it got the
+seasonal shape right and the level wrong, which is a *bias*, not bad luck.
+
+That is the seasonal-naive story from Part 4 in one number: copying 2024 misses everything that
+made 2025 different from 2024.
+
+Now look at **`worst_month`**. If several models miss in the *same* month, that month contained
+something none of them could have known - and no amount of model tuning would have helped. That is
+a data point about the world, not about the models.
+""")
+
 code(r"""
 best = table.index[0]
 spread = table["MASE"].max() - table["MASE"].min()
@@ -783,6 +1265,31 @@ md(r"""
 
 Read the table above, not this sentence - the notebook is executed, so the numbers are real and
 they, not the prose, are the result.
+
+### Why the winner won
+
+Holt-Winters is the simplest model in the comparison and it beat everything, including gradient
+boosting. That is not luck, and the explanation is sitting in its own fitted parameters.
+
+Four separate pieces of evidence, gathered independently, all said the same thing about this series:
+
+1. Part 2: the seasonal shape is **extremely stable** - peak in December or January, all 16 years.
+2. Part 2b: the swing is a stable **percentage** of the level, i.e. multiplicative.
+3. Part 3: after the seasonal difference the series was **already stationary** - no trend left.
+4. Part 5: both Holt-Winters variants estimated **`beta` = 0.000**, and the multiplicative one set
+   **`gamma` = 0.000** as well. Offered trend and seasonal adaptation, it took neither.
+
+Put those together and the series is: *a level that drifts slowly, times a fixed seasonal profile,
+plus noise.* The winning model is precisely that and nothing more - one active parameter.
+
+Its assumptions match the data, so every parameter it has goes into the part that matters.
+
+The booster, by contrast, spent its capacity learning a seasonal shape that Holt-Winters gets for
+free from its structure - and it had roughly 120 rows to do it with.
+
+**The general lesson: on short, strongly structured series, a model whose assumptions match the
+data beats a flexible model that has to learn the structure from scratch.** More capacity is not
+more accuracy when there is not enough data to feed it.
 
 ### What we cannot say
 

@@ -1,8 +1,47 @@
 # Chapter project plan — Forecasting Armenian electricity production
 
-**Status:** BUILT 2026-08-05. `32_electricity_forecast_solution.ipynb`, 62 cells (29 code,
-33 markdown), 8 figures, executes end to end in ~30 s on CPU with 0 errors and 0 empty cells.
-Assembled by `py_src/build_forecast_nb.py`, so it can be regenerated rather than hand-patched.
+**Status:** BUILT 2026-08-05, then expanded the same day after a pedagogical review.
+`32_electricity_forecast_solution.ipynb`, **104 cells (46 code, 58 markdown), 13 figures**,
+executes end to end in ~45 s on CPU with 0 errors and 0 empty cells. Assembled by
+`py_src/build_forecast_nb.py`, so it can be regenerated rather than hand-patched.
+
+## Expansion pass (instructor asked for more steps and more explanation)
+
+Ten weaknesses found and fixed; the notebook went 62 -> 104 cells.
+
+- `make_features` built 11 features in one cell, against the house "one idea per cell" rule. Now
+  built family by family (lags -> rolling -> calendar), each with the table shown and read.
+- "MASE by hand" was a one-line `np.abs(...).mean()`. Now four explicit steps - the 12 errors, the
+  mean, the in-sample scale, the division - with an `assert` tying the hand calc to the helper.
+- Differencing was never **plotted**; students read p-values without seeing a stationary series.
+  Added a 3-panel raw / seasonal / double-differenced figure.
+- Additive-vs-multiplicative was never addressed, although the chapter's own assignment asks it.
+  Added Part 2b.
+- No residual diagnostics after ARIMA. Added Ljung-Box (p = 0.19 / 0.12 / 0.33, all pass) plus a
+  residual time-plot, ACF and histogram.
+- SARIMA coefficients were printed and never read. Now each term is explained in words.
+- Recursive vs direct multi-step (a deck [31] topic) was one clause. Now a table and a rationale.
+- No per-month error breakdown. Added signed-error table, grouped bar chart, and bias reading.
+- Why Holt-Winters won was never explained. Now derived from four independent pieces of evidence.
+- Only one predict-first moment. Added one before the baseline.
+
+**Two errors in my own new material, caught by executing it:**
+
+1. The lag-availability demo used 2025-07 as the target and printed `lag_11 -> available`, directly
+   contradicting the rule it was meant to teach. The binding case is the *furthest* horizon month;
+   rewritten to show 2025-07 and 2025-12 side by side, where the disagreement is the lesson.
+2. Part 2b measured `corr(level, %swing) = +0.16` against `corr(level, abs swing) = +0.83`, i.e.
+   **multiplicative** seasonality - while Part 5 used `seasonal="add"` and the prose claimed the
+   check justified it. Now both variants are fitted.
+
+**That fix improved the result and created the notebook's best teaching moment.** Holt-Winters
+`mul` wins outright (MASE 0.578 vs `add` 0.609; AIC 172.2 vs 195.3), so the notebook now contains
+**two diagnostics with opposite fates** - Part 2b's was confirmed, Part 3's was refuted. The lesson
+sharpened from "diagnostics are not verdicts" to "a diagnostic is a hypothesis; checking costs one
+extra fit, so check."
+
+The multiplicative fit set `beta = 0.000` **and** `gamma = 0.000`, leaving a slowly-drifting level
+times a fixed seasonal profile - one active parameter, and the best model in the notebook.
 
 ## What the build changed about this plan
 
@@ -20,7 +59,8 @@ So the notebook fits **both** and lets the held-out year decide. It does, decisi
 
 | model | MASE | vs naive |
 |---|---|---|
-| Holt-Winters | **0.609** | -47.4% |
+| Holt-Winters (mul) | **0.578** | -50.1% |
+| Holt-Winters (add) | 0.609 | -47.4% |
 | GBM on differences | 0.806 | -30.4% |
 | SARIMA(0,1,1)(0,1,1)12 | 0.889 | -23.3% |
 | LightGBM (lag>=12) | 1.059 | -8.6% |
@@ -46,6 +86,7 @@ Other build notes:
 ---
 
 **Original plan below, as approved.**
+
 **Shape:** one solution-only walkthrough notebook (instructor's choice), following the
 `05_interpretability/25_startup_success_solution.ipynb` precedent — a single real project in
 sequential parts, not a list of exercises.
