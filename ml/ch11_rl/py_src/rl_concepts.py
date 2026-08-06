@@ -100,7 +100,8 @@ def fig_discount_horizon():
         ax.plot(k, gamma ** k, color=color, lw=2.2, label=f"$\\gamma={gamma}$")
         half = np.log(0.5) / np.log(gamma)
         ax.axvline(half, color=color, ls=":", lw=1.2, alpha=0.8)
-        ax.text(half + 0.6, 0.92, f"half-life\n{half:.0f} steps", color=color, fontsize=8, va="top")
+        ax.text(half + 0.9, 0.94, f"half-life\n{half:.0f} steps", color=color, fontsize=10,
+                va="top", fontweight="bold")
     ax.set_xlabel("steps into the future, $k$")
     ax.set_ylabel("weight $\\gamma^k$")
     ax.set_title("How far ahead the agent can see is a choice, not a fact")
