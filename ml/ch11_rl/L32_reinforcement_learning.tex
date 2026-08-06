@@ -1,0 +1,1039 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Lecture 32: Reinforcement Learning}
+\subtitle{Learning from consequences, not from answers}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Adapted and expanded from \texttt{misc/dl4nlp/18\_reinforcement\_learning}.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{March 2016, Seoul. Move 37.}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{center}
+        \includegraphics[width=0.98\linewidth]{go_lines.pdf}
+      \end{center}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vskip 8pt
+      \small
+      AlphaGo, playing black against Lee Sedol, put a stone on the \textbf{fifth line}.
+
+      \vskip 5pt
+      Centuries of theory put the opening on the third line (territory) or the fourth
+      (influence). The fifth is \emph{too far from the edge}.
+
+      \vskip 8pt
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \small
+        AlphaGo's own policy network estimated the chance a \textbf{human} would play it at
+        \textbf{1 in 10{,}000}.
+      \end{tcolorbox}
+
+      \vskip 5pt
+      \small
+      Commentators called it a mistake. Lee Sedol, away from the board, returned and took
+      \textbf{over 12 minutes} to answer. It won the game.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Nobody taught it that move}
+  \begin{center}
+  \begin{tikzpicture}[node distance=0.4cm]
+    \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=5.4cm, align=center,
+          inner sep=7pt] (sup) at (-3.4, 1.4) {
+      {\small\bfseries\color{popblue}Everything so far}\\[4pt]
+      {\small You are given $(\xv, y)$ pairs.\\ Someone already knows the answer.}
+    };
+    \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5.4cm,
+          align=center, inner sep=7pt] (rl) at (3.4, 1.4) {
+      {\small\bfseries\color{paramgreen}Here}\\[4pt]
+      {\small You are given a \emph{score}, sometimes,\\ long after you acted.}
+    };
+    \node[draw=armred, fill=armred!8, rounded corners=6pt, text width=11.6cm, align=center,
+          inner sep=7pt] at (0, -1.0) {
+      {\small There was no database of ``correct move 37s'' to imitate. There was only:
+      \textbf{play, and eventually find out whether you won.}}
+    };
+  \end{tikzpicture}
+  \end{center}
+
+  \vskip 4pt
+  \small
+  Be precise about the credit, though: AlphaGo learned from human games \emph{and} self-play RL
+  \emph{and} tree search. Its successor \textbf{AlphaGo Zero} dropped the human games entirely
+  and still surpassed it -- that is the version that is purely reinforcement learning.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{The setting}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Agent, environment, reward}
+
+    \vskip 0.6cm
+    {\large Three nouns, and one loop that connects them.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The loop}
+  \begin{center}
+  \begin{tikzpicture}
+    \node[draw=popblue, fill=popblue!15, rounded corners=8pt, minimum width=3cm,
+          minimum height=1.2cm, font=\bfseries, text=popblue] (agent) at (0, 1.7) {Agent};
+    \node[draw=paramgreen, fill=paramgreen!15, rounded corners=8pt, minimum width=3cm,
+          minimum height=1.2cm, font=\bfseries, text=paramgreen] (env) at (0, -1.4) {Environment};
+
+    \draw[-stealth, very thick, orange1] (1.6, 1.3) -- (1.6, -1.0);
+    \node[font=\small, text=orange1, right] at (1.8, 0.15) {action $a_t$};
+
+    \draw[-stealth, very thick, violet1] (-1.6, -1.0) -- (-1.6, 1.3);
+    \node[font=\small, text=violet1, left] at (-1.8, 0.5) {state $s_{t+1}$};
+    \node[font=\small, text=sampred, left] at (-1.8, -0.25) {reward $r_t$};
+
+    \node[draw=popblue, fill=lightbg, rounded corners=6pt, text width=6.2cm, align=left,
+          inner sep=7pt, font=\small] at (7.0, 0.2) {
+      \textbf{The agent's whole job:}\\[4pt]
+      choose $a_t$ so that the \emph{total} reward\\
+      $G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots$\\
+      is as large as possible.
+    };
+  \end{tikzpicture}
+  \end{center}
+
+  \vskip 2pt
+  \small
+  Note what the agent does \emph{not} get: no example of a good action, no gradient of
+  ``goodness'' with respect to what it did. Only the consequence.
+\end{frame}
+
+\begin{frame}{Reward is not a loss function}
+  This is the frame that explains why none of chapters 1--10 apply directly.
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                    title=\textbf{Three properties a loss does not have}]
+    \small
+    \begin{enumerate}\itemsep3pt
+      \item \textbf{Delayed.} The move that lost you the game was probably not the last one.
+            Which of the 200 moves gets the blame? (\emph{credit assignment})
+      \item \textbf{Sparse.} Most steps score zero. A robot that has never once reached the
+            goal has no signal at all to improve from.
+      \item \textbf{Not differentiable.} ``The user preferred this answer.'' ``The code passed
+            the tests.'' There is no $\partial \text{reward} / \partial \theta$ to descend.
+    \end{enumerate}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    And one property it \emph{does} have that is worse: \textbf{the data depends on the policy.}
+    Change how the agent behaves and you change the distribution it learns from. The i.i.d.\
+    assumption underneath every previous chapter is gone.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The MDP: five symbols for the whole setting}
+  \begin{center}
+    {\large $\text{MDP} = (\mathcal{S},\; \mathcal{A},\; P,\; R,\; \gamma)$}
+  \end{center}
+
+  \vskip 8pt
+  \begin{center}
+  \small
+  \begin{tabular}{c l l}
+    \toprule
+    \textbf{Symbol} & \textbf{Name} & \textbf{In the gridworld we are about to use} \\
+    \midrule
+    $\mathcal{S}$ & states & which square you are standing on \\
+    $\mathcal{A}$ & actions & up, down, left, right \\
+    $P(s'\mid s,a)$ & transition & where you actually end up (you may slip) \\
+    $R(s,a)$ & reward & $-0.04$ per move, $+1$ at the goal, $-1$ in the pit \\
+    $\gamma$ & discount & how much a future reward is worth now \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{The Markov property} is the assumption hiding in the name: the future depends on
+    the \emph{current} state only, not on how you got there. It is what makes any of this
+    tractable, and it is frequently a lie in practice.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Why discount at all?}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \vskip 6pt
+      \includegraphics[width=\linewidth]{discount_horizon.pdf}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \vskip 10pt
+      \small
+      $\gamma$ answers one question: \emph{how much is a reward worth if it arrives later?}
+
+      \vskip 6pt
+      \begin{itemize}\itemsep4pt
+        \item $\gamma$ near $0$ -- greedy, near-sighted. Only the next few steps matter.
+        \item $\gamma$ near $1$ -- patient. Willing to suffer now for a payoff much later.
+      \end{itemize}
+
+      \vskip 8pt
+      It is not only a modelling taste: $\gamma < 1$ also keeps the infinite sum finite, which
+      is what makes the whole thing well defined.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The discount is not a detail -- it changes the plan}
+  \begin{center}
+    \includegraphics[width=0.79\linewidth]{gamma_policy.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \small
+  One corridor, two rewards: $+1$ one step to the left, $+10$ seven steps to the right.
+  Same world in all three rows -- only $\gamma$ differs.
+
+  \vskip 3pt
+  At $\gamma = 0.5$ the distant $+10$ is worth $0.156$ from the start, less than the nearby
+  $+1$: the agent walks \textbf{away} from the bigger prize. The decision flips at
+  $\gamma \approx 0.68$.
+\end{frame}
+
+\begin{frame}{Our running example}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \includegraphics[width=\linewidth]{gridworld_layout.pdf}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \vskip 14pt
+      \small
+      A $4\times4$ world. Start bottom-left, $+1$ top-right, $-1$ just below it, a wall in
+      the middle.
+
+      \vskip 6pt
+      \textbf{Two details that make it interesting:}
+      \begin{itemize}\itemsep4pt
+        \item Every move costs $-0.04$, so dawdling is punished. Without this the agent would
+              be indifferent to taking the scenic route.
+        \item Actions are \textbf{unreliable}: you go where you intended with probability
+              $0.8$, and slip $90^\circ$ to either side with probability $0.1$ each.
+      \end{itemize}
+
+      \vskip 6pt
+      That second one is why walking right past the $-1$ is a bad idea even though it is the
+      shortest path.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ==================================================================================
+\section{Value}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}How good is this position?}
+
+    \vskip 0.6cm
+    {\large If you can answer that, the policy follows for free.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Two value functions}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{State value} $V^\pi(s)$]
+        \small
+        \[ V^\pi(s) = \E_\pi\!\left[\textstyle\sum_k \gamma^k r_{t+k} \mid s_t = s\right] \]
+        \vskip 2pt
+        ``Starting here and behaving like $\pi$, what do I collect?''
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Action value} $Q^\pi(s,a)$}]
+        \small
+        \[ Q^\pi(s,a) = \E_\pi\!\left[\textstyle\sum_k \gamma^k r_{t+k} \mid s_t = s, a_t = a\right] \]
+        \vskip 2pt
+        ``\dots if I take $a$ first, and behave like $\pi$ afterwards?''
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    \small
+    $Q$ is the more useful of the two, and the reason is practical: to \emph{act} from $V$ you
+    need to know where each action leads. To act from $Q$ you just compare numbers you already
+    have. That single difference is why most algorithms in this lecture learn $Q$.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The Bellman equation, in English}
+  \begin{center}
+    {\large $Q^\pi(s,a) \;=\; \underbrace{R(s,a)}_{\text{now}} \;+\; \gamma
+      \underbrace{\textstyle\sum_{s'} P(s'|s,a) \sum_{a'} \pi(a'|s')\, Q^\pi(s',a')}_{\text{everything after}}$}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \textbf{Read it aloud:} \emph{the value of doing this here is what you get immediately,
+    plus the discounted value of wherever you end up.}
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  That recursion is the entire foundation. Everything that follows -- value iteration,
+  Q-learning, DQN, the critic in actor-critic -- is some way of \textbf{solving or
+  approximating this one equation}.
+
+  \vskip 6pt
+  The optimal version replaces ``behave like $\pi$ afterwards'' with ``behave optimally
+  afterwards'':
+  \[ Q^*(s,a) = R(s,a) + \gamma \sum_{s'} P(s'|s,a)\, \max_{a'} Q^*(s',a') \]
+\end{frame}
+
+\begin{frame}{Predict first}
+  We are about to solve the gridworld exactly. Before the numbers appear:
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.8pt, arc=2pt]
+    Look at the square \textbf{directly below the $-1$ pit}.
+
+    \vskip 4pt
+    The goal $+1$ sits two squares straight up, just past the pit. Does the optimal policy
+    there point \textbf{up} -- the short way, squeezing past the pit -- or does it point
+    \textbf{away}?
+  \end{tcolorbox}
+
+  \vskip 12pt
+  \small
+  Commit to an answer, and to a reason. Remember that actions slip sideways one time in five.
+\end{frame}
+
+\begin{frame}{Solved, exactly}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \includegraphics[width=\linewidth]{gridworld_values.pdf}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \vskip 16pt
+      \small
+      Value iteration: apply the Bellman update to every square, repeatedly, until nothing
+      changes. Converged here in \textbf{23 sweeps}.
+
+      \vskip 8pt
+      \begin{itemize}\itemsep4pt
+        \item $V^*(\text{start}) = 0.2075$ -- positive, but modest: the goal is far and every
+              step costs.
+        \item The square beside the goal is worth $0.7954$.
+        \item Notice the value \emph{gradient} pointing away from the pit. Squares near it are
+              worth less even when they are close to the goal.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{And the policy falls out of it}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \includegraphics[width=\linewidth]{gridworld_policy.pdf}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \vskip 10pt
+      \small
+      $\pi^*(s) = \arg\max_a Q^*(s,a)$ -- once you know the values, choosing is trivial.
+
+      \vskip 8pt
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+        \small
+        \textbf{The answer to the prediction:} the square below the pit points
+        \textbf{left}, not up.
+
+        \vskip 4pt
+        Going up means walking alongside the pit, and a $10\%$ slip lands you in it and ends
+        the episode at $-1$. The long way round costs a few more $-0.04$ steps and is
+        \emph{still} worth more.
+      \end{tcolorbox}
+
+      \vskip 6pt
+      The agent is not avoiding the pit. It is avoiding \emph{the chance} of the pit.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ==================================================================================
+\section{Learning without a map}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Nobody gives you $P$}
+
+    \vskip 0.6cm
+    {\large Value iteration needed the rules of the world. Real agents do not get them.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{What we just did was cheating}
+  \begin{center}
+  \begin{tikzpicture}
+    \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=5.6cm, align=center,
+          inner sep=7pt] at (-3.3, 1.2) {
+      {\small\bfseries\color{popblue}Model-based}\\[4pt]
+      {\small You know $P(s'|s,a)$ and $R$.\\ Plan by computing.\\[3pt]
+      \emph{Value iteration, AlphaGo's search}}
+    };
+    \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5.6cm,
+          align=center, inner sep=7pt] at (3.3, 1.2) {
+      {\small\bfseries\color{paramgreen}Model-free}\\[4pt]
+      {\small You know nothing.\\ Learn by trying.\\[3pt]
+      \emph{Q-learning, DQN, PPO}}
+    };
+    \node[draw=armred, fill=armred!8, rounded corners=6pt, text width=11.8cm, align=center,
+          inner sep=6pt] at (0, -1.3) {
+      {\small A robot does not come with a probability table for how its wheels slip on this
+      particular carpet. A chatbot has no model of how a human will react. \textbf{Model-free
+      is the normal case.}}
+    };
+  \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Q-learning: learn the values from experience alone}
+  \begin{center}
+    {\large $Q(s,a) \leftarrow Q(s,a) + \alpha \Big[\underbrace{r + \gamma \max_{a'} Q(s',a')}_{\text{what I now think it is worth}} - \underbrace{Q(s,a)}_{\text{what I thought before}}\Big]$}
+  \end{center}
+
+  \vskip 10pt
+  \small
+  The bracket is a \textbf{surprise}: the gap between the estimate you had and the better
+  estimate you can make now that you have seen $r$ and $s'$. Nudge towards it by $\alpha$.
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.31\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+        \scriptsize\textbf{Model-free}\\ Never needs $P$. Just $(s,a,r,s')$.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+        \scriptsize\textbf{Off-policy}\\ Learns $Q^*$ even while behaving badly.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \scriptsize\textbf{Tabular}\\ One cell per $(s,a)$. Does not scale.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \scriptsize\color{gray}
+  Watkins \& Dayan (1992). Converges to $Q^*$ given decaying $\alpha$ and infinitely many
+  visits to every pair -- conditions no real system satisfies, and it usually works anyway.
+\end{frame}
+
+\begin{frame}{One update, by hand}
+  Suppose $\alpha = 0.5$, $\gamma = 0.9$. The agent is on a square where it currently believes
+  $Q(s, \text{right}) = 0.30$. It moves right, receives the usual $-0.04$, and lands on a
+  square whose best action it currently values at $0.60$.
+
+  \vskip 10pt
+  \begin{center}
+  \small
+  $\begin{aligned}
+    \text{target} \;&=\; r + \gamma \max_{a'} Q(s',a') \;=\; -0.04 + 0.9 \times 0.60 \;=\; \mathbf{0.50} \\[4pt]
+    \text{surprise} \;&=\; 0.50 - 0.30 \;=\; +0.20 \\[4pt]
+    Q(s,\text{right}) \;&\leftarrow\; 0.30 + 0.5 \times 0.20 \;=\; \mathbf{0.40}
+  \end{aligned}$
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    That is the whole algorithm. Everything else in tabular RL is bookkeeping around this line
+    -- and notice it never once asked where the agent was likely to end up. It only used where
+    it \emph{did} end up.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The dilemma nobody escapes}
+  To learn which action is best you must try actions that might not be. To score well you must
+  take the action you already believe is best. You cannot do both at once.
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \includegraphics[width=\linewidth]{epsilon_cost.pdf}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vskip 8pt
+      \small
+      \textbf{$\epsilon$-greedy:} act randomly with probability $\epsilon$, greedily otherwise.
+
+      \vskip 4pt
+      Priced exactly on our gridworld, with the optimal policy already known:
+      \begin{itemize}\itemsep1pt
+        \item $\epsilon = 0$: value $0.208$
+        \item $\epsilon = 0.1$: value $0.152$
+        \item $\epsilon = 1$: value $-0.418$
+      \end{itemize}
+
+      \vskip 4pt
+      Even $10\%$ random acting costs about a quarter of the achievable value.
+    \end{column}
+  \end{columns}
+
+  \vskip 2pt
+  \footnotesize
+  \textbf{But that is only one side.} The figure assumes you \emph{already know} the best
+  policy. At the start you do not, and $\epsilon = 0$ means never finding it. Hence the usual
+  compromise: start high, decay over time.
+\end{frame}
+
+\begin{frame}{On-policy or off-policy?}
+  \begin{center}
+  \small
+  \begin{tabular}{p{4.2cm} p{4.6cm} p{4.6cm}}
+    \toprule
+     & \textbf{Q-learning (off-policy)} & \textbf{SARSA (on-policy)} \\
+    \midrule
+    Target uses & $\max_{a'} Q(s',a')$ & $Q(s', a')$ for the $a'$ actually taken \\[4pt]
+    It learns the value of & the \emph{best} policy & the policy it is \emph{actually running},
+      exploration and all \\[4pt]
+    Near a cliff it will & walk the edge, because the optimal path is along the edge \&
+      & keep a margin, because it knows it sometimes slips \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    This is not a small distinction. If your agent's exploration can cause real damage -- a
+    physical robot, a live recommender -- the on-policy answer is often the one you want,
+    because it accounts for the fact that the agent \emph{will} sometimes do something random.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{When the table will not fit}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Atari has more states than the universe has atoms}
+
+    \vskip 0.6cm
+    {\large So stop storing them, and start predicting them.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The wall}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Tabular Q-learning stops here}]
+        \small
+        One Atari frame: $210 \times 160$ pixels, $128$ colours.
+
+        \vskip 4pt
+        \[ |\mathcal{S}| \approx 128^{33{,}600} \]
+        \vskip 2pt
+        There is no table. There will never be a table.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{The move you have made before}]
+        \small
+        Replace the lookup table with a \textbf{function}:
+        \[ Q(s,a) \;\longrightarrow\; Q_\theta(s,a) \]
+        \vskip 2pt
+        A network that has never seen this exact screen can still evaluate it, because it
+        generalises from similar ones.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \small
+  This is the same step as everywhere else in the course: stop memorising, start fitting. The
+  loss is just the squared surprise from two slides ago:
+  \[ \mathcal{L}(\theta) = \E\Big[\big(r + \gamma \max_{a'} Q_{\theta^-}(s',a') - Q_\theta(s,a)\big)^2\Big] \]
+\end{frame}
+
+\begin{frame}{DQN, and the two tricks that made it work}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title=\textbf{Experience replay}]
+    \small
+    Store transitions $(s,a,r,s')$ in a buffer and train on \emph{random} batches from it.
+
+    \vskip 3pt
+    \textbf{Why:} consecutive frames are almost identical, so training on them in order
+    violates the i.i.d.\ assumption badly and the network chases itself. Shuffling restores it.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                    title=\textbf{Target network}]
+    \small
+    Compute the target with a \emph{frozen} copy $Q_{\theta^-}$, updated only occasionally.
+
+    \vskip 3pt
+    \textbf{Why:} otherwise you are regressing towards a target that moves every time you take
+    a step -- a dog chasing its own tail. Freezing it makes the problem locally supervised.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  With these, one architecture learned $49$ Atari games from raw pixels, beating a human on
+  $29$ of them (Mnih et al., \emph{Nature} 2015). Same network, same hyperparameters, no
+  game-specific engineering -- which was the actual shock.
+\end{frame}
+
+% ==================================================================================
+\section{Optimising the policy directly}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Skip the values. Learn the behaviour.}
+
+    \vskip 0.6cm
+    {\large The road that leads to every algorithm used on language models.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Two ways to be an agent}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Value-based}]
+        \small
+        Learn $Q(s,a)$, then act greedily.
+
+        \vskip 4pt
+        \textbf{Good:} sample-efficient, off-policy replay.
+
+        \vskip 2pt
+        \textbf{Bad:} needs $\arg\max_a$, so actions must be few and discrete. Try that with a
+        robot arm's continuous torques.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Policy-based}]
+        \small
+        Learn $\pi_\theta(a|s)$ directly and improve it.
+
+        \vskip 4pt
+        \textbf{Good:} continuous actions, naturally stochastic, optimises what you care about.
+
+        \vskip 2pt
+        \textbf{Bad:} high variance, and normally on-policy -- yesterday's data is stale.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    \small
+    For a language model the action space is \emph{the whole vocabulary at every token}. That
+    alone decides the question -- which is why the LLM world is policy-based, and why the rest
+    of this lecture points that way.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The policy gradient}
+  \begin{center}
+    {\large $\nabla_\theta J(\theta) \;=\; \E_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a|s) \cdot G_t\big]$}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \textbf{In words:} take the actions you actually played, and adjust their probabilities in
+    proportion to how well things went afterwards. Good outcome -- make that action more
+    likely. Bad outcome -- less likely.
+  \end{tcolorbox}
+
+  \vskip 10pt
+  \small
+  Two things worth pausing on:
+
+  \begin{itemize}\itemsep4pt
+    \item $\nabla_\theta \log \pi_\theta(a|s)$ is a gradient of the \emph{policy}, which we
+          control -- not of the reward, which we cannot differentiate. That is the trick that
+          makes non-differentiable rewards usable.
+    \item $G_t$ is just a number that scales it. It can come from anywhere: a game score, a
+          unit test, a human's preference.
+  \end{itemize}
+
+  \vskip 6pt
+  \textbf{REINFORCE} is this formula used literally: play an episode, compute the returns,
+  take the step.
+\end{frame}
+
+\begin{frame}{REINFORCE has a variance problem}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \includegraphics[width=\linewidth]{reinforce_variance.pdf}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \vskip 6pt
+      \small
+      Two actions, one state. Action A returns about $11$, action B about $9$ -- so A is
+      better and the gradient \emph{should} point towards A.
+
+      \vskip 4pt
+      Batches of $20$ episodes, repeated $4000$ times:
+
+      \vskip 3pt
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \scriptsize
+        Plain REINFORCE points the \textbf{wrong way $33.9\%$} of the time. Sd $1.13$.
+      \end{tcolorbox}
+
+      \vskip 3pt
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+        \scriptsize
+        With a baseline of $10$: wrong way \textbf{$0.0\%$}, sd $0.11$ -- a $10\times$
+        reduction, \emph{same} average.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 2pt
+  \footnotesize
+  \textbf{Why it works:} both returns are positive, so plain REINFORCE pushes \emph{both}
+  actions up and only the sizes differ. Centring on the average makes the better action
+  positive and the worse one negative -- the signal stops fighting itself.
+\end{frame}
+
+\begin{frame}{Advantage, and the actor-critic}
+  \begin{center}
+    {\large $A(s,a) = Q(s,a) - V(s)$}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small \emph{``Was this action better or worse than what I normally do here?''}
+  \end{center}
+
+  \vskip 10pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Actor}]
+        \small The policy $\pi_\theta$. Chooses what to do.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Critic}]
+        \small An estimate of $V(s)$. Provides the baseline.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \small
+  The baseline from the previous slide, learned instead of assumed. It trades a little bias for
+  a lot of variance -- and it is the reason a value function reappears inside methods whose
+  whole point was to avoid one.
+
+  \vskip 6pt
+  \textbf{Remember the critic.} When you meet GRPO in the LLM chapter, its entire selling point
+  is \emph{throwing the critic away} and replacing it with the average of a group of samples.
+\end{frame}
+
+\begin{frame}{PPO: do not take a step you cannot walk back}
+  \begin{center}
+    \includegraphics[width=0.82\linewidth]{ppo_clip.pdf}
+  \end{center}
+
+  \vskip -4pt
+  \small
+  Vanilla policy gradient has no notion of ``too far''. One oversized update and the policy
+  collapses -- and unlike supervised learning you cannot simply reload, because the collapsed
+  policy now \emph{collects the data} for the next update.
+
+  \vskip 4pt
+  PPO clips the objective so that once the new policy differs from the old by more than
+  $\epsilon$ (typically $0.2$), moving further buys \textbf{nothing}. The gradient in that
+  region is flat by construction.
+\end{frame}
+
+% ==================================================================================
+\section{The payoff}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}A language model is just another agent}
+
+    \vskip 0.6cm
+    {\large Everything above, applied to text.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Text generation is an MDP}
+  \begin{center}
+  \small
+  \begin{tabular}{l l}
+    \toprule
+    \textbf{RL} & \textbf{Language model} \\
+    \midrule
+    state $s_t$ & the prompt plus every token generated so far \\
+    action $a_t$ & the next token (action space $=$ the vocabulary, $\sim$$100$k) \\
+    policy $\pi_\theta(a|s)$ & \textbf{the model itself} -- the softmax over next tokens \\
+    reward $r_t$ & almost always $0$ \dots until the response ends \\
+    episode & one complete response \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    Look at the reward row. A single scalar at the very end, for a sequence of hundreds of
+    actions -- the credit-assignment problem from the third slide of this lecture, in its most
+    extreme form.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{RLHF in three stages}
+  \begin{center}
+  \begin{tikzpicture}[node distance=0.35cm]
+    \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=3.5cm, align=center,
+          inner sep=6pt] (a) at (-4.3, 0) {
+      {\small\bfseries\color{popblue}1. SFT}\\[3pt]
+      {\scriptsize Fine-tune on human-written ideal answers. Ordinary supervised learning.}
+    };
+    \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=3.5cm, align=center,
+          inner sep=6pt] (b) at (0, 0) {
+      {\small\bfseries\color{orange1}2. Reward model}\\[3pt]
+      {\scriptsize Humans \emph{rank} pairs of answers. Train a model to predict the ranking.}
+    };
+    \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=3.5cm,
+          align=center, inner sep=6pt] (c) at (4.3, 0) {
+      {\small\bfseries\color{paramgreen}3. PPO}\\[3pt]
+      {\scriptsize Optimise the policy against that reward, with a KL penalty to the SFT model.}
+    };
+    \draw[-stealth, thick] (a) -- (b);
+    \draw[-stealth, thick] (b) -- (c);
+  \end{tikzpicture}
+  \end{center}
+
+  \vskip 8pt
+  \small
+  Stage 2 exists because ``helpful'' is not differentiable, but a \emph{comparison} can be
+  learned. Stage 3 is exactly the PPO from two slides ago.
+
+  \vskip 6pt
+  The KL penalty is the give-away that something is fragile: it holds the policy near the model
+  we started from, because optimising the reward too hard is actively dangerous. Which is the
+  next slide.
+\end{frame}
+
+\begin{frame}{Reward hacking: the agent does what you measured}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.8pt, arc=2pt,
+                    title=\textbf{Goodhart's law}]
+    When a measure becomes a target, it ceases to be a good measure.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \footnotesize
+  The reward model is a \emph{learned approximation} of human preference, fitted on finite
+  data. Optimise against it hard enough and the policy will find the places where the
+  approximation is wrong, because those are where the reward is highest.
+
+  \vskip 5pt
+  Observed failure modes, all real:
+  \begin{itemize}\itemsep2pt
+    \item answers get longer and longer, because raters mildly preferred longer answers
+    \item excessive hedging and flattery, because raters rewarded politeness
+    \item confident agreement with the user, because disagreement scored badly
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    None of these are bugs in the algorithm. The optimiser did its job perfectly. The
+    \textbf{objective} was wrong -- and this is the single most important idea to carry out of
+    this lecture.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{The bitter lesson}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}One more thing, and it stings}
+
+    \vskip 0.6cm
+    {\large Written by Rich Sutton -- who also wrote the RL textbook.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The bitter lesson (Sutton, 2019)}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=2pt]
+    \small
+    ``The biggest lesson that can be read from 70 years of AI research is that \textbf{general
+    methods that leverage computation are ultimately the most effective}, and by a large
+    margin.''
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \footnotesize
+  The pattern he documents, over and over: researchers encode human knowledge about the
+  problem; it helps at first; then it is beaten by a simpler method that just \emph{searches}
+  or \emph{learns} more, once the hardware allows.
+
+  \vskip 6pt
+  \begin{center}
+  \scriptsize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Domain} & \textbf{The knowledge-engineered approach} & \textbf{What beat it} \\
+    \midrule
+    Chess & hand-crafted positional heuristics & massive search (Deep Blue) \\
+    Go & shape and pattern libraries & search + self-play RL (AlphaGo) \\
+    Speech & phonetic models, linguistic rules & statistical, then deep, learning \\
+    Vision & hand-designed feature detectors & learned features (CNNs) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    It is \emph{bitter} because it says the satisfying part -- our insight into the problem --
+    is usually not what wins. Sutton's point is that we keep re-learning this and keep
+    resisting it.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Where this lecture is Exhibit A -- and where it is not}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Evidence for}]
+        \scriptsize
+        \begin{itemize}\itemsep2pt
+          \item \textbf{AlphaGo $\to$ AlphaGo Zero.} Deleting the human game database made it
+                \emph{stronger}. Sutton's own example.
+          \item \textbf{DQN.} One architecture, one set of hyperparameters, 49 Atari games.
+          \item \textbf{DeepSeek-R1.} Nobody taught it to reason; the behaviour emerged from RL
+                against a checkable reward.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                        title=\textbf{Read it carefully, though}]
+        \scriptsize
+        \begin{itemize}\itemsep2pt
+          \item It is \emph{not} ``structure never helps''. Convolution and attention are
+                human-designed inductive biases, and both were decisive.
+          \item Every method here is scaffolding: replay, target networks, clipping, KL
+                penalties. Someone designed those.
+          \item Compute is not free. ``Wait for better hardware'' is a strategy open to a few
+                labs and nobody else.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    \scriptsize
+    The honest reading: prefer methods that \textbf{improve when given more compute and data},
+    and be suspicious of cleverness that does not. A claim about what to bet on -- not a licence
+    to stop thinking.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section*{Recap}
+% ==================================================================================
+\begin{frame}{Recap}
+  \scriptsize
+  \begin{itemize}\itemsep2pt
+    \item RL is for problems with \textbf{no correct answer to imitate} -- only delayed, sparse,
+          non-differentiable consequences. The i.i.d.\ assumption is gone.
+    \item An \textbf{MDP} $(\mathcal{S}, \mathcal{A}, P, R, \gamma)$ is the whole setting, and
+          $\gamma$ is a real modelling choice: it changed which reward our corridor agent walked
+          towards.
+    \item The \textbf{Bellman equation} is the one recursion everything solves or approximates.
+          Solve it exactly with a model; \textbf{Q-learning} approximates it from experience
+          without one. Tabular hits a wall, so $Q$ becomes a \textbf{network} (DQN), with replay
+          and a frozen target.
+    \item \textbf{Policy gradients} optimise behaviour directly -- necessary when the action
+          space is a vocabulary. They are noisy: a baseline cut our wrong-direction rate from
+          $33.9\%$ to $0\%$. \textbf{PPO} then stops any update going too far.
+    \item Optimising a \emph{learned} reward invites \textbf{reward hacking}. The optimiser is
+          not the problem; the objective is.
+    \item \textbf{The bitter lesson:} bet on methods that improve with more compute and data.
+          AlphaGo Zero got stronger by \emph{deleting} the human games.
+  \end{itemize}
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.8pt, arc=2pt]
+    \footnotesize
+    \textbf{Next:} the \emph{LLM Training \& Alignment} chapter -- this lecture at scale. You can
+    now read [10] InstructGPT (the pipeline above), [01] GRPO (drop the critic), [02] DPO (drop
+    the reward model \emph{and} the RL), and [11] DeepSeek-R1 (reasoning from RL alone).
+  \end{tcolorbox}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Adapted and substantially expanded from misc/dl4nlp/18_reinforcement_learning.tex
+%     (24pp, LLM-framed). That deck stays as-is; this is a fork for the ml/ course, with the
+%     foundations given room and LLMs moved to the payoff section. See RL_CHAPTER_PLAN.md.
+%   - Instructor decisions (2026-08-06): adapt rather than write fresh; intuition-first with
+%     minimal derivation (a deliberate deviation from ml/SLIDE_STYLE.md's "full derivations");
+%     no trained demo - all figures are exact arithmetic or sampling from specified
+%     distributions.
+%   - Figures: py_src/gridworld.py (layout, values, policy - value iteration, 23 sweeps),
+%     py_src/rl_concepts.py (discount horizon, corridor-vs-gamma, epsilon cost via exact policy
+%     evaluation, REINFORCE variance, PPO clip), py_src/go_schematic.py (go_lines, a SCHEMATIC
+%     of the 3rd/4th/5th lines, not the real game-2 board position).
+%   - Quoted numbers all come from those scripts' logs: V*(start)=0.2075, V*(beside goal)=0.7954,
+%     eps-greedy 0.208/0.152/-0.418, corridor crossover gamma~0.68, REINFORCE wrong-direction
+%     33.9% -> 0.0%, sd 1.13 -> 0.11.
+%   - AlphaGo move 37 facts web-verified 2026-08-06: game 2, fifth-line shoulder hit, ~1 in
+%     10,000 under AlphaGo's policy network, Lee Sedol took 12+ minutes to reply. The AlphaGo
+%     Zero clarification is deliberate - AlphaGo itself was not pure RL.
+% =============================================================
