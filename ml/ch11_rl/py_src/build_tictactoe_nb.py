@@ -370,9 +370,13 @@ def train(opponent_policy=None, episodes=40_000, eps_start=0.9, eps_end=0.05,
         eps = eps_end + (eps_start - eps_end) * (1 - ep / episodes)
         board, player = EMPTY_BOARD, X
         traj = {X: [], O: []}
+        # Alternate which side the agent takes. Training it only as X would leave it with no
+        # opinion whatever about half the game, and then "it loses as O" would say nothing
+        # about the opponent it trained against - only that it had never played that side.
+        agent_side = X if ep % 2 == 0 else O
 
         while not is_over(board):
-            agent_turn = self_play or player == X
+            agent_turn = self_play or player == agent_side
             if agent_turn:
                 cell = greedy_action(Q, board, player, rng, eps)
             else:
@@ -406,8 +410,9 @@ def train(opponent_policy=None, episodes=40_000, eps_start=0.9, eps_end=0.05,
 """)
 
 code(r"""
-Q_vs_random, visits_vs_random = train(opponent_policy=random_policy, episodes=40_000)
+Q_vs_random, visits_vs_random = train(opponent_policy=random_policy, episodes=80_000)
 print(f"states the agent has an opinion about: {len({s for s, _ in Q_vs_random})}")
+print("(it alternates sides, so it trains as X and as O against the random opponent)")
 """)
 
 md(r"""
@@ -464,19 +469,29 @@ print(f"   as O: draws {vs_perfect_o['draws']:.1%},  losses {vs_perfect_o['X win
 md(r"""
 ### What happened
 
-It loses, and it loses often - despite crushing the random opponent minutes ago.
+As X it holds the draw. As O it **loses a meaningful share of games** - against an opponent
+that, by definition, can never be beaten but can always be held.
 
-The agent never learned tic-tac-toe. It learned **how to exploit a random opponent's
-mistakes**. Those two are not the same skill, and the difference was invisible as long as the
-random opponent was the only thing we measured against.
+That gap did not exist against the random opponent, where this agent looked near-perfect from
+both sides. A random opponent almost never punishes a bad move, so the agent was free to walk
+into positions that are lost under correct play, get away with it, and bank the win. It
+optimised the objective we gave it, exactly as asked.
 
-Look at *why*: a random opponent almost never punishes a bad move. So the agent was free to
-walk into positions that are losing under correct play, get away with it, and record the win.
-It optimised the objective we gave it, perfectly.
+> **The same lesson as the time-series chapter's naive baseline, from the other side. There the
+> danger was a baseline too strong to beat; here it is an opponent too weak to learn from. In
+> both cases the thing you measure against decides what "good" means.**
 
-> **This is the same lesson as the time-series chapter's naive baseline, from the other side.
-> There, the danger was a baseline too strong to beat. Here it is an opponent too weak to
-> learn from. In both cases the number you compare against decides what "good" means.**
+### Be honest about the size of the effect
+
+This is a *dent*, not a catastrophe - and the reason is worth more than the demo. Tic-tac-toe
+has only a few thousand positions. Even a random opponent, played tens of thousands of times
+with an exploring agent, stumbles into nearly all of them, so the agent gets at least some
+experience almost everywhere.
+
+Scale the game up and that stops being true. In a game where random play covers a vanishing
+fraction of the tree, the same setup does not lose one game in six - it never becomes competent
+at all. The mechanism you are seeing here in miniature is the one that makes training-opponent
+choice decisive in real systems.
 """)
 
 # --------------------------------------------------------------------------------------
@@ -535,72 +550,138 @@ moves**?
 
 code(r"""
 def grade(Q, positions):
-    "Fraction of live positions where the agent's greedy move is minimax-optimal."
-    ok, total, failures = 0, 0, []
+    # Fraction of positions with a real CHOICE where the agent's greedy move is optimal.
+    #
+    # Two exclusions, both of which would otherwise punish the agent unfairly:
+    #   * positions with a single legal move - there is nothing to get right or wrong;
+    #   * positions where every Q is still exactly 0.0 - the agent has formed no opinion, so
+    #     grading its arbitrary tie-break tells us nothing. Reported separately as
+    #     "no opinion" rather than silently scored as mistakes.
+    #
+    # That second case is easy to get wrong, and we did get it wrong first time round: a
+    # final move that DRAWS is updated towards a target of 0, so Q stays at exactly 0.0
+    # even though the state was visited many times.
+    ok, decided, no_opinion, failures = 0, 0, 0, []
     for board, player in positions:
         if is_over(board):
             continue
-        state = canonical(board, player)
         moves = legal_moves(board)
+        if len(moves) == 1:
+            continue                            # forced move; nothing to decide
+        state = canonical(board, player)
         if all(Q[(state, c)] == 0.0 for c in moves):
-            best_q = None                      # never visited: no opinion at all
-        else:
-            top = max(Q[(state, c)] for c in moves)
-            best_q = [c for c in moves if Q[(state, c)] == top]
+            no_opinion += 1
+            continue
+        top = max(Q[(state, c)] for c in moves)
+        best_q = [c for c in moves if Q[(state, c)] == top]
         best_true, _ = optimal_moves(board, player)
-        total += 1
-        if best_q is not None and set(best_q) <= set(best_true):
+        decided += 1
+        if set(best_q) <= set(best_true):
             ok += 1
         else:
             failures.append((board, player, best_q, best_true))
-    return ok / total, failures
+    return ok / decided, failures, no_opinion
 
-score_random, fails_random = grade(Q_vs_random, POSITIONS)
-score_self, fails_self = grade(Q_self, POSITIONS)
-print(f"trained vs random : {score_random:.1%} of positions played optimally")
-print(f"trained by self-play: {score_self:.1%} of positions played optimally")
+score_random, fails_random, blank_random = grade(Q_vs_random, POSITIONS)
+score_self, fails_self, blank_self = grade(Q_self, POSITIONS)
+print(f"trained vs random   : {score_random:6.1%} of decided positions optimal "
+      f"({blank_random} with no opinion)")
+print(f"trained by self-play: {score_self:6.1%} of decided positions optimal "
+      f"({blank_self} with no opinion)")
 """)
 
 md(r"""
 ### Where does it still get it wrong?
 
-The interesting question is not the percentage but **which** positions fail. Check how often the
-agent actually visited them during training.
+The percentage is less interesting than **which** positions fail. The obvious hypothesis is
+that the agent is weak where it has the least experience - the lecture's convergence condition
+says Q-learning needs *infinitely many visits to every state-action pair*, so thin coverage
+should mean bad play.
+
+Test it before believing it.
 """)
 
 code(r"""
-visit_counts = [visits_self[canonical(b, p)] for b, p, _, _ in fails_self]
-visit_counts = np.array(visit_counts)
+visit_counts = np.array([visits_self[canonical(b, p)] for b, p, _, _ in fails_self])
 all_counts = np.array([visits_self[canonical(b, p)] for b, p in POSITIONS if not is_over(b)])
 
-print(f"failing positions: {len(visit_counts)}")
-print(f"   median visits during training: {np.median(visit_counts):.0f}")
-print(f"   never visited at all: {(visit_counts == 0).sum()} of {len(visit_counts)}")
-print(f"all live positions:")
-print(f"   median visits during training: {np.median(all_counts):.0f}")
+print(f"failing positions : {len(visit_counts)},  median visits {np.median(visit_counts):.0f}")
+print(f"all live positions: {len(all_counts)},  median visits {np.median(all_counts):.0f}")
+print(f"failing positions never visited at all: {(visit_counts == 0).sum()}")
+""")
+
+md(r"""
+### Resist the urge to explain 16 data points
+
+Only a handful of genuine mistakes remain, and their median visit count sits a little below
+average - consistent with a coverage story, but nowhere near enough to claim one. Sixteen
+positions cannot support a theory. Say so, and look instead at where the *two agents* differ.
 """)
 
 code(r"""
-fig, ax = plt.subplots(figsize=(9, 3.4))
-bins = np.logspace(0, np.log10(max(all_counts.max(), 10)), 40)
-ax.hist(np.clip(all_counts, 1, None), bins=bins, color=BLUE, alpha=0.65, label="all positions")
-ax.hist(np.clip(visit_counts, 1, None), bins=bins, color=RED, alpha=0.8, label="positions it gets wrong")
-ax.set_xscale("log"); ax.set_yscale("log")
-ax.set_xlabel("times visited during self-play training (log)")
-ax.set_ylabel("number of positions (log)")
-ax.set_title("The mistakes live where the experience does not")
+def n_pieces(board):
+    return sum(1 for v in board if v != EMPTY)
+
+def error_by_depth(Q):
+    "Per game depth: share of decided positions where the greedy move is NOT optimal."
+    wrong, decided = defaultdict(int), defaultdict(int)
+    for board, player in POSITIONS:
+        if is_over(board) or len(legal_moves(board)) < 2:
+            continue
+        state, moves = canonical(board, player), legal_moves(board)
+        if all(Q[(state, c)] == 0.0 for c in moves):
+            continue
+        top = max(Q[(state, c)] for c in moves)
+        best_q = [c for c in moves if Q[(state, c)] == top]
+        best_true, _ = optimal_moves(board, player)
+        d = n_pieces(board)
+        decided[d] += 1
+        if not set(best_q) <= set(best_true):
+            wrong[d] += 1
+    return decided, wrong
+
+dec_r, wrong_r = error_by_depth(Q_vs_random)
+dec_s, wrong_s = error_by_depth(Q_self)
+depths = sorted(dec_r)
+
+fig, ax = plt.subplots(figsize=(9.4, 3.6))
+w = 0.38
+ax.bar([d - w/2 for d in depths], [wrong_r[d] / dec_r[d] for d in depths], w,
+       color=RED, label="trained against a random opponent")
+ax.bar([d + w/2 for d in depths], [wrong_s[d] / dec_s[d] for d in depths], w,
+       color=BLUE, label="trained by self-play")
+ax.set_xticks(depths)
+ax.set_xticklabels([f"{d}  (n={dec_r[d]})" for d in depths], fontsize=7.5)
+ax.set_xlabel("pieces already on the board when the agent must choose")
+ax.set_ylabel("share played sub-optimally")
+ax.set_title("Where the two training regimes actually differ")
 ax.legend(fontsize=9)
 plt.tight_layout(); plt.show()
 """)
 
 md(r"""
-The failures sit at the **left** of the distribution - positions the agent barely saw, or never
-saw at all.
+### Read the shape, not the totals
 
-That is the lecture's convergence condition made concrete: Q-learning converges given
-*infinitely many visits to every state-action pair*. Self-play visits sensible positions
-constantly and silly ones rarely, so the guarantee simply does not apply where the agent is
-weakest. Nothing is broken; the assumption is.
+Two things stand out, and neither is what you might guess.
+
+**The self-play agent is near-flawless at every depth** - the blue bars barely leave the axis.
+
+**The random-trained agent is worst in the OPENING and early middlegame**, peaking around three
+pieces on the board, and it is perfect by the time seven pieces are down. That is the reverse of
+"it gets sloppy at the end".
+
+It makes sense once stated: by seven pieces there are two cells left and the right move is
+usually forced - take the win, or block the loss - and *any* training regime finds that. The
+early game is where positions are subtle, and it is exactly where a random opponent **never
+punishes a mistake**. The agent had no way to learn that certain early choices are already
+losing, because nothing it played against ever made it pay.
+
+(Treat the 0-2 piece bars with care - there are only 1, 9 and 72 positions at those depths, so
+one mistake moves the percentage a long way.)
+
+> A single "93.5% vs 99.6%" hides all of this. When you have ground truth, break the score down
+> by something structural - here, game phase - because *where* a model is wrong usually explains
+> *why*.
 """)
 
 # --------------------------------------------------------------------------------------
@@ -625,7 +706,7 @@ print(f"live positions that exist in the whole game    : {len(live):,}")
 """)
 
 code(r"""
-score_greedy, _ = grade(Q_greedy, POSITIONS)
+score_greedy, _, blank_greedy = grade(Q_greedy, POSITIONS)
 greedy_agent = make_q_policy(Q_greedy)
 gx = match(greedy_agent, minimax_policy, 2_000)
 go = match(minimax_policy, greedy_agent, 2_000)
@@ -690,7 +771,7 @@ Run it with a **small** bonus first: $0.3$, well under the $\pm 1$ paid for the 
 
 code(r"""
 Q_shaped, _ = train(self_play=True, episodes=120_000, shaping=make_blocking_shaper(0.3))
-score_shaped, _ = grade(Q_shaped, POSITIONS)
+score_shaped, _, _ = grade(Q_shaped, POSITIONS)
 shaped_agent = make_q_policy(Q_shaped)
 sx = match(shaped_agent, minimax_policy, 2_000)
 so = match(minimax_policy, shaped_agent, 2_000)
@@ -703,21 +784,21 @@ print(f"{'blocking bonus = 0.3':<28}{score_shaped:>15.1%}{sx['O wins']:>13.1%}{s
 """)
 
 md(r"""
-### It helped. So what is the catch?
+### It changed essentially nothing
 
-Blocking really is the right move *most* of the time in tic-tac-toe, and the bonus is **small
-relative to the real reward**, so it behaves like a hint: it speeds up learning a genuinely
-correct habit without ever outvoting the actual outcome.
+The two rows are within a whisker of each other, and both still never lose to perfect play.
 
-That is the good case for shaping, and it is worth seeing that the good case exists.
+That is the benign case for shaping, and it is worth seeing: blocking really is the right move
+*most* of the time here, and the bonus is **small relative to the real reward**, so it acts as a
+mild hint that never outvotes the actual outcome. It neither rescued nor ruined anything.
 
-Now break it. Keep the identical heuristic and only turn the dial up, so that blocking pays
-**more than winning does**.
+Which makes the next result the interesting one. Keep the identical heuristic, change nothing
+but the size of the number, and let blocking pay **more than winning does**.
 """)
 
 code(r"""
 Q_greedy_block, _ = train(self_play=True, episodes=120_000, shaping=make_blocking_shaper(3.0))
-score_gb, _ = grade(Q_greedy_block, POSITIONS)
+score_gb, _, _ = grade(Q_greedy_block, POSITIONS)
 gb = make_q_policy(Q_greedy_block)
 gbx = match(gb, minimax_policy, 2_000)
 gbo = match(minimax_policy, gb, 2_000)
@@ -790,7 +871,7 @@ code(r"""
 def summarise(name, Q):
     a = make_q_policy(Q)
     rx, ro = match(a, minimax_policy, 3_000), match(minimax_policy, a, 3_000)
-    sc, _ = grade(Q, POSITIONS)
+    sc, _, _ = grade(Q, POSITIONS)
     return {"agent": name, "optimal moves": f"{sc:.1%}",
             "draws vs perfect (X)": f"{rx['draws']:.1%}",
             "loses vs perfect (X)": f"{rx['O wins']:.1%}",
