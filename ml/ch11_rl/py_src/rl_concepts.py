@@ -96,12 +96,14 @@ def evaluate_epsilon_greedy(policy, eps, gamma, tol=1e-12, max_sweeps=100_000):
 def fig_discount_horizon():
     k = np.arange(0, 61)
     fig, ax = plt.subplots(figsize=(7.4, 3.6))
+    # Half-lives go in the LEGEND, not on the plot: at gamma 0.5 and 0.9 they fall at ~1 and
+    # ~7 steps, so on-plot labels collide at any readable font size.
     for gamma, color in [(0.5, RED), (0.9, BLUE), (0.99, ORANGE)]:
-        ax.plot(k, gamma ** k, color=color, lw=2.2, label=f"$\\gamma={gamma}$")
         half = np.log(0.5) / np.log(gamma)
+        unit = "step" if round(half) == 1 else "steps"
+        ax.plot(k, gamma ** k, color=color, lw=2.2,
+                label=f"$\\gamma={gamma}$  (half-life {half:.0f} {unit})")
         ax.axvline(half, color=color, ls=":", lw=1.2, alpha=0.8)
-        ax.text(half + 0.9, 0.94, f"half-life\n{half:.0f} steps", color=color, fontsize=10,
-                va="top", fontweight="bold")
     ax.set_xlabel("steps into the future, $k$")
     ax.set_ylabel("weight $\\gamma^k$")
     ax.set_title("How far ahead the agent can see is a choice, not a fact")
