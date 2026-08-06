@@ -1,9 +1,14 @@
 # Chapter plan — Reinforcement Learning (L32)
 
-**Status:** BUILT 2026-08-06. `L32_reinforcement_learning.pdf`, **40 pages**, 9 Python-generated
-figures, compiles clean (3 residual overfull vboxes, largest 5.97pt / ~2mm, all verified
-non-clipping by rendering every page). Registered as `ml/ch11_rl/rl.qmd` in `_quarto.yml`,
-positioned immediately before `ml/llm_training/`.
+**Status:** BUILT 2026-08-06, then expanded twice the same day. `L32_reinforcement_learning.pdf`,
+**44 pages**, **10** Python-generated figures, 5 residual overfull vboxes (largest 5.97pt / ~2mm,
+all verified non-clipping by rendering the pages). Registered as `ml/ch11_rl/rl.qmd` in
+`_quarto.yml`, immediately before `ml/llm_training/`.
+
+> **Instructor decision 3 below ("no training demo") is SUPERSEDED.** It was reversed on
+> 2026-08-06 after an audit found the lecture never demonstrated its own thesis. Tabular
+> Q-learning now trains in `py_src/q_learning_demo.py`. Everything else in the chapter remains
+> exact arithmetic. See "Second expansion" below.
 
 ## Changes from this outline during the build
 
@@ -44,6 +49,40 @@ positioned immediately before `ml/llm_training/`.
 Numbers quoted on slides, all from the scripts' logs: `V*(start)=0.2075`,
 `V*(beside goal)=0.7954`, eps-greedy `0.208 / 0.152 / -0.418`, corridor crossover
 `gamma ~ 0.68`, REINFORCE `33.9% -> 0.0%`, `sd 1.13 -> 0.11`.
+
+## Second expansion (2026-08-06): the two gaps that mattered
+
+After the student review, an audit of what was *missing* rather than wrong found two gaps worth
+closing. Deck 40 -> 44 pages.
+
+**1. Nothing in the lecture ever learned.** Every result came from exact planning (value
+iteration needs `P`, which the deck spends a section saying you do not have) or a closed formula.
+The subtitle is "learning from consequences" and no agent ever improved. Added
+`py_src/q_learning_demo.py`: tabular Q-learning on the same gridworld, allowed to call only
+`step_env()` (one sampled transition), checked against the `V*` value iteration already computed.
+
+The run produced two results better than clean convergence, both kept:
+
+- Its policy matches `pi*` everywhere by **episode 135** and ends right in **12 of 13** squares.
+  The single miss is at (2,3) - the predict-first square - and is a genuine near-tie: `down` vs
+  `left` differ in true value by 0.018. It still does not walk past the pit, which is the lesson
+  that matters.
+- The error **plateaus at ~0.12 instead of reaching 0**, and the residual is one-sided:
+  **13 of 13 states are overestimated**, mean +0.079. That is *maximisation bias* - `max_a Q`
+  over noisy estimates systematically overshoots - and it earned its own frame plus a pointer to
+  Double Q-learning (van Hasselt, 2010).
+
+A first attempt with constant `alpha=0.2` did NOT converge (matched `pi*` at episode 491 then
+drifted back to 6 of 13 wrong). The fix is the decaying schedule the deck's own Q-learning slide
+already promises. The script's fail-loud guard caught this; it now asserts the policy claims
+rather than a value threshold, since the value gap is expected bias rather than error.
+
+**2. "When not to use RL" had zero coverage.** Grep confirmed it: nothing on sample cost, nothing
+on when to reach for something else. Every other chapter in this course is honest about limits.
+Two frames added - a decision table (labels available -> supervised; single decision -> not RL;
+known dynamics and small space -> plan directly) and the price: DQN's **50 million frames per
+game, about 38 days of play** (web-verified), plus the point that exploration is free in a
+simulator and expensive on a robot or a live system.
 
 ## Still open
 
