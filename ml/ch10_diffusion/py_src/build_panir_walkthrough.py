@@ -638,14 +638,49 @@ gen = [stats(w) for w in word]
 for letter, s in zip(LETTERS, gen):
     print(f"  {letter}  ink={s['ink']:.3f}  h={s['h']:2d}  w={s['w']:2d}  com_y={s['com_y']:.1f}")
 
-print("\\nreal, one sample per class:")
+print("\\nreal, one sample per class (NOTE: five different writers - see below):")
 real = [stats(XL[yL == c][0]) for c in range(5)]
 for letter, s in zip(LETTERS, real):
-    print(f"  {letter}  ink={s['ink']:.3f}  h={s['h']:2d}  w={s['w']:2d}  com_y={s['com_y']:.1f}")
+    print(f"  {letter}  ink={s['ink']:.3f}  h={s['h']:2d}  w={s['w']:2d}  com_y={s['com_y']:.1f}")""")
 
-for name, group in (("generated", gen), ("real", real)):
-    ink = [s["ink"] for s in group]; com = [s["com_y"] for s in group]
-    print(f"\\n{name:9s} ink spread {max(ink) - min(ink):.3f}   com_y spread {max(com) - min(com):.1f}")""")
+md("""**A comparison we cannot make, and what to do instead.**
+
+The tempting move is to put the generated spread next to the real spread and call the difference
+the model's failure. That would be wrong here. The Mashtots files carry **no writer identity** -
+each class folder is just numbered images - so those five real letters come from five *different*
+hands. Their spread measures between-writer variation as much as anything else, and it is not a
+"one hand" baseline.
+
+Rather than compare against a baseline we do not have, test the model's **own** assumption. If
+each letter really is drawn independently, then five letters from *one* generated word should be
+no more alike than five letters taken from *five different* generated words. Same seed discipline,
+same sampler - the only thing that changes is whether the letters were produced together.""")
+
+code("""N_WORDS = 8
+words = [sample_cond(cond, torch.arange(5), betas_t, abars_t, mode="ddim", seed=1000 + k)
+         for k in range(N_WORDS)]
+ink = np.array([[stats(w)["ink"] for w in word] for word in words])   # (N_WORDS, 5)
+
+within = ink.max(axis=1) - ink.min(axis=1)
+
+# Rebuild pseudo-words: letter i taken from a different run for each position.
+rng = np.random.default_rng(509)
+cols = np.array([rng.permutation(N_WORDS) for _ in range(5)])
+mixed = np.array([[ink[cols[i, k], i] for i in range(5)] for k in range(N_WORDS)])
+across = mixed.max(axis=1) - mixed.min(axis=1)
+
+print(f"{N_WORDS} words, ink spread across the five letters of a word")
+print(f"  letters generated TOGETHER (one word):      {within.mean():.4f}  +/- {within.std():.4f}")
+print(f"  letters generated SEPARATELY (mixed runs):  {across.mean():.4f}  +/- {across.std():.4f}")
+print(f"  ratio: {within.mean() / across.mean():.2f}")""")
+
+md("""**Read the ratio.** If the model had any notion of a word, letters produced together would
+agree with each other more than letters stitched from unrelated runs, and the ratio would be
+below 1. It is not - the two are the same to within noise.
+
+That is the independence assumption, measured on the model's own output, with no assumption about
+the dataset and no baseline we cannot construct. A word from this model is exactly five separate
+draws that happen to be displayed next to each other.""")
 
 md("""**The model's assumption, written out.** Each letter was drawn from an independent sample of
 noise, with no term coupling it to its neighbours:
