@@ -129,6 +129,25 @@ Scope ~5 frames + a transition. Decide whether it lives at the end of `[12]` or 
 
 ---
 
+## Cut from ch12 (vision-language models), 2026-08-07
+
+Both cut by the "figures only, no training" decision (`DECISIONS.md` #9), not because they are
+bad ideas. Either would make a strong homework for the chapter, which currently has none.
+
+1. **The AR-vs-diffusion head-to-head on the ՊԱՆԻՐ letters.** Train a VQ-VAE plus a small
+   autoregressive transformer on `ml/ch10_diffusion/data/mashtots_panir_24.npz`, generate the
+   word one token at a time, and put it next to ch10's diffusion samples. This is the
+   Chameleon-vs-Transfusion argument reduced to a dataset students already know, on a machine
+   with no GPU - both models are tiny (24x24 inputs, 6x6 token grids, minutes on CPU). L34
+   currently *asserts* the tradeoff and cites published work; this would demonstrate it.
+2. **A real CLIP zero-shot run on the Armenian letters.** Ask CLIP to name Պ / Ա / Ն / Ի / Ր
+   from sentence prompts. Expected to fail - CLIP has barely seen Armenian script - and the
+   failure is the teachable part: it shows concretely what "zero-shot" is bounded by.
+   Blocked on a dependency choice (`open_clip` vs `transformers`) plus a ~350 MB download,
+   which is the instructor's call, not Claude's.
+
+---
+
 ## How to use this file
 
 - Top-level of repo means it appears in every `ls` and every `git status`. Visible by design.

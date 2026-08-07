@@ -1,0 +1,589 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Lecture 33: Vision-Language Models I}
+\subtitle{How a model sees}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The most ordinary thing you do with a chat model}
+  \small
+  You paste a photo of a handwritten receipt and ask what the total is. It answers
+  correctly. You paste a chart and ask which quarter dropped. It answers.
+  \vskip 6pt
+  Nothing in this course so far can do that.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A transformer (ch9) consumes a \textbf{sequence of vectors}. Text arrives as one
+      naturally: split into tokens, look each up in an embedding table.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      An image is a \textbf{grid of pixels}. There is no sentence, no vocabulary, and no
+      obvious order. Nothing to look up.}}
+  \end{columns}
+  \vskip 8pt
+  This lecture is that bridge. The next one is the harder direction: making the same model
+  \textbf{draw}.
+\end{frame}
+
+\begin{frame}{Two questions that sound the same and are not}
+  \small
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{1. How does a model \emph{see} an image?}
+    \vskip 4pt
+    \footnotesize
+    Settled. One recipe, essentially everyone uses it, and the arguments left are about
+    efficiency.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      This lecture. You will be able to explain every open-weights vision-language model
+      released in the last three years.}}
+    \column{0.48\textwidth}
+    \textbf{2. How does a model \emph{draw} an image?}
+    \vskip 4pt
+    \footnotesize
+    Not settled. Three competing architectures, actively argued about, and the leading
+    products do not agree with each other.
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      L34. The disagreement is the interesting part, and it comes from a genuine conflict
+      with what you built in ch10.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  A \textbf{vision-language model} (\textbf{VLM}) is any model that takes both images and
+  text as input. The good ones do both questions at once.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{An image is not a sequence}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{An image is not a sequence}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      So make it one. The trick is almost insultingly simple.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Patchify}
+  \small
+  Cut the image into fixed squares. Flatten each square into a vector. Push each vector
+  through \textbf{one linear layer}. Done - the image is now a sequence, and every tool from
+  ch9 applies unchanged.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.93\textwidth]{patchify_grid.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Shown on a letter from ch10, at $24\times24$ with $4\times4$ patches. Each patch becomes a
+  16-dimensional vector; the linear layer maps it to whatever width the transformer wants.
+\end{frame}
+
+\begin{frame}{The arithmetic that governs everything downstream}
+  \small
+  A patch grid of side $s/p$ gives $(s/p)^2$ tokens. This number comes back as a
+  \textbf{cost} in every design decision for the rest of the lecture.
+  \vskip 8pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lccc}
+      \toprule
+      \textbf{Resolution} & \textbf{Patch} & \textbf{Grid} & \textbf{Tokens} \\
+      \midrule
+      $224\times224$ & $16\times16$ & $14\times14$ & 196 \\
+      $224\times224$ & $14\times14$ & $16\times16$ & 256 \\
+      \rowcolor{armred!12}
+      $336\times336$ & $14\times14$ & $24\times24$ & \textbf{576} \\
+      $1024\times1024$ & $14\times14$ & $73\times73$ & 5329 \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The highlighted row is \textbf{LLaVA-1.5} (Liu et al., 2023), the reference open
+      vision-language model. Remember \textbf{576}.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      Tokens grow with the \emph{square} of resolution, and attention costs the
+      \emph{square} of tokens. Doubling resolution is roughly $16\times$ the attention work.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The Vision Transformer}
+  \small
+  Dosovitskiy et al.\ (2021) put patches into a standard transformer encoder and changed
+  almost nothing else. The \textbf{Vision Transformer} (\textbf{ViT}) is the result, and it
+  underlies essentially every vision encoder in use today.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \footnotesize
+    \begin{enumerate}\itemsep 3pt
+      \item Patchify, then one linear projection.
+      \item \textbf{Add position embeddings.} Without them a picture is an unordered bag of
+        patches - self-attention has no idea which patch was where.
+      \item Optionally prepend a \textbf{classification token} (\textbf{CLS}) whose output
+        represents the whole image.
+      \item Run $N$ ordinary transformer blocks.
+    \end{enumerate}
+    \column{0.45\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The naming is honest.} There is no vision-specific machinery here. It is the
+      ch9 architecture, fed differently.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \small
+  A CNN (ch6) is built around a strong assumption: \textbf{nearby pixels belong together},
+  hard-wired by the convolution kernel. A Vision Transformer has no such wiring - every
+  patch can attend to every other patch from layer one.
+  \vskip 10pt
+  \begin{center}
+    \textbf{So: does a Vision Transformer need convolution to learn that neighbouring
+    patches are related?}
+  \end{center}
+  \vskip 10pt
+  \pause
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{No - given enough data.} With large training sets it learns local structure by
+      itself, and beats comparable CNNs.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{But on small data it loses.} The convolution's assumption is genuinely
+      correct, and a model given the right prior needs fewer examples to find it.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  This is the bias-variance tradeoff from ch2, wearing an architecture costume: a helpful
+  constraint is worth a lot when data is scarce and becomes a ceiling when it is not.
+\end{frame}
+
+% ================================================================
+\section{Two encoders, one space}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Two encoders, one space}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Patches are only useful if their meaning lines up with words.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The problem with a plain Vision Transformer}
+  \small
+  Train a Vision Transformer to classify 1000 categories and its features are excellent
+  \textbf{at those 1000 categories}. Ask about anything else and the representation was
+  never asked to encode it.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    We want an image representation shaped by \textbf{language}, so that "a photo of a dog
+    wearing a hat" and the corresponding picture land in the same place. Then a language
+    model can read the image features because they already speak its language.}}
+  \vskip 8pt
+  The supervision for that is lying around the internet in enormous quantity: images that
+  came with captions.
+\end{frame}
+
+\begin{frame}{CLIP}
+  \small
+  \textbf{Contrastive Language-Image Pre-training} (\textbf{CLIP}), Radford et al.\ (2021).
+  Two encoders - one for images, one for text - trained on \textbf{400 million}
+  image-caption pairs.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \footnotesize
+    Take a batch of $N$ pairs. Embed all $N$ images and all $N$ captions. Now score every
+    image against every caption:
+    \vskip 5pt
+    \begin{itemize}\itemsep 2pt
+      \item $N$ pairs are \textbf{correct} matches.
+      \item $N^2 - N$ pairs are \textbf{wrong}.
+    \end{itemize}
+    \vskip 5pt
+    Train so the correct ones score high and the rest score low. That is the entire
+    objective.
+    \column{0.56\textwidth}
+    \begin{center}
+      \includegraphics[width=0.86\linewidth]{clip_contrastive.pdf}
+    \end{center}
+  \end{columns}
+  \vskip 2pt
+  \footnotesize
+  \centering
+  Illustrative similarity values, drawn from a specified distribution. The
+  \textbf{structure} is exact.
+\end{frame}
+
+\begin{frame}{Why the free negatives matter so much}
+  \small
+  Supervised learning needs someone to write down the right answer. Contrastive learning
+  only needs pairs that \textbf{belong together}, and it manufactures its own wrong answers
+  from the rest of the batch.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      At $N = 32{,}768$, one training step supplies about \textbf{one billion} negative
+      comparisons at the cost of embedding 32,768 items.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{So batch size is not just a speed knob here.} It changes how hard the task is,
+      and therefore what the model learns. Small batch, easy task, weaker features.}}
+  \end{columns}
+  \vskip 10pt
+  \footnotesize
+  \textbf{SigLIP} (Zhai et al., 2023) - \textbf{Sigmoid Loss for Language-Image
+  Pre-training} - replaces the batch-wide softmax with an independent sigmoid on each pair.
+  No normalisation across the batch, so training works at smaller batches and scales more
+  easily. It is now the default encoder in most open vision-language models.
+\end{frame}
+
+\begin{frame}{Zero-shot classification falls out for free}
+  \small
+  CLIP was never trained to classify anything. But it can, with no classifier head and no
+  fine-tuning:
+  \vskip 6pt
+  \begin{enumerate}\footnotesize\itemsep 3pt
+    \item Write each class as a sentence: \emph{"a photo of a cat"}, \emph{"a photo of a
+      dog"}, \emph{"a photo of a marshrutka"}.
+    \item Embed all of them with the text encoder.
+    \item Embed the image. Pick the sentence with the highest similarity.
+  \end{enumerate}
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The class list is now a \textbf{string}, decided at inference time. Adding a category
+      costs a sentence, not a retraining run.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Bounded by the captions it saw.} Concepts rare on the web - specialist medical
+      images, minority scripts - are weak. "Zero-shot" is not "knows everything".}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Three ways to give an LLM eyes}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Three ways to give an LLM eyes}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      We have image tokens that mean something. Now attach them to a language model.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Design A - a projector}
+  \small
+  The simplest thing that works, and it works remarkably well. \textbf{LLaVA}
+  (Liu et al., 2023).
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize}]
+      \node[draw, rounded corners, fill=armblue!12, minimum height=0.75cm, text width=1.5cm,
+            align=center] (v) {image\\encoder};
+      \node[draw, rounded corners, fill=armorange!25, right=of v, minimum height=0.75cm,
+            text width=1.5cm, align=center] (p) {2-layer\\MLP};
+      \node[draw, rounded corners, fill=paramgreen!14, right=of p, minimum height=0.75cm,
+            text width=2.5cm, align=center] (l) {LLM\\(unmodified)};
+      \draw[-{Latex}, thick] (v) -- node[above]{576} (p);
+      \draw[-{Latex}, thick] (p) -- node[above]{576} (l);
+      \node[below=0.25cm of l, font=\scriptsize\itshape] {text tokens go in here too};
+    \end{tikzpicture}
+  \end{center}
+  \vskip 4pt
+  \footnotesize
+  A \textbf{multi-layer perceptron} (\textbf{MLP}) maps each of the 576 visual vectors into
+  the language model's embedding space. They are then simply \textbf{prepended to the text
+  tokens}, exactly as if they were words.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The language model is not modified at all.} No new layers, no architecture
+      change. That is why this took off - anyone could bolt vision onto any open LLM.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Cost:} all 576 tokens sit in the context window for the whole conversation.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Design B - a resampler}
+  \small
+  If 576 tokens is too many, \textbf{learn to compress them} to a fixed budget.
+  \textbf{Flamingo} (Alayrac et al., 2022) and \textbf{BLIP-2} (Li et al., 2023).
+  \vskip 6pt
+  \footnotesize
+  A small set of \textbf{learned query vectors} cross-attends to the image features and
+  outputs one vector each. The output count is \textbf{constant} no matter how many patches
+  went in - the image is summarised, not passed through.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Resolution and token cost are now \textbf{decoupled}. Feed a bigger image, pay the
+      same downstream price. This is what makes video remotely affordable.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{A fixed budget is a fixed budget.} Whatever those queries fail to pick up is
+      gone. Dense text in an image suffers badly.}}
+  \end{columns}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{A detail worth stealing.} Flamingo injects vision through gated cross-attention
+    whose gate is initialised to \textbf{zero}. At step one the vision path contributes
+    exactly nothing, so the model \emph{is} the original language model, and vision fades in
+    as the gate opens. Adding a modality can therefore never damage what already worked -
+    the same idea as a residual branch starting at zero.}}
+\end{frame}
+
+\begin{frame}{Design C - early fusion}
+  \small
+  Remove the bridge entirely. \textbf{One transformer}, both modalities, from the first
+  layer. \textbf{Chameleon} (Meta, 2024) is the clearest example, and L34 is mostly about
+  this family.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    There is no adapter to train, no frozen encoder, no projection. Images and text are just
+    two kinds of token in one vocabulary, and one loss covers both.
+    \vskip 6pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      This is the only design that can \textbf{generate} images as naturally as it reads
+      them. A projector is a one-way street.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Costs:} you cannot reuse a pretrained language model as-is, training is much
+      more expensive, and mixed-modality training is unstable enough that Chameleon needed
+      specific fixes to converge at all.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Which won}
+  \small
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lccc}
+      \toprule
+      & \textbf{A: projector} & \textbf{B: resampler} & \textbf{C: early fusion} \\
+      \midrule
+      Token cost & full (576) & fixed, small & full \\
+      Pretrained LLM reusable & yes & yes & no \\
+      Training cost & lowest & low & highest \\
+      Can generate images & no & no & \textbf{yes} \\
+      Detail preserved & high & lossy & high \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 10pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The field moved A $\rightarrow$ C as compute and data grew}, which is the usual
+    direction: hand-designed bridges lose to end-to-end training once you can afford it.
+    B survives where the token budget is the binding constraint, above all in video.}}
+  \vskip 6pt
+  \footnotesize
+  \centering
+  If you are building something today with an open model and a modest budget, A is still the
+  right default.
+\end{frame}
+
+% ================================================================
+\section{What it costs, and what breaks}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What it costs, and what breaks}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Every failure in this section traces back to one number.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{An image is expensive}
+  \small
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{token_budget.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  A $336\times336$ thumbnail costs more context than a full page of writing. A phone photo
+  at native resolution would cost more than this entire lecture as text.
+\end{frame}
+
+\begin{frame}{Stop resizing everything to a square}
+  \small
+  The fixed-resolution habit is inherited from image classification, and it is actively
+  harmful for documents: a wide receipt squashed to $336\times336$ has unreadable text
+  \textbf{before the model sees it}.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Naive Dynamic Resolution} (Qwen2-VL, Wang et al., 2024): keep the original
+      aspect ratio, emit however many tokens the image actually needs. A small icon costs
+      few tokens; a dense page costs many.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      This single change is most of why recent models became usable for
+      \textbf{screenshots, documents and charts}, which is now the dominant real-world use.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  The active research direction is the other side of the same coin: \textbf{token pruning
+  and merging} - drop or combine patches that carry little information, since most of a
+  photograph is background.
+\end{frame}
+
+\begin{frame}{Where vision-language models still fail}
+  \small
+  These are not random weaknesses. Each has a cause you can now name.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{p{3.5cm}p{7.4cm}}
+      \toprule
+      \textbf{Failure} & \textbf{Why} \\
+      \midrule
+      Counting objects & Attention pools information; nothing in the training objective ever
+        rewarded keeping a tally. \\
+      Precise spatial relations & Position embeddings give rough layout, not geometry. \\
+      Reading clocks and gauges & Needs exact angles from a coarse patch grid. \\
+      Dense or small text & Below the patch resolution the characters are simply not there. \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    Notice the pattern: most of these are the \textbf{token budget} again. The information
+    was destroyed at the encoder, and no amount of language-model capability downstream can
+    restore it. Same lesson as ch10, where halving a 1-2 pixel stroke twice erased it before
+    the deep layers ever saw it.}}
+\end{frame}
+
+\begin{frame}{Hallucination, in the visual case}
+  \small
+  A vision-language model will confidently describe objects that are not in the picture -
+  most often objects that \emph{usually} appear alongside what is there.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    Ask about a kitchen photo and you may be told about a refrigerator that is not in frame.
+    Kitchens have refrigerators, and the language model knows that far more strongly than it
+    trusts 576 blurry vectors.
+    \column{0.48\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The language prior overrides the image.} It is the \emph{language} model that
+      was trained on trillions of tokens; the visual evidence is comparatively thin and easy
+      to outvote.}}
+  \end{columns}
+  \vskip 10pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Practical consequence:} a fluent, specific description is not evidence that the
+    model looked carefully. If the answer matters, ask about what is \emph{absent}, or ask
+    twice with the object named differently.}}
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{enumerate}\footnotesize\itemsep 3pt
+      \item Cut an image into patches, project each one, and it is a sequence a transformer
+        can read. That is the whole bridge.
+      \item A Vision Transformer is the ch9 architecture, fed differently. Position
+        embeddings are what stop it being a bag of patches.
+      \item CLIP aligns images and text by contrast, using the batch itself as negatives.
+        Zero-shot classification falls out for free.
+      \item Attach it to a language model with a projector, a resampler, or no bridge at
+        all. The field moved toward no bridge.
+      \item One $336\times336$ image costs \textbf{576} tokens, and most failures trace back
+        to that number.
+    \end{enumerate}
+    \column{0.48\textwidth}
+    \vskip 12pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} reading an image is settled. \textbf{Drawing} one from the same model
+      is not.
+      \vskip 4pt
+      L34 starts from a real conflict: your ch10 diffusion model works in continuous space,
+      and a language model emits discrete tokens. Three different architectures resolve that
+      contradiction three different ways, and we will measure what the most popular one
+      costs on our own letters.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L33 Vision-Language Models I - how a model sees (ch12_vlm). Built 2026-08-07.
+%   Plan: ml/ch12_vlm/VLM_CHAPTER_PLAN.md (approved outline + instructor decisions).
+%
+%   Sources (web sweep 2026-08-07, all listed in the plan):
+%     - Radford et al. (2021) CLIP; Zhai et al. (2023) SigLIP.
+%     - Dosovitskiy et al. (2021) ViT.
+%     - Liu et al. (2023) LLaVA / LLaVA-1.5 - the 576-token and 2-layer-MLP figures.
+%     - Alayrac et al. (2022) Flamingo - Perceiver Resampler, gated cross-attention, alpha=0.
+%     - Li et al. (2023) BLIP-2 - Q-Former.
+%     - Wang et al. (2024) Qwen2-VL - Naive Dynamic Resolution.
+%
+%   Figures (Python-generated, py_src/l33_seeing_figs.py -> fig/):
+%     patchify_grid.pdf, clip_contrastive.pdf, token_budget.pdf.
+%   NO MODEL IS TRAINED in this chapter (instructor decision). clip_contrastive is a
+%   labelled schematic; patchify and token_budget are exact.
+%
+%   Pedagogical decisions:
+%     - Intuition-first, NOT full derivations (instructor decision, deviates from
+%       ml/SLIDE_STYLE.md deliberately - see the plan). The contrastive loss is described
+%       in words and by the similarity matrix; InfoNCE is never written out.
+%     - The token budget (576) is introduced early and then used as the single cause behind
+%       the whole failure section, so the deck has one spine rather than a list of facts.
+%     - The predict-first frame is on ViT-vs-CNN because the answer ("no, given enough
+%       data") is genuinely counter-intuitive and reconnects to ch2's bias-variance.
+%     - patchify_grid reuses a ch10 Mashtots letter: no new download, and the chapter's
+%       running example is already familiar.
+%     - Flamingo's alpha=0 gate is given a callout because it is a transferable trick, not
+%       a Flamingo detail.
+%     - The A/B/C comparison ends with a concrete recommendation (A for a modest budget)
+%       rather than leaving it open.
+%
+%   Next deck: L34_vlm_drawing.tex (image tokenization -> autoregressive generation ->
+%   unified models -> GPT-4o).

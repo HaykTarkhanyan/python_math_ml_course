@@ -9,6 +9,52 @@ this file holds the choice and a pointer.
 
 ---
 
+## #9 - ch12 (vision-language models) ships as two decks with figures only, no trained model
+
+**Date:** 2026-08-07 · **Status:** active
+
+**Decision.** New chapter `ml/ch12_vlm/`, decks **L33** (how a model sees) and **L34** (how a
+model draws), registered between `ch11_rl` and `llm_training`. **Intuition-first**, not full
+derivations. **No neural network is trained anywhere in the chapter.**
+
+**Why.** The course could explain transformers (ch9), autoencoders (ch8) and diffusion (ch10)
+but not how a chat model reads a pasted photo - the single most visible AI capability to a
+non-specialist, and the natural convergence point of four earlier chapters. Two decks because
+"seeing" is a settled engineering recipe while "drawing" is an open architectural argument;
+that is a real conceptual boundary, not an arbitrary split at 47 frames.
+
+Intuition-first is a **deliberate deviation from `ml/SLIDE_STYLE.md`** (which asks for full
+step-by-step derivations), matching the precedent set by `ch11_rl`. It shows in exactly two
+places: the contrastive loss and the VQ straight-through estimator, both described in words.
+
+**The chapter still measures something.** `fig/vq_quantization.pdf` fits a k-means codebook on
+ch10's 4,481 letters, which is clustering rather than network training (~8 s):
+
+| Codebook K | 8 | 32 | 128 | 512 |
+|---|---|---|---|---|
+| Reconstruction MSE | 0.01819 | 0.01064 | 0.00844 | **0.00654** |
+
+Two results are taught from it: sharply diminishing returns (128 -> 512 buys 22% for 4x the
+vocabulary), and visible stroke breakup even at K=512 because each patch is quantized with no
+knowledge of its neighbours. The second is **#8's finding again** - 1-2 px strokes are what
+every compression scheme destroys first.
+
+**Alternatives rejected.**
+- *Train a VQ-VAE plus an autoregressive generator on the ch10 letters and race it against the
+  diffusion model* - the strongest idea in the plan, and cut by the instructor as too much
+  build. The chapter now cites published comparisons instead of running its own.
+- *A real CLIP zero-shot run on the Armenian letters* - cut. It needs a ~350 MB download and a
+  new dependency (`open_clip` or `transformers`), which is a dependency choice that was not on
+  the table. Parked in `DEFERRED_TODO.md`.
+- *One long deck* (the ch11 shape) and *three decks* - rejected for the boundary reason above.
+
+**What would change this.** If the chapter gets a homework slot, the cut AR-vs-diffusion
+project is the obvious candidate and would give the chapter a project matching ch10's and
+ch11's. If GPT-4o's architecture is ever published, the L34 "known vs inferred" frame needs
+rewriting - it is currently the one frame in the chapter that could teach something false.
+
+---
+
 ## #8 - The ՊԱՆԻՐ denoiser is a ONE-level UNet at ch=96; #7's two-level design was the bug
 
 **Date:** 2026-08-07 · **Status:** active · **supersedes #7**

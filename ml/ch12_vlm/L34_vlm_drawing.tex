@@ -1,0 +1,556 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Lecture 34: Vision-Language Models II}
+\subtitle{How a model draws}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The same model wrote the caption and drew the picture}
+  \small
+  You ask a chat model to describe a photo. Then you ask it to draw one. Same conversation,
+  same model, no tool call, and you can ask it to change the third object from the left.
+  \vskip 8pt
+  That should strike you as architecturally strange, because of what you built in ch10.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Your diffusion model} works in \textbf{continuous} space. It predicts a real
+      valued noise vector and refines a real valued image over 50 passes.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{A language model} emits \textbf{discrete} tokens, one at a time, each an index
+      into a fixed vocabulary, each sampled from a softmax.}}
+  \end{columns}
+  \vskip 8pt
+  \centering
+  These are not the same kind of object. Something has to give.
+\end{frame}
+
+\begin{frame}{Three ways to resolve it, and nobody agrees}
+  \small
+  L33 said reading an image is settled. Drawing one is not. There are three live answers, all
+  shipping in real systems today:
+  \vskip 8pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lp{7.2cm}}
+      \toprule
+      \textbf{Make the image discrete} & Chop it into a vocabulary and predict tokens.
+        One model, one loss, no diffusion at all. \\
+      \textbf{Make the model do both} & Autoregressive on text, diffusion on images, one
+        shared transformer. \\
+      \textbf{Use different encoders} & One representation for understanding, another for
+        generating, sharing only the trunk. \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    We take the first one seriously enough to \textbf{measure it on our own letters}, because
+    it is the one with an obvious cost - and the cost turns out to be exactly the fragility
+    ch10 ran into.}}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{A picture made of words}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{A picture made of words}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      If an image were a sequence of symbols from a fixed vocabulary, GPT would already
+      know what to do with it.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{VQ-VAE - an autoencoder with a dictionary}
+  \small
+  Start from the autoencoder of ch8, and change exactly one thing.
+  \vskip 6pt
+  \begin{center}
+    \begin{tikzpicture}[node distance=0.5cm, every node/.style={font=\scriptsize}]
+      \node[draw, rounded corners, fill=armblue!12, minimum height=0.7cm, text width=1.3cm,
+            align=center] (e) {encoder};
+      \node[draw, rounded corners, fill=armorange!30, right=of e, minimum height=0.7cm,
+            text width=1.9cm, align=center] (q) {snap to nearest\\codebook entry};
+      \node[draw, rounded corners, fill=armblue!12, right=of q, minimum height=0.7cm,
+            text width=1.3cm, align=center] (d) {decoder};
+      \draw[-{Latex}, thick] (e) -- node[above, font=\tiny]{$\R^d$} (q);
+      \draw[-{Latex}, thick] (q) -- node[above, font=\tiny]{$\R^d$} (d);
+      \node[below=0.2cm of q, font=\tiny\itshape, text width=3cm, align=center]
+        {the latent is now an \textbf{integer}};
+    \end{tikzpicture}
+  \end{center}
+  \vskip 4pt
+  \footnotesize
+  Keep a learned table of $K$ vectors - the \textbf{codebook}. After the encoder produces a
+  latent vector, replace it with the nearest entry in that table and pass the entry to the
+  decoder. \textbf{Vector Quantized Variational Autoencoder} (\textbf{VQ-VAE}),
+  van den Oord et al.\ (2017).
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    The latent is no longer a point in a continuous space. It is \textbf{the index of a
+    table row} - a symbol, exactly like a word.}}
+\end{frame}
+
+\begin{frame}{The gradient problem, and the shameless fix}
+  \small
+  "Pick the nearest entry" is an $\argmin$. Its derivative is zero almost everywhere and
+  undefined at the boundaries, so gradients cannot flow back to the encoder and the encoder
+  never learns.
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
+      \textbf{The straight-through estimator.} On the way forward, use the codebook entry.
+      On the way back, \textbf{pretend the quantizer was not there} and copy the decoder's
+      gradient straight onto the encoder's output.}}
+    \column{0.48\textwidth}
+    \footnotesize
+    It is not the true gradient of anything. It is a deliberate lie that points in
+    approximately the right direction, and it works well enough that the whole field is
+    built on it.
+    \vskip 5pt
+    Two extra loss terms then pull the codebook entries and the encoder outputs toward each
+    other, so the lie stays small.
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  A recurring pattern in deep learning: when a discrete step blocks the gradient, invent a
+  differentiable fiction and check empirically that it trains.
+\end{frame}
+
+\begin{frame}{The codebook is a vocabulary}
+  \small
+  Once an image is a grid of integers, the analogy to text stops being an analogy.
+  \vskip 8pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lcc}
+      \toprule
+      \textbf{Chameleon} (Meta, 2024) & \textbf{Text} & \textbf{Image} \\
+      \midrule
+      Vocabulary size & 65,536 & 8,192 \\
+      Tokens per item & varies & 1,024 per $512\times512$ image \\
+      Produced by & byte-pair encoding & learned image tokenizer \\
+      Predicted by & one softmax & \textbf{the same softmax} \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 10pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    There is now \textbf{one sequence}, containing both kinds of token, predicted by
+    \textbf{one model} with \textbf{one loss}. Nothing in the transformer needs to know which
+    tokens were pixels. This is the cleanest answer to the opening contradiction - and it is
+    clean precisely because it forces images to become discrete.}}
+\end{frame}
+
+\begin{frame}{So what does forcing them to be discrete cost?}
+  \small
+  \footnotesize
+  Measured on the ch10 dataset: 4,481 handwritten letters at $24\times24$, cut into
+  $4\times4$ patches, with a $K$-entry codebook fitted by k-means.
+  \vskip 1pt
+  \begin{center}
+    \includegraphics[width=0.83\textwidth]{vq_quantization.pdf}
+  \end{center}
+  \vskip -1pt
+  \scriptsize
+  k-means stands in for a learned VQ-VAE encoder, which would do better - so read this as a
+  \textbf{lower bound} on quality.
+\end{frame}
+
+\begin{frame}{Two things to read off that figure}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{1. Sharply diminishing returns.}
+    \vskip 4pt
+    \footnotesize
+    $K{=}8 \rightarrow 32$ nearly halves the error (0.0182 $\rightarrow$ 0.0106).
+    $K{=}128 \rightarrow 512$ buys only \textbf{22\%} for four times the vocabulary.
+    \vskip 6pt
+    Growing $K$ is not a solution, which is why the field went to cleverer quantization
+    instead - MAGVIT-2 reaches a vocabulary of $2^{18}$ only by dropping the nearest-neighbour
+    lookup altogether.
+    \column{0.5\textwidth}
+    \textbf{2. Even at $K{=}512$ the strokes break up.}
+    \vskip 4pt
+    \footnotesize
+    Look at the letters, not the number. The reconstruction is speckled and the strokes come
+    apart at patch boundaries.
+    \vskip 6pt
+    Each patch is quantized \textbf{independently}, with no knowledge of its neighbours. A
+    stroke crossing a boundary has no mechanism holding it continuous.
+  \end{columns}
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{This is ch10's finding again.} These strokes are 1-2 pixels wide. There, halving
+    the image twice erased them before the deep layers saw them. Here, quantizing $4\times4$
+    blocks independently breaks them. Thin high-frequency structure is what every
+    compression scheme destroys first - and text in an image is exactly that.}}
+\end{frame}
+
+\begin{frame}{Compression, stated as a number}
+  \small
+  With $K = 512$ and $4\times4$ patches, one $24\times24$ letter becomes:
+  \vskip 8pt
+  \begin{center}
+    36 tokens $\times$ $\log_2 512$ bits $=$ \textbf{324 bits}, against
+    $24 \times 24 \times 8 = $ \textbf{4{,}608 bits} raw.
+    \vskip 4pt
+    A \textbf{14.2$\times$} compression.
+  \end{center}
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      That compression is the \emph{point}. A sequence model cannot afford one token per
+      pixel - $512\times512\times3$ would be 786,432 tokens.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Chameleon's tokenizer gets $512\times512$ down to \textbf{1,024} tokens. That is the
+      only reason putting an image in a language model's sequence is possible at all.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Next-token prediction, on a picture}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Next-token prediction, on a picture}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      There is no new algorithm in this section. That is the whole point of it.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Flatten it and predict the next one}
+  \small
+  \begin{center}
+    \includegraphics[width=0.88\textwidth]{raster_order.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Read the token grid top to bottom, left to right. Now it is a sequence, and generating an
+  image is \textbf{exactly} the training objective of GPT: predict token $t+1$ given tokens
+  $1 \ldots t$. Prompt it with text tokens first and you have text-to-image, with no new
+  machinery whatsoever.
+\end{frame}
+
+\begin{frame}{Why this was long thought a dead end}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{It is strictly sequential.} 1,024 tokens means \textbf{1,024 forward passes},
+      and token 900 cannot start until 899 is done.}}
+    \vskip 6pt
+    \footnotesize
+    Your ch10 sampler needed 50 passes with DDIM, and every pixel moved in parallel on each
+    one. Autoregressive generation looked like the obviously worse deal.
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Raster order is also arbitrary.} Nothing about a picture says the top-left
+      corner comes "first". A caption has a real order; an image does not.}}
+    \vskip 6pt
+    \footnotesize
+    Diffusion has no such asymmetry, which is part of why it won the 2021-2024 image
+    generation era outright.
+  \end{columns}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{What changed:} the goal stopped being "best image generator" and became "one
+    model that does everything". Once you want interleaved text and images, editing by
+    conversation, and knowledge shared between the two, the token formulation stops being a
+    handicap and starts being the only thing that composes.}}
+\end{frame}
+
+% ================================================================
+\section{One model for both}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{One model for both}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Three architectures, three answers to the same contradiction.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Paradigm 1 - fully discrete}
+  \small
+  \textbf{Chameleon} (Meta, 2024). Quantize images, put both token types in one vocabulary,
+  train one transformer with one cross-entropy loss. Early fusion, as in L33's Design C.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Maximum elegance.} Interleaved text and images in any order, one objective,
+      and every trick that works for language models transfers unchanged.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Pays at the tokenizer.} Everything the codebook throws away is gone before
+      the transformer starts - the effect we just measured on the letters.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  Training mixed modalities was also unstable enough that Chameleon needed specific fixes
+  (query-key normalisation among them) to converge at scale.
+\end{frame}
+
+\begin{frame}{Paradigm 2 - hybrid}
+  \small
+  \textbf{Transfusion} (Meta, 2024). Do not quantize at all. Keep images as
+  \textbf{continuous} patch latents, and run \textbf{both} objectives in one transformer.
+  \vskip 8pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lcc}
+      \toprule
+      & \textbf{Text tokens} & \textbf{Image patches} \\
+      \midrule
+      Representation & discrete & continuous \\
+      Objective & next-token cross-entropy & diffusion denoising (ch10) \\
+      Attention & causal & bidirectional within the image \\
+      \midrule
+      Transformer & \multicolumn{2}{c}{\textbf{shared, one set of weights}} \\
+      Loss & \multicolumn{2}{c}{the two, summed} \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{This is your ch10 model living inside a language model.} The DDPM loss you
+    derived in L28 is one of the two terms. No quantization means no codebook damage, at the
+    cost of a genuinely more complicated system.}}
+\end{frame}
+
+\begin{frame}{Paradigm 3 - decoupled encoders}
+  \small
+  \textbf{Janus} (DeepSeek, 2024). Observe that understanding and generating want
+  \textbf{different} representations, and stop forcing one to serve both.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\itemsep 3pt
+      \item To \textbf{understand}: SigLIP features (L33) - semantic, abstract, lossy about
+        exact pixels. Good, because you want the meaning.
+      \item To \textbf{generate}: quantized tokens - concrete, reconstructable. Good,
+        because you have to output actual pixels.
+    \end{itemize}
+    \vskip 5pt
+    Only the language model trunk is shared.
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The insight worth keeping:} "unified" does not have to mean "one
+      representation". Forcing a single encoder to be both semantic and reconstructable
+      makes it worse at each.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{GPT-4o's native image generation}
+  \small
+  The most visible system of all, and the one we know least about. What follows is
+  \textbf{reconstruction from published work}, not an official architecture.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Reasonably established:}
+    \begin{itemize}\itemsep 2pt
+      \item Native - not a call out to a separate image model.
+      \item Images as \textbf{continuous} latent patches, not discrete codes.
+      \item Explicit begin-image and end-image markers in the token stream.
+      \item A combined language-modelling and denoising loss.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Inferred, and should be labelled so:}
+    \begin{itemize}\itemsep 2pt
+      \item Model sizes and layer counts.
+      \item The exact noise schedule.
+      \item Whether generation is row-by-row or whole-image.
+      \item Data mixing ratios.
+    \end{itemize}
+  \end{columns}
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Be careful how you repeat this.} It is widely described online as
+    "autoregressive image generation", which is at best half right - the reconstruction that
+    fits the evidence is Paradigm 2, autoregressive over \emph{text} with
+    \emph{diffusion} on the image latents.}}
+\end{frame}
+
+\begin{frame}{Why writing text inside images suddenly worked}
+  \small
+  For years, generated images contained text-shaped marks that were not text. Then, quite
+  abruptly, they contained sentences.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      A dedicated image model has a text encoder bolted on and no idea how letters are
+      spelled. A unified model has \textbf{spelling knowledge in the same weights} that are
+      drawing the picture.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Same reason editing by conversation works: "make the sign say OPEN" needs the model to
+      hold the picture and the instruction in one context, not to re-generate from a new
+      prompt.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  This is ch10's closing point, answered. There, each letter of the word was generated
+  \textbf{independently}, so the result had no single hand. A unified model does not carry
+  that independence assumption - the whole image is one sequence, conditioned on everything
+  before it, letters included.
+\end{frame}
+
+% ================================================================
+\section{What it costs}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What it costs}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The honest frame, as in every chapter.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The bill}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{Tokens.} 1,024 per image is cheap for one picture and ruinous for video: one
+    second at 24 frames is roughly \textbf{25,000 tokens} before a single word of prompt.
+    \vskip 6pt
+    \textbf{Sequential decoding.} Generating 1,024 tokens one at a time is slow in a way
+    that parallel hardware cannot rescue.
+    \vskip 6pt
+    \textbf{Training.} Early fusion means no reusing an existing language model. You pay for
+    everything, from scratch.
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Still unsolved:}
+      \vskip 3pt
+      - the tokenizer is a lossy bottleneck nobody is happy with;
+      \vskip 2pt
+      - understanding and generation still interfere with each other during training;
+      \vskip 2pt
+      - evaluation is weak - there is no agreed measure of "did it follow the instruction";
+      \vskip 2pt
+      - fine detail and text remain the first things to break.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{enumerate}\footnotesize\itemsep 3pt
+      \item A language model emits discrete symbols; ch10's diffusion works in continuous
+        space. Unifying them means resolving that.
+      \item \textbf{VQ-VAE} makes an image discrete: an autoencoder whose latent is snapped
+        to a codebook entry, trained through a deliberate gradient fiction.
+      \item We measured the cost on our own letters. $K{=}512$ gives 14.2$\times$
+        compression, sharply diminishing returns, and \textbf{visibly broken strokes} -
+        thin structure is destroyed first, exactly as in ch10.
+      \item Once discrete, generating an image is next-token prediction in raster order.
+        No new algorithm.
+      \item Three unified architectures: fully discrete (Chameleon), hybrid
+        autoregressive-plus-diffusion (Transfusion), decoupled encoders (Janus). GPT-4o most
+        likely resembles the second.
+    \end{enumerate}
+    \column{0.48\textwidth}
+    \vskip 10pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Next:} you have now seen how a single transformer can read text, read images,
+      and draw them.
+      \vskip 4pt
+      What is left is how such a model is actually \emph{trained to be useful} - instruction
+      following, preferences, and reinforcement learning on top of a pretrained model.
+      That is \texttt{ml/llm\_training/}, with ch11's reinforcement learning as the
+      foundation.}}
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The unifying idea of this whole chapter: \textbf{make everything a sequence of
+      vectors, and one architecture will read all of it.}}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L34 Vision-Language Models II - how a model draws (ch12_vlm). Built 2026-08-07.
+%   Plan: ml/ch12_vlm/VLM_CHAPTER_PLAN.md (approved outline + instructor decisions).
+%
+%   Sources (web sweep 2026-08-07, all listed in the plan):
+%     - van den Oord et al. (2017) VQ-VAE - codebook, straight-through estimator.
+%     - Chameleon (Meta, 2024) - 1024 tokens per 512x512, codebook 8192, text vocab 65536,
+%       QK-norm for stability. arxiv 2405.09818.
+%     - Transfusion (Meta, 2024) - shared transformer, summed LM + diffusion loss.
+%     - Janus / Janus-Pro (DeepSeek, 2024) - decoupled SigLIP-understand / VQ-generate.
+%     - "Unified Multimodal Understanding and Generation Models" survey, arxiv 2505.02567 -
+%       the three-paradigm taxonomy this section follows.
+%     - "Autoregressive Models in Vision: A Survey", arxiv 2411.05902 - VQGAN lineage,
+%       codebook sizes, MAGVIT-2 lookup-free quantization at 2^18.
+%     - Aman's AI Journal, GPT-4o native image generation - the reconstruction, explicitly
+%       presented on-slide as inference rather than fact.
+%
+%   Figures (Python-generated, py_src/l34_drawing_figs.py -> fig/):
+%     vq_quantization.pdf, raster_order.pdf.
+%   NO NEURAL NETWORK IS TRAINED (instructor decision). vq_quantization fits a k-means
+%   codebook (~8 s) as a labelled stand-in for a learned VQ-VAE; it is therefore a LOWER
+%   bound on quality, which is the safe direction for the slide's claim.
+%
+%   Measured numbers quoted on slides, from logs/l34_drawing_figs.log:
+%     MSE by codebook size K=8/32/128/512: 0.01819 / 0.01064 / 0.00844 / 0.00654.
+%     324 bits vs 4608 raw = 14.2x. 128->512 improves only 22%.
+%
+%   Pedagogical decisions:
+%     - Intuition-first (instructor decision, deviates from ml/SLIDE_STYLE.md deliberately).
+%       The straight-through estimator is explained as "a deliberate lie" in words; no
+%       gradient algebra. The contrastive/ELBO style derivations are absent by design.
+%     - The chapter's own measurement is deliberately a NEGATIVE result: quantization
+%       visibly breaks the letters. It reconnects to ch10's depth finding rather than
+%       introducing an unrelated lesson.
+%     - GPT-4o gets an explicit known-vs-inferred split, and a warning that the popular
+%       "it is autoregressive" description is at best half right. This is the one place the
+%       deck could easily teach something false.
+%     - The "why text in images works" frame closes ch10's open question about independent
+%       per-letter generation, so the two chapters form an arc.
+%     - No homework frame (house rule: homework lives on the .qmd).
+%
+%   Next: ml/llm_training/ (RLHF, preference optimisation), which ch11_rl feeds.
