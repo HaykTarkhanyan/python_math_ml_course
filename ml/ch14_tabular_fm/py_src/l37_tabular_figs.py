@@ -240,8 +240,11 @@ def fig_scaling_timeline():
                 va="top" if up > 0 else "bottom", fontsize=8, color="0.4")
     ax.set_ylim(-1.15, 1.15); ax.set_xlim(-0.6, len(papers) - 0.4)
     ax.axis("off")
-    ax.set_title("Six papers whose whole purpose is fitting more rows in the context\n"
-                 "that is the shape of the method, not a frontier", fontsize=11)
+    # NB: the title deliberately does NOT say "the shape of the method, not a frontier" - the
+    # ceiling moved ~100x between the Nature paper and TabPFN-3, so that framing is wrong and
+    # would contradict the slide's own callout.
+    ax.set_title("Six papers whose whole purpose is fitting more rows into the context",
+                 fontsize=11)
     fig.tight_layout()
     out = FIG / "scaling_timeline.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
