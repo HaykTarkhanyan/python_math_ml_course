@@ -1,0 +1,929 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Lecture 38: Vision-Language-Action Models}
+\subtitle{Robots that read}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \vskip -8pt
+  \begin{center}
+    \footnotesize\color{armred}\textbf{Every number in this deck was checked on 8 August 2026.}
+    This field turns over every few months, so a model list older than that is already wrong.
+  \end{center}
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{You taught it to see. Now make it do something.}
+  \small
+  In L33 a model looked at a kitchen photo and described it. In L34 it drew one. Both
+  outputs were the same kind of thing: \textbf{tokens a human reads}.
+  \vskip 6pt
+  Point the same camera at the same kitchen and say \emph{"put the bowl in the sink"}. Now
+  the output has to be a number that a motor can execute, right now, and if it is wrong the
+  bowl breaks.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      A \textbf{Vision-Language-Action model} (\textbf{VLA}) is a vision-language model
+      fine-tuned so that its output is not text but \textbf{robot actions}.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      That one change breaks almost everything you have relied on: no ground truth to
+      condition on, no internet-scale corpus, and no way to run the test set twice.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  This lecture is deliberately two-sided. The first half is why this is exciting. The
+  second half is what the measurements actually say.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What a VLA actually is}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What a VLA actually is}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One network replaces an entire hand-built robotics stack. That is the whole claim.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Five robotics words, then we can talk normally}
+  \small
+  You have no robotics background and you do not need one. You need these five.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{p{3.0cm}p{8.6cm}}
+      \toprule
+      \textbf{End effector} & The business end of the arm: a gripper, a suction cup, a hand.
+        Policies usually output where the \emph{end effector} should go, not each joint
+        angle, because that transfers between arms of different shape. \\
+      \textbf{Degrees of freedom} & How many numbers you independently control. Arm plus
+        gripper is \textbf{7}: three positions, three rotations, one open/close. A humanoid
+        with two five-fingered hands is 40+. \\
+      \textbf{Proprioception} & The robot's sense of its own body: current joint angles,
+        gripper width. Cheap, exact, fed in alongside the images. \\
+      \textbf{Teleoperation} & A human driving the robot live, through a controller or a
+        small leader arm the real arm mirrors. This is how essentially all training data is
+        made. \\
+      \textbf{Embodiment} & A specific robot body. Different cameras, different action
+        dimensions, different reach. "Cross-embodiment" means one model driving several. \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The definition, and what it deletes}
+  \small
+  A VLA is built on \textbf{backbones pretrained on large-scale vision-language data}, then
+  fine-tuned to emit control commands. The pretraining is load-bearing: a transformer
+  trained from scratch on robot demonstrations is a visuomotor policy, not a VLA.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{The classical stack}, four modules, hand-designed interfaces:
+    \vskip 4pt
+    perception $\rightarrow$ object poses \\
+    symbolic planner $\rightarrow$ subgoals \\
+    motion planner $\rightarrow$ trajectory \\
+    controller $\rightarrow$ torques
+    \vskip 6pt
+    Every stage has its own representation and its own failure mode.
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{A VLA deletes all four.} One network trained end to end on (observation,
+      instruction, action) triples.
+      \vskip 4pt
+      Everything else in this lecture, good and bad, is a consequence of that one
+      decision.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  The bet: internet-scale visual and linguistic knowledge is what robots were always
+  missing, and once a model has it, \emph{one} set of weights can drive many robots at many
+  tasks.
+\end{frame}
+
+\begin{frame}{The loop, once around}
+  \small
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.96\textwidth]{vla_loop.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  Two things a language modeller would not expect. The actions are usually \textbf{deltas}
+  ("move 2 cm left"), not absolute positions, so the same action means the same thing
+  anywhere in the workspace. And the VLA never closes the torque loop: a conventional
+  controller underneath still does that at hundreds of Hz.
+\end{frame}
+
+\begin{frame}{There is no teacher forcing on a robot}
+  \small
+  In language modelling, a mistake at step $t$ does not corrupt step $t+1$ during training:
+  you feed the true token. On a robot, an error at step $t$ moves the arm somewhere the
+  demonstration never visited, and step $t+1$ is now out of distribution.
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Compounding error.} Behaviour cloning drifts, and the drift feeds itself. This
+    has no analogue in ordinary supervised learning, where a wrong prediction on row 7 does
+    not change row 8.}}
+  \vskip 8pt
+  \textbf{Action chunking} is the fix, from ACT (Zhao et al., 2023). Predict the next $H$
+  actions in one shot and execute them open-loop before asking again. Typical $H$ is 8 to
+  50; pi-0 uses $H = 50$.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Error now accumulates over $T/H$ decisions instead of $T$. It also lets the model
+      commit to one intent instead of averaging over a hesitating human's several.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The cost is reactivity.} During a chunk the robot is blind. And there is a
+      visible jerk every time a new chunk starts.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Three ways to make a language model emit a number}
+  \small
+  Discretize, or model the continuous distribution directly? The same question as ch10.
+  \vskip 4pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{p{2.9cm}p{4.4cm}p{4.4cm}}
+      \toprule
+      & \textbf{How} & \textbf{Why it wins or loses} \\
+      \midrule
+      \textbf{Discrete bins} \newline RT-2, OpenVLA
+        & Cut each action dimension into 256 bins, treat each bin as a token, autoregress.
+          OpenVLA overwrites the 256 least-used Llama-2 tokens.
+        & Zero architectural change: the action head \emph{is} the language head. But 7
+          dimensions $\times$ 50 steps is 350 tokens, far too slow. \\
+      \addlinespace
+      \textbf{Compressed tokens} \newline FAST
+        & Discrete cosine transform along the chunk, drop the small high-frequency terms,
+          then byte-pair encode.
+        & Robot trajectories are smooth signals, so treat them like audio. Roughly 10x
+          compression, 5x faster training. \\
+      \addlinespace
+      \textbf{Continuous head} \newline Octo, pi-0, GR00T N1
+        & A separate head trained as conditional diffusion or flow matching, conditioned on
+          the backbone's features.
+        & Demonstrations are genuinely multimodal: two humans reach around a mug two ways,
+          and averaging goes \emph{through} the mug. \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \footnotesize
+  \centering
+  FAST is Frequency-space Action Sequence Tokenization (Pertsch et al., 2025). The trick is
+  borrowed straight from JPEG.
+\end{frame}
+
+\begin{frame}{Too slow to touch anything}
+  \small
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{control_rates.pdf}
+  \end{center}
+  \vskip -6pt
+  \footnotesize
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{Dual-system designs.} A slow semantic model and a fast reactive one. Figure's
+      Helix runs a 7B model at 7-9 Hz that compresses the scene into a \emph{single latent
+      vector}, driving an 80M policy at 200 Hz. GR00T N1 has the same shape.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{Real-time chunking} (Black et al., 2025). Compute the next chunk while
+      executing the current one, freeze the actions already committed, and \emph{inpaint}
+      the rest. Yes, that is ch10's inpainting, applied to a trajectory.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{The shape of the field}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The shape of the field}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Five years of models, and a size chart that looks nothing like the language one.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The chart that does not look like the language one}
+  \small
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.79\textwidth]{model_timeline.pdf}
+  \end{center}
+  \vskip -6pt
+  \footnotesize
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{Two hard caps.} The model has to run \emph{on the robot} at control rate,
+      which bounds it at a few billion parameters. And with about a million trajectories in
+      the world, a 7B model already overfits comfortably.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      RT-2 (2023) was 55B and ran at 3 Hz, so it was never deployable. OpenVLA (Kim et al.,
+      2024) beat it by \textbf{16.5 points absolute across 29 tasks} at 7B, and became the
+      field's default baseline.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Demo, company-reported, or measured benchmark?}
+  \small
+  \vskip -6pt
+  \begin{center}
+    \includegraphics[width=0.90\textwidth]{gemini2_measured.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\scriptsize
+    Robotics publishes an unusual amount of marketing, so separate three things every time.
+    A \textbf{demo} is a video with no number (a robot folding laundry for eighteen hours
+    tells you the system does not fall over, not its success rate). A
+    \textbf{company-reported} number is real but unreproducible: self-chosen tasks,
+    unpublished protocol. A \textbf{measured benchmark} is something a second lab can run.
+    The chart above is the middle kind, and it is more honest than most: screwing a bulb
+    \emph{in} is 36\%.}}
+\end{frame}
+
+\begin{frame}{"Generalist policy" is three claims, not one}
+  \small
+  They travel under one label and they are not equally supported. Keep them apart.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{1. Multi-task.} \\ One set of weights, many tasks in one environment, selected
+      by the instruction.
+      \vskip 4pt
+      \textbf{Solved} since RT-1 in 2022: 700+ instructions, one model.}}
+    \column{0.32\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{2. Cross-embodiment.} \\ One set of weights drives \emph{different robots}.
+      \vskip 4pt
+      \textbf{Mostly works.} Open X-Embodiment pooled 60 datasets and got positive
+      transfer. Conditions apply - see later.}}
+    \column{0.32\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{3. Open-world.} \\ New objects, new scenes, new instructions, zero-shot.
+      \vskip 4pt
+      \textbf{The research frontier}, and where the marketing lives. This is the claim that
+      justifies the whole enterprise.}}
+  \end{columns}
+  \vskip 10pt
+  \footnotesize
+  \centering
+  The 2026 review of 164 VLA submissions to one conference is blunt: open models match the
+  frontier \emph{in simulation} and "dramatically lag" it in zero-shot open-world behaviour.
+\end{frame}
+
+% ================================================================
+\section{There is no internet of robot data}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{There is no internet of robot data}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      In vision and language, architecture was the bottleneck and data was free. Here it is
+      exactly reversed.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The gap}
+  \small
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{data_gap.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{And it cannot be closed by scraping, because the data does not exist to be
+    scraped.} It has to be generated by a human moving a robot in real time: roughly one
+    human-hour per robot-hour. That is a structural fact, not an engineering backlog. Every
+    strange decision in this field is a response to it.}}
+\end{frame}
+
+\begin{frame}{Four ways to manufacture what you cannot scrape}
+  \small
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{p{2.6cm}p{9.0cm}}
+      \toprule
+      \textbf{Teleoperation} & The gold standard and the expensive one. An ALOHA bimanual
+        rig is around \$20k; GELLO does the same job with a 3D-printed exoskeleton for about
+        \$300. DROID took 50 collectors at 13 institutions 12 months to reach 350 hours. \\
+      \addlinespace
+      \textbf{Human video} & The largest available signal, with no action labels and a hand
+        that is not a gripper. The 2026 answer is retargeting wrist and hand poses into
+        pseudo-actions. EgoScale pretrained on 20,854 hours of egocentric video and reports
+        a \emph{log-linear scaling law} between human-action loss and data scale. One paper,
+        one lab, but it is the first credible route to a corpus that scales. \\
+      \addlinespace
+      \textbf{Simulation} & Nearly free per sample, with resets and ground truth. Rendering
+        is close to solved; friction, deformation and contact are not, and contact is the
+        hard part. \\
+      \addlinespace
+      \textbf{Data engines} & Systems that \emph{manufacture} demonstrations. MimicGen turns
+        200 human demonstrations into 50,000 by replaying them onto new object poses. Huge
+        multiplier, but the diversity is combinatorial, not semantic: same skill, new
+        places, no new skills. \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Sim-to-real: what actually transfers}
+  \small
+  Folklore until recently. Jin et al.\ (2026) ran \textbf{over 10,000 real-world trials} to
+  ablate it, which is roughly 400 times more than a typical paper affords.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.53\textwidth}
+    \footnotesize
+    \begin{itemize}\itemsep 3pt
+      \item \textbf{Spatial randomization beats appearance randomization.} Randomizing
+        camera pose and table height helped more than randomizing backgrounds and lighting.
+      \item Randomizing \textbf{per frame} beats per episode.
+      \item Rendering fidelity helps, then plateaus.
+      \item \textbf{Reinforcement learning (ch11) is the big lever}: 5.6\% $\rightarrow$
+        33.4\% real-world success, and 42.8\% combined with randomization.
+    \end{itemize}
+    \column{0.47\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      Counter-intuitive, and useful: everyone reaches for \emph{visual} domain
+      randomization first because it is easy, and it is the less valuable axis.}}
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Read 42.8\% again.} That is the \emph{good} number, after the best recipe in
+      the largest study of its kind. Sim-to-real for manipulation remains bad in absolute
+      terms.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cross-embodiment transfer is conditional, not general}
+  \small
+  Pooling robots usually helps. Open X-Embodiment (2023) merged 60 datasets from 34 labs
+  into 1M+ trajectories across 22 embodiments, and the models trained on it beat their own
+  single-robot baselines. Gemini Robotics 1.5's Motion Transfer is a whole mechanism built
+  to move a skill from one body to another.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{But negative transfer is reported.} Embodiments with few close relatives in
+      the pool can do \emph{worse} than training alone, when a lot of low-quality data meets
+      high body diversity.
+      \vskip 3pt
+      Reported in the 2026 cross-embodiment literature; I could not trace the specific
+      robots to a paper I read, so treat the direction as the claim, not a number.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The honest framing:} transfer is a similarity-weighted average, not a free
+      lunch. Pooling helps bodies with close relatives in the pool and can hurt the ones
+      without.
+      \vskip 3pt
+      You have seen this before: multi-task learning helps until task conflict dominates.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  So "one brain, any robot" is really "one brain, any robot sufficiently similar to
+  something in the training set". That is a much weaker claim, and it changes the economics.
+\end{frame}
+
+% ================================================================
+\section{The language channel is largely dead}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The language channel is largely dead}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      This is the sequel to L33's hallucination frame, and it is worse than it was there.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Predict first}
+  \small
+  A team reports that their VLA's success rate is \textbf{almost unchanged} when you
+  rephrase the instruction. "Open the drawer", "pull the drawer open", "could you open that
+  drawer" all score the same.
+  \vskip 12pt
+  \begin{center}
+    \textbf{Good news or bad news?}
+  \end{center}
+  \vskip 12pt
+  \pause
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{It reads like robustness.} The model understood the request rather than
+      memorising a string. This is how such a result is usually reported.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{It is evidence the channel is dead.} A model that is insensitive to
+      \emph{every} change in wording may not be reading the wording at all.}}
+  \end{columns}
+  \vskip 8pt
+  \footnotesize
+  \centering
+  The test that separates the two: change the wording so the \emph{meaning} changes, and
+  check that the behaviour changes too.
+\end{frame}
+
+\begin{frame}{The experiment that settles it}
+  \small
+  \textbf{LIBERO-PRO} (Zhou et al., 2026) takes the standard benchmark and perturbs four
+  things: the object, its starting position, the instruction wording, and the environment.
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Models that score \textbf{over 90\%} on standard LIBERO score \textbf{0.0\%} under the
+    generalized setting. Not degraded. Zero.}}
+  \vskip 8pt
+  The diagnostic is better than the headline. Replace the instruction with a
+  \textbf{meaningless string} - the paper's examples are \texttt{fdsgfdsgsd} and
+  \texttt{xxx} - and the model still executes nearly the same trajectory.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      The policy is not reading the instruction. It is matching the \emph{scene} to a
+      memorised trajectory. The authors' own word for the reported accuracies is "rote
+      recall".}}
+    \column{0.44\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      They also find a hard positional cliff: success collapses once the object is displaced
+      past a small threshold, and stays at zero.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{It is not one benchmark having a bad day}
+  \small
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.79\textwidth]{language_collapse.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  \begin{columns}[T]
+    \column{0.53\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{DAERT} is Diversity-Aware Embodied Red Teaming (Tong et al., 2026): train an
+      attacker with reinforcement learning to \emph{search} for rephrasings that break the
+      policy. No adversarial patch, no jailbreak - just different English words for the same
+      request.}}
+    \column{0.47\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      Human raters judge the generated instructions \textbf{natural}. A related 2026 method
+      also shows a partial defence: fine-tuning on generated adversarial instructions
+      recovers some ground on \emph{unseen} ones.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{L33 said the prior outvotes the image. Here it is worse.}
+  \small
+  In L33, a vision-language model hallucinated a refrigerator into a kitchen photo: the
+  \textbf{language prior} was trained on trillions of tokens and easily outvoted 576 blurry
+  visual vectors.
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Flip it around. In a VLA the \textbf{vision} pathway carries the policy and the language
+    input can be ignored entirely. Swap the object named in the instruction and the model
+    executes the original task anyway. It is not that language loses a vote - it never cast
+    one.}}
+  \vskip 8pt
+  \textbf{Two structural causes, both fixable in principle:}
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{1. The training instructions are templated.} If every demonstration says "pick
+    up the X and place it in the Y", the model learns the slot filler, not the sentence.
+    Everyone optimised task diversity; nobody optimised linguistic diversity.
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{2. Vision wins every conflict.} Build a scene where the instruction contradicts
+    the visual prior (Fang et al., 2026) and models systematically follow the picture, even
+    when following the text was correct.
+  \end{columns}
+  \vskip 6pt
+  \footnotesize
+  \centering
+  A 2026 ablation study points the same way from the architecture side: the \emph{visual}
+  module is the bottleneck, and a better general vision-language model does not reliably
+  make a better controller.
+\end{frame}
+
+\begin{frame}{In Armenian it would be much worse}
+  \small
+  Dong et al.\ (2026) translated the standard benchmark into ten languages and measured
+  \textbf{success-rate drops of 30 to 50\% on non-English instructions}.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Their more interesting finding is \textbf{step-wise} sensitivity: language dependence
+      is wildly non-uniform along a trajectory. A few steps dominate all the failure; most
+      steps are effectively language-agnostic.
+      \vskip 3pt
+      Their fix intervenes only at those steps.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{A concrete prediction you can check.} Hand an open VLA an instruction in
+      Armenian and it will very probably fail - and now you can say roughly why, and roughly
+      \emph{where} in the trajectory.}}
+  \end{columns}
+  \vskip 10pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{What would count as fixed.} A model that is flat under adversarial paraphrase
+    search \emph{and} whose success collapses appropriately when the instruction is replaced
+    with nonsense. Both directions together. Nobody has shown this.}}
+\end{frame}
+
+% ================================================================
+\section{Embodied red teaming}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Embodied red teaming}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      A new category of attack: nobody jailbreaks anything. The attacker moves an object.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Token space is not configuration space}
+  \small
+  Everything you know about model safety was learned on text, and it does not carry over.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.93\linewidth}{\small
+      A model that refuses to \emph{describe} how to knock a glass off a table will happily
+      emit the action trajectory that knocks it off.
+      \vskip 4pt
+      The safety constraint was learned in \textbf{token space}. The harm happens in
+      \textbf{configuration space}.}}
+  \end{center}
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    That framing is from SafeVLA (Zhang et al., 2025), which formulates safety as a
+    constrained Markov decision process and optimises against elicited unsafe behaviours.
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      The 2026 framing is sharper still: risk "has fundamentally shifted from the intent
+      space to the physical space". The intent stays benign throughout.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{RedVLA: the attacker moves a knife}
+  \small
+  \textbf{RedVLA} (Zhang et al., April 2026) is a red-teaming framework for \emph{physical}
+  safety. Two stages, and neither touches the prompt.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{1. Risk scenario synthesis.} Find the critical interaction regions along a
+    perfectly benign trajectory. Inject a risk object - a knife, a bottle - into one of
+    them, keeping the task feasible and the instruction unchanged.
+    \vskip 6pt
+    \textbf{2. Trajectory-driven amplification.} Gradient-free search over \emph{where to
+    put it}, refined until it reliably triggers unsafe behaviour. Gradient-free, so it
+    works across model families.
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Attack success rate, six models, LIBERO:} \\
+      64.9\% (OpenVLA) to \textbf{95.5\%} (pi-0.5), within 10 optimisation iterations.
+      \vskip 4pt
+      Validated sim-to-real on a physical Franka arm as well.}}
+    \vskip 5pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      The scene looks benign. The instruction \emph{is} benign. Nothing in the input would
+      trip a text filter.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The better policy is the more attackable one}
+  \small
+  \vskip -6pt
+  \begin{center}
+    \includegraphics[width=0.60\textwidth]{redvla_coupling.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{The harm happens while the robot is working.} Across all six models most unsafe
+      rollouts are "Success $+$ Unsafe" or "Attempt $+$ Unsafe" - the policy completed or was
+      actively pursuing the task \emph{and} caused harm on the way. Outright collapse is only a
+      small fraction.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{So task success rate is not a safety metric, and here it is
+      anti-correlated with one.} Every leaderboard in this lecture would score those
+      rollouts as wins.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Defences cost capability, and the robots are already shipping}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \textbf{What exists.} Runtime monitors that halt execution before an unsafe action;
+    constrained-optimisation safety training; external safety controllers.
+    \vskip 5pt
+    RedVLA's own monitor cuts attack success by roughly two thirds and costs about 4 points
+    of benign performance. SafeVLA reports the friendlier result - an 83.6\% cut in
+    cumulative violation cost with task success \emph{up} 3.85\% - but on its own
+    procedurally generated benchmark.
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{What does not exist.} Formal verification of a neural policy. Certification.
+      Any accepted standard for what a VLA must be tested against before it works near a
+      person.
+      \vskip 4pt
+      The 2026 consensus is \emph{layered} mitigation, which is an admission that the policy
+      itself cannot be trusted.}}
+  \end{columns}
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Put these two facts on the same slide, because they are true at the same time.}
+    Humanoids are in early commercial deployment and the research literature reports attack
+    success rates above 90\% on the same class of model. An industrial cell with cages and
+    interlocks is a different risk category from a kitchen, and the field is moving toward
+    the kitchen.}}
+\end{frame}
+
+% ================================================================
+\section{Can we measure any of this?}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Can we measure any of this?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Including the evidence in the last two sections. Especially that.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The test set is a room}
+  \small
+  Simulation is a proxy, and the saturated kind: LIBERO now sits at 95-98\% and the
+  difference between 98\% and 99\% carries no information. So the claims that matter are
+  made on physical robots, where evaluation has problems with no analogue anywhere else in
+  machine learning.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\itemsep 3pt
+      \item \textbf{The test set is a physical room.} Lighting drifts through the day,
+        objects get placed slightly differently, the gripper wears. Another lab cannot
+        reproduce your evaluation because they do not have your room.
+      \item \textbf{Every trial costs a minute and a human reset.} So $n$ is tiny.
+      \item \textbf{There is no held-out set} in any meaningful sense.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      PhAIL (Arkhangelskiy, 2026) states the practice plainly: real-world VLA evaluation
+      "still rests on binary success rate at a fixed timeout with $N \le 25$ rollouts per
+      condition, almost always \textbf{without confidence intervals or paired statistical
+      comparison}".}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Do the arithmetic}
+  \small
+  \vskip -6pt
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{wilson_ci.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\scriptsize
+    Two policies reported at \textbf{70\%} and \textbf{80\%} on 20 trials are statistically
+    indistinguishable. A very large share of published VLA comparisons sits inside that
+    noise band - which means the ranking, and sometimes the paper's conclusion, could flip
+    on a rerun.}}
+\end{frame}
+
+\begin{frame}{Now turn it on this lecture}
+  \small
+  Everything in the last two sections is subject to its own critique, and a course that
+  taught you to check numbers should say so out loud.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The bad news is measured on the same weak instruments.} The 0.0\%, the
+      93.3\% $\rightarrow$ 5.9\%, the attack success rates - almost all of it is
+      \emph{simulation}, on the benchmark the same authors just told you is saturated.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Why it still stands.} The direction is unanimous across at least five
+      independent groups with different methods, and the gibberish-instruction result needs
+      no statistics at all: either the trajectory changes or it does not.}}
+  \end{columns}
+  \vskip 8pt
+  \textbf{How to read any VLA result, in six questions:}
+  \vskip 3pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{enumerate}\itemsep 1pt
+      \item Simulation or real? If real, what is $n$?
+      \item Which LIBERO? 97\% on the plain one means almost nothing in 2026.
+      \item Was the instruction varied at all?
+    \end{enumerate}
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{enumerate}\itemsep 1pt
+      \setcounter{enumi}{3}
+      \item Was the camera pose or object placement varied?
+      \item Company blog or paper?
+      \item Is a demo being used as evidence?
+    \end{enumerate}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\scriptsize\itemsep 3pt
+      \item A VLA is a vision-language model whose output is a motor command. It deletes the
+        four-stage classical stack; everything else follows from that.
+      \item Action chunking exists because there is no teacher forcing on a robot.
+        Dual-system designs exist because a 3B forward pass is a decade too slow for contact.
+      \item Data is the whole problem. The corpus is three orders of magnitude short of
+        video and cannot be scraped.
+      \item \textbf{The language channel is largely dead.} 90\%+ collapses to 0.0\%, and
+        gibberish instructions produce the same trajectory.
+      \item \textbf{Embodied red teaming is a new risk category.} Capability and
+        vulnerability rise together, and the robot succeeds \emph{dangerously}.
+      \item \textbf{And we cannot measure any of it well.} $N \le 25$ trials, no intervals -
+        which cuts against finding 4's own benchmarks too.
+    \end{enumerate}
+    \column{0.46\textwidth}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{Next:} the chapter page carries the reading list and the sources behind every
+      number in this deck.
+      \vskip 3pt
+      Three observations would make this deck out of date, and all three are live: a data
+      source that scales without human robot-time; a model flat under paraphrase search
+      \emph{and} broken by nonsense; one shared real-robot evaluation a second lab can
+      reproduce inside stated intervals.}}
+    \vskip 4pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\scriptsize
+      And yet the trajectory is steep. RT-1 was under four years ago, ran at 3 Hz, on one
+      robot, in one kitchen.}}
+  \end{columns}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Deck: L38 Vision-Language-Action models (ml/ch15_vla). Built 2026-08-08.
+%   Research base: _knowledge/vla/ (6 notes + sources.md), gathered 2026-08-07 by web
+%   search. Structural template: ml/ch12_vlm/L33_vlm_seeing.tex - this deck is its sequel.
+%
+%   RE-VERIFIED BY WEB SEARCH ON 2026-08-08 (everything sources.md flagged, plus every
+%   number that reached a slide):
+%     - LIBERO-PRO (Zhou et al., arXiv 2510.03827): >90% -> 0.0%; corrupted / "messy token"
+%       instructions leave outputs unchanged. Confirmed on the arXiv listing.
+%     - DAERT (Tong et al., arXiv 2604.05595, 7 Apr 2026): "reduce the average task success
+%       rate from 93.33% to 5.85%", pi-0 and OpenVLA. Confirmed verbatim from the abstract.
+%     - LIBERO-Para (Kim et al., arXiv 2603.28301): 22-52 point degradation over 7 configs
+%       (0.6B-7.5B); 80-96% of failures are planning-level. Confirmed.
+%     - LIBERO-Plus (Fei et al., arXiv 2510.13626): 95% -> below 30%; "models tend to ignore
+%       language instructions completely". Confirmed.
+%     - Multilingual (Dong et al., arXiv 2606.11906): 30-50% drop on non-English; step-wise
+%       sensitivity. Confirmed.
+%     - RedVLA (Zhang et al., arXiv 2604.22591, 24 Apr 2026): ASR 64.9% (OpenVLA) to 95.5%
+%       (pi-0.5) over six models; OpenVLA-OFT vs OpenVLA = +20.6 benign / +25.6 ASR;
+%       "Success + Unsafe" dominates. Confirmed from the paper HTML.
+%     - SafeVLA (Zhang et al., NeurIPS 2025 Spotlight, arXiv 2503.03480): 83.58% cost cut,
+%       +3.85% success. Confirmed.
+%     - PhAIL (Arkhangelskiy, arXiv 2605.29710, 28 May 2026): quoted verbatim from the
+%       abstract, "N <= 25 rollouts per condition, almost always without confidence
+%       intervals or paired statistical comparison".
+%     - Sim-to-real (Jin et al., arXiv 2603.22876, rev Jun 2026): >10k real trials; RL
+%       5.6% -> 33.4%, with domain randomization 42.8%. Sentence located in section 4.4.
+%     - Gemini Robotics 2 (DeepMind blog, 30 Jul 2026): all bar values in the figure read
+%       off the post itself. Screw bulb 36%, unscrew 92%. Not open weights.
+%     - OpenVLA (Kim et al., arXiv 2406.09246): 7B, 970k demos, +16.5 points absolute over
+%       RT-2-X across 29 tasks, DINOv2 + SigLIP + Llama-2.
+%     - ACT (Zhao et al., arXiv 2304.13705, Apr 2023); FAST = Frequency-space Action
+%       Sequence Tokenization (Pertsch et al., arXiv 2501.09747, Jan 2025); pi-0 (Black et
+%       al., arXiv 2410.24164, Oct 2024); RT-1 (Brohan et al., arXiv 2212.06817, Dec 2022).
+%     - ICLR-2026 field snapshot (Reuss blog): 164 submissions vs 1 at ICLR 2024; LIBERO
+%       95-98% "basically solved"; open models "lag significantly" zero-shot open-world.
+%       A researcher's personal blog, not peer reviewed - used only for field-level framing.
+%     - GR00T N1.6 (flagged unverified in sources.md) DOES exist: NVIDIA, CES January 2026,
+%       with an NVIDIA research page. Not cited on a slide, but the flag is resolved.
+%
+%   COULD NOT VERIFY - and how each was handled:
+%     1. "~300,000 hours of robot data exists." Only an industry estimate (Bessemer VC + the
+%        gogoduck912 scaling-law blog); no primary measurement. Kept, but the figure prints
+%        "(estimate)" next to the bar AND a caption naming both sources as estimates.
+%     2. "Zero-shot cross-embodiment transfer is 80-100% between similar arms." Dropped
+%        entirely. No number appears on the cross-embodiment frame.
+%     3. Negative cross-embodiment transfer on Unitree H1/G1. The robots could not be traced
+%        to a paper I read. The frame states the qualitative direction and says on-slide
+%        that the specific robots are not sourced.
+%     4. "Modal per-condition n is 10-20; none of 13 papers report intervals." Not in the
+%        PhAIL abstract. Replaced with the verbatim abstract sentence (N <= 25), which is
+%        weaker in wording and stronger in provenance.
+%     5. Eva-VLA's "random perturbations cause 33.2-55.7% failure." Verified (OpenVLA 55.7%,
+%        OpenVLA-OFT 42.0% under random 3D transforms) but cut for length. Note the notes'
+%        claim that "the better leaderboard model is the less robust one" is NOT supported
+%        by Eva-VLA's own table - OpenVLA-OFT is better in every column. The
+%        capability/vulnerability coupling claim on the slides comes from RedVLA instead,
+%        where it is directly measured.
+%     6. "Most VLAs degrade past five-minute task lengths." Commercial-site opinion. Cut.
+%     7. Company-reported numbers (Helix 200 Hz, pi*0.6 throughput, Gemini Robotics 2 bars,
+%        pi-0.5's 94% OOD). None are laundered into fact. Helix's rates are labelled
+%        "company-reported" inside the figure; the Gemini frame carries an explicit
+%        demo / company-reported / measured-benchmark distinction; pi-0.5's 94% is not used.
+%
+%   Figures (Python-generated, py_src/l38_vla_figs.py -> fig/):
+%     vla_loop.pdf, control_rates.pdf, model_timeline.pdf, data_gap.pdf,
+%     gemini2_measured.pdf, language_collapse.pdf, redvla_coupling.pdf, wilson_ci.pdf.
+%   NO MODEL IS TRAINED, DOWNLOADED OR RUN. vla_loop is a labelled schematic; every other
+%   figure plots published numbers or exact arithmetic. wilson_ci is computed from the
+%   closed-form Wilson score interval, not simulated.
+%
+%   Pedagogical decisions:
+%     - Intuition-first, NOT full derivations. Deliberate deviation from ml/SLIDE_STYLE.md,
+%       matching ch11, ch12 and ch14. Flow matching, diffusion heads and the constrained MDP
+%       are described by what they buy, never written out.
+%     - Assumed known and NOT re-explained: transformers, attention, vision-language models
+%       (ch12), diffusion (ch10), reinforcement learning (ch11). Explained from scratch
+%       instead: end effector, degrees of freedom, proprioception, teleoperation,
+%       embodiment - the students have no robotics background.
+%     - Three findings from the research are the deck's spine, one section each, rather than
+%       bullets in a limitations list: the dead language channel, embodied red teaming, and
+%       weak real-robot statistics.
+%     - The dead-language-channel section is framed explicitly as the sequel to L33's
+%       hallucination frame, and the direction is reversed on-slide: in L33 the language
+%       prior outvoted weak visual evidence; here the language input is never read.
+%     - The predict-first frame is on "robust to paraphrase - good news or bad news?",
+%       because the intuitive answer is the wrong one and the correction is the section.
+%     - Sections 1-3 build the case FOR VLAs before sections 4-6 dismantle it. On a topic
+%       that is mostly limits, the risk is a deck with nothing to be excited about.
+%     - The evaluation section is turned on the deck's own evidence ("Now turn it on this
+%       lecture") rather than quietly relying on benchmarks it just called saturated.
+%     - Title slide carries its own date, per the research file's own warning about how fast
+%       this field moves.
+%     - No homework frame (house rule; homework lives on the chapter .qmd page).
+%     - _quarto.yml was deliberately NOT touched and no .qmd was created.
+%
+%   Next deck: none planned. The recap's forward pointer is the chapter page plus the three
+%   observations that would make this deck out of date.
