@@ -169,7 +169,13 @@ def fig_clip_contrastive(n=8):
 # ---------------------------------------------------------------------------------------
 def fig_token_budget(patch=14):
     """Exact ViT token counts. This is the constraint that shapes every VLM design."""
-    res = [224, 336, 448, 672, 1024]
+    # Every resolution here is an exact multiple of the patch size, so (s/p)^2 holds
+    # literally. 1024 is NOT (1024/14 = 73.1) and quoting it would contradict the formula
+    # the slide states.
+    res = [224, 336, 448, 672, 896]
+    for r in res:
+        if r % patch:
+            raise ValueError(f"{r} is not a multiple of patch {patch}; (s/p)^2 would be a lie")
     tokens = [(r // patch) ** 2 for r in res]
     labels = [f"{r}x{r}" for r in res]
     page_of_text = 500      # ~400 words of English at roughly 1.3 tokens/word
@@ -180,9 +186,12 @@ def fig_token_budget(patch=14):
     bars = ax.bar(labels, tokens, color=colors, width=0.62)
     ax.bar_label(bars, fmt="%d", padding=3, fontsize=10, fontweight="bold")
     ax.axhline(page_of_text, color=ORANGE, lw=2.0, ls="--")
-    ax.text(len(res) - 0.42, page_of_text * 1.10,
-            f"a full page of text ~ {page_of_text} tokens",
-            color=ORANGE, fontsize=9.5, ha="right", fontweight="bold")
+    # Annotate into the empty upper-left region and point at the line. Placing the label ON
+    # the line struck it through both the line and the neighbouring bar label.
+    ax.annotate(f"a full page of text\n~ {page_of_text} tokens",
+                xy=(0.62, page_of_text), xytext=(0.12, max(tokens) * 0.52),
+                color=ORANGE, fontsize=9.5, ha="left", fontweight="bold",
+                arrowprops=dict(arrowstyle="->", color=ORANGE, lw=1.5))
     ax.set_ylabel(f"visual tokens (patch {patch}x{patch})", fontsize=10)
     ax.set_xlabel("input resolution", fontsize=10)
     ax.set_title("One image costs more than a page of text\n"
