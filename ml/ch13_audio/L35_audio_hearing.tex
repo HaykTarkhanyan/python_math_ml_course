@@ -1,0 +1,701 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Lecture 35: Audio-Language Models I}
+\subtitle{How a model hears}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{The other ordinary thing you do with a chat model}
+  \small
+  You record a voice message and send it. It answers the question. It also picks up that you
+  were annoyed, and answers more carefully.
+  \vskip 6pt
+  Last lecture was the same problem for pictures. This one is harder, and the reason is worth
+  saying up front.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      An image is a grid of pixels. Big, but \textbf{finite and static}. Cut it into patches and
+      you are done (L33).}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      Sound is \textbf{16,000 numbers per second, without end}. And the other person is still
+      talking while you answer.}}
+  \end{columns}
+  \vskip 8pt
+  This lecture builds the bridge. The next one makes the model \textbf{talk back}.
+\end{frame}
+
+\begin{frame}{Two questions that sound the same and are not}
+  \small
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{1. How does a model \emph{hear}?}
+    \vskip 4pt
+    \footnotesize
+    Settled. One recipe, and it is the recipe you already saw last lecture with a different
+    encoder in front of it.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      This lecture. By the end you can explain the front end of every audio model shipped in
+      the last three years.}}
+    \column{0.48\textwidth}
+    \textbf{2. How does a model \emph{speak}?}
+    \vskip 4pt
+    \footnotesize
+    Not settled. Two competing lineages, and a problem that has no counterpart at all in
+    vision: talking and listening at the same time.
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      L36. We have to invent a \emph{vocabulary for sound} to get there.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  An \textbf{audio-language model} takes sound and text as input. The interesting ones do both
+  questions at once, and answer out loud.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{A second of sound is 16,000 numbers}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{A second of sound is 16,000 numbers}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Sound is not a sequence either. It is far worse than a picture.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{What a waveform actually is}
+  \small
+  A microphone measures air pressure. Sampling it 16,000 times a second gives one long list of
+  numbers. Zoom in far enough and you can see the individual samples.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{waveform_zoom.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Synthesized speech, not a recording: the word PANIR from ch10, built with a formant model so
+  the chapter needs no audio file. Real speech is messier; the structure is the same.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{16 kHz} is the \emph{speech} convention: nearly all speech energy is below 8 kHz,
+      and sampling must be twice the highest frequency (Nyquist).}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      It is a convention, not a law. Mimi, EnCodec and MusicGen - \emph{neural audio codecs},
+      all of which you meet properly in L36 - run at \textbf{24} and \textbf{32 kHz}. Watch for
+      it when comparing rates.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The problem, as arithmetic}
+  \small
+  \begin{center}
+    \begin{tabular}{lr}
+      \toprule
+      \textbf{Quantity} & \textbf{Per second} \\
+      \midrule
+      Audio samples at 16 kHz & 16,000 \\
+      English text tokens (for comparison) & $\approx 2.5$ \\
+      \midrule
+      \rowcolor{armred!12}
+      \textbf{Ratio} & $\mathbf{\approx 6{,}400\times}$ \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  A 30-second clip is \textbf{480,000} samples. Attention costs the square of sequence length
+  (ch9), so this is not "expensive" - it is impossible.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Everything in the rest of this lecture is one idea: \textbf{get that number down}, without
+    throwing away what makes it speech. Every architecture we look at is a compression scheme
+    wearing a machine-learning hat.}}
+\end{frame}
+
+\begin{frame}{Predict first: could we just feed the raw samples in?}
+  \small
+  A transformer eats any sequence of vectors. Each audio sample is a number. So why not treat
+  16,000 samples per second as 16,000 tokens and let attention sort it out?
+  \vskip 10pt
+  \pause
+  \textbf{Two reasons, and the second is the interesting one.}
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Cost.} Quadratic attention over 480,000 positions for half a minute of audio.
+      No hardware fixes this.}}
+    \column{0.52\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{It does not work even when you can afford it.} Sample-level models (WaveNet,
+      van den Oord et al., 2016) produce babble that sounds like speech locally and means
+      nothing. Nothing holds structure across 16,000 steps.}}
+  \end{columns}
+  \vskip 8pt
+  \centering
+  The same lesson as characters versus tokens in text, an order of magnitude more extreme.
+\end{frame}
+
+% ================================================================
+\section{Turning sound into a picture}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Turning sound into a picture}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Six slides of signal processing. Every architecture number later in both lectures is
+      arithmetic on what we set here.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Framing: chop it up, and overlap the chops}
+  \small
+  Take a \textbf{25 ms} window, slide it along by a \textbf{10 ms} hop, and describe each window
+  separately.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{framing_window.pdf}
+  \end{center}
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Why 25 ms.} Long enough to resolve pitch, short enough that the vocal tract has
+      not moved much. This single choice sets every frame rate downstream.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{100 frames per second: a 160$\times$ shorter \emph{sequence}.} Not
+      "compression" - each frame is itself a vector of numbers, so the raw \emph{data} barely
+      shrinks. Attention cares about \emph{length}.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One spectrum per frame}
+  \small
+  Inside a 25 ms window, decompose the signal into the frequencies that make it up. That is the
+  \textbf{Fast Fourier Transform} (\textbf{FFT}); doing it on every frame of a signal is the
+  \textbf{Short-Time Fourier Transform} (\textbf{STFT}).
+  \vskip 8pt
+  Two things become readable that were invisible in the waveform:
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Harmonics} - evenly spaced spikes at multiples of the pitch. Their spacing
+      \emph{is} the pitch of the voice.}}
+    \column{0.52\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Formants} - broad peaks where the vocal tract resonates. Their positions are what
+      distinguish one vowel from another. This is what makes /a/ an /a/.}}
+  \end{columns}
+  \vskip 8pt
+  \centering
+  A 25 ms window at 16 kHz is 400 samples, which gives \textbf{201} frequency bins.
+\end{frame}
+
+\begin{frame}{Magnitude and phase, and why we throw one away}
+  \small
+  The transform returns \emph{complex} numbers: a magnitude (how much of that frequency) and a
+  \textbf{phase} (where in its cycle it is). Spectrograms keep only the magnitude.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.68\textwidth]{phase_discard.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Remember this slide.} A spectrogram \emph{cannot be played back}. That is why speech
+    synthesis needs a \textbf{vocoder} - a network whose whole job is to invent plausible phase
+    and turn a spectrogram back into a waveform - and why L36's codecs avoid the problem by
+    working on \textbf{raw waveforms} instead.}}
+\end{frame}
+
+\begin{frame}{The mel scale: spend detail where the ear has it}
+  \small
+  Hearing is roughly logarithmic. The gap from 200 to 400 Hz is enormous; the gap from 7,000 to
+  7,200 Hz is nearly inaudible. So we pool the 201 bins into \textbf{80} bands, narrow at the
+  bottom and wide at the top.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.84\textwidth]{mel_filterbank.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  The mapping is $m = 2595 \log_{10}(1 + f/700)$, fitted to human pitch judgements in the 1930s
+  and still in every speech system today.
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Now the arithmetic promised three slides ago.} 100 frames a second, 80 numbers each,
+    is \textbf{8,000 numbers} per second against 16,000 raw samples. The \emph{sequence} got
+    160$\times$ shorter; the \emph{data} only halved. That gap is the whole trick.}}
+\end{frame}
+
+\begin{frame}{Take the log, and you are done}
+  \small
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{spectrogram_stages.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    Panel 3 is not a broken figure. On a \textbf{linear} scale almost all the structure is
+    invisible, because loudness spans orders of magnitude. The log in panel 4 is what makes it
+    readable - to us, and to a network. \textbf{Panel 4 is exactly what Whisper is fed.}}}
+\end{frame}
+
+\begin{frame}{Reading the picture}
+  \small
+  The spectrogram is not a coloured rectangle. Every region of it says something, and you can
+  now name all of it:
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{llp{5.6cm}}
+      \toprule
+      \textbf{Sound} & \textbf{What to look for} & \textbf{Why} \\
+      \midrule
+      P (closure) & a silent gap & the mouth is shut; a stop consonant is partly \emph{silence} \\
+      P (burst) & a brief wideband smear & the pressure releases all at once \\
+      A & two low bands, far apart & first and second formants of an open vowel \\
+      N & energy collapses to the bottom & sound is coming out of the nose, not the mouth \\
+      I & a low band and a very high one & the tongue is forward; the formants split apart \\
+      \rowcolor{armorange!14}
+      R & regular vertical stripes & the tongue is tapping, about 25 times a second \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \centering
+  Speech recognition was hand-built on features like these for forty years before anyone
+  learned them.
+\end{frame}
+
+% ================================================================
+\section{Bolting ears onto a language model}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Bolting ears onto a language model}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      You have seen this recipe before. It was last lecture.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The recipe, which is the same recipe}
+  \small
+  \begin{center}
+    \begin{tikzpicture}[node distance=6mm, every node/.style={font=\footnotesize}]
+      \node[draw, rounded corners, fill=armorange!15, minimum height=8mm, minimum width=20mm] (a) {sound};
+      \node[draw, rounded corners, fill=armblue!15, right=of a, minimum height=8mm, minimum width=26mm] (b) {audio encoder};
+      \node[draw, rounded corners, fill=paramgreen!15, right=of b, minimum height=8mm, minimum width=22mm] (c) {projector};
+      \node[draw, rounded corners, fill=violet1!15, right=of c, minimum height=8mm, minimum width=20mm] (d) {LLM};
+      \draw[-{Latex[length=2mm]}] (a) -- (b);
+      \draw[-{Latex[length=2mm]}] (b) -- (c);
+      \draw[-{Latex[length=2mm]}] (c) -- (d);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 8pt
+  Replace "audio encoder" with "vision encoder" and this is L33 exactly. The language model is
+  usually \textbf{not modified at all}: the projector's whole job is to land audio vectors in the
+  space the text embeddings already live in.
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    This is the cheapest idea in the chapter and the most important. \textbf{Any} modality that
+    can be turned into a sequence of vectors plugs into the same socket. Audio is not special;
+    it is just harder to compress.}}
+\end{frame}
+
+\begin{frame}{Whisper, the encoder almost everyone uses}
+  \small
+  Whisper (Radford et al., 2022) was trained for speech recognition on 680,000 hours. Almost
+  nobody uses the whole thing - they cut off the encoder and throw the decoder away.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lr}
+      \toprule
+      \textbf{Stage} & \textbf{Size for a 30 s chunk} \\
+      \midrule
+      Raw samples at 16 kHz & 480,000 \\
+      Log-mel frames (10 ms hop) & $80 \times 3{,}000$ \\
+      After two convolutions, \textbf{the second with stride 2} & $\mathbf{1{,}500}$ vectors \\
+      \rowcolor{armblue!12}
+      Frame rate reaching the transformer & \textbf{50 Hz} \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{80 mel bins for every size except large-v3, which uses 128.} They are not
+      interchangeable - feeding 80 to a 128-bin model fails outright.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      Only \emph{one} of the two convolutions has stride 2. Two would halve it twice and give
+      750, and the number everyone quotes is 1,500.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Where "semantic" audio features come from}
+  \small
+  Three models get named constantly in this field, and all three are the same idea you already
+  know from text: \textbf{mask part of the input and predict it}, with no labels.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lll}
+      \toprule
+      \textbf{Model} & \textbf{Trained on} & \textbf{Used for} \\
+      \midrule
+      WavLM (Chen et al., 2022) & speech & frames that encode \emph{what was said} \\
+      w2v-BERT (Chung et al., 2021) & speech & the semantic tokens in AudioLM (L36) \\
+      Bidirectional Encoder representation & general audio & everything that is \emph{not} speech: \\
+      from Audio Transformers (BEATs, & & music, dog barks, doors \\
+      Chen et al., 2023) & & \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    Run k-means on their continuous output frames and you get discrete \textbf{units} - a
+    crude alphabet for speech, learned without a single transcript. Hold on to this: it is what
+    makes "semantic tokens" mean something in L36 rather than sounding like magic.}}
+\end{frame}
+
+\begin{frame}{By hand: what 30 seconds costs}
+  \small
+  \begin{center}
+    \begin{tabular}{lrl}
+      \toprule
+      \textbf{Step} & \textbf{Count} & \textbf{Why} \\
+      \midrule
+      audio samples & 480,000 & $30 \times 16{,}000$ \\
+      log-mel frames & 3,000 & 10 ms hop, so 100 per second \\
+      after the stride-2 convolution & 1,500 & 50 per second \\
+      after a further stride-2 pool & \textbf{750} & 25 per second (Qwen2-Audio) \\
+      \midrule
+      \rowcolor{paramgreen!14}
+      the \emph{transcript} of the same 30 s & $\approx 75$ & about 2.5 text tokens per second \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Even after compressing by a factor of 640, audio still costs about \textbf{ten times its own
+    transcript}. Hold on to that ratio - it decides the architecture of every product in this
+    space, and we will meet it again on the bill.}}
+\end{frame}
+
+\begin{frame}{Every rate in this chapter, on one axis}
+  \small
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{token_rate_ladder.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Careful reading these against each other: the top four come from 16 kHz speech, while Mimi
+  runs at 24 kHz. The rates are still comparable because they count \emph{frames per second of
+  audio}, not per sample.
+\end{frame}
+
+\begin{frame}{Design A: a projector (Qwen2-Audio)}
+  \small
+  Qwen2-Audio (Chu et al., 2024) does the simplest thing that works.
+  \vskip 6pt
+  \begin{itemize}\itemsep3pt
+    \item Whisper-large-v3 encoder, so 128 mel bins in and 50 Hz out.
+    \item A pooling layer with stride 2, giving \textbf{25 Hz} - one vector per 40 ms of audio.
+    \item A \textbf{single linear layer} maps each vector into the language model's embedding
+      space. The audio vectors are then simply placed in the sequence alongside text.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    This is LLaVA (L33) with a microphone. Note it is the \emph{single-linear} version, not the
+    two-layer projector of LLaVA-1.5 - the audio encoder is already doing the heavy lifting.}}
+  \vskip 6pt
+  \centering
+  \footnotesize
+  Cost: 30 seconds of audio occupies 750 positions in the context window.
+\end{frame}
+
+\begin{frame}{Design B: a resampler (SALMONN)}
+  \small
+  SALMONN (Tang et al., 2024) refuses to let cost scale with duration.
+  \vskip 6pt
+  \begin{itemize}\itemsep3pt
+    \item \textbf{Two} encoders, concatenated: Whisper-large-v2 for speech, BEATs for
+      everything else.
+    \item A window-level Q-Former (the resampler idea from L33) compresses each window to a
+      fixed number of learned query vectors.
+    \item 30 seconds becomes \textbf{88 tokens}. One token per \textbf{340 ms}, no matter what
+      is in it.
+  \end{itemize}
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{88 against 750.} An 8.5$\times$ saving, and the budget is now predictable.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      And a fixed budget is also a ceiling. Whatever a busy 30 seconds contained, it is getting
+      88 tokens.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Design C: built in from the start (Qwen3-Omni)}
+  \small
+  Qwen3-Omni (Qwen Team, 2025) does not bolt an encoder on. The audio encoder is trained with
+  the model.
+  \vskip 6pt
+  \begin{itemize}\itemsep3pt
+    \item \textbf{Audio Transformer} (\textbf{AuT}), trained from scratch on \textbf{20 million
+      hours}, emitting \textbf{12.5 Hz} - the lowest rate on the ladder.
+    \item A \textbf{Thinker} that reasons in text and a \textbf{Talker} that emits speech, both
+      mixture-of-experts.
+    \item Theoretical first packet of audio out: \textbf{234 ms}.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The same trajectory as vision in L33: bolted-on projector first, trained-together later,
+    as soon as there was enough data to justify it. The Talker half is L36's subject.}}
+\end{frame}
+
+\begin{frame}{Why SALMONN carries two encoders}
+  \small
+  This looks like redundancy. It is not, and the reason is a genuinely useful thing to know.
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    A speech encoder is trained to produce \textbf{transcripts}. Everything that is not a word
+    is, to that training objective, \textbf{noise to be suppressed}: the dog barking, the door,
+    the music under the dialogue, whether the speaker is a child, whether there are two of them.
+    Whisper is very good at ignoring exactly what you might want to ask about.}}
+  \vskip 8pt
+  So if you want a model that hears, and not merely one that transcribes, you need an encoder
+  that was never taught to throw sound away.
+  \vskip 8pt
+  \centering
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.9\linewidth}{\small\centering
+    This is most of the gap between "speech model" and "audio model" on benchmarks.}}
+\end{frame}
+
+% ================================================================
+\section{What the cascade throws away}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{What the cascade throws away}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      There is an obvious pipeline that avoids all of this. It is worth knowing exactly what it
+      costs, and exactly what it is still better at.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The cascade, and what falls out of it}
+  \small
+  \begin{center}
+    \begin{tikzpicture}[node distance=8mm, every node/.style={font=\footnotesize}]
+      \node[draw, rounded corners, fill=armorange!15, minimum height=7mm, minimum width=17mm] (a) {sound};
+      \node[draw, rounded corners, fill=armblue!15, right=of a, minimum height=7mm, minimum width=27mm] (b) {speech recognition};
+      \node[draw, rounded corners, fill=violet1!15, right=of b, minimum height=7mm, minimum width=17mm] (c) {LLM};
+      \node[draw, rounded corners, fill=paramgreen!15, right=of c, minimum height=7mm, minimum width=25mm] (d) {speech synthesis};
+      \draw[-{Latex[length=2mm]}] (a) -- (b);
+      \draw[-{Latex[length=2mm]}] (b) -- node[above, font=\tiny, color=armred] {text} (c);
+      \draw[-{Latex[length=2mm]}] (c) -- node[above, font=\tiny, color=armred] {text} (d);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 6pt
+  Both arrows in the middle are \textbf{plain text}. Everything the sound carried that text
+  cannot hold dies there:
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    who is speaking \quad emotion \quad sarcasm \\
+    hesitation \quad pace \quad emphasis \\
+    two people at once \quad background sound \\
+    accent \quad whether it was speech at all
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{"Say that again, but angrier."} There is no answer to this from a transcript. The
+      information was destroyed at the first arrow.}}
+  \end{columns}
+  \vskip 6pt
+  \footnotesize
+  And turn-taking is a guess: a \textbf{voice-activity detector} (\textbf{VAD}) decides you have
+  stopped talking. That is precisely why interrupting these systems feels wrong.
+\end{frame}
+
+\begin{frame}{Predict first: what does the cascade cost in time?}
+  \small
+  Four models in a row, each waiting for the last to finish. Guess the delay between you
+  stopping and the first sound coming back.
+  \vskip 6pt
+  \pause
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{latency_budget.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Three tiers, not two - a tuned streaming cascade is much better than a naive one, and saying
+  otherwise would be selling you something. Human conversational turn gaps average about
+  \textbf{200 ms}, which is the target the bottom bar is aiming at.
+\end{frame}
+
+\begin{frame}{The honest counter-argument}
+  \small
+  Native models win on latency and on everything text cannot carry. Cascades still run most
+  production systems in 2026, and the reasons are good ones.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{For the cascade}\\[3pt]
+      You can read the transcript, so you can debug it, log it, and satisfy an auditor.
+      You can swap any of the three parts for a better or cheaper one. Dozens of vendors
+      compete at each stage.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{For native}\\[3pt]
+      About a \textbf{quarter} of the latency of a tuned cascade, and a tenth of a naive one.
+      Keeps prosody and emotion. Handles overlap and interruption. But it is a black box from a
+      small number of vendors, and you cannot inspect what it "heard".}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.92\linewidth}{\small\centering
+    "The better architecture" is not the same question as "the better system to deploy on
+    Tuesday". Both answers are defensible right now.}}
+\end{frame}
+
+\begin{frame}{The bill}
+  \small
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{audio_token_budget.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  Gemini bills \textbf{32 tokens per second} of audio input, so one minute is \textbf{1,920}
+  tokens and the documented ceiling is 9.5 hours in a single prompt. Output audio runs about 25
+  tokens per second.
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{This is the ratio from the by-hand slide, arriving from a different direction.}
+    There we counted \emph{encoder frames} and got about 10$\times$; here we are reading a
+    \emph{vendor's price list} and get about 13$\times$. Different systems, different
+    measurements, same order of magnitude - which is what makes it a fact about the modality
+    rather than about one company. Same lesson as L33's 576-tokens-per-image slide:
+    \textbf{the modality is the cost}.}}
+\end{frame}
+
+\begin{frame}{Where audio models still fail}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Known weak spots}
+    \vskip 3pt
+    \footnotesize
+    \begin{itemize}\itemsep2pt
+      \item Long recordings - the context bill above
+      \item Counting and separating speakers
+      \item Exact timestamps ("when was this said")
+      \item Music, beyond naming the genre
+      \item Low-resource languages, \textbf{Armenian among them}
+    \end{itemize}
+    \column{0.48\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Whisper hallucinates on silence.} Koenecke et al.\ (2024) found invented phrases
+      in about \textbf{1\%} of transcriptions, and \textbf{38\% of those} contained explicit
+      harms - invented violence, made-up names, fabricated authority. They cluster on long
+      non-vocal stretches.}}
+  \end{columns}
+  \vskip 10pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    The failure mode is worth pausing on. A recognition model must emit \emph{something}, and
+    trained on 680,000 hours of mostly-speech it has never seen a long silence that meant
+    nothing. The same language prior that makes it fluent makes it confabulate - exactly the
+    vision-model hallucination story from L33, with a different sense organ.}}
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{itemize}\itemsep4pt
+    \item Sound arrives as \textbf{16,000 numbers a second}, about 6,400 times the rate of text.
+      Every design in this lecture exists to bring that number down.
+    \item \textbf{25 ms windows, 10 ms hop, 80 mel bins, log.} Six slides of signal processing
+      that turn sound into a picture, and set every frame rate that follows.
+    \item Keeping only magnitude \textbf{throws phase away}, so a spectrogram cannot be played
+      back. Remember it in L36.
+    \item \textbf{Encoder, projector, language model} - the same three boxes as L33. Whisper at
+      50 Hz, pooled to 25, or resampled to a fixed 88 tokens per 30 s.
+    \item The \textbf{cascade} still wins on debuggability and vendor choice; it costs between
+      0.6 and 2 seconds of extra latency, and everything a transcript cannot hold.
+  \end{itemize}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} the model has to answer \emph{out loud}. A language model emits discrete
+    tokens from a fixed vocabulary, and sound is continuous - so we go and invent a vocabulary
+    for sound, then teach the model to talk and listen at the same time.}}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+%   Source material: web sweep 2026-08-07, corrected after a review pass the same day.
+%     - Whisper front end (30 s, 80 mel / 128 for large-v3, two convs the SECOND with stride 2,
+%       1500 vectors, 50 Hz) verified against openai/whisper model.py, not from memory. An
+%       earlier draft said "two convolutions of stride 2", which contradicted its own 3000->1500.
+%     - Qwen2-Audio: Whisper-large-v3, stride-2 pool to 25 Hz, SINGLE LINEAR projector
+%       (Qwen2AudioMultiModalProjector). The tech report omits the projector; the code has it.
+%     - SALMONN: Whisper-large-v2 + BEATs, window-level Q-Former, 88 tokens / 30 s = 340 ms each.
+%     - Qwen3-Omni: AuT, 20M hours, 12.5 Hz, Thinker/Talker MoE, 234 ms first packet.
+%     - Gemini audio billing: 32 tokens/s in, ~25 out, 9.5 h ceiling (ai.google.dev).
+%     - Latency: Moshi 160 ms theoretical / 200 ms measured; Qwen3-Omni 234 ms. Shown as THREE
+%       tiers because the 1.5-3 s figure describes an un-optimised cascade and two tiers would
+%       have overstated the case against a system the next frame defends.
+%     - Koenecke et al. 2024 (FAccT), "Careless Whisper": ~1% of transcriptions hallucinate,
+%       38% of those carry explicit harms, concentrated on long non-vocal stretches.
+%   Figures: all from py_src/l35_hearing_figs.py on synthesized speech (py_src/audio_common.py).
+%     No recording is read anywhere in this chapter and no model is trained. The synthetic
+%     waveform is labelled as synthetic on the frame that shows it.
+%   Pedagogical decisions:
+%     - Full signal-processing primer kept (instructor's choice). It is load-bearing: 25 ms ->
+%       10 ms hop -> 100 fps -> Whisper's 50 Hz -> 25 pooled -> the 32 tokens/s on the bill.
+%       Cutting it would make every later number an assertion.
+%     - The phase frame was ADDED after review. Without it, "why vocoders exist" and "why codecs
+%       work on waveforms not mel" are both unmotivated, and L36's measurement has no caveat.
+%     - Intuition-first, matching ch11_rl and ch12_vlm rather than SLIDE_STYLE's full-derivation
+%       default. Deliberate; see AUDIO_CHAPTER_PLAN.md decision 4.
+%   Forward pointer: L36 (how a model speaks) - vocabulary for sound, residual quantization,
+%     semantic vs acoustic tokens, and full-duplex dialogue.

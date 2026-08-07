@@ -1,0 +1,733 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Lecture 36: Audio-Language Models II}
+\subtitle{How a model speaks}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{It answered out loud}
+  \small
+  You asked a question. About \textbf{200 milliseconds} later a voice started answering, with
+  the right emphasis in the right places. You interrupted halfway through, and it stopped.
+  \vskip 8pt
+  It did not call a speech-synthesis service. The same network that chose the words produced the
+  sound.
+  \vskip 10pt
+  \centering
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.9\linewidth}{\small\centering
+    Last lecture got sound \emph{into} a language model. This one is the harder direction, and
+    it needs an idea we have been avoiding since ch9.}}
+\end{frame}
+
+\begin{frame}{The contradiction}
+  \small
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \fcolorbox{popblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{What a language model does}\\[4pt]
+      Picks the next item from a \textbf{finite vocabulary}, by a softmax over maybe 100,000
+      choices. Discrete, one at a time.}}
+    \column{0.52\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{What sound is}\\[4pt]
+      A \textbf{continuous} pressure curve, arriving 16,000 numbers a second, where the exact
+      values matter and there is no alphabet.}}
+  \end{columns}
+  \vskip 10pt
+  This is the same collision as L34, where a continuous diffusion model met a discrete language
+  model over images. The resolution is the same too, and it is audacious:
+  \vskip 8pt
+  \centering
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.88\linewidth}{\small\centering
+    \textbf{Invent a vocabulary for sound.} Then talking is just next-token prediction.}}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{A vocabulary for sound}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{A vocabulary for sound}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      What if a sound were made of words? The first three attempts all fail, and each one
+      fails for a reason worth knowing.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Attempt 1: just round the samples}
+  \small
+  Each sample is a number. Round it to one of 256 levels and you have a vocabulary of 256. This
+  is literally what WaveNet did.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The vocabulary is fine.} 256 is tiny. With a logarithmic spacing that matches
+      loudness perception, 8 bits per sample sounds acceptable.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The sequence length is fatal.} You are back to 16,000 tokens per second - exactly
+      the problem L35 opened with. Nothing was gained.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  We do not need a smaller \emph{vocabulary}. We need fewer \emph{tokens}.
+\end{frame}
+
+\begin{frame}{Attempt 2: quantize frames instead of samples}
+  \small
+  Push the audio through an encoder that reduces it to a few frames per second, then snap each
+  frame's vector to the nearest entry of a learned codebook. This is \textbf{vector
+  quantization}, exactly as in L34, and the audio becomes a grid of integers.
+  \vskip 8pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{And now the vocabulary is fatal.} To match a real codec's quality with a single
+    codebook you would need roughly
+    \[ 2048^{8} = 2^{88} \approx 3 \times 10^{26} \text{ entries.} \]
+    That is not a large softmax. That is more entries than there are stars in the observable
+    universe, by a factor of a million.}}
+  \vskip 8pt
+  \centering
+  Attempt 1 had too many tokens. Attempt 2 has too many \emph{words}. The fix is to stop
+  choosing.
+\end{frame}
+
+\begin{frame}{Attempt 3: residual vector quantization}
+  \small
+  \textbf{Residual Vector Quantization} (\textbf{RVQ}) is the idea that made audio tokenizable,
+  and it is three lines long.
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \begin{enumerate}\itemsep2pt
+      \item Quantize the frame with codebook 1. Keep the index.
+      \item Look at what is \textbf{left over} - the error you just made.
+      \item Quantize \emph{that} with codebook 2. Repeat for 8 codebooks.
+    \end{enumerate}}}
+  \vskip 8pt
+  Formally, with $r_0 = x$ and $e_k(\cdot)$ the nearest entry in codebook $k$:
+  \[ r_k = r_{k-1} - e_k(r_{k-1}), \qquad \hat{x} = \sum_{k=1}^{8} e_k(r_{k-1}) \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Eight codebooks of 2,048 give $8 \times 11 = 88$ bits per frame - the same expressive
+      power as $2^{88}$ entries, from 16,384 vectors you can actually store.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      The cost: a frame is now \textbf{8 tokens, not 1}. Section 7 is entirely about what to do
+      about that.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What does each level actually buy?}
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.76\textwidth]{vq_residual_stages.pdf}
+  \end{center}
+  \vskip -4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Sharply front-loaded: level 1 buys about $\mathbf{2.5\times}$ what all seven
+    remaining levels add together}, for one eighth of the bits. \emph{That ratio} is the
+    finding; the dB values belong to this stand-in, not to a real codec. Same shape as L34's
+    image codebooks - which is why level 1 is the one everybody fights over.}}
+\end{frame}
+
+\begin{frame}{The codec, and where it actually operates}
+  \small
+  Encoder, residual quantizer, decoder, trained end to end.
+  \vskip 4pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    \textbf{On raw waveforms - not on the mel spectrograms we spent six slides building.} A
+    spectrogram cannot be played back (L35, the phase slide), so a system that must \emph{emit
+    sound} cannot live there. Mel is for models that only listen.}}
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{llr}
+      \toprule
+      \textbf{Codec} & \textbf{Who, when} & \textbf{Note} \\
+      \midrule
+      SoundStream & Zeghidour et al., 2021 & introduced residual quantization here \\
+      EnCodec & D\'efossez et al., 2022 & good enough for music, not just speech \\
+      \rowcolor{armblue!12}
+      Mimi & D\'efossez et al., 2024 & the one Moshi runs on \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  \centering
+  \footnotesize
+  Mimi: 24 kHz in, \textbf{12.5 frames per second} out - a \textbf{1,920$\times$} cut in
+  sequence length - with \textbf{8} codebooks of 2,048, which is \textbf{1.1 kbps}.
+  \vskip 3pt
+  (The released checkpoint ships 32 quantizers; Moshi uses 8 of them.)
+\end{frame}
+
+\begin{frame}{Two things that make the training work}
+  \small
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \textbf{Rounding has no gradient}
+    \vskip 3pt
+    \footnotesize
+    "Snap to the nearest entry" is a step function: its derivative is zero everywhere it is
+    defined. The encoder would never learn.
+    \vskip 4pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Straight-through estimator.} On the backward pass, pretend the quantizer was the
+      identity and pass the gradient through unchanged. Exactly the L34 trick, same
+      justification, and it still feels like cheating.}}
+    \column{0.51\textwidth}
+    \textbf{The loss is not squared error}
+    \vskip 3pt
+    \footnotesize
+    Minimising squared error on a waveform gives muffled audio: two signals can be
+    perceptually identical and numerically far apart, because the ear does not hear phase.
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Instead: \textbf{multi-scale spectral loss} (compare log-spectrograms at several window
+      sizes) plus \textbf{adversarial discriminators} - the ch8b idea, doing exactly what it is
+      good at, judging whether something sounds real.}}
+  \end{columns}
+  \vskip 8pt
+  \centering
+  \footnotesize
+  The second point is why a codec at 1.1 kbps sounds better than a 1990s codec at ten times the
+  bitrate.
+\end{frame}
+
+\begin{frame}{Is residual quantization the only way?}
+  \small
+  No, and a student who remembers L34 should already be suspicious - we saw there that growing a
+  codebook has sharply diminishing returns, and that the field escaped by changing the
+  \emph{quantizer} rather than its size.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Lookup-free and scalar quantization.} Drop the learned codebook; quantize each
+      dimension to a few fixed levels and let the combination be the code. The audio analogue
+      of MAGVIT-2 from L34.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Single-codebook tokenizers.} If one frame is one token, Section 7's whole problem
+      disappears. The price is quality, and the race is to push the frame rate down without
+      paying it.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  Same tension as every compression slide in this course: fewer tokens, or better sound.
+\end{frame}
+
+% ================================================================
+\section{Semantic tokens and acoustic tokens}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Semantic tokens and acoustic tokens}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      What was said, and how it sounded. Separating them is the difference between a codec and
+      something a language model can reason with.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The goal: split what from how}
+  \small
+  A language model built on codec tokens has a problem. The tokens encode \emph{sound}, and most
+  of what makes a sound is not what was said - it is the voice, the room, the microphone.
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{What we want.} Level 1 carries \emph{what was said}. The rest carry \emph{who said
+    it and how}. Then the model can reason over level 1 like it reasons over text, and treat
+    the others as decoration.}}
+  \vskip 8pt
+  Kyutai's demonstration of the finished system makes it vivid: keep level 1, replace the rest,
+  and you hear \textbf{the same words in a completely different voice}.
+  \vskip 8pt
+  \centering
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.9\linewidth}{\small\centering
+    Note the word \textbf{goal}. Nothing so far makes this happen.}}
+\end{frame}
+
+\begin{frame}{And it does not happen on its own}
+  \small
+  Take a plain residual quantizer that nobody told about meaning, and resynthesize audio from
+  \textbf{level 1 alone}. If level 1 were "semantic", the words would survive and the voice
+  would not.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.9\linewidth}{\small
+      \textbf{The opposite happens.} Probing EnCodec this way (Zhang et al., 2024), level 1
+      alone retains a \textbf{speaker similarity of 0.92} - the voice comes through almost
+      perfectly - while the content is destroyed.}}
+  \end{center}
+  \vskip 8pt
+  Which makes sense in hindsight, and our own measurement two slides ago said the same thing
+  from the other direction: \textbf{level 1 is whatever explains the most variance}, and in
+  speech that is the gross spectral shape of a particular voice. Nothing in the training
+  objective ever mentioned words.
+  \vskip 6pt
+  \centering
+  \footnotesize
+  "Coarse" and "semantic" are not synonyms.
+\end{frame}
+
+\begin{frame}{Mimi's fix, and the attempt that failed first}
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.76\textwidth]{split_rvq.pdf}
+  \end{center}
+  \vskip -6pt
+  \footnotesize
+  The obvious repair is to \emph{teach} level 1 to be semantic, with a loss making it match
+  \textbf{WavLM} - the self-supervised speech model from L35, whose features track \emph{what
+  was said}. Mimi's authors tried exactly that: it made the first quantizer much better at
+  telling phonemes apart, and \textbf{made the audio worse}, because whatever level 1 stopped
+  encoding still had to be carried by the residual it handed on.
+  \vskip 3pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    So they took it out of the chain. \textbf{Worth copying as a way of working:} the obvious
+    design was tried, measured, and restructured - and the paper reports the failure.}}
+\end{frame}
+
+\begin{frame}{AudioLM: three stages, three jobs}
+  \small
+  AudioLM (Borsos et al., 2022) took the same split and made it the architecture.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{llp{5.2cm}}
+      \toprule
+      \textbf{Stage} & \textbf{Tokens} & \textbf{Job} \\
+      \midrule
+      1 & semantic, from w2v-BERT (L35) & long-range structure: syntax, meaning, where the
+        melody is going \\
+      2 & coarse acoustic, from SoundStream & voice, recording conditions \\
+      \rowcolor{armblue!12}
+      3 & fine acoustic & the last details of fidelity \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  Each stage is its own transformer, conditioned on the output of the one before.
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Why split it at all?} Coherence over ten seconds and fidelity over ten milliseconds
+    are different problems. One model doing both spends its capacity in the wrong place - it
+    produces audio that sounds gorgeous and says nothing, which is precisely what sample-level
+    models did in L35.}}
+\end{frame}
+
+% ================================================================
+\section{Generating sound left to right}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Generating sound left to right}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      We have a vocabulary. Now the awkward part: there are eight tokens per timestep and a
+      language model emits one at a time.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Eight tokens per frame, one tape}
+  \small
+  Residual quantization gives a \textbf{grid}: 8 codebooks deep, $T$ frames wide. Autoregressive
+  generation needs a \textbf{line}. Somebody has to choose the order, and the choice is not free.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Read it in the wrong order and you ask the model to predict fine detail before it has
+      committed to the coarse content it is detailing.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      Read it too carefully and you pay 8 forward passes per frame. At 12.5 Hz that is 100
+      steps per second of audio - real time evaporates.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  Exactly the raster-order question from L34, one dimension deeper.
+\end{frame}
+
+\begin{frame}{Three orders, three prices}
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{codebook_patterns.pdf}
+  \end{center}
+  \vskip 2pt
+  \small
+  \begin{columns}[T]
+    \column{0.33\textwidth}
+    \footnotesize
+    \textbf{Flatten} - best quality, and $K \times T$ steps. Every token sees every earlier one.
+    \column{0.33\textwidth}
+    \footnotesize
+    \textbf{Parallel} - $T$ steps, and it assumes the 8 codebooks of a frame are independent
+    given the past. They are not.
+    \column{0.34\textwidth}
+    \footnotesize
+    \textbf{Delay} - offset each codebook by one step. $T + K - 1$ steps, and codebook $k$ can
+    still see codebook $k-1$ for its own frame.
+  \end{columns}
+  \vskip 8pt
+  \centering
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.9\linewidth}{\footnotesize\centering
+    MusicGen (Copet et al., 2023) uses delay with $K=4$: \textbf{$T+3$} steps instead of $4T$,
+    for nearly the quality of flattening.}}
+\end{frame}
+
+\begin{frame}{VALL-E: speech synthesis as next-token prediction}
+  \small
+  VALL-E (Wang et al., 2023) trained a language model on codec tokens over 60,000 hours. Text in,
+  codec tokens out, decode to audio. Nothing about it is specific to speech - it is GPT with a
+  different vocabulary.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The striking part is what came free. Prefix the generation with \textbf{3 seconds} of
+    somebody's voice as codec tokens, and the model continues \emph{in that voice} - because
+    continuing the prompt is the only thing it knows how to do. \textbf{Zero-shot voice cloning
+    with no fine-tuning}, from a capability nobody added on purpose.}}
+  \vskip 4pt
+  \footnotesize
+  The output is codec tokens, so getting audio back is just running the codec's decoder - the
+  point the next slide but one makes in general.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      Three seconds of anyone's voice is a phone call, a voicemail, a video. The impersonation
+      problem is a direct consequence of the architecture, not a misuse of it.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      The technical mitigation is \textbf{watermarking}: embed a signal in generated audio that
+      survives compression and re-recording. Moshi ships one.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The other lineage: do not generate left to right at all}
+  \small
+  Everything so far has been autoregressive. A large part of speech synthesis went the other
+  way, and you have seen this argument before.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lll}
+      \toprule
+      & \textbf{Autoregressive} & \textbf{Non-autoregressive} \\
+      \midrule
+      How & next token, one at a time & denoise the whole utterance at once \\
+      On what & discrete codec tokens & continuous latents (no quantization) \\
+      Examples & VALL-E, CosyVoice & F5-TTS, MaskGCT, Voicebox \\
+      Strength & prompting, streaming & speed, and no tokenizer to lose fidelity in \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{This is L34 section 7, again, for a different sense.} Discrete-and-autoregressive
+    versus continuous-and-diffusion, the same trade-off, the same unresolved argument. When the
+    same fork appears twice in two lectures, it is telling you something about the shape of the
+    problem rather than about images or audio.}}
+\end{frame}
+
+\begin{frame}{Getting back to a waveform}
+  \small
+  Two lineages, and they answer "how do I turn this into sound" differently.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Mel plus a vocoder} (the Tacotron era). The model predicts a mel spectrogram; a
+      separate network - HiFi-GAN and relatives - invents the phase that L35 threw away and
+      produces a waveform. Two models, trained separately.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Codec tokens plus the codec's decoder} (now). There is no separate vocoder,
+      because \textbf{the codec decoder is the vocoder} - it was trained as the other half of
+      the encoder that made the tokens.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.9\linewidth}{\footnotesize\centering
+    A common confusion worth heading off: in a codec system, asking "and then which vocoder?"
+    has no answer. The decoder already is one.}}
+\end{frame}
+
+\begin{frame}{By hand: one second of audio, both directions}
+  \small
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{lrr}
+      \toprule
+      & \textbf{Listening (L35)} & \textbf{Speaking (L36)} \\
+      \midrule
+      raw samples & 16,000 & 24,000 (Mimi runs at 24 kHz) \\
+      frames & 100 log-mel & 12.5 codec frames \\
+      after the encoder & 50 Whisper vectors & 12.5 frames $\times$ 8 codebooks \\
+      \rowcolor{armblue!12}
+      tokens the model handles & 25 (pooled) & \textbf{100} \\
+      bits & continuous vectors & $12.5 \times 88 = 1{,}100$ bits \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Speaking costs more than listening.} Understanding can pool aggressively and throw
+      away anything not needed for meaning. Generation has to produce every bit that comes out
+      of the loudspeaker.}}
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      1,100 bits per second is \textbf{1.1 kbps} - the number from the codec slide, now derived
+      rather than quoted.}}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{Talking at the same time}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Talking at the same time}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The one problem in this chapter that has no counterpart anywhere in vision.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{A conversation is not turn-taking}
+  \small
+  Everything built so far assumes turns: you speak, it listens, you stop, it answers. Real
+  conversation is not like that. A system that can listen and speak \emph{simultaneously} is
+  called \textbf{full duplex}, borrowing the term from telephony.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\itemsep2pt
+      \item You say "mhm" while the other person is still talking
+      \item Both of you start at once, and one yields
+      \item You interrupt as soon as the answer is wrong
+      \item The pause before "yes" carries the real answer
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
+      A turn-based model cannot do any of this \textbf{by construction}, however fast it gets.
+      The voice-activity detector from L35 is a \emph{guess} about when you finished, and it is
+      making that guess with no idea what you were saying.}}
+  \end{columns}
+  \vskip 10pt
+  \centering
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.92\linewidth}{\small\centering
+    An image arrives all at once. A conversation is two streams that never stop. This is where
+    the audio problem stops resembling the vision problem.}}
+\end{frame}
+
+\begin{frame}{Moshi: predict everything, every frame}
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.88\textwidth]{duplex_streams.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  Moshi (D\'efossez et al., 2024) drops turns entirely. Every 80 ms it predicts
+  $K = 2Q+1 = \textbf{17}$ streams: \textbf{8} codebooks of its own audio, \textbf{8} of yours,
+  and \textbf{1} text token.
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    It is \textbf{always} listening and \textbf{always} speaking. Silence is not the absence of
+    output, it is a prediction like any other - which is what makes an interruption something
+    the model can simply respond to, rather than an exception some surrounding code must handle.}}
+\end{frame}
+
+\begin{frame}{Inner monologue}
+  \small
+  A speech-to-speech model trained only on audio tokens speaks fluently and reasons badly. All
+  that text pretraining is in there somewhere, and generating sound does not reach it.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Moshi's answer:} for each frame, predict the \textbf{text} token \emph{first}, then
+    that frame's audio tokens conditioned on it. The model writes what it is about to say, then
+    says it, 12.5 times a second.}}
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    Keeps the linguistic quality of a language model while the output stays genuinely
+    speech-to-speech. Nothing is transcribed and re-synthesized - the text is an internal
+    scaffold, not a stage in a pipeline.
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      And it comes with a bonus: shift the text stream relative to the audio and the same model
+      does \textbf{streaming recognition} or \textbf{streaming synthesis}. Three systems, one
+      set of weights.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why it takes two transformers}
+  \small
+  17 streams per frame. The obvious approach - one vocabulary covering every combination - needs
+  $2048^{17}$ entries, so that is out. The alternative, 17 separate steps per frame, destroys
+  the frame rate.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Temporal transformer.} 32 layers, 4,096 wide. Steps once per frame, at 12.5 Hz.
+      This is where the language ability lives, and it does the expensive work only 12.5 times
+      a second.}}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Depth transformer.} 6 layers, 1,024 wide. Runs \emph{inside} one frame, across the
+      17 streams, so each stream sees the ones decided before it. Small enough that 17 of these
+      cost little.}}
+  \end{columns}
+  \vskip 8pt
+  \centering
+  This structure is the \textbf{RQ-Transformer} (Lee et al., 2022), borrowed from image
+  generation rather than invented here.
+  \vskip 6pt
+  \footnotesize
+  Result: \textbf{160 ms} of theoretical latency, about \textbf{200 ms} measured. For scale, one
+  Mimi frame is 80 ms, so the floor is a small number of frames - though the paper reports the
+  160 ms rather than breaking it down, so do not quote a decomposition.
+\end{frame}
+
+\begin{frame}{The landscape, mid-2026}
+  \small
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{llll}
+      \toprule
+      \textbf{Model} & \textbf{Year, who} & \textbf{Weights} & \textbf{Notable for} \\
+      \midrule
+      Moshi / Mimi & 2024, Kyutai & \textbf{open} & full duplex, inner monologue, 12.5 Hz \\
+      Qwen3-Omni & 2025, Alibaba & \textbf{open} & one model for text, image, audio, video \\
+      GPT-realtime & 2024--, OpenAI & closed & the product that made this mainstream \\
+      Gemini native audio & 2024--, Google & closed & 32 tokens/s billing, very long context \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Worth noticing: unlike the text-model race, the open-weights entries here are genuinely at
+    the front. Moshi published the architecture, the codec, and the failed ablations - which is
+    why this lecture could be built at all. Almost nothing about the closed systems is
+    documented well enough to teach.}}
+\end{frame}
+
+\begin{frame}{What is still unsolved}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{itemize}\itemsep3pt
+      \item \textbf{Memory.} A one-hour conversation is 45,000 frames and 765,000 tokens.
+        Nobody has a good answer.
+      \item \textbf{More than two speakers.} The 17 streams assume exactly one of you.
+      \item \textbf{Evaluation.} S2SBench for reasoning loss, MMAU and AIR-Bench for audio
+        understanding - all young, none decisive.
+      \item \textbf{Impersonation.} Watermarking helps; it does not solve it.
+    \end{itemize}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The open question worth watching: does learning to speak cost you thinking?}
+      \vskip 4pt
+      S2SBench measures a real drop when models are trained for speech output. Qwen3-Omni claims
+      \emph{no} degradation against its single-modality counterparts.
+      \vskip 4pt
+      Both are published. They disagree. That is the honest state in 2026, and it is a better
+      thing to tell students than a tidy answer.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{itemize}\itemsep4pt
+    \item A language model needs a \textbf{finite vocabulary}. Rounding samples gives too many
+      tokens; one big codebook needs $3 \times 10^{26}$ words.
+    \item \textbf{Residual quantization} solves it by quantizing the leftovers, over and over.
+      Our stand-in measurement: level 1 buys roughly \textbf{2.5$\times$} what levels 2-8 add
+      between them - the ratio is the lesson, not the decibels.
+    \item Codecs work on \textbf{waveforms}, not spectrograms, because a spectrogram cannot be
+      played back.
+    \item Level 1 is \textbf{not} semantic for free - it keeps the voice and loses the words.
+      Mimi runs a semantic quantizer \textbf{in parallel}, after the obvious fix hurt the audio.
+    \item Eight tokens per frame need an order: \textbf{flatten, parallel, or delay}.
+    \item \textbf{Full duplex} is the genuinely new problem. Moshi predicts 17 streams every
+      80 ms and never takes a turn.
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Next:} \texttt{ml/llm\_training/}. Every model here was a pretrained language model
+    with a new sense bolted on - so the question left is how that language model got made.}}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+%   Source material: web sweep 2026-08-07, corrected after a review pass the same day. Five
+%   numbers in the first draft were wrong; all replacements verified against primary sources.
+%     - Mimi: 24 kHz -> 12.5 Hz is 1920x (SeaNet strides 4,5,6,8 plus a final stride-2 conv),
+%       NOT the 128x in Kyutai's explainer - that figure describes the explainer's own TOY codec.
+%       Q=8 codebooks of 2048 = 1.1 kbps; the released checkpoint ships 32 quantizers.
+%     - Mimi does NOT distill WavLM into RVQ level 1. That was tried and REJECTED: it improved
+%       ABX phonetic discriminability and hurt audio quality, so Mimi runs a plain semantic VQ
+%       in PARALLEL with a 7-level acoustic RVQ and sums the outputs. Verified in the Moshi
+%       paper. The failed-attempt framing is better teaching than the wrong fact was.
+%     - Single-codebook equivalent of 8x2048 is 2^88 ~ 3e26. An earlier draft said "billions".
+%     - MusicGen: delay costs T+K-1 and flattening K*T, with K=4 (not 8).
+%     - Moshi: K=2Q+1=17 streams; temporal transformer 32 layers / 4096 wide, depth transformer
+%       6 layers / 1024 wide; 160 ms theoretical, 200 ms measured. RQ-Transformer is
+%       Lee et al. 2022, ADOPTED by Moshi rather than invented by it.
+%     - SpeechTokenizer (Zhang et al., 2024): resynthesis from EnCodec RVQ-1 alone retains 0.92
+%       speaker similarity while content collapses. This replaces a planned experiment of our
+%       own - see below.
+%   Figures: py_src/l36_speaking_figs.py. vq_residual_stages is the chapter's own measurement
+%     (k-means residual quantization, K=64, 8 levels, codebooks fit on a 60 s synthesized corpus
+%     and applied to a HELD-OUT utterance). Measured: 16.86 dB at level 1, then 2.12, 1.09, 1.16,
+%     0.77, 0.57, 0.56, 0.45 - sharply front-loaded. The stand-in caveat is printed on the figure
+%     itself, not only in the plan: it quantizes log-mel frames, which cannot be turned back into
+%     audio, and a real codec trains its codebooks jointly with a decoder.
+%   CUT, deliberately: a planned `semantic_vs_acoustic` measurement (same word in two synthesized
+%     voices, per-level token agreement). It cannot distinguish its hypothesis from its confound -
+%     the two voices differ only in F0, and at 16 kHz the low mel filters resolve the harmonic
+%     comb, so level-1 agreement moves for reasons unrelated to semantics, in either direction
+%     depending on parameters. Replaced with published evidence (Zhang et al. 2024 above), which
+%     is stronger and honest. Do not reinstate it without fixing the design.
+%   Pedagogical decisions:
+%     - Intuition-first, matching ch11_rl and ch12_vlm (AUDIO_CHAPTER_PLAN.md decision 4). The
+%       RVQ recursion is shown and explained; the straight-through estimator is signposted to L34
+%       rather than re-derived.
+%     - "Codecs operate on waveforms, not mel" is stated explicitly because L35 spends six frames
+%       building mel and students otherwise carry the wrong assumption into this deck.
+%     - The non-autoregressive TTS frame exists to make the ch12 echo explicit: the same
+%       AR-vs-diffusion fork recurs for audio, which says something about the problem shape.
+%   Forward pointer: ml/llm_training/ - how the language model these all bolt onto is built.
