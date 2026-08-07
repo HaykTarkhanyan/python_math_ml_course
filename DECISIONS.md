@@ -9,6 +9,129 @@ this file holds the choice and a pointer.
 
 ---
 
+## #8 - The ՊԱՆԻՐ denoiser is a ONE-level UNet at ch=96; #7's two-level design was the bug
+
+**Date:** 2026-08-07 · **Status:** active · **supersedes #7**
+
+**Decision.** `LEVELS = 1` (24 -> 12 -> 24, a single halving) at `ch=96`, **1.50M params**,
+10000 steps. Trained on a rented T4 via the Colab CLI, not locally.
+
+**Why.** #7 assumed capacity was the constraint and went from 266k to 7.03M params. It was
+wrong, and the measurement is unambiguous:
+
+| arch | params | steps | final loss | samples |
+|---|---|---|---|---|
+| 2 levels, 24x24 | 7.03M | 20000 | 0.038 | fragments |
+| 2 levels, 32x32 | 7.03M | 10000 | **0.9994** | diverged |
+| **1 level, 24x24** | **1.50M** | **10000** | **0.0269** | **legible letters** |
+
+A **4.7x smaller** model produced the best loss of any run and the first readable ՊԱՆԻՐ.
+The cause is the same property that made crop-to-ink mandatory in #6: **the strokes are 1-2 px
+wide.** Halving twice (24 -> 12 -> 6) leaves them sub-pixel in the deep layers, so the extra
+capacity models a representation from which the letter has already been erased. Halving once
+keeps them. The 20000-step run also plateaued by ~step 4000, ruling out training length.
+
+**Alternatives rejected.**
+- *More capacity* (#7's answer). Falsified above.
+- *More steps.* The progression figure shows no change from step 4000 to 20000.
+- *32x32.* Not rejected - **untested**. That run diverged (loss 0.9994 = predicting zero)
+  because `lr=2e-3` is too hot for 7.03M params; the same run at 24x24 had already shown a
+  27.32 loss spike over its first 250 steps. Retest with a lower LR before concluding anything.
+
+**Cost accepted.** The UNet is now built from `ModuleList`s with `levels` as a parameter, so
+**state-dict keys changed** and every checkpoint predating this entry is unloadable. Given all of
+them produced unusable samples, nothing of value was lost.
+
+**What would change this.** If a 32x32 run at a lower LR beats this, revisit - more pixels is the
+other way to stop downsampling from destroying strokes. `pack_mashtots.py` takes a size argument
+and `TAG` keeps experiment artifacts apart, so that test is ~10 min on a T4.
+
+---
+
+## #7 - The ՊԱՆԻՐ denoiser is a two-level UNet at ch=64, not digits_ddpm's TinyUNet
+
+**Date:** 2026-08-06 · **Status:** active, **outcome pending** (6000-step run in flight)
+
+**Decision.** `train_panir_ddpm.py` uses its own **two-level** conditional UNet
+(24 -> 12 -> 6 -> 12 -> 24, skips at both scales, conditioning injected at all three),
+**ch=64, 3.13M params**, rather than reusing `digits_ddpm.py`'s TinyUNet.
+
+**Why.** The first full run *did* converge - loss 1.2 -> 0.0344 - but the samples were
+malformed and **Ի effectively failed to render** (per-class ink 0.059 against 0.099-0.123 for
+the others; 0.024 in the generated word). Loss went flat at **step ~800** and the remaining
+5,200 steps bought 0.005. Flat loss plus bad samples is a capacity limit, not undertraining,
+and TinyUNet is 266k params with a single down/up level - built for 8x8 digits, not 24x24
+cursive across 5 classes. Notably the *thinnest* input class (ink 0.131 vs 0.16-0.21) became
+the failed output class.
+
+**Why ch=64 specifically.** Measured at 4 threads: **ch=48 -> 1274 ms/step, ch=64 -> 1288,
+ch=96 -> 3245.** ch=64 buys 1.8x the parameters of ch=48 for ~1% more time - the step is
+memory-bound at this size, so the capacity is nearly free - while ch=96 costs 2.5x.
+
+**Alternatives rejected.**
+- *More steps on TinyUNet.* The loss curve was flat for 5,200 steps. Nothing there to gain.
+- *Drop to 16x16*, which is what #6 prescribed for trouble. Rejected because resolution was not
+  what bound the first run; the same architecture would simply fail faster.
+- *ch=96.* 5.4 h per run for capacity this dataset almost certainly does not need.
+
+**Cost accepted.** The step-timing probe (a tight loop over one cached batch) predicted 1288 ms;
+the real loop runs at **3.86 s/step**, so a 6000-step run is ~6.4 h rather than ~2 h. The probe
+did not model per-step data indexing or memory pressure and should not be trusted for future
+estimates without a real-loop check. The run was left at BelowNormal priority regardless, per the
+freeze-safety rule in `diffusion_lib.py:23`.
+
+**What would change this.** If the letters are still malformed after this run, capacity is *not*
+the binding constraint and the next suspects are the data volume (~900 images/class) and the
+per-glyph size normalization from #6 - not a still-larger model.
+
+---
+
+## #6 - The diffusion homework trains on five Armenian letters at 24x24, vendored as one .npz
+
+**Date:** 2026-08-05 · **Status:** active
+
+**Decision.** `ml/ch10_diffusion` gets a homework after all (reversing the "lectures only" call in
+`DIFFUSION_CHAPTER_PLAN.md`), built on **five** classes of the Kaggle *Mashtots Dataset v2* -
+**Պ Ա Ն Ի Ր**, which spell **ՊԱՆԻՐ** - preprocessed to **24x24** and committed as a single
+**1.25 MB `.npz`** (`data/mashtots_panir_24.npz`). Students never touch Kaggle.
+
+**Why.**
+- *Five letters, not 78.* The word is the payoff: generate each letter class-conditionally, paste
+  them side by side, and the result is visibly wrong because every letter comes from a different
+  hand. That failure *is* the lesson about global coherence. ՊԱՆԻՐ also happens to be this course's
+  difficulty unit. Five classes give ~4,481 images, against `digits_ddpm.py`'s 1,797.
+- *24x24.* Measured, throttled to 4 threads on a loaded machine: **16x16 = 22.5 min/run,
+  24x24 = 35.2 min, 32x32 = 109.1 min** for 6,000 steps. 32x32 is 3.1x the time of 24x24 for 1.8x
+  the pixels - superlinear, so it is disqualified. 16 -> 24 costs only 1.56x and the glyphs are
+  visibly better (`mashtots_letters.html` shows both).
+- *Crop to the ink box before resizing.* Not an optimization - required. The glyph fills only
+  ~34-40 px of the 64 px frame, so a naive resize applies a 4x reduction to 1-2 px strokes:
+  ink fraction **0.133 vs 0.258** at 16x16, peak brightness 134 vs 154. A font-rendered probe missed
+  this entirely because font strokes are 5-8x thicker than this handwriting.
+- *Vendored `.npz`.* The source is a **competition**, so raw access needs an account, an API token
+  and accepting the rules. Every other dataset in this course is a one-liner.
+
+**Alternatives rejected.**
+- *All 78 classes.* ~900 images/class either way, but 78-way conditioning on a CPU budget buys
+  nothing the word demo needs.
+- *64x64 native.* Hours per run. The chapter's own `digits_ddpm.py` docstring already made this call
+  for MNIST, though note its "hours" figure is for 60,000 images, not our 4,481.
+- *Pretrained Stable Diffusion via `diffusers`.* Teaches none of L27-L30 and is minutes per image on
+  an Iris Xe. `diffusers` is not even installed.
+- *Font-rendered letters (Sylfaen + augmentation).* Zero download and fully reproducible, but real
+  handwriting is the better story and makes the per-writer inconsistency genuine. Kept as a fallback.
+
+**Cost accepted.** Per-glyph cropping normalizes every letter to the same size, discarding the
+natural ~3x size spread (19-57 px), so the model cannot generate size variation. Stroke weight and
+slant survive, which is enough for the inconsistency lesson.
+
+**What would change this.** If a training run at 24x24 fails to converge in ~35 minutes, drop to
+16x16 rather than adding steps. If the letters Ի and Ր turn out to be confusable at 24x24 (they are
+near-twins in cursive), swap one and re-pack - `extract_mashtots.py` and `pack_mashtots.py` are
+parameterized by a single `LETTERS` list and the raw zip is kept.
+
+---
+
 ## #5 - GANs get two decks in the generative thread, not a chapter after diffusion
 
 **Date:** 2026-08-03 · **Status:** active

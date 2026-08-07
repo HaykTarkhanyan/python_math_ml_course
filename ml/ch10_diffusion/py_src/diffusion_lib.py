@@ -109,7 +109,8 @@ def spiral_class_labels(x):
 def timestep_embedding(t, dim=32):
     """Sinusoidal embedding - the same construction as transformer positional encoding."""
     half = dim // 2
-    freqs = torch.exp(-np.log(10000.0) * torch.arange(half, dtype=torch.float32) / half)
+    # follow t's device, so the same code runs on CPU locally and CUDA on a rented runtime
+    freqs = torch.exp(-np.log(10000.0) * torch.arange(half, dtype=torch.float32, device=t.device) / half)
     args = t[:, None].float() * freqs[None, :]
     return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
 
