@@ -144,7 +144,8 @@ Reason: during ch10 four runs were compared (2-level, 1-level, 24px, 32px). With
 | `WORKFLOWS.md` | Task playbook for AI assistants: task -> workflow/skill/source-of-truth map, definition of done, hard rules. |
 | `CONVENTIONS.md` | This file. Naming, structure, YouTube title rules. |
 | `DEFERRED_TODO.md` | Parked topics (bias-variance bits, GLMs, causal inference, etc.). |
-| `LEARNINGS.md` | Non-obvious lessons learned. |
+| `_learnings/*.md` | Non-obvious lessons, one file per lesson (`YYYY-MM-DD-HHMM_slug.md`). **New lessons go here.** |
+| `LEARNINGS.md` | Read-only archive of pre-2026-08-08 lessons. Do not append; see its header. |
 | `_work_sessions/*.toml` | Per-session logs (one TOML per session); `PROGRESS.md` is the pre-2026-07-22 archive. |
 
 ---

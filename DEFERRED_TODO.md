@@ -52,6 +52,15 @@ The full deck got cut. Status of the 3 surviving concepts (as of 2026-06-19):
 
 Pre-built decks parked because they need more statistics background than the current cohort has. Each is mostly compile-ready.
 
+> **Re-evaluated 2026-08-08 and deliberately kept parked.** All three were test-compiled and
+> **all three build cleanly** - "mostly compile-ready" is now "compiles". They are still not
+> registered in `_quarto.yml`, by instructor decision: the statistics-background reason above
+> still holds, and being finished is not the same as being ready to teach.
+>
+> Note for the next revisit: **GLMs' stated condition is already met** - logistic regression is
+> taught and delivered in the classification chapter. That one is unblocked whenever the cohort
+> is ready; the other two still need the placement question answered.
+
 ### `deferred_glms.tex` — Generalized Linear Models (29 frames)
 
 Sections: Why GLMs / The GLM Framework / OLS as GLM / Logistic as GLM / Poisson regression / Estimation & inference (IRLS, deviance) / Family tree / Choosing the right GLM / Practical Python.

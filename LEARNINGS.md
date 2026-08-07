@@ -1,7 +1,19 @@
-# LEARNINGS.md
+# LEARNINGS.md — ARCHIVE (read-only as of 2026-08-08)
+
+**Do not append here. New lessons go in `_learnings/`, one file per lesson**
+(`YYYY-MM-DD-HHMM_slug.md`).
+
+This file is kept as a read-only archive rather than split into `_learnings/` files, decided
+2026-08-08. The convention wants one file per lesson with a `YYYY-MM-DD-HHMM` filename, but these
+entries have dates without times and several have no date at all, so a mechanical split would
+have invented a timestamp for every filename. Most of them are also one-line reference tips
+rather than lessons with a symptom and a cause, which is what `_learnings/` is for.
+
+Still worth reading - the LaTeX, Quarto and Windows sections are live knowledge, and corrections
+to entries here are welcome. Same status as `PROGRESS.md`.
 
 Non-obvious lessons, gotchas, and incidents from working in this repo.
-Append new entries with a date. Strike through obsolete ones, do not delete.
+Strike through obsolete ones, do not delete.
 
 ## LaTeX / Beamer
 

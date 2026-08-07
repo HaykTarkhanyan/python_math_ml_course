@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Helper Files - check before starting any task
 
 - **`WORKFLOWS.md`** - maps every recurring task type to its workflow, skill, and source-of-truth file, plus definition-of-done tables and hard rules. **Read the matching row before improvising a workflow.**
-- `LEARNINGS.md` - dated gotchas and incidents (LaTeX, Quarto, Windows tooling, machine limits). Append when something non-obvious bites.
+- **`_learnings/`** - one Markdown file per lesson (`YYYY-MM-DD-HHMM_slug.md`). **Write new lessons here.** Skim the filenames at session start and read any that look relevant to what you are about to touch.
+- `LEARNINGS.md` - **read-only archive** (frozen 2026-08-08; see its header for why it was not split). Dated gotchas and incidents: LaTeX, Quarto, Windows tooling, machine limits. Still worth reading, but do not append.
 - `CONVENTIONS.md` - course-specific naming and structure decisions (deck/notebook/folder naming, QMD template, YouTube link-text rule).
 - **`_work_sessions/`** - per-session logs (one TOML per session, newest filename last). Skim the last 2-3 at session start for context; write a new one at session end (`wrap-session` skill). Format: `_work_sessions/README.md`. (`PROGRESS.md` is the pre-2026-07-22 archive - read-only.)
 - `DEFERRED_TODO.md` - parked topics.
