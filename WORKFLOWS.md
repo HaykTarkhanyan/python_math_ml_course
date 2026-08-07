@@ -46,7 +46,7 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 | Artifact | Done means |
 |---|---|
-| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
+| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, **`non_essential/detect_clipped_slides.py` run and every flag checked against the rendered page**, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
 | Figure script | runs end-to-end under the `ma` venv, PDFs in sibling `fig/`, log in `logs/`, figures actually embedded in the deck and the deck recompiled |
 | Homework `.qmd` | registered in `_quarto.yml` with exact-case path, blank line before every list / blockquote / fence, difficulty markers set |
 | Commit | no `.aux`/`.log`/`.nav` staged, message explains the change, push only when asked |
