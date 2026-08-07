@@ -4,7 +4,7 @@ Recurring decisions made across this course. Codify here so future-me and Claude
 
 This is course-specific only. Tooling conventions (uv, logging, plot colors, etc.) live in `CLAUDE.md`. Recurring deferrals live in `DEFERRED_TODO.md`.
 
-Last updated: 2026-06-19
+Last updated: 2026-08-07
 
 ---
 
@@ -105,6 +105,34 @@ gform/                     # Apps Script + question CSVs for the Google Form
 
 - **figures/** subfolder only if `.tex` decks include external images (TikZ-only decks don't need it).
 - **gform/** keeps form scaffolding out of the main lecture flow.
+
+---
+
+## Training runs — tag every artifact, never overwrite
+
+Any script that trains a model and can be run more than once with different settings carries a
+`TAG` constant, and **every** path it writes is built from it. Canonical example:
+`ml/ch10_diffusion/py_src/train_panir_ddpm.py`.
+
+```python
+DATA_SIZE = 24
+TAG = ""          # "" is the shipped run; "_lvl1", "_res32" etc. for experiments
+
+def paths():
+    d, suf = CHAPTER / "data", f"{DATA_SIZE}{TAG}"
+    return (d / f"mashtots_panir_{DATA_SIZE}.npz", d / f"panir_ddpm_{suf}.pt",
+            d / f"panir_ddpm_{suf}_ckpt.pt", d / f"panir_progression_{suf}.npz")
+```
+
+Rules:
+
+- One `paths()` function returns every output path. No path literals scattered through the script — that is how a rerun silently clobbers the good weights.
+- Weights, checkpoint, figures and any progression/metrics file all take the same suffix, so a run's artifacts are greppable as a set and comparable side by side.
+- The untagged name (`TAG = ""`) is the **shipped** artifact — the one the qmd and notebooks load. Experiments always get a tag.
+- Save weights as CPU tensors (`{k: v.cpu() for k, v in state_dict.items()}`). A checkpoint saved on a GPU raises on load for every student who does not have one.
+- Store the config *inside* the checkpoint (`ch`, `levels`, `size`, `n_classes`, `letters`) and check for missing keys on load. A stale checkpoint that loads with mismatched keys produces plausible-looking garbage, which reads like a modelling bug and costs hours.
+
+Reason: during ch10 four runs were compared (2-level, 1-level, 24px, 32px). Without tagging, each would have overwritten the last and no comparison would have been possible.
 
 ---
 
