@@ -43,7 +43,7 @@ Raw image = 4,608 bits, so K=512 is **14.2x compression**.
 
 Two things worth teaching, both visible in `fig/vq_quantization.pdf`:
 
-1. **Sharply diminishing returns.** 8 -> 32 nearly halves the error; 128 -> 512 buys only 22%
+1. **Sharply diminishing returns.** 8 -> 32 cuts the error by 41%; 128 -> 512 buys only 22%
    for 4x the vocabulary. That is exactly why the field went to lookup-free quantization
    (MAGVIT-2) rather than simply growing K.
 2. **Even at K=512 the strokes visibly break up.** Each patch is quantized with no knowledge of
