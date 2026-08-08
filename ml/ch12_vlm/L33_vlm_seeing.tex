@@ -132,28 +132,49 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{The same thing, on a real photograph}
+  \small
+  A $24\times24$ letter makes the idea clear but hides the scale. Here is what a real vision
+  encoder actually does to a real image.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.66\textwidth]{patchify_real.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  A market in Yerevan. Keep this picture in mind - by the end of the lecture it will have
+  broken three different things.
+\end{frame}
+
 \begin{frame}{The Vision Transformer}
   \small
   Dosovitskiy et al.\ (2021) put patches into a standard transformer encoder and changed
   almost nothing else. The \textbf{Vision Transformer} (\textbf{ViT}) is the result, and it
   underlies essentially every vision encoder in use today.
-  \vskip 6pt
-  \begin{columns}[T]
-    \column{0.55\textwidth}
-    \footnotesize
-    \begin{enumerate}\itemsep 3pt
-      \item Patchify, then one linear projection.
-      \item \textbf{Add position embeddings.} Without them a picture is an unordered bag of
-        patches - self-attention has no idea which patch was where.
-      \item Optionally prepend a \textbf{classification token} (\textbf{CLS}) whose output
-        represents the whole image.
-      \item Run $N$ ordinary transformer blocks.
-    \end{enumerate}
-    \column{0.45\textwidth}
-    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
-      \textbf{The naming is honest.} There is no vision-specific machinery here. It is the
-      ch9 architecture, fed differently.}}
-  \end{columns}
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{vit_pipeline.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    Step 4's \textbf{classification token} (\textbf{CLS}) is an extra learned vector whose
+    output summarises the whole image. \textbf{The naming is honest:} nothing in this diagram
+    is vision-specific - it is the ch9 architecture, fed differently.}}
+\end{frame}
+
+\begin{frame}{Why step 3 is not optional}
+  \small
+  Self-attention is \textbf{permutation-equivariant}: shuffle the inputs and you get the same
+  outputs, shuffled. It has no built-in idea of "next to".
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{position_embeddings.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    A \textbf{convolution} could never make this mistake - locality is wired into the kernel.
+    A transformer has to be \emph{told} where each patch was, by adding a learned vector per
+    position. Take that away and an image is a bag of unordered squares.}}
 \end{frame}
 
 \begin{frame}{Predict first}
@@ -214,35 +235,122 @@
   came with captions.
 \end{frame}
 
-\begin{frame}{CLIP}
+\begin{frame}{What "one space" actually means}
+  \small
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{shared_space.pdf}
+  \end{center}
+  \vskip -4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    Two encoders, one destination. A picture of a cat and the string \emph{"a cat"} should end
+    up pointing the same way, \textbf{even though no shared weight ever processed both}.
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Once that holds, an image is \textbf{addressable by language} - which is exactly what a
+      language model needs to read it. The rest of this section is how to get from the left
+      panel to the right one.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{CLIP: two towers that have to meet}
   \small
   \textbf{Contrastive Language-Image Pre-training} (\textbf{CLIP}), Radford et al.\ (2021).
-  Two encoders - one for images, one for text - trained on \textbf{400 million}
-  image-caption pairs.
+  Two completely separate encoders, trained together on \textbf{400 million} image-caption
+  pairs scraped from the web.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.90\textwidth]{clip_pipeline.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  The two towers share \textbf{no weights} and never see each other's inputs. The only thing
+  forcing them to agree is the loss - which is why the last two boxes matter so much.
+\end{frame}
+
+\begin{frame}{Two details in that diagram that are easy to skip}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{The linear projection}
+    \vskip 3pt
+    \footnotesize
+    A Vision Transformer might output 768 numbers; the text transformer 512. You cannot
+    compare vectors of different lengths at all.
+    \vskip 4pt
+    So each tower ends with one learned matrix mapping into a \textbf{shared embedding
+    space} - 512 dimensions for CLIP ViT-B/32. That space is the whole product. Everything
+    else is a way of shaping it.
+    \column{0.5\textwidth}
+    \textbf{The L2 normalisation}
+    \vskip 3pt
+    \footnotesize
+    Every embedding is divided by its own length, so it lands on the unit sphere. Now the dot
+    product of two embeddings is exactly the \textbf{cosine of the angle} between them.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      Meaning becomes \textbf{direction}, not magnitude. A picture of a cat and the words
+      "a cat" should point the same way; how long the arrows are means nothing.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The objective, written out}
+  \small
+  Take a batch of $N$ pairs. Embed everything and build the $N \times N$ matrix of cosine
+  similarities $s_{ij}$ between image $i$ and caption $j$.
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    Read \textbf{row $i$} as a multiple-choice question: \emph{"which of these $N$ captions
+    belongs to image $i$?"} The right answer is always on the diagonal - so this is ordinary
+    classification with $N$ classes, and takes ordinary cross-entropy:
+    \[ \mathcal{L}_{\text{image}\to\text{text}}
+       = -\frac{1}{N}\sum_{i=1}^{N} \log
+         \frac{\exp(s_{ii}/\tau)}{\sum_{j=1}^{N} \exp(s_{ij}/\tau)} \]}}
   \vskip 4pt
   \begin{columns}[T]
-    \column{0.44\textwidth}
-    \footnotesize
-    Take a batch of $N$ pairs. Embed all $N$ images and all $N$ captions. Now score every
-    image against every caption:
-    \vskip 5pt
-    \begin{itemize}\itemsep 2pt
-      \item $N$ pairs are \textbf{correct} matches.
-      \item $N^2 - N$ pairs are \textbf{wrong}.
-    \end{itemize}
-    \vskip 5pt
-    Train so the correct ones score high and the rest score low. That is the entire
-    objective.
-    \column{0.56\textwidth}
-    \begin{center}
-      \includegraphics[width=0.86\linewidth]{clip_contrastive.pdf}
-    \end{center}
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Then again down the \textbf{columns} - "which image belongs to this caption?" - and
+      average the two. The loss is \textbf{symmetric}; neither modality is the label.}}
+    \column{0.5\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      $\tau$ is the \textbf{temperature}, and CLIP does not fix it. It is learned by gradient
+      descent like any other weight.}}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Temperature: how confident should the model be?}
+  \small
+  Cosine similarities live in $[-1,1]$ and in practice bunch together. Feed those straight
+  into a softmax and every answer looks equally good, so there is almost no gradient.
+  Dividing by a small $\tau$ spreads them apart.
   \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.90\textwidth]{clip_temperature.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    $\tau$ controls \textbf{how harshly a near-miss is punished}. CLIP does not tune it by
+    hand: it is \textbf{initialised at 0.07 and learned}, so the model decides for itself how
+    sharp its own softmax should be - one fewer hyperparameter, and a rare case of a training
+    difficulty setting being handed to gradient descent.}}
+\end{frame}
+
+\begin{frame}{By hand: one training step on a batch of 4}
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{clip_worked_step.pdf}
+  \end{center}
+  \vskip -4pt
   \footnotesize
-  \centering
-  Illustrative similarity values, drawn from a specified distribution. The
-  \textbf{structure} is exact.
+  Row I1's correct caption scored 0.31; the best wrong one scored 0.28. After dividing by
+  $\tau$ that gap becomes 4.4 against 4.0, and the softmax puts \textbf{0.436} on the right
+  answer, for a row loss of $-\ln 0.436 = 0.83$.
+  \vskip 3pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\footnotesize
+    A perfect batch scores 0; random guessing on 4 classes scores $\ln 4 = 1.39$. At
+    \textbf{0.63} this model beats chance and has plenty left to learn.}}
 \end{frame}
 
 \begin{frame}{Why the free negatives matter so much}
@@ -250,47 +358,113 @@
   Supervised learning needs someone to write down the right answer. Contrastive learning
   only needs pairs that \textbf{belong together}, and it manufactures its own wrong answers
   from the rest of the batch.
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.44\textwidth}
+    \begin{center}
+      \includegraphics[width=0.99\linewidth]{clip_contrastive.pdf}
+    \end{center}
+    \column{0.56\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      At $N = 32{,}768$, one step supplies about \textbf{one billion} negative comparisons for
+      the cost of embedding 32,768 items.}}
+    \vskip 6pt
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{Batch size is not a speed knob here.} A bigger batch means more wrong answers to
+      rule out, so the question is genuinely harder and the features have to be sharper. Small
+      batch, easy task, weaker model.}}
+    \vskip 6pt
+    {\footnotesize Illustrative values; the \textbf{structure} is exact.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The catch, and the fix everyone now uses}
+  \small
+  That batch-wide softmax is expensive in a specific way: normalising a row needs every other
+  device's embeddings, so the loss does not shard cleanly across machines.
+  \vskip 8pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{SigLIP} (Zhai et al., 2023), \textbf{Sigmoid Loss for Language-Image
+    Pre-training}, replaces the softmax over a whole row with an \textbf{independent sigmoid
+    on each pair}: each of the $N^2$ cells becomes its own yes/no question.}}
   \vskip 8pt
   \begin{columns}[T]
     \column{0.5\textwidth}
-    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
-      At $N = 32{,}768$, one training step supplies about \textbf{one billion} negative
-      comparisons at the cost of embedding 32,768 items.}}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      No normalisation across the batch, so it shards trivially - and it works well at
+      \emph{small} batch sizes, where CLIP's objective degrades.}}
     \column{0.5\textwidth}
-    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
-      \textbf{So batch size is not just a speed knob here.} It changes how hard the task is,
-      and therefore what the model learns. Small batch, easy task, weaker features.}}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
+      It is now the default vision encoder in a large share of open vision-language models.}}
   \end{columns}
-  \vskip 10pt
-  \footnotesize
-  \textbf{SigLIP} (Zhai et al., 2023) - \textbf{Sigmoid Loss for Language-Image
-  Pre-training} - replaces the batch-wide softmax with an independent sigmoid on each pair.
-  No normalisation across the batch, so training works at smaller batches and scales more
-  easily. It is now a common default encoder in open vision-language models.
 \end{frame}
 
 \begin{frame}{Zero-shot classification falls out for free}
   \small
-  CLIP was never trained to classify anything. But it can, with no classifier head and no
-  fine-tuning:
-  \vskip 6pt
-  \begin{enumerate}\footnotesize\itemsep 3pt
-    \item Write each class as a sentence: \emph{"a photo of a cat"}, \emph{"a photo of a
-      dog"}, \emph{"a photo of a marshrutka"}.
-    \item Embed all of them with the text encoder.
-    \item Embed the image. Pick the sentence with the highest similarity.
-  \end{enumerate}
+  CLIP was never trained to classify anything. But it can: write each class as a
+  \emph{sentence}, embed them all, embed the image, and take the highest similarity.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.88\textwidth]{zero_shot.pdf}
+  \end{center}
+  \vskip -4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    The last step is the same dot product as in training - \textbf{classification and retrieval
+    are the same operation here}, you have only chosen what to put in the columns. The class
+    list is a \textbf{string}, decided at inference time.}}
+\end{frame}
+
+\begin{frame}{Why "a photo of a" is not decoration}
+  \small
+  The prompt template looks like superstition. It is not, and the reason recurs everywhere in
+  this course.
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    CLIP's text encoder never saw bare nouns. It saw \textbf{captions} - "a photo of a cat
+    sitting on a windowsill". Feeding it the single word \emph{"cat"} asks it to embed
+    something \textbf{off the distribution it was trained on}, and the embedding is
+    correspondingly worse.}}
   \vskip 8pt
   \begin{columns}[T]
-    \column{0.52\textwidth}
-    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
-      The class list is now a \textbf{string}, decided at inference time. Adding a category
-      costs a sentence, not a retraining run.}}
     \column{0.48\textwidth}
+    \footnotesize
+    Wrapping the class in a caption-shaped sentence puts it back on distribution. Then go
+    further: embed the \emph{same} class under \textbf{80 different templates} - "a bad photo
+    of a...", "a sculpture of a..." - and average the resulting vectors.
+    \column{0.52\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      Radford et al.\ report \textbf{3.5\%} on ImageNet from that ensembling, and almost
+      \textbf{5\%} from prompt engineering and ensembling together. It is free at inference:
+      average once, keep one vector per class.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What CLIP achieved, and where it stops}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
+      \textbf{The headline result.} Zero-shot CLIP matched a \textbf{ResNet-50 trained
+      directly on ImageNet}, without seeing one ImageNet training image.
+      \vskip 3pt
+      And it was far more \textbf{robust}: on distorted or unusual renderings of the same
+      classes, the supervised model degraded sharply and CLIP largely held up. Learning from
+      captions rather than a fixed label set gives a less brittle representation.}}
+    \column{0.5\textwidth}
     \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
       \textbf{Bounded by the captions it saw.} Concepts rare on the web - specialist medical
-      images, minority scripts - are weak. "Zero-shot" is not "knows everything".}}
+      imaging, minority scripts, fine-grained species - stay weak. "Zero-shot" means "no task
+      training", not "knows everything".
+      \vskip 3pt
+      It is also poor at \textbf{counting}, at reading text in images, and at spatial
+      relations. Captions rarely say "three cups to the left of the laptop", so nothing ever
+      taught it to encode that.}}
   \end{columns}
+  \vskip 6pt
+  \centering
+  \footnotesize
+  Hold on to the right-hand box. Every one of those weaknesses returns at the end of this
+  lecture as a \textbf{vision-language model} failure - this is where they are born.
 \end{frame}
 
 % ================================================================
@@ -305,6 +479,21 @@
     \end{minipage}
   \end{center}
   \vfill
+\end{frame}
+
+\begin{frame}{The three answers, side by side}
+  \small
+  Everyone agrees on the vision encoder. The disagreement is about \textbf{what sits between
+  it and the language model} - and the real question underneath is how many tokens the
+  language model is asked to swallow.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{three_designs.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  \centering
+  The next three frames take these one at a time. Watch the third row of each column.
 \end{frame}
 
 \begin{frame}{Design A - a projector}
@@ -450,7 +639,34 @@
   at native resolution would cost more than this entire lecture as text.
 \end{frame}
 
-\begin{frame}{Stop resizing everything to a square}
+\begin{frame}{What the resize actually destroys}
+  \small
+  Back to the market. Those handwritten price labels are perfectly legible in the photograph.
+  Here they are before and after the resize every fixed-resolution encoder performs:
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{resolution_detail.pdf}
+  \end{center}
+  \vskip -4pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{No amount of cleverness downstream recovers this.} The model is not failing to
+    read the labels - it never received them. When a vision-language model "cannot read" a
+    receipt, this is usually why, and it happens before layer one.}}
+\end{frame}
+
+\begin{frame}{So stop resizing everything to a square}
+  \small
+  \begin{center}
+    \includegraphics[width=0.88\textwidth]{anyres_tiling.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Cut the image into crops, encode each at full resolution, and add one downscaled copy of the
+  whole thing so the model still knows how the pieces fit together. The token bill goes up in
+  exact proportion - here $5\times$.
+\end{frame}
+
+\begin{frame}{The general version of that fix}
   \small
   The fixed-resolution habit is inherited from image classification, and it is actively
   harmful for documents: a wide receipt squashed to $336\times336$ has unreadable text
@@ -472,6 +688,34 @@
   The active research direction is the other side of the same coin: \textbf{token pruning
   and merging} - drop or combine patches that carry little information, since most of a
   photograph is background.
+\end{frame}
+
+\begin{frame}{Three failures, in one photograph}
+  \small
+  The market picture from the start of the lecture is a near-perfect adversarial example, and
+  you can now explain every part of it.
+  \vskip 6pt
+  \begin{center}
+    \footnotesize
+    \begin{tabular}{p{3.3cm}p{7.6cm}}
+      \toprule
+      \textbf{Ask it...} & \textbf{and it struggles, because} \\
+      \midrule
+      "How many bowls of spice are there?" & dozens of near-identical objects, and attention
+        \emph{pools} rather than counts. \\
+      "What does that handwritten label say?" & the resize destroyed the strokes two slides
+        ago - the model never received them. \\
+      \rowcolor{armorange!14}
+      "What script is that?" & Armenian handwriting is thin on the caption web CLIP learned
+        from, so the representation is weak where the data was. \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \centering
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.92\linewidth}{\footnotesize\centering
+    None of these is a mysterious model quirk. Each is a specific decision made earlier in
+    this lecture, coming back with a bill.}}
 \end{frame}
 
 \begin{frame}{Where vision-language models still fail}

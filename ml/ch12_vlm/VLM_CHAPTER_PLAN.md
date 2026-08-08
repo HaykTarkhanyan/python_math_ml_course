@@ -255,3 +255,86 @@ approaches the ch10 diffusion runs. Every training script follows the `TAG` conv
 
 **To verify at build time** (cited from secondary sources so far, not the primary papers):
 BLIP-2's exact query count (32), Parti's token count, and MAGVIT-2's 2^18 codebook.
+
+---
+
+## Depth pass, 2026-08-08 (instructor: "spend more time on stuff, e.g. CLIP")
+
+The first build stated results where it should have developed them. CLIP in particular got three
+frames that gave the objective in words and never showed how a similarity number is produced.
+
+**L33 CLIP section: 3 frames -> 10.** New material, all of it mechanism rather than more claims:
+
+- **Two towers, drawn** (`clip_pipeline.pdf`) - and the two steps everyone skips: the **linear
+  projection** into a shared 512-d space (768-d and 512-d towers cannot be compared at all), and
+  the **L2 normalisation** that turns the dot product into a cosine. Meaning becomes *direction*.
+- **The objective written out** - row *i* as an *N*-way multiple-choice question, so the loss is
+  ordinary cross-entropy; then the same down the columns, averaged. The symmetry was never stated
+  before.
+- **Temperature** (`clip_temperature.pdf`) - what dividing by tau actually does to the softmax,
+  shown at four values. Initialised at 0.07 and *learned*.
+- **A worked step** (`clip_worked_step.pdf`) - a real 4x4 batch: similarities -> divide by tau ->
+  softmax -> `-ln 0.436 = 0.83` -> batch loss 0.63, against `ln 4 = 1.39` for chance. Every number
+  checkable on the slide. `SLIDE_STYLE.md` asks for a by-hand frame wherever mechanics are
+  computable; CLIP is the most computable topic in the chapter and had none.
+- **Why the softmax is the expensive part**, and how SigLIP's per-pair sigmoid removes it.
+- **Why "a photo of a" is not decoration** - the text encoder never saw bare nouns, so a lone word
+  is off-distribution. 3.5% from ensembling 80 templates, almost 5% with prompt engineering.
+- **What CLIP achieved and where it stops** - matched a ResNet-50 trained directly on ImageNet,
+  and was notably more robust; but weak at counting, text-in-image, and spatial relations, which
+  is where the chapter's later VLM failures are *born*.
+
+**L34: one new frame** - the VQ-VAE loss. The old text said "two extra loss terms" and stopped.
+Now written out: reconstruction + codebook + beta * commitment, with the point that terms 2 and 3
+are the **same distance written twice** and only the stop-gradient distinguishes them, plus
+**codebook collapse** as the failure mode.
+
+### Two numbers corrected during this pass
+
+Both were mine, caught by verifying before shipping rather than after:
+
+- "+1.3% on ImageNet from the template alone" - **could not be sourced.** Replaced with the
+  figures that are: **3.5%** from ensembling 80 prompts, almost **5%** combined.
+- "tau settles near 0.01" - **an inference of mine**, not a documented result (it follows from the
+  logit-scale clamp, but the converged value is not something I could verify). The slide now
+  states only what is documented: initialised at 0.07, learned.
+
+## Illustration pass, 2026-08-08 (instructor: more frames, more illustrations, explanatory)
+
+L33 26 -> 40 pages, L34 24 -> 27. Nine new diagrams, none of them an experiment.
+
+**A real photograph now runs through L33.** A Yerevan spice market, downloaded to
+`fig/img/yerevan_market.jpg`. It was chosen because one image carries three separate frames:
+dozens of near-identical bowls (**counting**), handwritten Armenian price labels (**text in
+images**, and a **minority script**), and fine detail that a fixed-resolution resize destroys.
+It is introduced right after the abstract letter-based patchify frame and returns at the end as
+a three-failure summary, so the chapter has a visual spine rather than a list of weaknesses.
+
+New in **L33**:
+
+| Frame | Figure | Why it was needed |
+|---|---|---|
+| The same thing, on a real photograph | `patchify_real` | A $24\times24$ letter shows the idea and hides the scale. This is $224\times224$ with $16\times16$ patches = 196 tokens. |
+| The Vision Transformer | `vit_pipeline` | The frame had **no picture at all** - four numbered steps in prose. |
+| Why step 3 is not optional | `position_embeddings` | The same patches shuffled. Attention is permutation-equivariant, so without position embeddings these two inputs are *identical*. Previously one bullet. |
+| What "one space" actually means | `shared_space` | "A shared embedding space" was pure words. Now: before/after, and why a language model can then read an image. |
+| Zero-shot classification | `zero_shot` | Three prose steps became a diagram of the actual comparison. |
+| The three answers, side by side | `three_designs` | The chapter's central architectural comparison had **no diagram**; each design was described in isolation and never seen together. |
+| What the resize actually destroys | `resolution_detail` | The strongest new frame: real Armenian handwriting, native resolution vs after a $336\times336$ resize. The claim "text is unreadable before the model sees it" was an assertion; now it is visible. |
+| So stop resizing to a square | `anyres_tiling` | Tiling drawn on the real photo, with the $5\times$ token bill. |
+| Three failures, in one photograph | - | Ties counting, unreadable labels, and Armenian script back to specific earlier decisions. |
+
+New in **L34**:
+
+| Frame | Figure | Why |
+|---|---|---|
+| The gradient problem | `straight_through` | Forward path through the quantizer, backward path around it. Was prose only. |
+| The failure mode this creates | `codebook_collapse` | Codebook collapse was one buried sentence. Now its own frame, with the practical instruction: **log how many entries are actually used**. |
+| The three answers, side by side | `three_paradigms` | Chameleon / Transfusion / Janus were three separate frames never shown together, though the whole section is a comparison. |
+
+### An acronym regression the mechanical check caught
+
+Replacing the ViT prose with `vit_pipeline` removed the only expansion of **CLS** - the acronym
+then existed *only inside the figure*, where `grep` cannot see it. The check in `SLIDE_STYLE.md`
+flagged it because the term vanished from the .tex entirely. **Worth remembering: moving prose
+into a figure can silently orphan a definition.** Fixed by defining CLS in the frame's callout.

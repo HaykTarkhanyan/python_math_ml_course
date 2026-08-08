@@ -237,9 +237,133 @@ def fig_raster_order(k=6, generated=20):
     log.info(f"wrote {out}")
 
 
+# ---------------------------------------------------------------------------------------
+# Explanatory diagrams. Added 2026-08-08 (instructor: more frames and illustrations,
+# explanatory rather than experimental). Nothing below measures anything.
+
+from matplotlib.patches import FancyBboxPatch, Rectangle    # noqa: E402
+
+
+def _panel(ax, x, y, w, h, text, color, fs=8, alpha=0.16):
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.01",
+                                fc=color, ec=color, alpha=alpha, lw=1.3))
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.01",
+                                fc="none", ec=color, lw=1.3))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=fs)
+
+
+def _arrow(ax, x0, y0, x1, y1, color="0.4", lw=1.3, style="-|>", ls="-"):
+    ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
+                arrowprops=dict(arrowstyle=style, color=color, lw=lw, linestyle=ls))
+
+
+def fig_straight_through():
+    """The forward path goes through the quantizer; the backward path walks around it."""
+    fig, ax = plt.subplots(figsize=(10.0, 3.4))
+    ax.set_xlim(0, 10); ax.set_ylim(0, 3.4); ax.axis("off")
+
+    _panel(ax, 0.3, 1.5, 1.7, 0.8, "encoder", BLUE)
+    _panel(ax, 2.9, 1.5, 2.2, 0.8, "snap to nearest\ncodebook entry", ORANGE)
+    _panel(ax, 6.0, 1.5, 1.7, 0.8, "decoder", BLUE)
+
+    _arrow(ax, 2.0, 1.9, 2.9, 1.9)
+    _arrow(ax, 5.1, 1.9, 6.0, 1.9)
+    ax.text(4.0, 2.55, "FORWARD: use the codebook entry", fontsize=9, ha="center",
+            color="0.25")
+
+    # backward path detours around the quantizer
+    _arrow(ax, 6.0, 1.2, 2.0, 1.2, color=RED, lw=1.6)
+    ax.plot([6.0, 6.0], [1.5, 1.2], color=RED, lw=1.6)
+    ax.plot([2.0, 2.0], [1.2, 1.5], color=RED, lw=1.6)
+    ax.text(4.0, 1.05, "BACKWARD: copy the gradient straight across,\n"
+                       "as if the quantizer were not there", fontsize=9, ha="center",
+            va="top", color=RED)
+
+    ax.add_patch(Rectangle((2.85, 1.05), 2.3, 1.75, fill=False, ec=RED, lw=1.0, ls=":"))
+    ax.text(4.0, 0.3, "The derivative of \"pick the nearest\" is zero almost everywhere. "
+                      "So we route around it and check that training works.",
+            fontsize=8.5, ha="center", style="italic", color="0.3")
+    out = FIG / "straight_through.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_codebook_collapse():
+    """Codebook collapse, drawn. Schematic usage histograms, not a measurement."""
+    rng = np.random.default_rng(SEED)
+    k = 64
+    healthy = rng.gamma(6.0, 1.0, size=k)
+    healthy = healthy / healthy.sum()
+    collapsed = np.zeros(k)
+    live = rng.choice(k, size=9, replace=False)
+    collapsed[live] = rng.gamma(6.0, 1.0, size=9)
+    collapsed = collapsed / collapsed.sum()
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.8, 2.9), sharey=True)
+    for ax, data, title, color in [
+            (axes[0], healthy, "healthy: every entry earns its keep", "#008C46"),
+            (axes[1], collapsed, f"collapsed: {int((collapsed > 0).sum())} of {k} entries "
+                                 f"do all the work", RED)]:
+        ax.bar(range(k), data, color=color, alpha=0.85, width=0.9)
+        ax.set_title(title, fontsize=9.5, color=color)
+        ax.set_xlabel("codebook entry", fontsize=8.5)
+        ax.set_yticks([])
+        ax.spines[["top", "right", "left"]].set_visible(False)
+    axes[0].set_ylabel("how often it is chosen", fontsize=8.5)
+    fig.suptitle("Schematic. An entry that is never the nearest to anything gets no gradient, "
+                 "so it stays where it was.", fontsize=8.5, y=0.02)
+    fig.tight_layout()
+    out = FIG / "codebook_collapse.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_three_paradigms():
+    """Chameleon vs Transfusion vs Janus - the chapter's central disagreement, drawn."""
+    fig, axes = plt.subplots(1, 3, figsize=(11.4, 4.0))
+    specs = [
+        ("1. fully discrete", BLUE, "Chameleon",
+         [("image -> codebook indices", ORANGE),
+          ("ONE sequence of\ndiscrete tokens", BLUE),
+          ("one transformer,\none softmax", "#7832A0"),
+          ("cross-entropy\n(one loss)", "#008C46")],
+         "Clean. Pays the\nquantization cost."),
+        ("2. hybrid", RED, "Transfusion",
+         [("image -> continuous latents", ORANGE),
+          ("text tokens AND\nimage latents", RED),
+          ("one transformer,\ntwo heads", "#7832A0"),
+          ("cross-entropy\n+ diffusion loss", "#008C46")],
+         "No quantization loss.\nTwo objectives to balance."),
+        ("3. decoupled", ORANGE, "Janus",
+         [("TWO image encoders:\nunderstand vs generate", ORANGE),
+          ("separate paths in", ORANGE),
+          ("one transformer\nbody", "#7832A0"),
+          ("task-specific\nheads", "#008C46")],
+         "Understanding and drawing\nwant different features."),
+    ]
+    for ax, (title, color, who, boxes, note) in zip(axes, specs):
+        ax.set_xlim(0, 3); ax.set_ylim(0, 4.8); ax.axis("off")
+        ax.set_title(f"{title}\n{who}", fontsize=10, color=color)
+        for i, (label, c) in enumerate(boxes):
+            y = 3.75 - i * 0.85
+            _panel(ax, 0.25, y, 2.5, 0.6, label, c, fs=7.5)
+            if i < len(boxes) - 1:
+                _arrow(ax, 1.5, y, 1.5, y - 0.25)
+        ax.text(1.5, 0.15, note, fontsize=8, ha="center", color="0.25", style="italic")
+    fig.suptitle("All three are trying to reconcile ONE thing: a language model emits "
+                 "discrete symbols, an image is continuous.", fontsize=9.5, y=1.0)
+    fig.tight_layout()
+    out = FIG / "three_paradigms.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
     X, y, letters = load_dataset()
     fig_vq_quantization(X, y, letters)
     fig_raster_order()
-    log.info("done - 2 figures")
+    fig_straight_through()
+    fig_codebook_collapse()
+    fig_three_paradigms()
+    log.info("done - 5 figures")

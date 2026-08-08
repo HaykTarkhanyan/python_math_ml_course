@@ -116,7 +116,18 @@
   "Pick the nearest entry" is an $\argmin$. Its derivative is zero almost everywhere and
   undefined at the boundaries, so gradients cannot flow back to the encoder and the encoder
   never learns.
-  \vskip 10pt
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{straight_through.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  \centering
+  The forward pass goes through the quantizer. The backward pass walks around it.
+\end{frame}
+
+\begin{frame}{Why that is allowed to work}
+  \small
   \begin{columns}[T]
     \column{0.52\textwidth}
     \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\small
@@ -130,13 +141,58 @@
     built on it.
     \vskip 5pt
     Two extra loss terms then pull the codebook entries and the encoder outputs toward each
-    other, so the lie stays small.
+    other, so the lie stays small. Next slide.
   \end{columns}
   \vskip 8pt
   \footnotesize
   \centering
   A recurring pattern in deep learning: when a discrete step blocks the gradient, invent a
   differentiable fiction and check empirically that it trains.
+\end{frame}
+
+\begin{frame}{Keeping the lie small: the three terms}
+  \small
+  The straight-through estimator is only harmless if the codebook entry the decoder receives
+  is \textbf{close to} the vector the encoder produced. So the loss actively enforces that.
+  With $z_e$ the encoder output, $e$ its nearest codebook entry, and $\mathrm{sg}[\cdot]$ a
+  \textbf{stop-gradient} (forward: identity; backward: zero):
+  \vskip 2pt
+  \[ \mathcal{L} = \underbrace{\|x - \text{dec}(e)\|^2}_{\text{1. reconstruction}}
+     \;+\; \underbrace{\|\mathrm{sg}[z_e] - e\|^2}_{\text{2. codebook}}
+     \;+\; \beta\underbrace{\|z_e - \mathrm{sg}[e]\|^2}_{\text{3. commitment}} \]
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    Terms 2 and 3 are \textbf{the same distance}, written twice. The stop-gradient is what
+    makes them different: term 2 freezes the encoder and moves the \textbf{codebook}; term 3
+    freezes the codebook and moves the \textbf{encoder}.
+    \column{0.5\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\footnotesize
+      They meet in the middle, and $\beta$ (about \textbf{0.25}) says who moves further. A
+      large $\beta$ makes the encoder commit to whatever the codebook currently says - useful,
+      because a codebook that is chased too hard never settles.}}
+  \end{columns}
+  \vskip 6pt
+  \centering
+  \footnotesize
+  \textbf{Next: the failure mode this creates.}
+\end{frame}
+
+\begin{frame}{The failure mode this creates: codebook collapse}
+  \small
+  Nothing in that loss guarantees the codebook gets \emph{used}. An entry that is never the
+  nearest to anything receives no gradient, so it never moves, so it stays useless forever.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{codebook_collapse.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\footnotesize
+    A 512-entry codebook can quietly do the work of 40, and the loss curve will not tell you -
+    reconstruction simply plateaus a little worse than it should. \textbf{Always log how many
+    codebook entries are actually used.} It is one line of code, and it separates a real bug
+    from a mysterious quality ceiling.}}
 \end{frame}
 
 \begin{frame}{The codebook is a vocabulary}
@@ -300,6 +356,18 @@
     \end{minipage}
   \end{center}
   \vfill
+\end{frame}
+
+\begin{frame}{The three answers, side by side}
+  \small
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{three_paradigms.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  \centering
+  Read the second row of each column: it is the only place they genuinely disagree. Everything
+  else follows from that one choice about how an image is represented.
 \end{frame}
 
 \begin{frame}{Paradigm 1 - fully discrete}
