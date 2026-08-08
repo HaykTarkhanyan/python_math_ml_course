@@ -194,7 +194,7 @@ def fig_model_timeline():
         ("Helix",       2025.12, 7.08,  False),
         ("GR00T N1",    2025.21, 2.2,   True),
         ("SmolVLA",     2025.42, 0.45,  True),
-        ("pi*0.6",      2025.88, 5.0,   False),
+        ("pi-0.6",      2025.88, 5.0,   False),
         ("Dream-VLA",   2025.99, 7.0,   True),
         ("LingBot-VLA 2.0", 2026.52, 6.0, True),
     ]
@@ -209,7 +209,7 @@ def fig_model_timeline():
     offsets = {
         "RT-1": (0, 13), "RT-2": (0, 14), "Octo": (-4, -20), "OpenVLA": (-2, 13),
         "pi-0": (10, -6), "Helix": (2, 13), "GR00T N1": (12, -4), "SmolVLA": (-6, -20),
-        "pi*0.6": (-30, 6), "Dream-VLA": (4, 11), "LingBot-VLA 2.0": (-42, -20),
+        "pi-0.6": (-30, 6), "Dream-VLA": (4, 11), "LingBot-VLA 2.0": (-42, -20),
     }
     for label, year, params, is_open in models:
         dx, dy = offsets[label]
@@ -217,7 +217,9 @@ def fig_model_timeline():
                     fontsize=8.5, color=BLUE if is_open else RED, fontweight="bold")
 
     ax.axhspan(0.4, 8.0, color=ORANGE, alpha=0.13, zorder=0)
-    ax.text(2023.62, 1.9, "everything after RT-2\nlives in this band: 0.45B - 7B",
+    # "everything" was false on this chart's own data - Octo (2024, 0.093B) sits below the
+    # band. Say "most" and let the visible exception stand.
+    ax.text(2023.62, 1.9, "after RT-2, most models\nlive in this band: 0.45B - 7B",
             fontsize=9, color="#8a6000", fontweight="bold", ha="center")
 
     ax.set_yscale("log")
@@ -487,9 +489,12 @@ def fig_wilson_ci():
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(alpha=0.2, ls=":")
     fig.text(0.5, -0.05,
+             # Ratio computed against the n = 20 annotated on this same chart, not against
+             # the N <= 25 figure quoted two slides earlier - a reader checking the claim
+             # uses the number in front of them.
              f"Exact 95% Wilson intervals. A pooled two-proportion z-test is less "
              f"conservative and separates 70% from 80% at n = {n_test} per arm - still "
-             f"about six times the trial counts actually published.",
+             f"{n_test / 20:.0f}x the n = 20 annotated above.",
              ha="center", fontsize=8.2, color=GREY, style="italic")
     fig.tight_layout()
     save(fig, "wilson_ci.pdf")
