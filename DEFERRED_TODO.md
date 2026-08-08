@@ -157,6 +157,39 @@ bad ideas. Either would make a strong homework for the chapter, which currently 
 
 ---
 
+## Cut from ch16 (JEPA and world models), 2026-08-08
+
+Both cut by instructor decision at plan time, not because they are weak. Plan:
+`ml/ch16_jepa/JEPA_CHAPTER_PLAN.md`, decisions 2 and 3. Research: `_knowledge/jepa/`.
+
+1. **The toy collapse experiment.** "Not yet" - deferred, not cancelled. Two small MLP encoders on
+   2-D synthetic data, trained with the JEPA objective **with and without** the EMA teacher,
+   plotting **embedding variance against step** with the loss curve alongside. The no-EMA run's
+   variance goes to zero while its loss looks excellent, which is the whole point: **the loss does
+   not tell you it broke.** Seconds of CPU, no GPU, no large arrays - the machine-load rule is not
+   in play here, this was a scope decision.
+
+   Why it is worth doing later: L39 currently *asserts* that a low loss is compatible with a
+   worthless representation, and argues it from the frame-13 degenerate solution. That is sound but
+   it is arithmetic, not evidence. The chapter's central danger stays abstract without this.
+
+   **It slots in as L39 frame 15b and renumbers nothing** - the plan was written to absorb it.
+
+2. **The LeWorldModel term project.** The one genuinely reproducible artifact in the whole chapter:
+   a compact JEPA world model trained end to end from raw pixels, **two loss terms, one
+   hyperparameter, a single GPU and a few hours** (arXiv 2603.19312, id from the Welch Labs
+   interview - paper not yet read). It exercises everything the chapter teaches in one artifact -
+   latent prediction, anti-collapse regularisation, action conditioning, and goal-conditioned CEM
+   planning.
+
+   Everything else in ch16 is a model no student can reproduce (1M hours of video, 16 A100s). This
+   one is a term project, and that gap is exactly why it is worth revisiting. Note the machine
+   constraint: this needs a GPU, so it is a Colab job, not a laptop job.
+
+   Project ideas stay recorded in `_knowledge/jepa/06_teaching_notes.md` as research.
+
+---
+
 ## How to use this file
 
 - Top-level of repo means it appears in every `ls` and every `git status`. Visible by design.

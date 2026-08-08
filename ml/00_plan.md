@@ -1,123 +1,158 @@
 # Course plan
 
-Last updated: 2026-07-29
+Last updated: 2026-08-08
 
-## Already delivered ✅
+**Cadence: Wednesday / Friday / Sunday**, three sessions a week (changed from the earlier
+Tuesday/Thursday pattern). Times on the "Metric" Google Calendar.
 
-- **[01] ML intro + linear regression**
-- **[02] Design matrix, normal equation, polynomial regression**
-- **[03] Data preprocessing — missing values, categorical encoding, scaling**
-- **[04] Linear regression from scratch — practical** (HW1)
-- **[05] Linear regression — predicting house rent** (HW2)
-- **[06] Model evaluation — overfitting and cross-validation**
-- **[07] Regularization** — Ridge, Lasso, early stopping
-- **[08] Hyperparameter tuning** — grid / random / Bayesian
-- **[09] Regression metrics** — MSE, R², diagnostic plots
-- **[10] Practical — find the errors**
-- **[11] Logistic regression** — binary + multiclass, log-loss, odds ratios
-- **[12] Classification metrics** — precision/recall/F1, ROC-AUC, PR-AUC, lift
-- **[13] Threshold tuning** — cost-optimal cutoff, Youden's J, `TunedThresholdClassifierCV`
-- **[14] Calibration** — reliability diagrams, Brier/ECE, Platt + isotonic
-- **[15] Imbalanced learning** — class weights, resampling, SMOTE
-- **[16] Classification practical — bank marketing**
-- **[17] Decision trees** — Gini/entropy, CART, pruning
-- **[18] Random forests** — bagging, OOB, the ρσ² floor
-- **[19] Boosting** — AdaBoost, gradient boosting in function space
-- **[20] Advanced boosting** — XGBoost / LightGBM / CatBoost, stacking
-- **[21] Trees practical** — wine + census income
-- **[22] Interpreting linear models & trees** — glass boxes, split credit, RuleFit
-- **[23] PFI & feature effects** — PFI/CFI/LOCO/SAGE, fANOVA, ICE→PDP→M-plot→ALE, Friedman's H
+**Projected finish: mid-to-late November 2026** — see [Projected finish](#projected-finish).
 
-## Built but not yet delivered
+---
 
-- **[24] SHAP & LIME** — Shapley values, the four SHAP plots, LIME step by step, counterfactuals
-- **[25] Interpretability practical** — explaining startup success (leakage audit + glass boxes + PFI/PDP)
+## Delivered ✅ — [01] through [24]
 
-## Next chapter
+Last delivered: **[24] SHAP & LIME**, notes exported 2026-07-30.
 
-**Feature engineering / selection** (`ml/06_feature_engineering`) — both decks exist but date from
-2026-07-07 and predate the current style conventions, so they need a polish pass before recording.
-After that: **classic methods** (`ml/07_classic_methods` — KNN, Naive Bayes, LDA/QDA, SVM, GP),
-which is deliberately placed right before the neural-network block so the margin/kernel material
-sets it up. Then **time series** (`ml/08_time_series`), below.
+| # | Lecture |
+|---|---|
+| [01] | ML intro + linear regression |
+| [02] | Design matrix, normal equation, polynomial regression |
+| [03] | Data preprocessing — missing values, categorical encoding, scaling |
+| [04] | *Practical* — linear regression from scratch (HW1) |
+| [05] | *Practical* — predicting house rent (HW2) |
+| [06] | Model evaluation — overfitting and cross-validation |
+| [07] | Regularization — Ridge, Lasso, early stopping |
+| [08] | Hyperparameter tuning — grid / random / Bayesian |
+| [09] | Regression metrics — MSE, R², diagnostic plots |
+| [10] | *Practical* — find the errors |
+| [11] | Logistic regression — binary + multiclass, log-loss, odds ratios |
+| [12] | Classification metrics — precision/recall/F1, ROC-AUC, PR-AUC, lift |
+| [13] | Threshold tuning — cost-optimal cutoff, Youden's J, `TunedThresholdClassifierCV` |
+| [14] | Calibration — reliability diagrams, Brier/ECE, Platt + isotonic |
+| [15] | Imbalanced learning — class weights, resampling, SMOTE |
+| [16] | *Practical* — bank marketing |
+| [17] | Decision trees — Gini/entropy, CART, pruning |
+| [18] | Random forests — bagging, OOB, the ρσ² floor |
+| [19] | Boosting — AdaBoost, gradient boosting in function space |
+| [20] | Advanced boosting — XGBoost / LightGBM / CatBoost, stacking |
+| [21] | *Practical* — wine + census income |
+| [22] | Interpreting linear models & trees — glass boxes, split credit, RuleFit |
+| [23] | PFI & feature effects — PFI/CFI/LOCO/SAGE, fANOVA, ICE→PDP→M-plot→ALE, Friedman's H |
+| [24] | SHAP & LIME — Shapley values, the four SHAP plots, LIME, counterfactuals |
 
-## Time series — built, not delivered (`ml/08_time_series`)
+Videos for [22]–[24] are recorded but not yet published.
 
-Two decks, reviewed and reworked 2026-07-31. They were originally numbered 07/08, which collided
-with the delivered [07] Regularization and [08] Hyperparameter tuning; renumbered to **30/31**,
-leaving **28–29 free for classic methods** (chapter 07 comes first in course order).
+---
 
-- **[30] Time series — classical methods** — trend/season/noise, STL, stationarity + differencing
-  (ADF *and* KPSS), ACF/PACF read on our own series, AR/MA/ARMA/ARIMA/SARIMA, Holt-Winters,
-  naive baselines and MASE worked by hand.
-- **[31] Time series — the ML approach** — forecasting as supervised learning, time-aware splits
-  and leakage, lag/rolling/calendar/exogenous features, `TimeSeriesSplit` (incl. `gap`),
-  the tree extrapolation trap, recursive vs direct, prediction intervals via conformal,
-  M4/M5 and why the winners were hybrids, deep + foundation models.
+## Scheduled — the classic ML track closes out
 
-Open items before recording: no real dataset appears in either deck (everything is one synthetic
-monthly series); the AMD/Dram exchange rate is name-dropped in the cold open but never shown.
+| Date | Day | Session | Material |
+|---|---|---|---|
+| **Aug 12** | Wed | Feature engineering + feature selection + classic methods | `26_feature_engineering` · `27_feature_selection` · `L12b_svm_and_classic_methods` |
+| **Aug 14** | Fri | Time series lecture | `30_classical_time_series` · `31_ml_time_series` |
+| **Aug 16** | Sun | *Practical* — Armenia electricity / gas usage | `32_electricity_forecast_solution.ipynb` |
+| **Aug 19** | Wed | Clustering | `L13_clustering` |
+| **Aug 21** | Fri | *Practical* — compress a Saryan painting | `solution_image_compression.ipynb` |
+| **Aug 23** | Sun | Dimensionality reduction | `L13b_dimensionality_reduction` |
 
-## Next lecture — Tuesday 2026-06-23
+After Aug 23 the classic ML track (chapters 01–08 plus clustering and dim reduction) is fully
+delivered, and everything remaining is the deep-learning half.
 
-Videos [07], [08], [09]:
+---
 
-- **[07] Regularization** — Ridge, Lasso, Elastic Net
-- **[08] Hyperparameter tuning** — Grid / Random / Optuna
-- **[09] Regression losses** — MSE, MAE, Huber, quantile
+## Projected — the deep learning half
 
-## Practical — Thursday 2026-06-25
+Extrapolated Wed/Fri/Sun from Aug 26 with no breaks. Dates are the **low end** of each range;
+every extra session pushes everything after it by 2–3 days.
 
-Video [10]. Hands-on covering L01d (overfitting + CV) + the three Tuesday lectures.
+| Block | Sessions | Dates | Built material |
+|---|---|---|---|
+| Dim reduction practical | 1 | Aug 26 | `solution_eigenfaces.ipynb` |
+| Neural networks | 2–3 | Aug 28, 30 | `L14`, `L15` |
+| NN practical | 1–2 | Sep 2 | `nn_practical_solution.ipynb` |
+| CNN | 3 | Sep 4, 6, 9 | `L16`–`L19` |
+| RNN | 2 | Sep 11, 13 | `L20`, `L21` |
+| Autoencoders | 3 | Sep 16, 18, 20 | `L22`, `L23`, `HW1_sae_rnn` |
+| GANs | 2 | Sep 23, 25 | `L23b`, `L23c` |
+| **Attention + LLMs** | **8** | Sep 27, 30 · Oct 2, 4, 7, 9, 11, 14 | `L24` only — **see build dependencies** |
+| Diffusion | 2–3 | Oct 16, 18 | `L27`–`L31` + PANIR project |
+| Reinforcement learning | 2–3 | Oct 21, 23 | `L32` + tic-tac-toe project |
+| VLM | 2 | Oct 25, 28 | `L33`, `L34` |
+| Audio | 2 | Oct 30, Nov 1 | `L35`, `L36` |
+| VLA | 2 | Nov 4, 6 | `L38` only |
+| Tabular foundation models | 2 | Nov 8, 11 | `L37` only |
 
-**Suggested dataset:** `insurance.csv` (Kaggle "Medical Cost Personal Datasets", ~1300 rows, target = `charges`).
+### Projected finish
 
-Why:
+- **Wed 11 November 2026** — 40 sessions from Aug 12, if every "2–3" lands on 2.
+- **Fri 20 November 2026** — 44 sessions, if all four ranges (NN lectures, NN practical,
+  diffusion, RL) land on 3.
 
-- Mixed types — `sex`, `smoker`, `region` force one-hot / ordinal decisions
-- Small enough for fast CV + HP search iteration
-- `smoker × age` interaction rewards polynomial features + regularization
-- Skewed, asymmetric residuals (smokers) motivate MAE / Huber over MSE
-- Single file, no API, no auth — students download once and go
+---
 
-Alt if we want continuity: reuse `data/House_Rent_Dataset.csv` (already used in HW2 — students know it).
+## Build dependencies — what the schedule needs that does not exist yet
 
-## Classification — Saturday/Sunday 2026-06-27/28
+Ordered by how soon the date arrives.
 
-Videos [11], [12], [13], [14]:
+### 1. Attention + LLMs — ~7 sessions of material, first needed **Sep 27**
 
-- **[11] Logistic regression** — incl. multiclass (softmax / one-vs-rest) and log-loss (built: `11_classification_logreg`)
-- **[12] Classification metrics** — accuracy → precision/recall/F1 → ROC AUC → PR AUC → lift (built: `12_classification_metrics`)
-- **[13] Threshold tuning** — cost-sensitive cutoff (`c* = C_FP/(C_FP+C_FN)`), Youden's J, recall floor, `TunedThresholdClassifierCV` (built: `13_threshold_tuning`; not yet lectured, split out of [12])
-- **[14] Calibration** — reliability diagrams, Brier score, ECE, Platt / isotonic, `CalibratedClassifierCV` (building: `14_calibration`)
+The largest block in the course and the least built. `ml/ch9_attention/` holds **L24 only**
+(53pp); the planned **L25 and L26 do not exist**. `ATTENTION_CHAPTER_PLAN.md` carries the
+approved outline for all three.
 
-> Note (2026-06-21): the planned [12] "classification losses" and [13] "multiclass" were folded into [11]; metrics + threshold tuning became [12]; calibration is its own [13]. Threshold tuning moved out of [14].
+The rest of the block would come from **`misc/dl4nlp/`** — 18 decks, ~442 pages, already in the
+house palette — which is currently outside `ml/` and unregistered in `_quarto.yml`. Folding it
+into `ch9_attention` (or a new LLM chapter) is a decision, not a mechanical move: it changes
+chapter boundaries and the numbering.
 
-## Imbalanced learning — next lecture (Tue 2026-06-30, tentative)
+**Lead time: ~7 weeks from 2026-08-08.**
 
-Video [15]:
+### 2. VLA and tabular FM — one session each with nothing to teach
 
-- **[15] Imbalanced learning** — class weights, resampling (over/under-sampling, SMOTE), the precision/recall tradeoff when the positive class is rare
+Both blocks are scheduled for 2 sessions but hold **one deck each** (`L38` 36pp, `L37` 39pp) and
+no practical. Either build a practical for each, or cut both to 1 session and finish ~4 days
+earlier. Candidate already identified: the **nanoTabPFN "change the prior" lab** cut from ch14
+(~60 s pre-training per iteration, verified against the paper).
 
-## Next lectures (sequence, dates TBD)
+### 3. Homework gaps
 
-- **[15] Feature engineering**
-- **[16] Decision trees**
-- **[17] Random forests + bagging**
-- **[18] Boosting** — AdaBoost, GBM
-- **[19] XGBoost / LightGBM / CatBoost** — include monotonic + interaction constraints (~3-4 frames; required for credit / insurance / healthcare)
-- **[20] Stacking / blending**
-- **[21] Feature selection** — filter / wrapper / embedded, tree-based importances, SHAP
-- **[22] Other classic models** — KNN, SVM, Gaussian processes, Naive Bayes, LDA, QDA
-- **[23] Neural networks** — likely multi-lecture (perceptron → MLP → backprop → frameworks)
-- **[24] Experiment tracking** — MLflow / W&B
-- **[25] TabPFN + tabular foundation models** — awareness lecture; in-context prior-fitted transformer that beats default XGBoost on small data (≤10k rows). Short, students will see this in interviews.
-  
-## Other topics — want to cover, timing TBD
+No homework exists for **ch7 (RNN), ch8b (GAN), ch12 (VLM), ch13 (audio), ch14 (tabular FM),
+ch15 (VLA)**. Only ch14 and ch15 need one to fill a scheduled slot; the others are lecture-only
+blocks, so their homework is optional relative to this schedule.
 
-- Data leakage
-- Model interpretability
-- Error analysis
-- Data drift
-- Model deployment
-- Cost-sensitive learning
+---
+
+## Open questions
+
+1. **Sunday Aug 9 is unassigned**, and **[25] the interpretability chapter project**
+   (startup success — the solution notebook is written and the data is in the repo) has no slot
+   anywhere in this schedule. Dropped, or does it go somewhere?
+2. **RL was listed twice** when this schedule was set (2–3 sessions each time). Counted once
+   here. If it is genuinely two blocks, add 2–3 sessions and the finish moves to
+   late November.
+3. **Numbering.** The two tracks now collide: `24_shap_lime` vs `L24_attention`,
+   `30_classical_time_series` vs `L30_diffusion_conditioning`. This bites the moment the
+   deep-learning decks get YouTube playlist numbers — which starts Aug 26. See the
+   housekeeping entry in `DEFERRED_TODO.md` for the two honest resolutions.
+4. **Duplicate feature-engineering decks.** `ml/06_feature_engineering/` holds both
+   `26_`/`27_` (Jul 2026) and legacy `L01g_`/`L01h_` (Jun 2026) versions of the same two
+   topics. The Aug 12 lecture should use `26_`/`27_`; the legacy pair needs archiving.
+
+---
+
+## Not scheduled
+
+### `ml/deferred/` — three compiled decks, deliberately parked
+
+GLMs (29pp), causal inference (37pp), regression inference (32pp). All three compile; all three
+stay unregistered by instructor decision (2026-08-08) — the statistics-background reason still
+holds. GLMs' stated revisit condition is already met. See `DEFERRED_TODO.md`.
+
+### Topics wanted, no slot
+
+Experiment tracking (MLflow / W&B), data drift, model deployment, error analysis.
+
+### Deliberately out of scope
+
+Recommender systems, MLOps, Gaussian processes, survival analysis, online learning,
+multi-target regression. Each is a separate course.
