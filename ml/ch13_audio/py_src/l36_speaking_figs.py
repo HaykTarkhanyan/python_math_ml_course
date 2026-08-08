@@ -302,6 +302,177 @@ def fig_duplex_streams():
     save(fig, "duplex_streams")
 
 
+# ---------------------------------------------------------------- explanatory diagrams
+# Added 2026-08-08 (instructor: expand, more illustrations). The residual-quantization
+# mechanism - the central idea of the deck - previously had no picture at all.
+
+def fig_rvq_mechanism():
+    """Residual quantization, one level at a time, with the residual actually shrinking.
+
+    The bars are REAL: a frame from the corpus, quantized level by level with the same
+    codebooks the measurement uses. The point is visual - what is left over gets smaller.
+    """
+    train = log_mel(synth_corpus(60.0)).T
+    codebooks, _, _ = residual_vq(train, 4, K)
+    x = train[len(train) // 3]
+
+    residual, approx = x.copy(), np.zeros_like(x)
+    rows = [("the frame itself", x.copy(), None)]
+    for lvl, cb in enumerate(codebooks, start=1):
+        _, q = quantize(residual[None, :], cb)
+        approx = approx + q[0]
+        residual = residual - q[0]
+        rows.append((f"after level {lvl}", approx.copy(), residual.copy()))
+    log.info("rvq mechanism figure: residual norms "
+             f"{[round(float(np.linalg.norm(r[2])), 2) for r in rows[1:]]}")
+
+    fig, axes = plt.subplots(len(rows), 2, figsize=(9.6, 5.4),
+                             gridspec_kw={"width_ratios": [1, 1]})
+    for r, (label, approxv, resid) in enumerate(rows):
+        axes[r, 0].plot(approxv, lw=1.4, color=BLUE)
+        axes[r, 0].set_ylabel(label, fontsize=8, rotation=0, ha="right", va="center")
+        axes[r, 0].set_xticks([]); axes[r, 0].set_yticks([])
+        axes[r, 0].set_ylim(x.min() - 0.5, x.max() + 0.5)
+        if resid is None:
+            axes[r, 1].axis("off")
+            axes[r, 1].text(0.5, 0.5, "nothing quantized yet", ha="center", va="center",
+                            fontsize=8, color="0.5", transform=axes[r, 1].transAxes)
+        else:
+            axes[r, 1].plot(resid, lw=1.2, color=RED)
+            axes[r, 1].set_xticks([]); axes[r, 1].set_yticks([])
+            axes[r, 1].set_ylim(-3, 3)
+            axes[r, 1].text(0.98, 0.85, f"$\\|r\\| = {np.linalg.norm(resid):.1f}$",
+                            transform=axes[r, 1].transAxes, ha="right", fontsize=8,
+                            color=RED)
+    axes[0, 0].set_title("what the decoder would receive", fontsize=9.5, color=BLUE)
+    axes[0, 1].set_title("what is still LEFT OVER (the residual)", fontsize=9.5, color=RED)
+    fig.suptitle("Each level quantizes the previous level's mistake. The red curve is what "
+                 "the next level has to explain.", fontsize=9.5, y=0.02)
+    fig.tight_layout()
+    save(fig, "rvq_mechanism")
+
+
+def _box(ax, x, y, w, h, text, color, fs=8, alpha=0.16):
+    ax.add_patch(Rectangle((x, y), w, h, fc=color, ec=color, alpha=alpha, lw=1.3))
+    ax.add_patch(Rectangle((x, y), w, h, fc="none", ec=color, lw=1.3))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=fs)
+
+
+def _arr(ax, x0, y0, x1, y1, color="0.4", lw=1.2):
+    ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw))
+
+
+def fig_codec_architecture():
+    """Encoder, quantizer, decoder - and the fact that it lives on WAVEFORMS."""
+    fig, ax = plt.subplots(figsize=(11.0, 3.0))
+    ax.set_xlim(0, 11); ax.set_ylim(0, 3.0); ax.axis("off")
+
+    _box(ax, 0.15, 1.25, 1.5, 0.8, "waveform\n24 kHz", ORANGE, fs=8)
+    _arr(ax, 1.65, 1.65, 2.05, 1.65)
+    _box(ax, 2.05, 1.25, 1.7, 0.8, "conv encoder\nstride 1920", BLUE, fs=8)
+    _arr(ax, 3.75, 1.65, 4.15, 1.65)
+    _box(ax, 4.15, 1.25, 1.8, 0.8, "residual\nquantizer (8)", "#7832A0", fs=8)
+    _arr(ax, 5.95, 1.65, 6.35, 1.65)
+    _box(ax, 6.35, 1.25, 1.7, 0.8, "conv decoder", BLUE, fs=8)
+    _arr(ax, 8.05, 1.65, 8.45, 1.65)
+    _box(ax, 8.45, 1.25, 1.5, 0.8, "waveform\nagain", ORANGE, fs=8)
+
+    ax.text(2.9, 1.05, "12.5 frames/s", ha="center", fontsize=7.5, color="0.35")
+    ax.text(5.05, 1.05, "8 x 11 bits\n= 1.1 kbps", ha="center", va="top", fontsize=7.5,
+            color="0.35")
+    ax.text(5.5, 2.6, "Waveform in, waveform out - NOT a spectrogram, because a spectrogram "
+                      "cannot be played back (L35).", ha="center", fontsize=9.5, color=RED)
+    ax.text(5.5, 0.35, "Trained end to end with a multi-scale spectral loss plus "
+                       "discriminators - not squared error.",
+            ha="center", fontsize=8.5, style="italic", color="0.3")
+    save(fig, "codec_architecture")
+
+
+def fig_audiolm_stages():
+    """AudioLM's three stages: long-range structure and local fidelity are different jobs."""
+    fig, ax = plt.subplots(figsize=(10.4, 3.2))
+    ax.set_xlim(0, 10.4); ax.set_ylim(0, 3.2); ax.axis("off")
+    stages = [
+        ("Stage 1\nsemantic tokens\n(from w2v-BERT)", "what is being said,\nover seconds",
+         "#008C46"),
+        ("Stage 2\ncoarse acoustic\n(SoundStream)", "whose voice,\nwhat room", BLUE),
+        ("Stage 3\nfine acoustic", "the last details\nof fidelity", ORANGE),
+    ]
+    x = 0.4
+    for i, (label, sub, color) in enumerate(stages):
+        _box(ax, x, 1.35, 2.6, 1.15, label, color, fs=8.5)
+        ax.text(x + 1.3, 1.05, sub, ha="center", va="top", fontsize=8, color="0.3")
+        if i < len(stages) - 1:
+            _arr(ax, x + 2.6, 1.92, x + 3.15, 1.92)
+            ax.text(x + 2.87, 2.05, "conditions", fontsize=6.5, ha="center", color="0.45")
+        x += 3.15
+    ax.text(5.2, 2.9, "Each stage is its own transformer, conditioned on everything before it",
+            ha="center", fontsize=9.5)
+    ax.text(5.2, 0.35, "One model doing all three spends its capacity in the wrong place: "
+                       "gorgeous audio that says nothing.",
+            ha="center", fontsize=8.5, style="italic", color="0.3")
+    save(fig, "audiolm_stages")
+
+
+def fig_inner_monologue():
+    """Moshi writes what it is about to say, then says it - 12.5 times a second."""
+    fig, ax = plt.subplots(figsize=(10.6, 3.4))
+    ax.set_xlim(0, 10.6); ax.set_ylim(0, 3.4); ax.axis("off")
+
+    words = ["", "the", "", "cheese", "", "is", "ready", ""]
+    n = len(words)
+    w = 1.15
+    for t in range(n):
+        x = 0.55 + t * w
+        _box(ax, x, 2.25, w - 0.12, 0.55, words[t] if words[t] else "-",
+             "#008C46" if words[t] else "0.75", fs=8.5)
+        for k in range(3):
+            _box(ax, x, 1.55 - k * 0.42, w - 0.12, 0.34, "", BLUE, alpha=0.30 - k * 0.06)
+        _arr(ax, x + (w - 0.12) / 2, 2.25, x + (w - 0.12) / 2, 1.92, color="#008C46", lw=1.1)
+    ax.text(0.45, 2.52, "text", ha="right", va="center", fontsize=9, color="#008C46")
+    ax.text(0.45, 1.1, "audio\n(8 codebooks)", ha="right", va="center", fontsize=9,
+            color=BLUE)
+    ax.text(5.3, 3.1, "Within each 80 ms frame, the TEXT token is predicted FIRST, and the "
+                      "audio is conditioned on it", ha="center", fontsize=9.5)
+    ax.text(5.3, 0.32, "So the language model's fluency reaches the speech - and shifting "
+                       "this stream turns the same model into a recogniser or a synthesiser.",
+            ha="center", fontsize=8.5, style="italic", color="0.3")
+    save(fig, "inner_monologue")
+
+
+def fig_rq_transformer():
+    """Why it takes two transformers: one across time, a small one within a frame."""
+    fig, ax = plt.subplots(figsize=(10.4, 3.6))
+    ax.set_xlim(0, 10.4); ax.set_ylim(0, 3.6); ax.axis("off")
+
+    for t in range(4):
+        x = 0.6 + t * 1.5
+        _box(ax, x, 2.5, 1.25, 0.7, f"frame {t+1}", "#7832A0", fs=8)
+        if t < 3:
+            _arr(ax, x + 1.25, 2.85, x + 1.5, 2.85, color="#7832A0", lw=1.6)
+    ax.text(0.5, 2.85, "temporal\n32 layers, 4096 wide\nsteps at 12.5 Hz", ha="right",
+            va="center", fontsize=8, color="#7832A0")
+
+    _arr(ax, 1.2, 2.5, 1.2, 2.1, color="0.5")
+    for k in range(4):
+        _box(ax, 0.6, 1.6 - k * 0.42, 1.25, 0.34,
+             ["text", "audio 1", "audio 2", "..."][k], BLUE, fs=7)
+        if k < 3:
+            _arr(ax, 1.9, 1.77 - k * 0.42, 1.9, 1.77 - (k + 1) * 0.42, color=BLUE, lw=1.1)
+    ax.text(2.15, 1.1, "depth transformer\n6 layers, 1024 wide\nruns INSIDE one frame,\n"
+                       "across all 17 streams", ha="left", va="center", fontsize=8,
+            color=BLUE)
+
+    ax.text(7.4, 1.9, "Why not one big vocabulary?\n"
+                      "$2048^{17}$ entries.\n\n"
+                      "Why not 17 separate steps?\n"
+                      "the frame rate dies.",
+            ha="center", va="center", fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.5", fc="white", ec=RED, lw=1.2))
+    save(fig, "rq_transformer")
+
+
 def main():
     log.info("=" * 70)
     log.info("L36 figures - k-means only, no trained network, no recording")
@@ -312,6 +483,11 @@ def main():
     fig_split_rvq()
     fig_codebook_patterns()
     fig_duplex_streams()
+    fig_rvq_mechanism()
+    fig_codec_architecture()
+    fig_audiolm_stages()
+    fig_inner_monologue()
+    fig_rq_transformer()
     log.info("L36 figures done")
 
 

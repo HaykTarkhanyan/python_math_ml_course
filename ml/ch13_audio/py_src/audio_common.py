@@ -1,8 +1,11 @@
 """Shared audio synthesis and signal processing for ch13 (Audio-Language Models).
 
-NO AUDIO FILE IS READ anywhere in this chapter (instructor decision, AUDIO_CHAPTER_PLAN.md
-2026-08-07). Every waveform is synthesized here with a source-filter formant model, so the
-chapter needs no recording, no `librosa`, and no `soundfile` - `scipy.signal` is enough.
+Every waveform used to TEACH is synthesized here with a source-filter formant model, so the
+chapter needs no `librosa` and no `soundfile` - `scipy.signal` is enough.
+
+Updated 2026-08-08: `load_real_panir()` reads one real recording, used only to let the deck put
+real speech beside the synthetic signal. The chapter's original "no audio file is read" rule is
+relaxed to exactly that one file; everything else is still generated.
 
 The synthesized speech is LABELLED AS SYNTHETIC on every slide that shows it. Real speech is
 messier (jitter, shimmer, coarticulation, room), but the structure the slides point at -
@@ -162,6 +165,30 @@ def synth_panir(f0=120.0, sr=SR, seed=SEED):
     if peak == 0:
         raise RuntimeError("synthesized ՊԱՆԻՐ is all zeros - synthesis is broken")
     return wave / peak, marks
+
+
+def load_real_panir(sr=SR):
+    """A real human saying PANIR, 1.28 s at 16 kHz.
+
+    Downloaded 2026-08-08 from Wikimedia Commons (Hy-panir.ogg) and converted with ffmpeg to
+    16 kHz mono. It exists so the deck can put the synthesized signal next to real speech and
+    let students see exactly how the two differ - the synthetic one is labelled as synthetic
+    throughout, and this is what makes that label checkable rather than a disclaimer.
+    """
+    from scipy.io import wavfile
+    path = Path(__file__).resolve().parents[1] / "fig" / "img" / "panir_real.wav"
+    if not path.exists():
+        raise FileNotFoundError(f"{path} missing - re-download and convert with ffmpeg")
+    got, x = wavfile.read(path)
+    if got != sr:
+        raise ValueError(f"{path} is {got} Hz, expected {sr} - reconvert with ffmpeg -ar {sr}")
+    x = x.astype(np.float64)
+    if x.ndim > 1:
+        x = x.mean(axis=1)
+    peak = np.abs(x).max()
+    if peak == 0:
+        raise RuntimeError(f"{path} is silent")
+    return x / peak
 
 
 def synth_corpus(seconds=60.0, sr=SR, seed=SEED):

@@ -428,3 +428,42 @@ TTS, VAD, AuT, BEATs, MoE. Run the mechanical check from `SLIDE_STYLE.md` before
 - [Introducing Whisper](https://openai.com/index/whisper/) — 30 s chunks, 80-channel log-mel, 25 ms / 10 ms
 - [Gemini API audio docs](https://ai.google.dev/gemini-api/docs/audio) — 32 tokens per second, 9.5 h limit
 - [Cascaded vs speech-to-speech, 2026 state](https://futureagi.com/blog/cascaded-voice-ai-vs-speech-to-speech-2026/) — latency budgets and why production still cascades
+
+## Illustration pass, 2026-08-08 (instructor: expand, make more understandable)
+
+L35 32 -> 39 pages, L36 32 -> 37. Ten new diagrams, matching the treatment ch12 got.
+
+### One real recording now enters the chapter
+
+`fig/img/panir_real.wav` - a human saying **PANIR**, the chapter's exact running example, found
+on Wikimedia Commons and converted with ffmpeg to 16 kHz mono (1.28 s). This **relaxes the
+original "no audio file is read" rule**, deliberately and in exactly one place. The docstrings
+and the L35 provenance block were updated rather than left stale.
+
+It earns its place twice:
+
+- **`real_vs_synth`** - the real waveform and log-mel beside the synthetic ones. Every figure in
+  this chapter is labelled "synthesized"; this is what makes that label **checkable rather than
+  a disclaimer**. The real signal has breath, room noise and drifting pitch; the burst, formant
+  bands, nasal dip and trill sit where the lecture says they do.
+- **`single_spectrum`** - the frame that teaches students to *read* a spectrum now uses real
+  speech rather than a model of it. Formants are located with `find_peaks` on the envelope, not
+  hard-coded.
+
+### New figures
+
+| Deck | Figure | The gap it fills |
+|---|---|---|
+| L35 | `single_spectrum` | "Harmonics and formants" was two callout boxes and no picture - on the frame where students learn to read a spectrum at all. |
+| L35 | `real_vs_synth` | The synthetic-signal caveat had no evidence behind it. |
+| L35 | `whisper_pipeline` | The 480,000 -> 3,000 -> 1,500 -> 750 chain existed only as a table. |
+| L35 | `three_audio_designs` | Qwen2-Audio / SALMONN / Qwen3-Omni were three prose frames, never seen together, though the section is a comparison. Mirrors ch12's `three_designs`. |
+| L35 | `speech_vs_audio` | "A speech encoder discards everything that is not words" is the section's best idea and had no illustration. |
+| L36 | `rvq_mechanism` | **The central idea of the deck had no picture.** One real frame quantized four times, showing the residual shrink 5.4 -> 3.4 -> 2.9 -> 2.6 and, more importantly, become *less structured*. |
+| L36 | `codec_architecture` | Encoder/quantizer/decoder, with "waveforms, not mel" stated on the diagram itself. |
+| L36 | `audiolm_stages` | The three stages were a table. |
+| L36 | `inner_monologue` | Moshi's best idea - text predicted before that frame's audio - was pure prose. |
+| L36 | `rq_transformer` | Temporal vs depth transformer, with the two rejected alternatives ($2048^{17}$; 17 steps per frame) drawn beside it. |
+
+Several dense frames were split in two rather than shrunk, so the figure gets room and the prose
+keeps its own slide.

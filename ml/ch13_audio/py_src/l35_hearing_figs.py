@@ -1,8 +1,13 @@
 """Concept figures for L35 (Audio-Language Models I - how a model hears).
 
-NO MODEL IS TRAINED and NO AUDIO FILE IS READ (instructor decisions, AUDIO_CHAPTER_PLAN.md
-2026-08-07). Every waveform is synthesized by py_src/audio_common.py and is labelled as
-synthetic on the slide; every other number here is exact arithmetic from a cited source.
+NO MODEL IS TRAINED (instructor decision, AUDIO_CHAPTER_PLAN.md 2026-08-07). Every number
+here is exact arithmetic from a cited source.
+
+Audio sources, updated 2026-08-08: the chapter is still built on the synthesized waveform from
+py_src/audio_common.py, labelled as synthetic on every slide that shows it. It now ALSO reads
+ONE real recording - fig/img/panir_real.wav, a human saying the same word - used by exactly two
+figures (real_vs_synth, single_spectrum). It exists so the "synthesized" label is checkable
+rather than a disclaimer. The original "no audio file is read" note is therefore obsolete.
 
 Generates into ml/ch13_audio/fig/:
   waveform_zoom.pdf       -- one signal at 2 s / 100 ms / 5 ms, down to individual samples
@@ -29,7 +34,8 @@ import numpy as np
 from matplotlib.patches import Rectangle
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audio_common import (HOP, HOP_MS, N_FFT, N_MELS, SR, WIN_MS, build_logger, istft,
+from audio_common import (HOP, HOP_MS, N_FFT, N_MELS, SR, WIN_MS, build_logger, frame_signal,
+                          istft, load_real_panir,
                           log_mel, mel_filterbank, stft_mag, synth_panir)
 
 RED, BLUE, ORANGE = "#D90012", "#0033A0", "#F2A800"
@@ -326,9 +332,188 @@ def fig_audio_token_budget():
     save(fig, "audio_token_budget")
 
 
+# ---------------------------------------------------------------- explanatory diagrams
+# Added 2026-08-08 (instructor: expand, more illustrations, make it more understandable).
+# Several frames previously carried their whole argument in prose or a table.
+
+def _panel(ax, x, y, w, h, text, color, fs=8, alpha=0.16):
+    ax.add_patch(Rectangle((x, y), w, h, fc=color, ec=color, alpha=alpha, lw=1.3))
+    ax.add_patch(Rectangle((x, y), w, h, fc="none", ec=color, lw=1.3))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=fs)
+
+
+def _arrow(ax, x0, y0, x1, y1, color="0.4", lw=1.2):
+    ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw))
+
+
+def fig_real_vs_synth(synth):
+    """The synthetic signal beside a real recording of the same word.
+
+    Every frame in this chapter is labelled "synthesized". This figure is what makes that
+    label honest rather than a disclaimer: the structure matches, and the differences are
+    visible and namable.
+    """
+    real = load_real_panir()
+    fig, axes = plt.subplots(2, 2, figsize=(10.6, 4.6),
+                             gridspec_kw={"height_ratios": [1, 1.5]})
+    for col, (sig, name) in enumerate([(real, "real recording (a human, 1.28 s)"),
+                                       (synth, "our formant synthesis (0.80 s)")]):
+        t = np.arange(len(sig)) / SR
+        axes[0, col].plot(t, sig, lw=0.4, color=[RED, BLUE][col])
+        axes[0, col].set_xlim(0, t[-1])
+        axes[0, col].set_title(name, fontsize=10, color=[RED, BLUE][col])
+        axes[0, col].set_ylabel("amplitude")
+        axes[0, col].set_xticks([])
+        axes[1, col].imshow(log_mel(sig), origin="lower", aspect="auto", cmap="magma",
+                            extent=[0, len(sig) / SR, 0, N_MELS])
+        axes[1, col].set_xlabel("seconds")
+        axes[1, col].set_ylabel("mel bin")
+    fig.suptitle("Same word. The real one has noise, breath and drifting pitch; "
+                 "the formants and the burst sit in the same places.", fontsize=9.5, y=0.02)
+    fig.tight_layout()
+    save(fig, "real_vs_synth")
+
+
+def fig_single_spectrum():
+    """How to READ a spectrum: harmonics are the pitch, peaks in the envelope are formants."""
+    real = load_real_panir()
+    frames = frame_signal(real)
+    energy = (frames ** 2).sum(axis=1)
+    idx = int(np.argmax(energy))                 # the loudest frame: a vowel
+    frame = frames[idx] * np.hanning(N_FFT)
+    spec = np.abs(np.fft.rfft(frame, n=N_FFT))
+    freqs = np.fft.rfftfreq(N_FFT, 1.0 / SR)
+    db = 20 * np.log10(np.maximum(spec, 1e-8))
+
+    # A wide moving average in the log domain leaves the envelope and averages the comb away.
+    win = 15
+    env = np.convolve(db, np.ones(win) / win, mode="same")
+    log.info(f"single-spectrum figure: frame {idx} of {len(frames)} "
+             f"({idx * HOP / SR:.2f}s), peak {freqs[np.argmax(spec)]:.0f} Hz")
+
+    # Find the formants rather than hard-coding where they "should" be: the two lowest
+    # prominent peaks of the envelope below 3.5 kHz.
+    from scipy.signal import find_peaks
+    peaks, _ = find_peaks(env[freqs < 3500], prominence=2.0)
+    formants = freqs[peaks][:2]
+    log.info(f"single-spectrum figure: envelope peaks at {np.round(freqs[peaks][:4], 0)} Hz")
+
+    fig, ax = plt.subplots(figsize=(9.8, 3.6))
+    ax.plot(freqs, db, lw=0.8, color="0.62", label="spectrum of one 25 ms frame")
+    ax.plot(freqs, env, lw=2.4, color=RED, label="envelope (the shape of the vocal tract)")
+    top = env.max()
+    for name, f in zip(["F1", "F2"], formants):
+        ax.annotate(name, xy=(f, env[np.argmin(np.abs(freqs - f))]),
+                    xytext=(f, top + 13), ha="center", fontsize=11, color=RED,
+                    fontweight="bold",
+                    arrowprops=dict(arrowstyle="->", color=RED, lw=1.3))
+    ax.set_xlim(0, 5000)
+    ax.set_ylim(db.min() - 3, top + 20)
+    ax.set_xlabel("frequency (Hz)")
+    ax.set_ylabel("magnitude (dB)")
+    ax.legend(fontsize=8, loc="lower left")
+    ax.set_title("One frame of real speech. The fine ripple is PITCH (harmonics of the vocal "
+                 "folds);\nthe broad bumps are FORMANTS, and they decide which vowel you hear.",
+                 fontsize=9.5)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    save(fig, "single_spectrum")
+
+
+def fig_whisper_pipeline():
+    """30 seconds of audio through Whisper's front end, with the number at every stage."""
+    fig, ax = plt.subplots(figsize=(11.0, 2.7))
+    ax.set_xlim(0, 11); ax.set_ylim(0, 2.7); ax.axis("off")
+    stages = [
+        ("30 s of audio", "480,000\nsamples", ORANGE),
+        ("log-mel\n(25 ms / 10 ms)", "80 x 3,000", BLUE),
+        ("conv 1\n(stride 1)", "3,000", BLUE),
+        ("conv 2\n(stride 2)", "1,500", RED),
+        ("transformer\nencoder", "1,500\n= 50 Hz", "#7832A0"),
+        ("stride-2 pool\n(Qwen2-Audio)", "750\n= 25 Hz", "#008C46"),
+    ]
+    x = 0.15
+    for i, (label, count, color) in enumerate(stages):
+        _panel(ax, x, 1.15, 1.5, 0.85, label, color, fs=7.5)
+        ax.text(x + 0.75, 0.82, count, ha="center", va="top", fontsize=8.5,
+                fontweight="bold", color="0.2")
+        if i < len(stages) - 1:
+            _arrow(ax, x + 1.5, 1.57, x + 1.75, 1.57)
+        x += 1.78
+    ax.text(5.5, 2.45, "Only ONE of the two convolutions has stride 2. "
+                       "Two would give 750, and everyone quotes 1,500.",
+            ha="center", fontsize=9, color=RED)
+    ax.text(5.5, 0.25, "The transcript of the same 30 seconds is about 75 text tokens.",
+            ha="center", fontsize=9, style="italic", color="0.3")
+    save(fig, "whisper_pipeline")
+
+
+def fig_three_audio_designs():
+    """The three ways to attach ears to a language model, side by side."""
+    fig, axes = plt.subplots(1, 3, figsize=(11.4, 4.0))
+    specs = [
+        ("A - projector", BLUE, "Qwen2-Audio",
+         [("audio", ORANGE), ("Whisper-large-v3\n(50 Hz)", BLUE),
+          ("stride-2 pool\n+ linear", "#008C46"), ("LLM", "#7832A0")],
+         "750 tokens per 30 s\n(scales with length)"),
+        ("B - resampler", RED, "SALMONN",
+         [("audio", ORANGE), ("Whisper-v2 + BEATs\n(two encoders)", RED),
+          ("window-level\nQ-Former", "#008C46"), ("LLM", "#7832A0")],
+         "88 tokens per 30 s\n(fixed, whatever is in it)"),
+        ("C - native", ORANGE, "Qwen3-Omni",
+         [("audio", ORANGE), ("AuT, trained with\nthe model (12.5 Hz)", ORANGE),
+          ("Thinker (text)\n+ Talker (speech)", "#008C46"), ("one model", "#7832A0")],
+         "375 tokens per 30 s\nand it can answer aloud"),
+    ]
+    for ax, (title, color, who, boxes, cost) in zip(axes, specs):
+        ax.set_xlim(0, 3); ax.set_ylim(0, 4.7); ax.axis("off")
+        ax.set_title(f"{title}\n{who}", fontsize=10.5, color=color)
+        for i, (label, c) in enumerate(boxes):
+            y = 3.65 - i * 0.85
+            _panel(ax, 0.3, y, 2.4, 0.62, label, c, fs=7.5)
+            if i < len(boxes) - 1:
+                _arrow(ax, 1.5, y, 1.5, y - 0.23)
+        ax.text(1.5, 0.25, cost, fontsize=8.5, ha="center", color="0.25")
+    fig.suptitle("The same question as the vision chapter: how many tokens does the language "
+                 "model see, and who decides?", fontsize=9.5, y=1.0)
+    fig.tight_layout()
+    save(fig, "three_audio_designs")
+
+
+def fig_speech_vs_audio():
+    """Why SALMONN carries two encoders: a speech encoder is TRAINED to discard the rest."""
+    fig, ax = plt.subplots(figsize=(10.0, 3.4))
+    ax.set_xlim(0, 10); ax.set_ylim(0, 3.4); ax.axis("off")
+
+    contents = ["the words", "who is speaking", "the emotion", "a dog barking",
+                "music underneath", "a door slamming"]
+    for k, c in enumerate(contents):
+        _panel(ax, 0.15, 2.75 - k * 0.48, 2.1, 0.38, c, "0.55", fs=7.5)
+    ax.text(1.2, 3.25, "what is in the sound", fontsize=8.5, ha="center")
+
+    _panel(ax, 3.0, 1.9, 1.9, 0.7, "speech encoder\n(Whisper)", BLUE, fs=8)
+    _panel(ax, 3.0, 0.7, 1.9, 0.7, "audio encoder\n(BEATs)", "#008C46", fs=8)
+    for k in range(len(contents)):
+        y = 2.94 - k * 0.48
+        _arrow(ax, 2.25, y, 3.0, 2.25 if k < 3 else 1.05, color="0.75", lw=0.7)
+
+    _panel(ax, 5.6, 1.9, 1.9, 0.7, "keeps the words,\nDISCARDS the rest", RED, fs=7.5)
+    _panel(ax, 5.6, 0.7, 1.9, 0.7, "keeps all of it", "#008C46", fs=8)
+    _arrow(ax, 4.9, 2.25, 5.6, 2.25)
+    _arrow(ax, 4.9, 1.05, 5.6, 1.05)
+
+    ax.text(8.7, 1.65, "If you want a model\nthat HEARS and not one\nthat TRANSCRIBES,\n"
+                       "you need both.", ha="center", fontsize=9, color="0.2")
+    ax.text(5.0, 0.15, "A transcription objective treats everything that is not a word as "
+                       "noise to suppress.", ha="center", fontsize=8.5, style="italic",
+            color="0.35")
+    save(fig, "speech_vs_audio")
+
+
 def main():
     log.info("=" * 70)
-    log.info("L35 figures - synthesized speech only, no recording, no trained model")
+    log.info("L35 figures - synthesized speech, plus one real recording for comparison")
     wave, marks = synth_panir()
     log.info(f"synthesized PANIR: {len(wave):,} samples = {len(wave) / SR:.2f}s at {SR} Hz")
     log.info(f"segments: {[m[0] for m in marks]}")
@@ -347,6 +532,11 @@ def main():
     fig_token_rate_ladder()
     fig_latency_budget()
     fig_audio_token_budget()
+    fig_real_vs_synth(wave)
+    fig_single_spectrum()
+    fig_whisper_pipeline()
+    fig_three_audio_designs()
+    fig_speech_vs_audio()
     log.info("L35 figures done")
 
 
