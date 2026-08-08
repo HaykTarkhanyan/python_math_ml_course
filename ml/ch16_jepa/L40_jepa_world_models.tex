@@ -1,0 +1,986 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\newcommand{\wlslide}[1]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=south west, font=\tiny, text=white!70]
+        at ([shift={(0.26cm,0.16cm)}]current page.south west) {Welch Labs (2026)};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+\title{Lecture 40: Working Up the Alternative Stack}
+\subtitle{World models, planning, and a billion-dollar bet}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \vskip -8pt
+  \begin{center}
+    \footnotesize\color{armred}\textbf{Every number in this deck was checked on 8 August
+    2026}, and where a claim could not be traced to a paper it is labelled on the slide.
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Last week's robots. This week's verdict on them.}
+  \small
+  Chapter 15 ended with vision-language-action models doing real work: folding laundry,
+  clearing tables, taking out the trash.
+  \vskip 8pt
+  Asked whether JEPA-based approaches would overtake them, Yann LeCun's answer was three
+  words:
+  \vskip 6pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.6\linewidth}{\centering\large
+      \emph{"VLAs are doomed."}}}
+  \end{center}
+  \vskip 10pt
+  \pause
+  Meanwhile, the JEPA-based alternative he is backing takes about \textbf{a minute} to
+  move a cup off a platform.
+  \vskip 8pt
+  \begin{center}
+    \small Hold both of those in your head. Today is about whether the confidence is
+    earned.
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/vla_stack.jpg}
+
+\begin{frame}{How many hours of robot data?}
+  \small
+  A robot picks and places objects it has never seen, in a laboratory whose data the model
+  was never trained on, with \textbf{no task-specific training and no reward function}.
+  \vskip 8pt
+  Guess the size of its robot training set.
+  \vskip 6pt
+  \pause
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{data_asymmetry.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize\centering
+  Under \textbf{62 hours} of robot video - beside \textbf{a million hours} of ordinary
+  internet video. Four orders of magnitude.
+\end{frame}
+
+\begin{frame}{The claim}
+  \small
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\centering\small
+      \textbf{Physics can be learned by watching.}\\
+      Only the mapping from \emph{commands} to \emph{consequences} needs a robot.}}
+  \end{center}
+  \vskip 12pt
+  If that is true, it dissolves chapter 15's central problem. There is no internet of robot
+  data and there never will be - but there is an internet of \textbf{video}, and video is
+  full of objects falling, rolling, colliding and being picked up.
+  \vskip 10pt
+  \footnotesize
+  Chapter 15's answer to data scarcity was to pool across robots and squeeze more from
+  every demonstration. This is a different answer: \textbf{stop needing the demonstrations
+  for the physics}.
+\end{frame}
+
+\begin{frame}{The map for today}
+  \small
+  A VLA is built on a vision-language model. A vision-language model is built on a vision
+  encoder. \textbf{JEPA has a candidate at all three levels.}
+  \vskip 8pt
+  \begin{center}
+    \begin{tabular}{@{}p{1.4cm}p{4.4cm}p{4.6cm}@{}}
+      & \textbf{Mainstream} & \textbf{JEPA alternative} \\[3pt]
+      \hline\rule{0pt}{2.8ex}
+      Level 3 & VLA (ch15) & LeWorldModel, V-JEPA 2-AC \\[4pt]
+      Level 2 & vision-language model (ch12) & VL-JEPA \\[4pt]
+      Level 1 & CLIP-style vision encoder (ch12) & V-JEPA 2 \\
+    \end{tabular}
+  \end{center}
+  \vskip 10pt
+  We climb it from the bottom. \textbf{Watch the evidence as we go} - it does not stay the
+  same strength at every level, and that turns out to be the most important thing in this
+  lecture.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/alternative_stack.jpg}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Level 1: the vision encoder}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Level 1: the vision encoder}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Start at the bottom. Replace CLIP.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{V-JEPA: mask in space \emph{and} time}
+  \small
+  Last lecture's recipe, with a time axis added. Corrupt a video clip by removing
+  \textbf{spatio-temporal} regions; predict the representations of what was removed.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      The bet: by learning to fill in the missing pieces of video, the model has to learn
+      \textbf{how things move} - and by proxy, how the world works.}}
+  \end{center}
+  \vskip 10pt
+  This is the first system in the chapter for which "predictive" means anything like
+  "predicts the future".
+\end{frame}
+
+\wlslide{borrowed/welchlabs/vjepa2_masked_video.jpg}
+
+\begin{frame}{Why Something-Something v2 is the honest benchmark}
+  \small
+  Most video benchmarks can be solved by \textbf{looking at one frame}. Recognise a
+  swimming pool, guess "swimming".
+  \vskip 8pt
+  Something-Something v2 is built to defeat that. Its classes are defined by
+  \textbf{motion}:
+  \vskip 6pt
+  \begin{center}
+    \emph{"pushing something from left to right"} \quad vs \quad
+    \emph{"pushing something from right to left"}
+  \end{center}
+  \vskip 6pt
+  Identical objects, identical scene, identical single frame. Only the direction differs.
+  \vskip 10pt
+  \footnotesize
+  A model that has only learned appearance scores at chance here. That is why it is the
+  number worth quoting for a video model - and why V-JEPA 2's \textbf{77.3} is meaningful.
+\end{frame}
+
+\begin{frame}{V-JEPA 2, and the contrast that matters}
+  \small
+  \textbf{V-JEPA 2} (Meta, June 2025): \textbf{1.2B} parameters, over \textbf{one million
+  hours} of internet video plus a million images.
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{CLIP} is trained so image embeddings match \textbf{caption} embeddings. Its
+      representation is \textbf{pinned to language}: it learns the distinctions that people
+      bothered to write down.}}
+    \column{0.47\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{V-JEPA} never sees a word. It may represent "cat" however it likes, as long
+      as that helps fill in missing video. \textbf{Unconstrained, and unaided.}}}
+  \end{columns}
+  \vskip 10pt
+  \centering\small
+  \textbf{AMI Labs} - the company LeCun leaves Meta to found, and which we come back to at
+  the end of this lecture - puts the philosophy on its landing page:\\
+  \emph{"Real intelligence does not start in language. It starts in the world."}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/vjepa_vs_clip.jpg}
+
+\begin{frame}{So does a language-free encoder even talk to a language model?}
+  \small
+  It is a real worry. If nothing ever forced the representation to line up with words,
+  why would a language model be able to read it?
+  \vskip 8pt
+  \pause
+  It works - and the authors flag it as \emph{"contrary to conventional wisdom"}:
+  \vskip 6pt
+  \begin{center}
+    \begin{tabular}{@{}lr@{}}
+      Something-Something v2 (motion) & \textbf{77.3} \\
+      Epic-Kitchens-100 action anticipation & \textbf{39.7} recall@5 \\
+      PerceptionTest (with an 8B language model) & \textbf{84.0} \\
+      TempCompass (with an 8B language model) & \textbf{76.9} \\
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  \color{armred}Note what the last two require: the encoder is \textbf{aligned to a large
+  language model} to produce them. At level 1 the JEPA alternative wins by
+  \textbf{joining} the mainstream stack, not by replacing it. Hold that thought.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/tempcompass_pineapple.jpg}
+
+% ================================================================
+\section{Level 2: the vision-language model}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Level 2: the vision-language model}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Now replace the whole thing.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The one-line change}
+  \small
+  A standard vision-language model emits \textbf{text, one token at a time}. Everything
+  else about it - vision encoder in, prompt conditioning, a transformer in the middle - is
+  already the shape of a JEPA.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      \textbf{VL-JEPA} keeps all of that and changes the target: instead of generating the
+      answer, it \textbf{predicts the embedding of the answer}, in one shot.}}
+  \end{center}
+  \vskip 10pt
+  The prompt becomes conditioning on the predictor. The answer text goes through its own
+  encoder to produce the target. That is the entire modification.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/vlm_to_jepa_mapping.jpg}
+
+\begin{frame}{Why that should help: the mushroom}
+  \small
+  Show the model a mushroom and ask whether it is safe to eat. Suppose the training data
+  says \emph{"do not eat this mushroom"}.
+  \vskip 8pt
+  Your model answers: \emph{"this mushroom is not safe to eat."}
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Generative VLM.} Wrong tokens in the wrong order. \textbf{Penalised} - for
+      an answer that is completely correct.}}
+    \column{0.47\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{VL-JEPA.} Both sentences encode to \textbf{nearly the same embedding}. The
+      surface wording was never the target.}}
+  \end{columns}
+  \vskip 10pt
+  \begin{center}
+    \small\color{armred}\textbf{This is the leaves argument, moved from pixels to
+    language.}
+  \end{center}
+  \footnotesize\centering
+  Unpredictable surface detail - which leaf, which phrasing - is exactly what a learned
+  target is free to discard.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/mushroom_phrasing.jpg}
+
+\begin{frame}{The controlled comparison}
+  \small
+  Same vision encoder. Same data. Same training configuration. Only the objective differs.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.72\linewidth}{\centering\small
+      After 5 million training examples, zero-shot video classification:\\[4pt]
+      \textbf{VL-JEPA 35\%} \quad vs \quad \textbf{standard VLM 20\%}}}
+  \end{center}
+  \vskip 8pt
+  And the efficiency turns into capability: roughly \textbf{1.6B} parameters outperforming
+  \textbf{7B-13B} models on \textbf{GQA} (questions needing several reasoning steps over one
+  image - \emph{"is there fruit to the left of the tray the cup is on?"}), and
+  \textbf{65.7\%} on \textbf{WorldPrediction-WM} (pick what plausibly happens next) against
+  GPT-4o's 53.3 and Gemini-2.0's 55.6.
+  \vskip 8pt
+  \footnotesize\color{gray}
+  Sourcing, since it matters: the 35/20 comparison is reported in the Welch Labs
+  documentary, not in a paper I have read. The GQA and WorldPrediction numbers come from
+  press coverage of the VL-JEPA paper rather than the paper itself.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/vljepa_learning_curve.jpg}
+
+\begin{frame}{The wrinkle. Do not skip it.}
+  \small
+  VL-JEPA predicts an embedding. Embeddings are not sentences.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small
+      \textbf{It cannot answer a question by default.} To score those benchmarks, all
+      candidate answers are encoded and the nearest one to the prediction is chosen -
+      \textbf{multiple choice}. To make it speak at all, the team trained a separate
+      \textbf{text decoder} to turn predictions back into words.}}
+  \end{center}
+  \vskip 10pt
+  So the comparison to a 7B generative model is not quite like-for-like: one of them was
+  asked to \emph{write} an answer, the other to \emph{pick} one.
+  \vskip 8pt
+  \footnotesize
+  \color{armred}This is last lecture's closing point arriving as a bill. JEPA discards what
+  a decoder would need - so the moment you want words back, you must bolt one on.
+\end{frame}
+
+% ================================================================
+\section{Level 3: the robot, and what a world model is}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Level 3: the robot}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Top of the stack. This is where the disagreement is real.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{"World model" means two incompatible things}
+  \small
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{A. Generative}\\[3pt]
+      Given a state and an action, produce \textbf{the observation you would see}.\\[4pt]
+      Sora, Genie, Cosmos.\\[4pt]
+      \emph{You can watch its predictions.}}}
+    \column{0.47\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{B. Latent predictive}\\[3pt]
+      Given a state and an action, produce \textbf{the next state in its own
+      representation}.\\[4pt]
+      JEPA.\\[4pt]
+      \emph{You cannot watch it. It is judged by whether you can plan with it.}}}
+  \end{columns}
+  \vskip 10pt
+  \centering\small
+  When someone says "world model", ask which one they mean. Half the disagreements in this
+  area are people arguing past each other across this line.
+\end{frame}
+
+\begin{frame}{The argument for B, and the honest counter}
+  \small
+  \textbf{For B:} rendering an imagined future commits you to detail you cannot know and
+  do not need. Deciding whether to reach left or right does not require the texture of the
+  tablecloth in the imagined future - and being wrong about it should not cost you.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small
+      \textbf{Against B:} a generative world model can be \textbf{inspected}. You can watch
+      Sora's prediction and see the spoon pass through the bowl. A latent world model that
+      has learned something wrong gives you \textbf{no such handle}, and debugging it is
+      genuinely harder.}}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  That is the price of last lecture's closing point, paid a second time: the thing that
+  makes it efficient is the thing that makes it opaque.
+\end{frame}
+
+\begin{frame}{New material: learning the dynamics}
+  \small
+  Chapter 11 had \textbf{model-based} reinforcement learning - but there, the model was
+  \textbf{handed to you}: you knew $P(s'|s,a)$ and $R$, and planning was computation.
+  \vskip 8pt
+  A line of work asks what happens when you must \textbf{learn} the dynamics instead, and
+  learn them in a \textbf{latent space} rather than in pixels:
+  \vskip 6pt
+  \begin{itemize}\small
+    \item \textbf{World Models} (Ha and Schmidhuber, 2018) - encode frames, learn a
+      recurrent dynamics model, train the policy "in imagination".
+    \item \textbf{PlaNet / Dreamer} - latent dynamics, still carrying a decoder and a
+      reconstruction term.
+    \item \textbf{TD-MPC} - latent dynamics with \textbf{no reconstruction at all}.
+  \end{itemize}
+  \vskip 8pt
+  \begin{center}
+    \small\color{armred}So "predict in latent space" is not new. LeCun says so himself.
+  \end{center}
+\end{frame}
+
+\begin{frame}{What is actually new}
+  \small
+  LeCun's own framing of the lineage, which is more honest than most:
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.9\linewidth}{\small
+      Predicting the state at $t{+}1$ from the state at $t$ and an action, then optimising
+      over action sequences to reach an outcome - \emph{"this is classical optimal control.
+      This is going back to the late '50s in the Soviet Union, early '60s in the West.
+      Very classical stuff.\\[3pt]
+      What is not classical is you \textbf{learn} the model \dots\ what is even less
+      classical is you learn a \textbf{representation} of the input that computes an
+      abstract state, and you learn the model in that state. And that's JEPA."}}}
+  \end{center}
+  \vskip 10pt
+  \footnotesize\centering
+  Three claims, only the third of which is new. Worth noticing how rarely a field's
+  champion says that out loud.
+\end{frame}
+
+\begin{frame}{The difference that explains all of last lecture}
+  \small
+  In model-based reinforcement learning, the latent state \textbf{cannot collapse} - and
+  nobody had to invent machinery to stop it.
+  \vskip 8pt
+  Why not? Because the latent is also required to predict \textbf{reward} and
+  \textbf{value}. Those are external, grounded signals. A constant representation predicts
+  reward terribly, so the objective rules it out for free.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      \textbf{JEPA has no reward.} It learns from passive video with nothing external
+      anchoring the representation.\\[5pt]
+      Every anti-collapse device in L39 - the EMA teacher, the stop-gradient, VICReg,
+      SIGReg - is \textbf{the price of dropping reward.}}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Action conditioning}
+  \small
+  Two stages, and the asymmetry between them is the whole design:
+  \vskip 8pt
+  \begin{enumerate}\small
+    \item \textbf{Stage 1, actionless.} Over a million hours of internet video. The model
+      learns how the world moves, from watching. No actions, no labels, no rewards.
+    \item \textbf{Stage 2, action-conditioned.} Freeze that, and learn
+      $s_{t+1} = P(s_t, a_t)$ from under 62 hours of unlabelled robot video with its
+      recorded actions.
+  \end{enumerate}
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      Essentially all the knowledge comes from passive observation. The robot data only
+      has to teach it \textbf{what your commands do} - not what the world is.}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Two different systems. Do not confuse them.}
+  \small
+  The rest of this lecture draws on \textbf{two} systems that share one idea. They are
+  wildly different in scale, and nearly everything that follows depends on which is which.
+  \vskip 8pt
+  \begin{center}
+  \scriptsize
+  \begin{tabular}{@{}p{2.4cm}p{4.6cm}p{5.2cm}@{}}
+    & \textbf{V-JEPA 2-AC} (Meta) & \textbf{LeWorldModel} \\[2pt]
+    \hline\rule{0pt}{2.6ex}
+    Size & 1.2B & compact; \textbf{one GPU, a few hours} \\[4pt]
+    Trained on & 1M h internet video + 62 h DROID & raw pixels and actions from one task \\[4pt]
+    Runs on & real \textbf{Franka arms}, two labs & \textbf{PushT}, a 2-D pushing task \\[4pt]
+    Shown here & the zero-shot result & the \textbf{inside} of the world model \\
+  \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  We use the toy to \textbf{look inside} - because on PushT you can train a decoder and
+  actually see what the model imagined. That is not possible at Meta's scale, and the
+  pictures that follow are \textbf{not} what the Franka arm is running.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/lewm_pusht_arch.jpg}
+
+\begin{frame}{It learns the physics from pixels alone (LeWorldModel, PushT)}
+  \small
+  Train on nothing but sequences of \textbf{(image, action, next image)}. Then train a
+  small decoder purely so \emph{we} can look at the predicted embeddings.
+  \vskip 8pt
+  Press \emph{up}, and the decoded prediction moves up. Left, left. Push into the T, and
+  the T rotates about the contact point.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      Nobody told it the T is rigid, that it is movable, or how contact works. All of that
+      is \textbf{inferred from watching pixels change under actions.}}}
+  \end{center}
+  \vskip 8pt
+  \footnotesize\centering
+  What you have is effectively \textbf{a learned video game}: a simulator you can press
+  keys in, built from observation instead of written by a programmer.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/pusht_decoded_actions.jpg}
+
+\begin{frame}{And it drifts \small (toy system: LeWorldModel on PushT)}
+  \small
+  Run the model forward 18 steps and put it beside the real environment under the same
+  actions.
+  \vskip 8pt
+  Early steps match closely. Then they separate - and once they separate they do not come
+  back, because each prediction is fed its own previous output.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small\centering
+      In the authors' own words, the learned world model \emph{"goes off the rails
+      sometimes"} - and that instability sets a hard limit on how far ahead you can plan.}}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  \color{armred}Chapter 15's compounding error, third appearance: no teacher forcing at
+  inference, so small errors feed themselves.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/rollout_vs_real_drift.jpg}
+
+% ================================================================
+\section{Planning as search in embedding space}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Planning as search in embedding space}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Now use it.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The loop}
+  \small
+  You are given a \textbf{goal image}. Encode it once; call that $s_{\text{goal}}$. Then,
+  at every step:
+  \vskip 6pt
+  \begin{enumerate}\small
+    \item Sample many candidate action sequences.
+    \item Roll each one forward \textbf{through the world model}, in latent space.
+    \item Score each by $\|\,s_{\text{final}} - s_{\text{goal}}\,\|$.
+    \item Keep the best few, resample around them, repeat. \hfill
+      (\textbf{cross-entropy method}, \textbf{CEM})
+    \item \textbf{Execute only the first action.} Then re-plan from what actually happened.
+      \hfill (\textbf{model-predictive control}, \textbf{MPC})
+  \end{enumerate}
+  \vskip 8pt
+  \footnotesize\color{gray}
+  Both CEM and MPC are new here - chapter 11 planned with a \emph{given} model, and never
+  needed either.
+\end{frame}
+
+\begin{frame}{The cross-entropy method, in two pictures \small (toy system: PushT)}
+  \small
+  Start with 500 completely random trajectories. Roll them all out in the world model,
+  colour each by its distance to the goal embedding, keep the best 30 as an
+  \textbf{elite set}, and resample from that set's mean and variance. Repeat.
+  \vskip 8pt
+  \begin{center}
+    \small\color{armred}No gradients. No trained planner. Just imagine, score, and narrow.
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/cem_random_trajectories.jpg}
+\wlslide{borrowed/welchlabs/cem_elite_set.jpg}
+
+\begin{frame}{What the score actually is}
+  \small
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.84\linewidth}{\centering\small
+      Euclidean distance between the \textbf{predicted final embedding} and the
+      \textbf{goal embedding}.}}
+  \end{center}
+  \vskip 12pt
+  Notice what is \emph{not} in that sentence:
+  \begin{itemize}\small
+    \item No reward function was specified.
+    \item No reward model was trained.
+    \item Nothing was ever rendered - the entire search happens in the representation,
+      which is what makes it fast enough to run at all.
+  \end{itemize}
+  \vskip 10pt
+  \begin{center}
+    \small\color{armred}\textbf{You say what you want by showing it a picture.}
+  \end{center}
+\end{frame}
+
+
+\begin{frame}{Execute one step, then re-plan}
+  \small
+  The rollout drifts. So do not trust it for long.
+  \vskip 8pt
+  Model-predictive control plans a whole sequence, executes \textbf{one action}, throws the
+  rest away, and re-plans from the state the world is actually in.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      Chapter 15 met the same disease and chose a different cure.\\[5pt]
+      \textbf{Action chunking:} commit to a burst of actions, so there are fewer decisions
+      to compound.\\[3pt]
+      \textbf{MPC:} re-plan constantly, so errors never get a long horizon to compound
+      over.}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The result, and the honest numbers \small (real arms: V-JEPA 2-AC)}
+  \small
+  \textbf{V-JEPA 2-AC} was deployed \textbf{zero-shot} on Franka arms in two laboratories
+  Meta had collected no data from - no task-specific training, no reward - reaching
+  \textbf{65-80\%} on pick-and-place with novel objects.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small
+      Now the other side of the ledger:
+      \begin{itemize}\small
+        \item Planning takes \textbf{on the order of a minute per task} - orders of
+          magnitude too slow for a real controller.
+        \item \textbf{LeWorldModel} reliably plans about \textbf{five steps} ahead on
+          PushT before the rollout stops being trustworthy.
+      \end{itemize}}}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  This is not a robot controller. It is a demonstration that the \textbf{representation}
+  contains enough physics to plan in.
+\end{frame}
+
+\begin{frame}{The limitation hiding inside "show it a picture"}
+  \small
+  Goal-image planning is elegant. It is also the method's boundary.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      This works when \textbf{the goal is known and the path is unknown.}}}
+  \end{center}
+  \vskip 10pt
+  \emph{"Put the cup on the shelf"} - fine, photograph the outcome.
+  \vskip 6pt
+  \emph{"Tidy the kitchen."} \emph{"Make this safe."} \emph{"Explore."} \textbf{There is no
+  image to aim at.}
+  \vskip 10pt
+  Open-ended tasks need exactly what this approach was advertised as avoiding: reward
+  design, goal proposal, or something that invents intermediate subgoals.
+\end{frame}
+
+\begin{frame}{The proposed fix: hierarchy}
+  \small
+  Two levels of world model. The \textbf{high-level} predictor proposes a
+  \textbf{subgoal}; the \textbf{low-level} predictor plans the actions to reach it.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.86\linewidth}{\small\centering
+      On PushT, two levels extend the reliable planning horizon from about
+      \textbf{5 steps to 15}.}}
+  \end{center}
+  \vskip 10pt
+  It also answers the previous slide: a hierarchy that \emph{generates} subgoals is a
+  mechanism for turning \emph{"tidy the kitchen"} into a sequence of things you \emph{can}
+  aim a goal-conditioned planner at.
+  \vskip 8pt
+  \footnotesize\color{gray}
+  Zhang et al., \emph{Hierarchical Planning with Latent World Models}, 2026.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/hierarchical_planning.jpg}
+
+\begin{frame}{Why hierarchy is the right shape}
+  \small
+  LeCun's illustration, and it is a good one. Sitting in his office at NYU, wanting to be
+  in Paris tomorrow:
+  \vskip 8pt
+  \begin{center}
+    \emph{go to the airport} $\rightarrow$ \emph{catch a plane} $\rightarrow$
+    \emph{be in Paris}
+  \end{center}
+  \vskip 8pt
+  He \textbf{cannot} plan that trip as a sequence of millisecond muscle commands. Not
+  because it would be slow, but because \textbf{he does not have the information} - he does
+  not know yet where he will be standing when he hails the taxi.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small\centering
+      Detail buys accuracy at short range and \textbf{destroys} it at long range. So
+      predict in detail over short horizons, and abstractly over long ones.}}
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/nyu_to_paris.jpg}
+
+\begin{frame}{The open part}
+  \small
+  The hope is that the hierarchy is \textbf{learned rather than designed} - that if you
+  train low levels to make short, detailed predictions and high levels to make long,
+  abstract ones, a useful hierarchy of representations simply emerges, the way feature
+  hierarchies emerged in convolutional networks.
+  \vskip 10pt
+  Two honest caveats:
+  \begin{itemize}\small
+    \item LeCun concedes it requires \textbf{semi-expert trajectories} - you cannot learn
+      high-level structure from random flailing.
+    \item Hierarchical JEPA is still largely a \textbf{proposal}. The systems that ship
+      are single-level.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{The honest scoreboard, and the bet}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The honest scoreboard}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Meta shipped a benchmark that its own flagship model fails.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Three benchmarks, released alongside V-JEPA 2}
+  \small
+  \begin{itemize}\small
+    \item \textbf{IntPhys 2} - is this scene \textbf{physically possible}? Objects passing
+      through each other, vanishing, floating.
+    \item \textbf{MVPBench} - video-language understanding on \textbf{minimally different
+      pairs}.
+    \item \textbf{CausalVQA} - counterfactuals, anticipation, planning. \emph{What
+      \textbf{could} happen}, not what happened.
+  \end{itemize}
+  \vskip 10pt
+  MVPBench's construction is worth stealing. Take pairs of videos that differ as little as
+  possible but have \textbf{different correct answers}. A model that relies on a shortcut -
+  the caption prior, a single frame - now scores \textbf{at chance by construction}.
+  \vskip 6pt
+  \footnotesize\color{gray}That trick generalises far beyond video. If you build a
+  benchmark, build it so shortcuts score zero.
+\end{frame}
+
+\begin{frame}{The result}
+  \small
+  \begin{center}
+    \includegraphics[width=0.70\textwidth]{physics_gap.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  A model that is \textbf{state of the art at anticipating human actions} cannot reliably
+  tell you whether a scene is \textbf{physically possible}. Whatever V-JEPA 2 learned from
+  a million hours of video, it is \textbf{not} the intuitive physics the world-model thesis
+  promises.
+\end{frame}
+
+\begin{frame}{A second admission}
+  \small
+  V-JEPA 2 shipped in June 2025. In March 2026 its own successor described its
+  representations as \textbf{"noisy"}, with \textbf{"fragmented local spatial structure"}:
+  \vskip 6pt
+  \begin{center}
+    \begin{tabular}{@{}lrr@{}}
+      & \textbf{V-JEPA 2} & \textbf{V-JEPA 2.1} \\ \hline\rule{0pt}{2.6ex}
+      NYUv2 depth, RMSE (lower better) & 0.642 & \textbf{0.350} \\
+      ADE20K segmentation, mIoU & 24.4 & \textbf{47.8} \\
+      Something-Something v2 & 77.3 & 76.9 \\
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  For nine months, the flagship world model was strong globally and close to
+  \textbf{uninformative about \emph{where} things are} - in a system whose proposed use is
+  robot manipulation.
+  \vskip 6pt
+  \begin{center}
+    \small\color{armred}Note the last row: motion got slightly \emph{worse} while
+    segmentation doubled. \textbf{"The representation is good" is not one number.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The critique of VLA, prong 1: cloning does not scale}
+  \small
+  Chapter 15's models are trained largely by \textbf{behavioural cloning} - a human
+  teleoperates the robot, and the model learns to imitate.
+  \vskip 8pt
+  LeCun's objection: you cannot collect demonstrations for every variation of every task,
+  and outside the demonstrations these systems are, in his words, \emph{"completely
+  helpless \dots\ brittle"}.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      A world model needs no demonstration of the task at all. It needs to know
+      \textbf{what happens if}, and then it can search for a solution nobody showed it.}}
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/teleoperation_rig.jpg}
+
+\begin{frame}{Prong 2: no explicit planning}
+  \small
+  A VLA is trained and deployed \textbf{end to end}. Camera images and joint positions in,
+  next joint positions out, repeat.
+  \vskip 8pt
+  It plainly does something plan-like - chapter 15's robots pass a key between grippers to
+  orient it correctly. But that reasoning is \textbf{implicit and invisible}.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      \emph{"If you really want to build reliable agentic systems, they absolutely have to
+      be able to predict the consequences of their actions \dots\ the inference process now
+      becomes a \textbf{search}, as opposed to just an autoregressive prediction."}}}
+  \end{center}
+  \vskip 6pt
+  \footnotesize\centering
+  A search you can inspect, bound, and attach safety constraints to.
+\end{frame}
+
+\begin{frame}{The counter-evidence, kept deliberately}
+  \small
+  The critique is strong. It is also not the whole picture, and leaving it unanswered
+  would be unfair to chapter 15.
+  \vskip 8pt
+  \begin{itemize}\small
+    \item \textbf{RT-2} moved an object to a picture of Taylor Swift. Nothing in its
+      demonstration data involved Taylor Swift - it connected a concept from
+      \textbf{web pretraining} to actions learned separately.
+    \item Later systems perform tasks absent from their demonstrations: microwaves, paper
+      towel rolls, air fryers.
+  \end{itemize}
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small\centering
+      \textbf{Generalisation is a sliding scale, not a yes/no.} These tasks were not in the
+      demonstrations; \emph{similar} ones were. The open question is how far that stretches
+      - not whether it exists.}}
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/rt2_generalisation.jpg}
+
+\begin{frame}{The higher you climb, the thinner the evidence}
+  \small
+  Look back at the stack we climbed, and at what was actually behind each rung.
+  \vskip 6pt
+  \begin{center}
+  \scriptsize
+  \begin{tabular}{@{}p{1.2cm}p{5.0cm}p{6.2cm}@{}}
+    & \textbf{The JEPA alternative} & \textbf{What the evidence actually is} \\[2pt]
+    \hline\rule{0pt}{2.6ex}
+    Level 1 & V-JEPA 2, 1.2B, shipped &
+      Real benchmark wins - but the headline numbers come from \textbf{aligning it to an
+      8B language model} \\[5pt]
+    Level 2 & VL-JEPA, 1.6B, research &
+      Beats larger models - on a \textbf{multiple-choice protocol}, with a text decoder
+      bolted on to speak \\[5pt]
+    Level 3 & LeWorldModel / V-JEPA 2-AC &
+      A \textbf{2-D pushing toy} planning \textbf{5 steps}; a real arm at 65-80\%, about a
+      minute per task \\
+  \end{tabular}
+  \end{center}
+  \vskip 8pt
+  \begin{center}
+    \small\color{armred}The idea gets more ambitious as you climb. \textbf{The evidence
+    gets thinner.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Nobody actually has to choose}
+  \small
+  The framing all lecture has been \emph{replace}. That is the argument as its champion
+  states it. It is not what the evidence shows.
+  \vskip 8pt
+  \begin{itemize}\small
+    \item V-JEPA 2's best numbers come from \textbf{pairing it with a language model}.
+    \item VL-JEPA ships a \textbf{text decoder} so it can answer at all.
+    \item 2026 systems couple a chapter-15 VLA to a \textbf{latent world model} and use
+      both.
+  \end{itemize}
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.88\linewidth}{\small\centering
+      Even the documentary this lecture borrows from concludes that the JEPA approach is
+      \emph{"not incompatible with the current mainstream language-driven approach"} - and
+      that on agentic and robotics problems it remains \textbf{"quite limited"}.}}
+  \end{center}
+  \vskip 6pt
+  \footnotesize\centering
+  The interesting question is not \emph{which wins}. It is \emph{which layer does each
+  idea belong in}.
+\end{frame}
+
+\begin{frame}{Score the thesis}
+  \small
+  \begin{center}
+  \begin{tabular}{@{}p{7.4cm}p{4.6cm}@{}}
+    \textbf{Claim} & \textbf{Status, August 2026} \\[2pt]
+    \hline\rule{0pt}{2.8ex}
+    Predicting in latent space gives good, efficient encoders &
+      \color{paramgreen}\textbf{Supported} \\[5pt]
+    You can plan with a video world model &
+      \color{paramgreen}\textbf{Supported}, \color{black}slowly, small scale \\[5pt]
+    Watching video yields \textbf{intuitive physics} &
+      \color{armred}\textbf{Not supported} \color{black}(IntPhys 2) \\[5pt]
+    It replaces next-token prediction for language &
+      \color{armred}\textbf{Not demonstrated} \\
+  \end{tabular}
+  \end{center}
+  \vskip 10pt
+  \footnotesize\centering
+  Two green, two red. Anyone who tells you this is settled - in \textbf{either} direction -
+  is selling something.
+\end{frame}
+
+\begin{frame}{The bet}
+  \small
+  LeCun left Meta at the end of 2025 after twelve years as its Chief AI Scientist, and
+  co-founded \textbf{AMI Labs}: \textbf{\$1.03B} raised in March 2026 at a \$3.5B
+  pre-money valuation, headquartered in Paris. \textbf{No revenue plans.}
+  \vskip 8pt
+  What he says they will actually build is more specific than the coverage suggests -
+  \textbf{not robots}:
+  \vskip 4pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      Complex systems you \textbf{cannot reduce to equations}: a jet engine, a chemical
+      plant, a power plant, a patient's blood sugar.\\[4pt]
+      \emph{"If you can write down the equations, just write down the equations."}}}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  That is a sharper thesis than "beat the LLMs": world models are for systems where
+  \textbf{nobody has a simulator} and data is the only route to one. Meanwhile Meta shipped
+  V-JEPA 2.1 without him.
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{itemize}\small
+    \item Every layer of the mainstream stack has a \textbf{JEPA counterpart} - and the
+      evidence for each gets thinner as you climb.
+    \item A \textbf{world model} means two different things. JEPA's kind predicts
+      \textbf{state}, not pixels: cheap and unwatchable.
+    \item Planning is \textbf{search in embedding space} against a goal \emph{image}. No
+      reward is ever specified - and that is both the elegance and the boundary.
+    \item Model-based RL avoided collapse for free because it had \textbf{reward}. JEPA
+      pays for dropping it.
+    \item The honest state: \textbf{good encoders, real but slow planning, no intuitive
+      physics yet.}
+  \end{itemize}
+  \vskip 4pt
+  \begin{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.88\linewidth}{\small\centering
+      \textbf{Anyone who leaves this room certain either way was taught badly.}\\
+      \small The measurements are in the lecture. The bet is still running.}}
+  \end{center}
+\end{frame}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Plan          : ml/ch16_jepa/JEPA_CHAPTER_PLAN.md
+%   Research      : _knowledge/jepa/ (8 files).
+%   Structure     : the "alternative stack" framing is from Welch Labs part 2.
+%   Figures       : py_src/ch16_figs.py. physics_gap.pdf draws the human range as a BAND
+%                   because Meta reports it as a band; no per-benchmark human bars were
+%                   invented (see _knowledge/jepa/sources.md).
+%   Borrowed stills: Welch Labs, "Yann LeCun's $1B Bet Against LLMs" Parts 1 and 2,
+%                   https://youtu.be/kYkIdXwW2AE , https://youtu.be/v_jDvpEGTIg
+%                   Fetched 2026-08-08 at 1080p. Reference folders in this directory.
+%   Review fixes  : ch11 "callback" replaced by an explicit NEW-material frame on learned
+%                   latent dynamics (ch11 only ever gives you P(s'|s,a));
+%                   V-JEPA 2-AC and LeWorldModel are now explicitly separated by a
+%                   comparison frame, and the duplicate part-1 action-conditioning still
+%                   was dropped;
+%                   the unsourced "4-year-old visual bandwidth" frame was CUT - it is
+%                   narration inside a sponsor segue with no number and no calculation;
+%                   the single-sourced "16 s/action" is now "on the order of a minute",
+%                   which both sources support;
+%                   VL-JEPA's 35/20, GQA and WorldPrediction numbers are attributed
+%                   on-slide to video/press rather than stated as paper results;
+%                   added "the higher you climb, the thinner the evidence" and "nobody has
+%                   to choose" - without them the deck was more either/or than the
+%                   evidence, the source, or its own stated aim.
+% ================================================================

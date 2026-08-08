@@ -1,0 +1,965 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+% Full-bleed borrowed still (Welch Labs). Same pattern as \bbbslide in
+% ml/ch9_attention/L24_attention.tex. Needs 2 pdflatex passes (remember picture).
+\newcommand{\wlslide}[1]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=south west, font=\tiny, text=white!70]
+        at ([shift={(0.26cm,0.16cm)}]current page.south west) {Welch Labs (2026)};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+\title{Lecture 39: Predicting the Wrong Thing}
+\subtitle{Joint-embedding predictive architectures}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \vskip -8pt
+  \begin{center}
+    \footnotesize\color{armred}\textbf{Every number in this deck was checked against its
+    paper on 8 August 2026.}
+  \end{center}
+\end{frame}
+
+% ================================================================
+\begin{frame}{Same model. Same masking. One thing changed.}
+  \small
+  Take one architecture, one masking scheme, one dataset. Train it twice. The only
+  difference: what it is asked to predict.
+  \vskip 6pt
+  \begin{itemize}
+    \item \textbf{Run A} predicts the \textbf{pixels} of the hidden region.
+    \item \textbf{Run B} predicts a \textbf{representation} of the hidden region.
+  \end{itemize}
+  \vskip 8pt
+  Run A is given \textbf{60\% more training} than run B.
+  \vskip 10pt
+  \pause
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.8\linewidth}{\centering
+      Linear evaluation on 1\% of ImageNet:\\[3pt]
+      \textbf{pixels 40.7} \quad vs \quad \textbf{representations 66.9}\\[3pt]
+      \small A gap of \textbf{26.2 points}, with the losing run getting more compute.}}
+  \end{center}
+  \vskip 4pt
+  \footnotesize\centering (Assran et al., 2023, Table 7.)
+\end{frame}
+
+\begin{frame}{The question this chapter asks}
+  \large
+  \begin{center}
+    \vskip 10pt
+    Fifteen chapters have quietly been answering one question\\ without ever asking it
+    out loud:
+    \vskip 16pt
+    {\color{popblue}\textbf{What should a model be asked to predict?}}
+    \vskip 16pt
+    \normalsize
+    Not \emph{which architecture}. Not \emph{which optimiser}. The \textbf{objective}.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Four answers you have already seen}
+  \small
+  \begin{tabular}{@{}p{3.6cm}p{4.2cm}p{4.6cm}@{}}
+    \textbf{Chapter} & \textbf{Predicts} & \textbf{Target comes from} \\[3pt]
+    \hline\rule{0pt}{3ex}
+    ch8 autoencoders   & the input itself      & the data \\[4pt]
+    ch10 diffusion     & a distribution        & the data \\[4pt]
+    LLMs               & the next token        & the data \\[4pt]
+    ch12 CLIP          & \emph{whether} two things match & the data \\[6pt]
+    \hline\rule{0pt}{3ex}
+    \textbf{ch16 JEPA} & \textbf{a representation} & \textbf{a network being trained} \\
+  \end{tabular}
+  \vskip 10pt
+  Every target above is fixed before training starts. The last one is not: it is produced
+  by a second encoder that is \textbf{learning at the same time}.
+  \vskip 6pt
+  \footnotesize\color{armred}That single change is the whole chapter.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Three ways to build a self-supervised task}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Three ways to build a self-supervised task}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      You have already seen two of them.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The joint-embedding architecture, via CLIP}
+  \small
+  Chapter 12, renamed. Two encoders, one shared space, agreement as the objective.
+  \vskip 6pt
+  \begin{itemize}
+    \item Take two views of the same thing: two crops, an image and its caption, two
+      signatures.
+    \item Encode both. Train so matching pairs land close together.
+  \end{itemize}
+  \vskip 8pt
+  The idea is older than CLIP by three decades. LeCun and colleagues built it at Bell Labs
+  in the early 1990s to detect \textbf{fraudulent signatures}: pass a reference and a
+  candidate through two copies of the same network, and compare the vectors that come out.
+  They called them \textbf{Siamese networks}.
+  \vskip 8pt
+  \footnotesize\color{gray}Nothing is generated. The network never draws a signature.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/siamese_signatures.jpg}
+
+\begin{frame}{What a joint-embedding architecture cannot do}
+  \small
+  It answers \emph{"do these two things match?"} and nothing else.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.86\linewidth}{\small
+      Give it the left half of a photograph and the right half. It can score them as
+      compatible. It \textbf{cannot tell you what the right half looks like} - not in
+      pixels, not in features, not at all. There is no mechanism in the architecture for
+      expressing \emph{how} $y$ relates to $x$.}}
+  \end{center}
+  \vskip 10pt
+  For a world model that is fatal. \emph{"Is this a plausible next second of video?"} is
+  useful. \emph{"What is the next second of video?"} is what an agent actually needs.
+\end{frame}
+
+\begin{frame}{The generative architecture}
+  \small
+  Hide part of the input. Reconstruct it. Score the reconstruction against the truth.
+  \vskip 6pt
+  This is the shape of the denoising autoencoder (ch8), of masked autoencoders, and -
+  with the axis relabelled from space to time - of next-token prediction.
+  \vskip 10pt
+  It fixes the joint-embedding problem exactly: it says \emph{what} $y$ is. And it cannot
+  collapse, because the target is fixed by the data and the model does not get a vote.
+  \vskip 10pt
+  \pause
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.86\linewidth}{\small
+      So why is this not the end of the lecture? Because for video and images it produces
+      \textbf{blur}, and the reason it produces blur is not a bug to be engineered away.}}
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/ball_video_frames.jpg}
+
+\begin{frame}{Why: you cannot enumerate the futures}
+  \small
+  A language model has a \textbf{finite vocabulary}. GPT-2 has exactly
+  \textbf{50{,}257} possible next tokens, one output per token, and it can raise or lower
+  each independently.
+  \vskip 8pt
+  Video has no such luxury. Each subpixel of a full-HD frame takes one of 256 values, and
+  there are $1920 \times 1080 \times 3$ of them:
+  \vskip 4pt
+  \begin{center}
+    $256^{\,1920 \times 1080 \times 3} \;\approx\; 10^{15{,}000{,}000}$ possible next frames
+  \end{center}
+  \vskip 4pt
+  against roughly $10^{80}$ atoms in the observable universe.
+  \vskip 8pt
+  \footnotesize
+  There is no output layer for that. So the network must emit \textbf{pixel values
+  directly} - and now uncertainty has nowhere to go.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/counting_argument.jpg}
+
+\begin{frame}{So it predicts the average, and the average is a blur}
+  \small
+  A ball rolls toward the edge of a table. In the training data it sometimes bounces left,
+  sometimes right.
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Language model.} Separate outputs for \emph{"left"} and \emph{"right"}.
+      It raises \textbf{both}. The distribution is the answer.}}
+    \column{0.47\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Video model.} One frame out. Squared error is minimised by the
+      \textbf{conditional mean} - so it draws the ball in \textbf{both places, faintly}.}}
+  \end{columns}
+  \vskip 10pt
+  \begin{center}
+    \small\color{armred}\textbf{Third time this course has met this argument.}
+  \end{center}
+  \footnotesize
+  Chapter 15: averaging two valid robot trajectories gives a third, invalid one. Chapter
+  10: diffusion exists partly to avoid committing to a mean. Same disease every time -
+  \textbf{a single-valued prediction of a multi-valued thing}.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/bouncing_ball_average.jpg}
+
+\begin{frame}{And most of those pixels never mattered}
+  \small
+  Blur is the visible symptom. The deeper cost is \textbf{where the capacity goes}.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.9\linewidth}{\small
+      A model trained to predict a dashcam feed spends most of its resources predicting
+      \textbf{the motion of the leaves} on the trees beside the road. Those leaves are
+      essentially unpredictable - and they are a very large number of pixels.}}
+  \end{center}
+  \vskip 10pt
+  The loss does not know the difference between \emph{"a car is pulling out"} and
+  \emph{"that leaf moved 3 pixels left"}. It charges the same price for both, and there
+  are far more leaves than cars.
+  \vskip 6pt
+  \footnotesize\color{gray}This example is LeCun's. On the next slide, the right-hand panel
+  is the \textbf{optical flow} of that road scene - colour shows which direction each pixel
+  is moving. Almost all the motion in the frame is foliage.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/dashcam_leaves.jpg}
+
+\begin{frame}{JEPA: predict the representation, not the thing}
+  \small
+  Encode \emph{both} sides. Then predict one embedding from the other, through a
+  \textbf{predictor} network.
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.93\textwidth]{three_architectures.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  The latent $z$ absorbs what is genuinely unpredictable - which way the ball bounced.
+  Two things are new: the loss lives in \textbf{representation space}, and the target is
+  produced by a network that is \textbf{itself being trained}.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/jepa_core_arch.jpg}
+
+\begin{frame}{The sentence to remember}
+  \vfill
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.86\linewidth}{\centering\large
+      \textbf{JEPA gives the model permission to\\ throw information away.}}}
+    \vskip 14pt
+    \normalsize
+    If the target encoder may discard the leaves, the loss stops charging for them.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Careful: none of that was I-JEPA}
+  \small
+  Every example so far - the bouncing ball, the dashcam - has been \textbf{video}. That
+  was to show why \emph{predicting pixels} is hopeless in general.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small
+      The first working JEPA, \textbf{I-JEPA}, has \textbf{no time axis at all}. It takes
+      \textbf{one still photograph}, hides some regions, and predicts their
+      representations from the rest of the same image. Nothing is a "next frame".}}
+  \end{center}
+  \vskip 10pt
+  \textbf{Predictive} here means \emph{predicts one part from another part}, not
+  \emph{predicts the future}. Time arrives in L40, and only then does any of this become
+  a world model.
+\end{frame}
+
+% ================================================================
+\section{The catch: collapse}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The catch: collapse}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      And the rest of the design exists to stop it throwing \emph{everything} away.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Write down the degenerate solution}
+  \small
+  Let the target encoder map \textbf{every} input to the same constant vector $c$. Let the
+  predictor ignore its input and output $c$.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.72\linewidth}{\centering
+      $\|\,\text{Pred}(s_x) - s_y\,\| \;=\; \|c - c\| \;=\; \mathbf{0}$}}
+  \end{center}
+  \vskip 8pt
+  The loss is \textbf{exactly zero} - the best value it can possibly take. The
+  representation is worthless: every image, every caption, every video maps to the same
+  point.
+  \vskip 8pt
+  This is \textbf{representation collapse}, and nothing in the objective forbids it.
+  \vskip 4pt
+  \footnotesize\color{gray}The generative architecture cannot do this, because it is
+  scored against pixels it does not control. That safety is exactly what we gave up.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/representation_collapse.jpg}
+
+\begin{frame}{This is not mode collapse}
+  \small
+  Same word, different failure. Chapter 8b used it for something else.
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.95\linewidth}{\small
+      \textbf{Mode collapse} (ch8b, GANs)\\
+      A \emph{generator} covers one mode of the data. It produces real-looking output,
+      but always the same kind.}}
+    \column{0.47\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Representation collapse} (here)\\
+      An \emph{encoder} maps every input to one point. It produces nothing at all, and
+      the loss is delighted.}}
+  \end{columns}
+  \vskip 12pt
+  \centering\small One is a generator being lazy about \emph{variety}.\\
+  The other is an encoder being lazy about \emph{information}.
+\end{frame}
+
+\begin{frame}{The loss will not tell you it broke}
+  \small
+  A falling loss curve is the thing you normally trust. Here it proves nothing, for
+  \textbf{three} separate reasons.
+  \vskip 8pt
+  \begin{enumerate}\small
+    \item \textbf{Zero is reachable by cheating.} The degenerate solution attains the
+      global minimum. A low loss is consistent with a useless model.
+    \item \textbf{The target is moving.} The loss measures agreement with the target
+      encoder, which is itself being updated. It is not comparable across runs, or even
+      across time within one run.
+    \item \textbf{Shrinking beats learning.} The loss is a distance between embeddings, so
+      \textbf{scaling the target encoder's outputs toward zero reduces it} without
+      changing anything the representation encodes.
+  \end{enumerate}
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      You cannot early-stop on this loss. Model selection needs a \textbf{downstream
+      probe} - which is expensive, so far fewer configurations get tried than you are
+      used to.}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The energy picture}
+  \small
+  Define an energy $F(x,y)$ that is low when $x$ and $y$ are compatible. Training pushes
+  it down on observed pairs.
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{energy_landscape.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  The failure mode is \textbf{not} low energy on the data - that is the goal. It is low
+  energy \textbf{everywhere}: a flat landscape that distinguishes nothing. So the real
+  objective is always \emph{low on the data, and kept high off it}.
+\end{frame}
+
+\begin{frame}{One loss, three choices}
+  \small
+  Every JEPA objective in the literature has the same two-term shape:
+  \vskip 6pt
+  \begin{center}
+    \fcolorbox{popblue}{popblue!7}{\parbox{0.88\linewidth}{\centering\vskip 3pt
+      $\mathcal{L} \;=\;
+      \underbrace{\mathbb{E}\big[\, d\big(\text{Pred}(s_x, z),\, s_y\big) \big]}
+                 _{\text{latent predictive invariance}}
+      \;+\;
+      \lambda \cdot \underbrace{R(s_1, \ldots, s_B)}_{\text{anti-collapse}}$
+      \vskip 3pt}}
+  \end{center}
+  \vskip 6pt
+  \footnotesize
+  Reading it: $s_x, s_y$ are the two embeddings; $d$ is a distance; $z$ is the optional
+  latent that absorbs what is genuinely unpredictable (which way the ball bounced);
+  $s_1, \ldots, s_B$ are the embeddings of a \textbf{batch} of $B$ examples; and $\lambda$
+  is a single weight trading the two terms off.
+  \vskip 6pt
+  \small
+  Everyone agrees on the first term. \textbf{The families differ only in what $R$ is} -
+  and in one case, in whether it is a term in the loss at all rather than a property of
+  the architecture.
+  \vskip 4pt
+  \footnotesize\color{gray}The energy $F(x,y)$ from the previous slide is the same
+  quantity as that first term, viewed one pair at a time.
+\end{frame}
+
+\begin{frame}{The three families}
+  \scriptsize
+  \begin{tabular}{@{}p{3.0cm}p{4.3cm}p{2.6cm}p{3.1cm}@{}}
+    \textbf{Family} & \textbf{What $R$ is} & \textbf{Examples} & \textbf{Cost} \\[2pt]
+    \hline\rule{0pt}{2.6ex}
+    \textbf{Contrastive} &
+      not a regulariser - a second data term: pull matching pairs together, and explicitly
+      push \emph{non}-matching pairs apart &
+      \textbf{CLIP} (ch12) &
+      needs many negative pairs; scales badly with dimension \\[8pt]
+    \textbf{Teacher--student} &
+      \emph{absent from the loss.} Collapse is blocked \textbf{structurally}, by making the
+      two branches asymmetric &
+      \textbf{I-JEPA}, DINO &
+      works, poorly understood; silent failure mode \\[8pt]
+    \textbf{Moment-matching} &
+      an explicit penalty on batch statistics: keep every dimension's variance up,
+      decorrelate the dimensions &
+      \textbf{Barlow Twins} &
+      one more term and weight to tune \\
+  \end{tabular}
+  \vskip 8pt
+  \normalsize
+  I-JEPA is in the middle row - worth dwelling on, because it is the row with no theory
+  behind it.
+  \vskip 4pt
+  \footnotesize\color{gray}
+  One representative each; BYOL, SimCLR, MoCo, VICReg and SIGReg belong to the same three
+  rows and are not separate ideas.
+\end{frame}
+
+\begin{frame}{The teacher that resists being dragged}
+  \small
+  I-JEPA's answer is an \textbf{exponential moving average} (\textbf{EMA}) teacher. The
+  target encoder is never touched by gradient descent. It is a slow copy of the context
+  encoder:
+  \vskip 4pt
+  \begin{center}
+    $\theta_{\text{target}} \;\leftarrow\; m \cdot \theta_{\text{target}} \;+\;
+     (1-m)\cdot \theta_{\text{context}}$
+    \qquad $m: 0.996 \rightarrow 1.0$
+  \end{center}
+  \vskip 8pt
+  Two supporting details, both load-bearing:
+  \begin{itemize}\small
+    \item \textbf{Stop-gradient.} No gradient flows into the target branch. The student
+      chases the teacher; the teacher never chases back.
+    \item By the end of pretraining $m \rightarrow 1$, so the teacher \textbf{freezes}
+      entirely.
+  \end{itemize}
+  \vskip 6pt
+  \textbf{Why this blocks collapse:} to reach the constant solution the student would have
+  to \emph{drag the teacher there too} - but the teacher only moves at rate $1-m \approx
+  0.004$ per step, and it is the thing defining the target. The constant is no longer a
+  fixed point you can reach in one step.
+\end{frame}
+
+\begin{frame}{Say it plainly: a heuristic, not a theorem}
+  \small
+  Keep the intuition from the last slide - it is genuinely why this works in practice. But
+  be precise about what it does \emph{not} establish.
+  \vskip 6pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small\centering
+      It argues the constant solution is \textbf{hard to reach quickly}. It does
+      \textbf{not} prove the constant solution is unreachable, nor that some
+      \emph{partial} collapse - a representation using only a few of its dimensions -
+      is prevented at all.}}
+  \end{center}
+  \vskip 8pt
+  There is \textbf{no general proof} that an EMA teacher prevents collapse. It is an
+  empirical recipe inherited from BYOL and DINO, and it is contested.
+  \vskip 8pt
+  \begin{itemize}\small
+    \item \textbf{C-JEPA} argues I-JEPA's EMA \emph{does not fully prevent collapse}, and
+      bolts VICReg's variance and covariance terms on to the same backbone to fix it.
+    \item \textbf{SALT} (2025) reports that a \textbf{frozen} teacher beats an EMA teacher
+      at matched compute.
+    \item \textbf{LeJEPA} (2025) removes the teacher, the stop-gradient and the predictor
+      altogether.
+  \end{itemize}
+  \vskip 10pt
+  \begin{center}
+    \small\color{armred}The load-bearing mechanism of the most cited paper in this area is
+    a trick nobody has justified.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The other teacher-student method: DINO}
+  \small
+  DINO shares I-JEPA's row, and it is the one that wins the benchmarks at the end of this
+  lecture - so it deserves its mechanism stated, not just its name.
+  \vskip 8pt
+  \begin{itemize}\small
+    \item Same asymmetry: a \textbf{student} network and an \textbf{EMA teacher}, with a
+      stop-gradient on the teacher.
+    \item But the two branches see \textbf{different hand-crafted crops} of the image - a
+      global view for the teacher, small local views for the student - and the student must
+      match the teacher's output distribution across views.
+    \item Anti-collapse comes from two extra tricks on the teacher's outputs:
+      \textbf{centring} (subtract a running mean, stopping one class dominating) and
+      \textbf{sharpening} (a low temperature, stopping the output going uniform).
+  \end{itemize}
+  \vskip 6pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      The difference that matters here: \textbf{DINO needs you to hand-design the
+      augmentations.} I-JEPA needs you to hand-design the \textbf{masking} instead.\\
+      Neither is free. Remember that when we get to the scoreboard.}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The family that came back}
+  \small
+  The third row has the best origin story, and it is where the field may be heading.
+  \vskip 6pt
+  LeCun's own account: the joint-embedding methods were \emph{"kind of hacks"} until
+  \textbf{Stephane Deny} brought in \textbf{Horace Barlow's 1961} hypothesis - that
+  neurons in a visual system work by \textbf{reducing redundancy between each other}.
+  \vskip 8pt
+  \textbf{Barlow Twins} applies it literally:
+  \begin{enumerate}\small
+    \item Take the batch of activations from each of the two encoders.
+    \item Compute the \textbf{cross-correlation matrix} between them.
+    \item Drive it toward the \textbf{identity}: diagonal $\rightarrow 1$ (the two views
+      agree), off-diagonal $\rightarrow 0$ (the dimensions stop duplicating each other).
+  \end{enumerate}
+  \vskip 6pt
+  \footnotesize
+  \textbf{VICReg} is the simplified successor; \textbf{SIGReg} (LeJEPA, 2025) the current
+  one. Keep this row in mind - the last frame of this deck comes back to it.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/neuron_correlation.jpg}
+\wlslide{borrowed/welchlabs/barlow_crosscorr_identity.jpg}
+
+% ================================================================
+\section{I-JEPA, in detail}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{I-JEPA, in detail}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      The first one that worked.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Three networks, and the one you keep}
+  \small
+  All three are Vision Transformers (ch12).
+  \vskip 6pt
+  \begin{tabular}{@{}p{3.3cm}p{9.4cm}@{}}
+    \textbf{Context encoder} & standard ViT. Sees \textbf{only the visible patches}.
+      Trained by gradient descent. \\[5pt]
+    \textbf{Target encoder} & same architecture. \textbf{Not} trained by gradients -
+      EMA of the context encoder. \\[5pt]
+    \textbf{Predictor} & a deliberately \textbf{narrow} ViT: width fixed at
+      \textbf{384} whatever the backbone, depth 6 / 12 / 16. \\
+  \end{tabular}
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      After pretraining you \textbf{keep the target encoder} and \textbf{throw the
+      predictor away}. The predictor existed only to make the task solvable.}}
+  \end{center}
+  \vskip 4pt
+  \footnotesize\color{gray}Remember that. Next lecture reverses it exactly.
+\end{frame}
+
+\begin{frame}{Multi-block masking}
+  \small
+  \begin{center}
+    \includegraphics[width=0.93\textwidth]{masking_strategy.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  Sample \textbf{4 target blocks} at scale $(0.15, 0.2)$ and aspect ratio $(0.75, 1.5)$.
+  Sample \textbf{one context block} at scale $(0.85, 1.0)$, then \textbf{delete from it
+  any region overlapping a target} - otherwise the task is trivial. About \textbf{25\%}
+  of patches survive as context.
+\end{frame}
+
+\begin{frame}{The subtle bit: targets are masked at the \emph{output}}
+  \small
+  The target blocks are selected \textbf{after} the target encoder has run, not before.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small
+      The target encoder sees the \textbf{entire, unmasked image}. Only then do we pick
+      out the patch embeddings belonging to the target blocks.}}
+  \end{center}
+  \vskip 10pt
+  Why it matters: a patch embedding computed \emph{in context} already reflects the whole
+  scene, so it is a \textbf{semantic} target. Encode the block in isolation and you are
+  back to predicting local texture.
+  \vskip 8pt
+  \footnotesize\color{gray}Be honest about the cost: the two branches now see different
+  amounts of evidence. The JEPA loss is not the likelihood of anything.
+\end{frame}
+
+\begin{frame}{How we are going to read the numbers}
+  \small
+  Every result in this deck uses a \textbf{linear probe} on a \textbf{frozen} encoder.
+  \vskip 8pt
+  \begin{enumerate}\small
+    \item Pretrain with no labels. Then \textbf{freeze the encoder completely}.
+    \item Train \textbf{one linear layer} on top of it, with labels, to classify.
+    \item Report that accuracy.
+  \end{enumerate}
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      A linear layer can only \emph{read off} what is already there. It cannot fix a bad
+      representation. So this measures \textbf{how much usable structure the pretraining
+      put in} - not how good the whole system can be made.}}
+  \end{center}
+  \vskip 6pt
+  \footnotesize
+  It is also the honest choice: fine-tuning the whole network would let a good optimiser
+  paper over a weak representation.
+\end{frame}
+
+\begin{frame}{Ablation 1: the masking strategy is not a detail}
+  \small
+  \begin{center}
+    \includegraphics[width=0.74\textwidth]{ablation_masking.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  A \textbf{34 to 39 point} spread from how you cut up the image, at fixed architecture
+  and fixed compute. Larger than most architectural choices this course has taught.
+\end{frame}
+
+\begin{frame}{Read the rasterized row}
+  \small
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.86\linewidth}{\small\centering
+      \textbf{Rasterized} uses one image quadrant as context: \textbf{25\% of the
+      patches}, exactly the same budget as the winning strategy.\\[4pt]
+      It scores \textbf{15.5} against \textbf{54.2}.}}
+  \end{center}
+  \vskip 12pt
+  Same amount of information by the patch count. \textbf{39 points worse} by where the
+  information sits.
+  \vskip 10pt
+  Two rules come out of this:
+  \begin{itemize}\small
+    \item Targets must be \textbf{large enough to be semantic}. A small target is a
+      texture patch, and predicting texture teaches you texture.
+    \item Context must be \textbf{spatially distributed}. A single corner of an image
+      tells you almost nothing about the rest of it.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Ablation 2: the target space}
+  \small
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{ablation_target.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  The frame-one result. Same architecture, same masking; only the target changes. If this
+  chapter has one number, it is this one: \textbf{what you predict matters more than what
+  you predict it with.}
+\end{frame}
+
+\begin{frame}{What the predictor learns to represent}
+  \small
+  Train a separate decoder purely to \emph{look} at what the predictor outputs (it is not
+  part of I-JEPA). Across samples of the same prediction:
+  \vskip 8pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Consistent:} the pose and the object part. The back of a bird. The roof of
+      a car. It knows \emph{what} is there.}}
+    \column{0.47\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Varies wildly:} exact texture, background, fine detail. It has
+      \textbf{declined to represent} them.}}
+  \end{columns}
+  \vskip 12pt
+  \centering
+  That is the architecture working as designed: representing what is predictable, and
+  staying \textbf{silent} about what is not.
+  \vskip 6pt
+  \footnotesize\color{gray}Caveat honestly: hand-picked visualisations in a paper, using a
+  decoder the method does not otherwise have.
+\end{frame}
+
+\begin{frame}{What I-JEPA still gets wrong: it assumes it knows \emph{where}}
+  \small
+  I-JEPA's predictor is told the \textbf{exact position} of the patch it must predict, via
+  fixed positional embeddings.
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small\centering
+      Given only part of a dog, \textbf{you cannot locate its tail precisely.}\\
+      The position is genuinely uncertain - and the model is not allowed to say so.}}
+  \end{center}
+  \vskip 10pt
+  \textbf{StoP-JEPA} models each masked position as a \textbf{Gaussian random variable}
+  with learned covariance instead of a fixed point. A few lines of code, no extra compute,
+  better probing.
+  \vskip 8pt
+  \footnotesize
+  \color{armred}This is the bouncing-ball argument again - applied to \textbf{position}
+  instead of content. Fourth appearance. It keeps being the same lesson: \emph{do not
+  force a single-valued answer onto a multi-valued question.}
+\end{frame}
+
+% ================================================================
+\section{Does it work? Reading a scoreboard honestly}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Does it work?}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      This is the part most summaries get wrong.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{ImageNet-1k, linear evaluation}
+  \small
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \scriptsize
+    \textbf{No hand-crafted augmentations}\\[3pt]
+    \begin{tabular}{@{}llr@{}}
+      Method & Arch & Top-1 \\ \hline\rule{0pt}{2.4ex}
+      MAE & ViT-H/14 (1600 ep) & 77.2 \\
+      data2vec & ViT-L/16 (1600 ep) & 77.3 \\
+      CAE & ViT-L/16 (1600 ep) & 78.1 \\
+      \textbf{I-JEPA} & \textbf{ViT-H/14 (300 ep)} & \textbf{79.3} \\
+      \textbf{I-JEPA} & \textbf{ViT-H/16$_{448}$ (300 ep)} & \textbf{81.1} \\
+    \end{tabular}
+    \vskip 8pt
+    \textbf{With augmentations}\\[3pt]
+    \begin{tabular}{@{}llr@{}}
+      Method & Arch & Top-1 \\ \hline\rule{0pt}{2.4ex}
+      SimCLR v2 & RN152 ($2\times$) & 79.1 \\
+      DINO & ViT-B/8 (300 ep) & 80.1 \\
+      iBOT & ViT-L/16 (250 ep) & 81.0 \\
+    \end{tabular}
+    \column{0.44\textwidth}
+    \vskip 20pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.93\linewidth}{\small
+      Read it carefully before you repeat it.\\[5pt]
+      I-JEPA \textbf{clearly wins its own category}, at a quarter to a half the epochs.\\[5pt]
+      It does \textbf{not} beat DINO or iBOT at $224$px. Only the $448$px variant matches
+      them.\\[5pt]
+      The paper's own words: it \emph{"decreases the gap"}.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What it does win: efficiency}
+  \small
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{efficiency.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize
+  A ViT-Huge/14 trained on \textbf{16 A100s in under 72 hours} - less compute than a
+  ViT-\emph{Small}/16 trained with iBOT. The reason is structural: augmentation-based
+  methods process \textbf{ten or more crops} of every image per step. I-JEPA processes
+  \textbf{one view}, and its context encoder sees only a quarter of that.
+\end{frame}
+
+\begin{frame}{A slide about where numbers come from}
+  \small
+  A widely-circulated summary of this paper reports:
+  \vskip 6pt
+  \begin{center}
+    \emph{"I-JEPA achieves \textbf{72.4\%} on 1\% ImageNet against MAE's
+    \textbf{59.8\%}."}
+  \end{center}
+  \vskip 8pt
+  The paper's own Table 2 says:
+  \vskip 4pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.74\linewidth}{\centering\small
+      I-JEPA ViT-H/14, 300 epochs: \textbf{73.3}\\
+      MAE ViT-H/14, 1600 epochs: \textbf{71.5}}}
+  \end{center}
+  \vskip 8pt
+  A claimed 12.6-point gap is really \textbf{1.8 points}. Inflated roughly sixfold.
+  \vskip 8pt
+  \begin{center}
+    \small\color{armred}\textbf{And the true story is the better one:} I-JEPA got there
+    in \textbf{300 epochs against 1600}. The real result is efficiency, not a blowout.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Where the image line actually went}
+  \small
+  Uncomfortable epilogue. The default general-purpose image encoder in 2026 is
+  \textbf{DINOv2/v3} - self-distillation \textbf{with} hand-crafted augmentations, the
+  family I-JEPA was positioned against.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.88\linewidth}{\small\centering
+      DINOv3 (August 2025) reached \textbf{88.4} on ImageNet - against a supervised state
+      of the art of 88.6. Its authors: \emph{"the first time that a self-supervised model
+      has reached comparable results to weakly and supervised models on image
+      classification."}}}
+  \end{center}
+  \vskip 8pt
+  \footnotesize
+  \textbf{Not comparable to the 79.3 above} - different protocol, different era, vastly
+  more data. The point is not the number. The point is that Meta ships both, and the one
+  people build on is not the JEPA.
+  \vskip 4pt
+  \color{armred}Being right about the objective did not automatically win the benchmark.
+  \vskip 6pt
+  \color{black}\footnotesize
+  \textbf{Does that sink the thesis?} No - but be precise about what survives. The
+  \emph{target-space} result (66.9 vs 40.7) is a controlled comparison and stands. What has
+  \emph{not} been shown is that \textbf{dropping augmentations} is also a win: DINOv3 keeps
+  them and leads. Two separate claims, and this chapter only established the first.
+\end{frame}
+
+\wlslide{borrowed/welchlabs/dinov3_scoreboard.jpg}
+
+% ================================================================
+\section{Where this leaves us}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Where this leaves us}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One idea that travels, one thing it cannot do, one question still open.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The objective travels}
+  \small
+  Predicting in representation space is now standard far beyond images:
+  \vskip 6pt
+  \begin{itemize}\small
+    \item \textbf{Audio and speech} - A-JEPA, Audio-JEPA, WavJEPA (ch13)
+    \item \textbf{Biosignals} - EEG, ECG, brain dynamics, genomics
+    \item \textbf{3D and point clouds}, \textbf{molecules and polymers}
+    \item \textbf{Tabular and time series} - including LaT-PFN, which crosses JEPA with
+      the prior-fitted networks of \textbf{ch14}
+    \item \textbf{Remote sensing}, \textbf{recommendation}, \textbf{robotics}
+  \end{itemize}
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.86\linewidth}{\small\centering
+      Look at that list again. Almost every one is a domain with \textbf{few labels and
+      abundant unlabelled data} - which is exactly the regime where "pretrain without
+      labels or augmentations" pays.}}
+  \end{center}
+\end{frame}
+
+\begin{frame}{What it structurally cannot do}
+  \small
+  A question you should be asking after ch10: \emph{why not just use JEPA instead of
+  diffusion?}
+  \vskip 10pt
+  \begin{center}
+    \fcolorbox{armred}{armred!8}{\parbox{0.88\linewidth}{\small\centering
+      JEPA is \textbf{not designed to reconstruct anything}. It deliberately discards the
+      information a decoder would need. No pixels, no waveforms, no tokens.}}
+  \end{center}
+  \vskip 10pt
+  They are not applying for the same job. Diffusion generates; JEPA understands.
+  \vskip 8pt
+  \begin{center}
+    \small\color{armred}\textbf{The reason it is good at understanding is the reason it
+    cannot generate.}
+  \end{center}
+  \vskip 6pt
+  \footnotesize\color{gray}This will matter in L40: a world model you cannot look inside
+  is harder to debug than one that draws you a picture.
+\end{frame}
+
+\begin{frame}{What is still unresolved}
+  \small
+  The middle row of the taxonomy - the one I-JEPA depends on - is under active attack.
+  \vskip 8pt
+  \begin{itemize}\small
+    \item \textbf{SALT} (Sept 2025) reports a \textbf{frozen} teacher beating EMA at
+      matched compute, and that student quality is remarkably insensitive to teacher
+      quality.
+    \item \textbf{LeJEPA} (Nov 2025) proves the \textbf{isotropic Gaussian} is the optimal
+      embedding distribution and enforces it with a single regulariser (SIGReg) - deleting
+      the teacher, the stop-gradient and the predictor. Its authors report one
+      hyperparameter and results across 50+ architectures.
+  \end{itemize}
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armorange}{armorange!10}{\parbox{0.88\linewidth}{\small\centering
+      The claim that would matter most in practice: \textbf{LeJEPA's training loss
+      correlates with downstream accuracy.} If that holds, the expensive-probe problem
+      from earlier in this lecture goes away.}}
+  \end{center}
+  \vskip 4pt
+  \footnotesize\color{gray}Both are young, and neither has displaced the standard recipe.
+  The moment-matching family may yet win.
+\end{frame}
+
+\begin{frame}{Recap}
+  \small
+  \begin{itemize}\small
+    \item The choice of \textbf{prediction target} dominates. Representation targets beat
+      pixel targets by \textbf{26.2 points} with less training.
+    \item Pixel targets fail because they force a \textbf{single-valued answer to a
+      multi-valued question}, and because they charge full price for unpredictable detail.
+    \item Learned targets buy that freedom at the cost of \textbf{collapse}. All the
+      machinery - EMA teachers, stop-gradients, VICReg, SIGReg - exists to pay it.
+    \item \textbf{The loss cannot tell you it worked.} Only a downstream probe can.
+    \item Read scoreboards carefully. I-JEPA wins its category and \textbf{does not} beat
+      DINO at equal resolution.
+  \end{itemize}
+  \vskip 6pt
+  \begin{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.88\linewidth}{\small
+      \textbf{Next:} everything today happened inside \textbf{one still photograph}. Add a
+      time axis and you get a video model. Add \textbf{actions} and you get something you
+      can plan with - a \textbf{world model}, and a billion-dollar argument about whether
+      it is the future of AI.}}
+  \end{center}
+\end{frame}
+
+\wlslide{borrowed/welchlabs/goal_state_planning.jpg}
+
+\end{document}
+
+% ================================================================
+% Provenance:
+%   Plan          : ml/ch16_jepa/JEPA_CHAPTER_PLAN.md
+%   Research      : _knowledge/jepa/ (8 files). I-JEPA (arXiv 2301.08243) and the JEPA
+%                   tutorial (OpenReview Zr4PUe0ZNl) both read in full.
+%   Figures       : py_src/ch16_figs.py -> fig/*.pdf. Nothing is measured or simulated;
+%                   every plotted number is transcribed from a paper.
+%                   physics_gap.pdf deliberately draws the human range as a BAND because
+%                   Meta reports it as one - no per-benchmark human bars were invented.
+%   Borrowed stills: Welch Labs, "Yann LeCun's $1B Bet Against LLMs" Part 1,
+%                   https://youtu.be/kYkIdXwW2AE (2 May 2026). Fetched 2026-08-08 at
+%                   1080p. Reference: _reference_welchlabs_lecun_p1/. Video git-ignored.
+%   Review fixes  : ch11 callback removed (ch11 never covers latent world models);
+%                   "you have already built two" -> "seen" (ch12 trains nothing);
+%                   added the "none of that was I-JEPA" frame (the deck's video examples
+%                   were manufacturing the "predicts the future" misconception);
+%                   linear-probe protocol moved here from L40, before the numbers use it;
+%                   CAE 78.1 restored to Table 1; EMA expanded with update rule,
+%                   stop-gradient and mechanism; Barlow Twins moved after the EMA frames
+%                   so emphasis matches what I-JEPA actually uses; f15 given the
+%                   moving-target and norm-shrinking legs.
+% ================================================================
