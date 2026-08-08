@@ -108,6 +108,38 @@ gform/                     # Apps Script + question CSVs for the Google Form
 
 ---
 
+## Borrowed video material — `_reference_<slug>/` in, `fig/borrowed/<source>/` out
+
+Used twice now (3Blue1Brown in `ml/ch9_attention`, Welch Labs in `ml/ch16_jepa`), so it is a
+convention rather than a one-off. Fetch with the `youtube-reference` skill.
+
+```
+ml/<chapter>/_reference_<slug>/
+  transcript.txt      # cleaned + timestamped   (committed)
+  README.md           # beat map + re-fetch command, written by hand (committed)
+  meta.txt            # one-line metadata       (committed)
+  description.txt     # chapters + links        (committed)
+  frames/             # fNN_HH-MM-SS.jpg        (committed, small)
+  video.mp4, *.vtt    # GIT-IGNORED via the folder's own .gitignore
+ml/<chapter>/fig/borrowed/<source>/
+  descriptive_name.jpg   # the stills a deck actually uses, renamed
+```
+
+- **Never commit the video.** `yt_fetch.sh` writes the `.gitignore`; keep it. ch16 carries ~355 MB
+  of video locally and ~6 MB in git. The README's re-fetch command is the recovery path.
+- **Frames get descriptive names when they enter `fig/borrowed/`** (`jepa_core_arch.jpg`, not
+  `f18_00-31-20.jpg`). The reference folder keeps the timestamped originals so a frame can always
+  be traced back.
+- **The README is written by hand**, after reading the transcript — the script cannot summarise
+  content. It carries a timestamped beat map, which becomes the shot list when building the deck.
+- **Attribution goes on every borrowed slide**, as a small corner node. Full-bleed mechanism and
+  the 16:9 / 4:3 macros are in `ml/SLIDE_STYLE.md`.
+- **Check each still is *settled* and actually shows what its slide claims.** Nothing automated
+  catches a mid-animation grab or a mismatched illustration — see
+  `_learnings/2026-08-08-2300_borrowed-video-stills-need-a-settled-state-check.md`.
+
+---
+
 ## Training runs — tag every artifact, never overwrite
 
 Any script that trains a model and can be run more than once with different settings carries a

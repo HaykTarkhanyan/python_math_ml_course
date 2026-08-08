@@ -9,6 +9,84 @@ this file holds the choice and a pointer.
 
 ---
 
+## #11 - ch16 borrows 33 full-bleed video stills, at a density that is deliberately high
+
+**Date:** 2026-08-08 · **Status:** active
+
+**Decision.** Stills pulled from the Welch Labs LeCun documentary go into L39/L40 as
+**full-bleed frames with no caption**, attributed with a small corner node, at roughly **one page
+in three**. They are never redrawn into house style.
+
+**Why.** The instructor's framing settled it: *"I'm fine with guided screening, the important
+thing is student content, not author."* I had argued the opposite - that a deck cutting to
+someone else's artwork every third slide stops feeling like ours - and that objection was
+correctly overruled. Optimising for the deck feeling ours is a worse objective than the room
+understanding JEPA, and the borrowed architecture diagrams are better than what I would draw.
+
+**The line that was held.** Borrowed stills carry **architecture and narrative**; Python carries
+**every number and every measurement**. A still is someone else's explanation; the I-JEPA
+ablation bars are our evidence. Three planned figures were cut because a still did the job
+better; the three-panel architecture figure was *kept despite* having a still, because the deck
+points back to it five times and it must be in our visual language.
+
+**Alternatives rejected.** Redrawing everything in house style (weeks of figure work, worse
+diagrams); ~16 stills, architecture only (my recommendation - overruled); captions under each
+still (breaks full-bleed, and the surrounding frames already carry the argument).
+
+**What would change this.** A rendered-slide review reporting that the deck reads as a screening
+rather than a lecture, or a licensing situation that makes 33 borrowed frames untenable.
+
+---
+
+## #10 - ch16 (JEPA) ships as two decks, explanatory only, and refuses to pick a side
+
+**Date:** 2026-08-08 · **Status:** active
+
+**Decision.** New chapter `ml/ch16_jepa/`, decks **L39** (the objective) and **L40** (world
+models), registered after `ch15_vla`. **No model is trained; every plotted number is transcribed
+from a paper.** No student project. The chapter is written to leave the LeCun-versus-LLMs
+question **open**.
+
+**Why.** The chapter's subject is the *objective*, not an architecture - the question the course
+had been answering implicitly for fifteen chapters without asking: what should a model be asked
+to predict? The evidence is unusually clean, from I-JEPA Table 7: same architecture, same
+masking, **66.9** predicting representations vs **40.7** predicting pixels, with the pixel run
+getting **60% more** training.
+
+Two decks because there is a real conceptual boundary: L39 has no time axis at all (I-JEPA works
+on one still image), and time plus actions is what turns the objective into a world model.
+
+**Explanatory only** follows the ch14 precedent. One exception was proposed - a toy collapse
+demo, seconds of CPU, showing embedding variance going to zero while the loss looks excellent -
+and the instructor deferred it. L39 frame 15 now argues it in words instead, and the plan is
+written so the figure can drop in as frame 15b without renumbering anything.
+
+**Refusing to pick a side is load-bearing, not politeness.** The chapter's own scoreboard is two
+green, two red: good efficient encoders (supported), planning with a video world model
+(supported, slowly), intuitive physics (**not** supported - IntPhys 2), replacing next-token
+prediction (**not** demonstrated). Both student reviewers independently reached that verdict
+before the deck stated it.
+
+**One figure refuses to draw a number.** `physics_gap.pdf` plots the human range as a **shaded
+85-95% band** rather than three bars, because Meta reports it as a band with no per-benchmark
+figures, and model performance only qualitatively as "at or near chance". Inventing three human
+bars would have made the one chart intended to keep the chapter honest the only one built on
+fabricated numbers. The limitation is printed on the figure itself.
+
+**Alternatives rejected.** One combined deck (drops either the ablations or the planning loop -
+and after the L40 restructure it would orphan the hierarchy section that answers the chapter's
+sharpest criticism); running the collapse experiment (deferred, in `DEFERRED_TODO.md`); the
+LeWorldModel term project (deferred - it is the only reproducible model in the chapter, single
+GPU and a few hours, so it will be worth revisiting); deriving energy-based models properly
+(that is its own lecture - stated with one picture instead, per the ch11/ch12/ch14 precedent).
+
+**What would change this.** V-JEPA-style physical reasoning clearing the IntPhys 2 gap would make
+the "not supported" row wrong and require rewriting L40's close. A JEPA-based language model
+competitive with frontier LLMs would do the same to the fourth row. Either would be a reason to
+revisit, not a reason to soften the current text.
+
+---
+
 ## #9 - ch12 (vision-language models) ships as two decks with figures only, no trained model
 
 **Date:** 2026-08-07 · **Status:** active
