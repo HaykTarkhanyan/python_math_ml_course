@@ -243,3 +243,18 @@ The invariance is stated by the authors as a design consequence, which is exactl
    and that bounding it is welcome.
 2. Frame 1's predict-first needs a concrete pairing (which dataset, which baseline) - invent a
    plausible one, or use a real row from a published comparison?
+
+## Slow-down pass, 2026-08-08 (instructor: expand, explain it slower and better)
+
+L37 30 -> 39 pages. Four new figures, all explanatory. The deck was accurate but stated its
+hardest ideas once and moved on; each one now gets built before it is used.
+
+| New frame | Figure | The gap |
+|---|---|---|
+| Say that sentence again, slowly | - | *"A learning algorithm that is itself learned"* is the whole lecture in one sentence, and it is easy to nod at without it landing. Split into "what you have done until now" vs "what happens here", ending on: the thing that got learned moved up one level. |
+| The same weights, three different datasets | `one_model_many_datasets` | Makes "no fitting" concrete - one network, identical weights, three datasets, three behaviours, and the difference lives entirely in the context. |
+| At inference there is no fitting at all | `incontext_layout` | The claim "your training table goes in the context" had no picture of what the context actually contains. Now: labelled train block, unlabelled test block, one frozen forward pass. |
+| Where does a synthetic dataset come from? | `scm_walkthrough` | **The biggest gap.** "Draw a random causal graph, draw random mechanisms, push noise through" was one sentence. Now performed once end to end with real numbers on an 8-row table, closing with "now do this about 100 million times". |
+| Why invent the data at all? | - | Three reasons it is not a hack (you need millions; you know the ground truth so you can train toward the Bayes-optimal answer; no leakage), and the bill: whatever the prior does not generate, the model has never seen. |
+| What each direction is actually for | `column_meaning` | Two-way attention had a diagram of *what attends to what* but never said what each direction is **for**. Row = "who is this?", column = "is this big?" - shown with the value 37 sitting at the 50th percentile of an age column and the 0th of a pay column. |
+| And that is why there is no scaler | - | Connects column attention back to ch6's manual standardisation: the preprocessing step became part of the architecture. |

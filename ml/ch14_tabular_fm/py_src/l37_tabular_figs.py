@@ -251,6 +251,200 @@ def fig_scaling_timeline():
     log.info(f"wrote {out}")
 
 
+# ---------------------------------------------------------------------------------------
+# Slow-down figures. Added 2026-08-08 (instructor: explain it slower and better). The first
+# half of this deck asserts its hardest ideas - "a prior over datasets", "the training table
+# IS the prompt" - in prose. These make each one concrete before it is used.
+
+def _box(ax, x, y, w, h, text, color, fs=8, alpha=0.16):
+    ax.add_patch(Rectangle((x, y), w, h, fc=color, ec=color, alpha=alpha, lw=1.3))
+    ax.add_patch(Rectangle((x, y), w, h, fc="none", ec=color, lw=1.3))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=fs)
+
+
+def _arrow(ax, x0, y0, x1, y1, color="0.4", lw=1.2):
+    ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw))
+
+
+def fig_scm_walkthrough(n=8):
+    """ONE synthetic dataset being born, step by step.
+
+    The deck previously said "draw a random causal graph, draw random mechanisms, push noise
+    through, read off features and a label" in a single sentence and moved on. This walks
+    through exactly that sentence once, with real numbers, so "sampled from a prior over
+    datasets" stops being an incantation.
+    """
+    rng = np.random.default_rng(SEED + 3)
+
+    # 1. a random causal graph over two roots and one derived feature
+    # 2. random mechanisms
+    z1 = rng.normal(size=n)
+    z2 = rng.normal(size=n)
+    x3 = np.tanh(1.7 * z1 - 0.9 * z2) + rng.normal(scale=0.15, size=n)
+    y = ((0.8 * x3 + 0.5 * z2 + rng.normal(scale=0.3, size=n)) > 0).astype(int)
+
+    fig = plt.figure(figsize=(11.2, 3.5))
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.05, 1.05, 1.25], wspace=0.25)
+
+    # panel 1: the graph
+    ax = fig.add_subplot(gs[0])
+    ax.set_xlim(0, 3); ax.set_ylim(0, 3); ax.axis("off")
+    pos = {"z1": (0.5, 2.3), "z2": (2.3, 2.3), "x3": (1.4, 1.3), "y": (1.4, 0.35)}
+    for name, (px, py) in pos.items():
+        c = {"y": RED}.get(name, BLUE)
+        ax.add_patch(plt.Circle((px, py), 0.28, fc=c, ec=c, alpha=0.2, lw=1.4))
+        ax.add_patch(plt.Circle((px, py), 0.28, fc="none", ec=c, lw=1.4))
+        ax.text(px, py, f"${name[0]}_{name[1]}$" if name != "y" else "$y$",
+                ha="center", va="center", fontsize=10)
+    for a, b in [("z1", "x3"), ("z2", "x3"), ("x3", "y"), ("z2", "y")]:
+        _arrow(ax, *pos[a], *pos[b], color="0.45")
+    ax.set_title("1. draw a random causal graph", fontsize=9.5)
+
+    # panel 2: the mechanisms
+    ax = fig.add_subplot(gs[1])
+    ax.axis("off")
+    ax.set_title("2. draw random mechanisms", fontsize=9.5)     # aligned with the other two
+    ax.text(0.5, 0.72, r"$x_3 = \tanh(1.7 z_1 - 0.9 z_2) + \epsilon$",
+            ha="center", fontsize=10, transform=ax.transAxes)
+    ax.text(0.5, 0.50, r"$y = \mathbb{1}[\,0.8 x_3 + 0.5 z_2 + \epsilon > 0\,]$",
+            ha="center", fontsize=10, transform=ax.transAxes)
+    ax.text(0.5, 0.22, "the shapes, the weights and the\nnoise are all sampled too",
+            ha="center", fontsize=8, color="0.4", transform=ax.transAxes)
+
+    # panel 3: the resulting table
+    ax = fig.add_subplot(gs[2])
+    ax.axis("off")
+    ax.set_title("3. push noise through, read off a table", fontsize=9.5)
+    cols = [r"$z_1$", r"$z_2$", r"$x_3$", "$y$"]
+    tbl = ax.table(cellText=[[f"{a:.2f}", f"{b:.2f}", f"{c:.2f}", str(d)]
+                             for a, b, c, d in zip(z1, z2, x3, y)],
+                   colLabels=cols, loc="center", cellLoc="center")
+    tbl.auto_set_font_size(False); tbl.set_fontsize(7.5); tbl.scale(1.0, 1.02)
+    for k in range(len(cols)):
+        tbl[0, k].set_facecolor("#dfe6f2")
+    for r in range(1, n + 1):
+        tbl[r, 3].set_facecolor("#f7dcdc")
+    fig.suptitle("This is ONE dataset. TabPFN's pre-training does this about 100 million "
+                 "times, with a different graph every time.", fontsize=9.5, y=0.02)
+    out = FIG / "scm_walkthrough.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_incontext_layout():
+    """What actually goes into the context window: the training table IS the prompt."""
+    fig, ax = plt.subplots(figsize=(10.8, 3.4))
+    ax.set_xlim(0, 10.8); ax.set_ylim(0, 3.4); ax.axis("off")
+
+    # the training block
+    ax.add_patch(Rectangle((0.2, 1.15), 3.3, 1.75, fc=BLUE, ec=BLUE, alpha=0.10, lw=1.4))
+    ax.text(1.85, 3.0, "your ENTIRE training table", ha="center", fontsize=9, color=BLUE)
+    for r in range(5):
+        for c in range(4):
+            ax.add_patch(Rectangle((0.45 + c * 0.62, 2.5 - r * 0.3), 0.55, 0.24,
+                                   fc=BLUE, ec="white", alpha=0.35, lw=0.6))
+        ax.add_patch(Rectangle((0.45 + 4 * 0.62, 2.5 - r * 0.3), 0.55, 0.24,
+                               fc=RED, ec="white", alpha=0.5, lw=0.6))
+    ax.text(3.25, 2.62, "y", fontsize=8, color=RED, ha="center")
+    ax.text(1.85, 1.32, "features + LABELS", ha="center", fontsize=8, color="0.3")
+
+    # the test block
+    ax.add_patch(Rectangle((3.75, 1.15), 2.2, 1.75, fc=ORANGE, ec=ORANGE, alpha=0.10, lw=1.4))
+    ax.text(4.85, 3.0, "the rows you want answered", ha="center", fontsize=9, color="#B07800")
+    for r in range(3):
+        for c in range(4):
+            ax.add_patch(Rectangle((3.95 + c * 0.42, 2.4 - r * 0.3), 0.36, 0.24,
+                                   fc=ORANGE, ec="white", alpha=0.45, lw=0.6))
+        ax.text(5.72, 2.52 - r * 0.3, "?", fontsize=9, color=RED, ha="center", va="center")
+    ax.text(4.85, 1.32, "features only", ha="center", fontsize=8, color="0.3")
+
+    _arrow(ax, 6.05, 2.0, 6.55, 2.0)
+    _box(ax, 6.6, 1.35, 1.9, 1.3, "one frozen\ntransformer\n\nONE forward pass", "#7832A0",
+         fs=8.5)
+    _arrow(ax, 8.55, 2.0, 9.05, 2.0)
+    _box(ax, 9.1, 1.5, 1.5, 1.0, "predictive\ndistribution\nfor each ?", "#008C46", fs=8)
+
+    ax.text(5.4, 0.62, "Everything to the left of the arrow is the PROMPT. "
+                       "No weights change at any point.",
+            ha="center", fontsize=9.5, color="0.2")
+    ax.text(5.4, 0.2, "This is in-context learning from ch9, with a spreadsheet in the "
+                      "context instead of sentences.",
+            ha="center", fontsize=8.5, style="italic", color="0.4")
+    out = FIG / "incontext_layout.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_one_model_many_datasets(n=90):
+    """One frozen network, three different datasets, three different answers, no training."""
+    rng = np.random.default_rng(SEED)
+
+    t = rng.uniform(0, np.pi, n)
+    moons = np.c_[np.r_[np.cos(t), 1 - np.cos(t)],
+                  np.r_[np.sin(t), 0.5 - np.sin(t)]] + rng.normal(0, 0.09, (2 * n, 2))
+    moons_y = np.r_[np.zeros(n), np.ones(n)]
+
+    blobs = np.r_[rng.normal([-1, -1], 0.45, (n, 2)), rng.normal([1.1, 1.0], 0.45, (n, 2))]
+    blobs_y = np.r_[np.zeros(n), np.ones(n)]
+
+    xor = rng.uniform(-1.5, 1.5, (2 * n, 2))
+    xor_y = ((xor[:, 0] > 0) ^ (xor[:, 1] > 0)).astype(float)
+
+    fig = plt.figure(figsize=(10.6, 3.6))
+    gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 1.25], wspace=0.3)
+    for k, (X, y, name) in enumerate([(moons, moons_y, "dataset A"),
+                                      (blobs, blobs_y, "dataset B"),
+                                      (xor, xor_y, "dataset C")]):
+        ax = fig.add_subplot(gs[k])
+        ax.scatter(*X[y == 0].T, s=9, color=BLUE, alpha=0.75)
+        ax.scatter(*X[y == 1].T, s=9, color=RED, alpha=0.75)
+        ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(name, fontsize=9.5)
+
+    ax = fig.add_subplot(gs[3])
+    ax.axis("off")
+    _box(ax, 0.05, 0.42, 0.9, 0.3, "ONE frozen network\nidentical weights\nfor all three",
+         "#7832A0", fs=8.5)
+    for k in range(3):
+        ax.annotate("", xy=(0.05, 0.57), xytext=(-0.25 - k * 0.02, 0.85 - k * 0.22),
+                    xycoords="axes fraction", textcoords="axes fraction",
+                    arrowprops=dict(arrowstyle="-|>", color="0.55", lw=1.1))
+    ax.text(0.5, 0.24, "three different\ndecision rules,\nno weight ever updated",
+            ha="center", fontsize=8.5, transform=ax.transAxes, color="0.25")
+    fig.suptitle("What is learned is not a decision boundary. It is the RULE that turns a "
+                 "table into one.", fontsize=9.5, y=0.02)
+    out = FIG / "one_model_many_datasets.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_column_meaning():
+    """Why attending DOWN a column is not decoration: a raw number means nothing alone."""
+    rng = np.random.default_rng(SEED)
+    age = rng.normal(37, 9, 400)
+    salary = rng.lognormal(mean=np.log(2200), sigma=0.5, size=400)
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.8, 3.0))
+    for ax, data, name, unit in [(axes[0], age, "column: age", "years"),
+                                 (axes[1], salary, "column: monthly pay", "currency")]:
+        ax.hist(data, bins=30, color=BLUE, alpha=0.55)
+        ax.axvline(37, color=RED, lw=2.2)
+        pct = (data < 37).mean() * 100
+        ax.text(37, ax.get_ylim()[1] * 0.92, f"  the value 37\n  sits at the {pct:.0f}th pct",
+                color=RED, fontsize=8.5, va="top")
+        ax.set_title(name, fontsize=9.5)
+        ax.set_xlabel(unit, fontsize=8.5)
+        ax.set_yticks([])
+        log.info(f"column-meaning figure: 37 is at the {pct:.0f}th percentile of {name}")
+    fig.suptitle("The SAME number, 37, in two columns. Attending down a column is how a cell "
+                 "finds out which of these it is in.", fontsize=9.5, y=0.02)
+    fig.tight_layout()
+    out = FIG / "column_meaning.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
     fig_pfn_inversion()
@@ -258,4 +452,8 @@ if __name__ == "__main__":
     fig_two_d_attention()
     fig_context_cost()
     fig_scaling_timeline()
-    log.info("done - 5 figures")
+    fig_scm_walkthrough()
+    fig_incontext_layout()
+    fig_one_model_many_datasets()
+    fig_column_meaning()
+    log.info("done - 9 figures")

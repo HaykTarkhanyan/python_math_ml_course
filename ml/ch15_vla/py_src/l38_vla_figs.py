@@ -27,7 +27,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle
 
 SEED = 509
 RED, BLUE, ORANGE = "#D90012", "#0033A0", "#F2A800"
@@ -500,6 +500,160 @@ def fig_wilson_ci():
     save(fig, "wilson_ci.pdf")
 
 
+# ---------------------------------------------------------------------------------------
+# Slow-down diagrams. Added 2026-08-08 (instructor: expand, explain slower). Three of this
+# deck's hardest ideas lived inside table cells. These are conceptual diagrams - nothing is
+# measured, trained or run.
+
+def _panel(ax, x, y, w, h, text, color, fs=8, alpha=0.16):
+    ax.add_patch(Rectangle((x, y), w, h, fc=color, ec=color, alpha=alpha, lw=1.3))
+    ax.add_patch(Rectangle((x, y), w, h, fc="none", ec=color, lw=1.3))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=fs)
+
+
+def _arrow(ax, x0, y0, x1, y1, color="0.4", lw=1.2, ls="-"):
+    ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw, linestyle=ls))
+
+
+def fig_action_multimodality():
+    """Why averaging demonstrations is not a neutral act.
+
+    Two humans route around an obstacle in opposite directions. Both are correct. Their
+    average goes straight through it. This is the entire argument for a diffusion or flow
+    head instead of a head trained with mean squared error, and in the deck it was one
+    sentence inside a table cell.
+    """
+    t = np.linspace(0, 1, 120)
+    start, goal = np.array([0.0, 0.0]), np.array([4.0, 0.0])
+    obstacle = np.array([2.0, 0.0])
+
+    def route(sign):
+        mid = obstacle + np.array([0.0, sign * 1.35])
+        pts = (1 - t)[:, None] ** 2 * start + 2 * (1 - t)[:, None] * t[:, None] * mid \
+            + t[:, None] ** 2 * goal
+        return pts
+
+    up, down = route(+1), route(-1)
+    mean = 0.5 * (up + down)
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.1), sharex=True, sharey=True)
+    for ax in axes:
+        ax.add_patch(plt.Circle(obstacle, 0.55, fc="0.35", ec="0.2", alpha=0.85, zorder=3))
+        ax.scatter(*start, s=45, color="0.25", zorder=4)
+        ax.scatter(*goal, s=45, marker="*", color="#008C46", zorder=4)
+        ax.set_xlim(-0.6, 4.6); ax.set_ylim(-2.1, 2.1)
+        ax.set_xticks([]); ax.set_yticks([]); ax.set_aspect("equal")
+
+    axes[0].plot(*up.T, lw=2.4, color=BLUE)
+    axes[0].set_title("demonstration 1: go over", fontsize=9.5, color=BLUE)
+    axes[1].plot(*down.T, lw=2.4, color=ORANGE)
+    axes[1].set_title("demonstration 2: go under", fontsize=9.5, color="#B07800")
+    axes[2].plot(*up.T, lw=1.0, color=BLUE, alpha=0.35)
+    axes[2].plot(*down.T, lw=1.0, color=ORANGE, alpha=0.35)
+    axes[2].plot(*mean.T, lw=2.8, color=RED)
+    axes[2].set_title("their average: straight through it", fontsize=9.5, color=RED)
+    axes[2].text(2.0, 0.95, "collision", ha="center", fontsize=9, color=RED,
+                 fontweight="bold")
+
+    fig.suptitle("Both demonstrations are correct. A head trained to predict the MEAN action "
+                 "learns the one behaviour that is not.", fontsize=9.5, y=0.02)
+    fig.tight_layout()
+    out = FIG / "action_multimodality.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_compounding_error():
+    """Why a robot cannot be trained like a language model: errors move the world."""
+    rng = np.random.default_rng(SEED)
+    T = 60
+    demo = np.c_[np.linspace(0, 6, T), 0.9 * np.sin(np.linspace(0, 2.4, T))]
+
+    def rollout(chunk, sigma=0.06):
+        """Each decision injects a small HEADING error that then persists.
+
+        Modelled as a rotation of the commanded step rather than an additive offset: an
+        offset re-applied every step compounds quadratically and flies off the canvas, which
+        is not what drift looks like. Accumulated heading is a random walk, so deviation grows
+        with the square root of the number of DECISIONS - exactly the quantity chunking cuts.
+        """
+        out, heading = [demo[0].copy()], 0.0
+        for k in range(1, T):
+            if (k - 1) % chunk == 0:               # the policy was asked for a new action
+                heading += rng.normal(0, sigma)
+            c, s = np.cos(heading), np.sin(heading)
+            dx, dy = demo[k] - demo[k - 1]
+            out.append(out[-1] + np.array([c * dx - s * dy, s * dx + c * dy]))
+        return np.array(out)
+
+    # Draw MANY rollouts per panel, not one. A single draw is not representative when the
+    # chunked arm only makes 5 random decisions - the first version of this figure happened to
+    # show chunking drifting MORE, which is the opposite of the point it was captioned with.
+    n_show, n_stat = 14, 400
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 3.2), sharey=True)
+    for ax, chunk, title, color in [
+            (axes[0], 1, "ask every step: 60 chances to drift", RED),
+            (axes[1], 12, "action chunking, $H=12$: 5 chances", "#008C46")]:
+        for _ in range(n_show):
+            ax.plot(*rollout(chunk).T, lw=1.0, color=color, alpha=0.45)
+        gaps = [np.linalg.norm(rollout(chunk)[-1] - demo[-1]) for _ in range(n_stat)]
+        ax.plot(*demo.T, lw=2.8, color="0.3", zorder=5)
+        ax.scatter(*demo[0], s=40, color="0.2", zorder=6)
+        ax.set_title(f"{title}\nmean final deviation over {n_stat} runs: "
+                     f"{np.mean(gaps):.2f}", fontsize=9.5, color=color)
+        ax.set_xticks([]); ax.set_yticks([])
+        log.info(f"compounding-error ({title}): mean final gap {np.mean(gaps):.2f} "
+                 f"over {n_stat} rollouts (schematic units)")
+    axes[0].plot([], [], lw=2.8, color="0.3", label="the demonstration")
+    axes[0].plot([], [], lw=1.4, color=RED, label="rollouts")
+    axes[0].legend(fontsize=7.5, loc="lower left")
+    fig.suptitle("Schematic, 14 rollouts drawn per panel. An error does not just cost "
+                 "accuracy - it moves the arm somewhere the demonstrations never went.",
+                 fontsize=9, y=0.02)
+    fig.tight_layout()
+    out = FIG / "compounding_error.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_three_action_heads():
+    """Discrete bins vs compressed tokens vs a continuous head, side by side."""
+    fig, axes = plt.subplots(1, 3, figsize=(11.4, 3.9))
+    specs = [
+        ("1. discrete bins", BLUE, "RT-2, OpenVLA",
+         [("action dimension", ORANGE), ("cut into 256 bins", BLUE),
+          ("each bin = a TOKEN\n(reuse rare text tokens)", BLUE),
+          ("the language head,\nunchanged", "#7832A0")],
+         "7 dims x 50 steps\n= 350 tokens. Slow."),
+        ("2. compressed tokens", RED, "FAST",
+         [("the whole chunk", ORANGE), ("cosine transform\nalong time", RED),
+          ("drop small high-\nfrequency terms, then BPE", RED),
+          ("the language head,\nunchanged", "#7832A0")],
+         "~10x fewer tokens.\nThe JPEG trick."),
+        ("3. continuous head", "#008C46", "Octo, pi-0, GR00T N1",
+         [("backbone features", ORANGE), ("a SEPARATE head", "#008C46"),
+          ("diffusion or\nflow matching (ch10)", "#008C46"),
+          ("real numbers out,\nno bins at all", "#7832A0")],
+         "Can represent BOTH\nways around the mug."),
+    ]
+    for ax, (title, color, who, boxes, note) in zip(axes, specs):
+        ax.set_xlim(0, 3); ax.set_ylim(0, 4.7); ax.axis("off")
+        ax.set_title(f"{title}\n{who}", fontsize=10, color=color)
+        for i, (label, c) in enumerate(boxes):
+            y = 3.65 - i * 0.85
+            _panel(ax, 0.25, y, 2.5, 0.62, label, c, fs=7.5)
+            if i < len(boxes) - 1:
+                _arrow(ax, 1.5, y, 1.5, y - 0.23)
+        ax.text(1.5, 0.2, note, fontsize=8.5, ha="center", color="0.25", style="italic")
+    fig.suptitle("The same fork as chapter 10 and chapter 13: discretize and reuse the "
+                 "language head, or model the numbers directly.", fontsize=9.5, y=1.0)
+    fig.tight_layout()
+    out = FIG / "three_action_heads.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
     np.random.seed(SEED)
@@ -511,4 +665,7 @@ if __name__ == "__main__":
     fig_language_collapse()
     fig_redvla_coupling()
     fig_wilson_ci()
-    log.info("done - 8 figures")
+    fig_action_multimodality()
+    fig_compounding_error()
+    fig_three_action_heads()
+    log.info("done - 11 figures")
