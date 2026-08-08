@@ -9,8 +9,11 @@
 # and an empty frames/ dir. Write README.md yourself after.
 set -uo pipefail
 
-URL="${1:?usage: bash yt_fetch.sh <URL> <DEST_DIR>}"
-DEST="${2:?usage: bash yt_fetch.sh <URL> <DEST_DIR>}"
+URL="${1:?usage: bash yt_fetch.sh <URL> <DEST_DIR> [HEIGHT]}"
+DEST="${2:?usage: bash yt_fetch.sh <URL> <DEST_DIR> [HEIGHT]}"
+# Max video height. 720 keeps files ~50-150 MB and is enough to read visuals; pass 1080
+# when the frames are destined for full-bleed showcase slides (720 looks soft blown up).
+HEIGHT="${3:-720}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$DEST/frames"
 
@@ -39,9 +42,23 @@ else
   echo "WARNING: no English subtitles found - transcript.txt not written"
 fi
 
-echo "== download 720p =="
-yt-dlp -f "bestvideo[height<=720]+bestaudio/best[height<=720]" \
+echo "== download ${HEIGHT}p =="
+# --js-runtimes node is REQUIRED: YouTube signs media URLs with obfuscated JS, and yt-dlp
+# only enables deno by default, which is not installed here. Without it the media bytes
+# 403 while metadata and subtitles still succeed - so the folder looks healthy but has no
+# video. See _learnings/2026-08-03-1250_yt-dlp-needs-a-js-runtime.md.
+yt-dlp --js-runtimes node \
+  -f "bestvideo[height<=$HEIGHT]+bestaudio/best[height<=$HEIGHT]" \
   --merge-output-format mp4 -o "$DEST/video.%(ext)s" "$URL" 2>&1 | tail -2
+
+# Partial success is the trap here - assert the mp4 actually landed rather than trusting
+# a clean exit.
+if [ -s "$DEST/video.mp4" ]; then
+  echo "video.mp4: $(du -h "$DEST/video.mp4" | cut -f1)"
+else
+  echo "ERROR: $DEST/video.mp4 missing or empty - download failed" >&2
+  exit 1
+fi
 
 # keep the large/raw assets out of git history
 cat > "$DEST/.gitignore" <<'EOF'
