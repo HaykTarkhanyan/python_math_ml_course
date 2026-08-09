@@ -249,11 +249,11 @@ TimeSeriesSplit(n_splits=5,
     on train it reports what the model \emph{leans} on, on test what actually
     \emph{buys} accuracy):
     \begin{itemize}\small
-      \item \texttt{dlag\_12}, the seasonal lag, dominates at $+0.63$.
+      \item \texttt{dlag\_k} $=$ lag $k$ of the \textbf{differenced} target
+        $d_t=y_t-y_{t-1}$. \texttt{dlag\_12}, the seasonal one, dominates at $+0.63$.
       \item \texttt{month} and \texttt{dlag\_3} split the rest.
       \item \texttt{dlag\_1} is \textbf{negative} ($-0.03$).
     \end{itemize}
-    \vskip2pt
     \callout{armorange}{\scriptsize A \emph{negative} importance means shuffling the
     column \textbf{helped} -- last month's change was noise, and the model is better
     off without it.}
@@ -302,9 +302,11 @@ TimeSeriesSplit(n_splits=5,
 \begin{frame}{Benchmark everything against the naive baseline}
   Three contenders, one held-out block, and -- this is the part people skip --
   \textbf{one stated horizon}: 18 months, forecast from a single origin.
+  {\footnotesize\ Scored with \textbf{MASE} $=$ your MAE $\div$ the seasonal-naive
+  model's MAE (lecture 30), so below $1$ beats copying last year.}
   \vskip1pt
   \begin{center}
-    \includegraphics[width=0.74\textwidth]{fig/model_comparison.pdf}
+    \includegraphics[width=0.66\textwidth]{fig/model_comparison.pdf}
   \end{center}
   \vskip1pt
   \callout{paramgreen}{\footnotesize A properly specified SARIMA (MASE $0.35$) and the
@@ -340,28 +342,54 @@ TimeSeriesSplit(n_splits=5,
   Lecture 30 was blunt: \emph{a point forecast without an interval is only half an
   answer}. SARIMA hands you one for free -- it is a probability model. A gradient
   booster hands you a single number.
-  \vfill
+  \vskip4pt
+  \textbf{Route 1 -- quantile regression.} Train one booster per quantile $q$, each
+  with a \textbf{pinball loss} that penalises the two directions unequally:
+  \[ L_q(y,\hat y) \;=\;
+     \begin{cases}
+       q\,(y-\hat y)      & \text{if } y \ge \hat y \quad(\text{you under-predicted}) \\[2pt]
+       (1-q)(\hat y - y)  & \text{if } y <    \hat y \quad(\text{you over-predicted})
+     \end{cases} \]
   \begin{columns}[T]
-    \column{0.5\textwidth}
-    \textbf{Two ways to get one anyway:}
-    \begin{itemize}\small
-      \item \textbf{Quantile regression} -- train three boosters with a pinball loss
-        at $q = 0.05,\, 0.5,\, 0.95$
-        (\texttt{LGBMRegressor(objective="quantile", alpha=0.95)}).
-      \item \textbf{Conformal prediction} -- fit once, measure your errors on a
-        held-out calibration block, and use their empirical quantiles as the band.
-        Model-agnostic, and distribution-free.
-    \end{itemize}
-    \column{0.5\textwidth}
-    \callout{armorange}{\footnotesize Both need the calibration block to sit
-    \emph{after} training and \emph{before} test -- the arrow of time again. And both
-    give you the width \emph{at a stated horizon}: a 1-step band is far narrower than
-    an 18-step one, so a single ``$\pm$'' number is meaningless without $h$.}
-    \vskip4pt
-    \footnotesize Libraries: \texttt{MAPIE}, \texttt{neuralforecast}'s conformal
-    wrapper, \texttt{Darts}. Connects straight back to lecture 14 -- an interval you
-    do not check the coverage of is decoration.
+    \column{0.55\textwidth}
+    \footnotesize At $q=0.95$ an under-prediction costs $0.95$ per unit and an
+    over-prediction only $0.05$ -- \textbf{19 times} more painful to be low. So that
+    model learns to sit high. Fit $q=0.05,\,0.5,\,0.95$ and the outer two \emph{are}
+    your band.
+    \column{0.45\textwidth}
+    \callout{armblue}{\scriptsize \texttt{LGBMRegressor(objective=} \texttt{"quantile",
+    alpha=0.95)} -- one fit per quantile, so three models for one band.}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Route 2 -- conformal prediction}
+  Fit \emph{once}, then let the model's own past errors set the width.
+  \vskip3pt
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \begin{enumerate}\small
+      \item Fit on train.
+      \item Predict on a held-out \textbf{calibration} block; record the absolute
+        errors.
+      \item Take their empirical quantile -- that is your $\pm$.
+    \end{enumerate}
+    \vskip3pt
+    \footnotesize Say the calibration errors, sorted, come out as
+    $4,\;7,\;9,\;12,\;22$. For $90\%$ coverage take the $90$th percentile,
+    $\approx\!19$, so the band is \textbf{forecast $\pm 19$}. Honest by construction:
+    that is the width $90\%$ of past errors actually fell inside.
+    \column{0.46\textwidth}
+    \callout{armorange}{\scriptsize Model-agnostic and distribution-free -- it wraps a
+    booster, an RNN, anything. The calibration block must sit \emph{after} train and
+    \emph{before} test: the arrow of time again.}
+    \vskip3pt
+    \callout{armblue}{\scriptsize Width is \textbf{per horizon}: a 1-step band is far
+    narrower than an 18-step one, so a bare ``$\pm$'' means nothing without $h$.}
+  \end{columns}
+  \vskip3pt
+  \footnotesize Libraries: \texttt{MAPIE}, \texttt{neuralforecast}'s conformal wrapper,
+  \texttt{Darts}. Straight back to lecture 14 -- an interval whose coverage you never
+  check is decoration.
 \end{frame}
 
 \begin{frame}{When to reach for ML vs classical}
@@ -383,6 +411,11 @@ TimeSeriesSplit(n_splits=5,
       \item non-linear interactions between drivers.
     \end{itemize}
   \end{columns}
+  \vskip4pt
+  {\footnotesize The right-hand column is really \emph{one} idea with a name: a
+  \textbf{global} model -- one model fitted across many series, sharing what they have
+  in common -- against SARIMA's \textbf{local} model, one fitted per series. Watch for
+  it on the next few slides.}
   \vfill
   \callout{armblue}{\footnotesize In the \textbf{M5} competition (Walmart sales,
   thousands of related series), gradient-boosted trees on engineered features won.
