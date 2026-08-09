@@ -257,7 +257,7 @@ def fig_dbscan_anim():
     near = dist <= eps
     fig, ax = plt.subplots(figsize=(5, 3.7)); base(ax)
     gray(ax, ~near); col(ax, near, TAB[0]); circ(ax, seed, ARM_BLUE)
-    ax.set_title(r"2. $\geq$ min\_samples $\to$ core; neighbors join", fontsize=10)
+    ax.set_title(r"2. $\geq$ min_samples $\to$ core; neighbors join", fontsize=10)
     save(fig, "clu_db_anim_2.pdf")
 
     # 3: expand from a frontier core (density-reachable)
@@ -458,12 +458,17 @@ def fig_ari_points():
 def fig_agglo_anim():
     """Agglomerative merging: scatter with cluster MIDPOINTS + a dendrogram that builds up.
 
-    Uses centroid linkage, so the merge distance d = distance between the two cluster midpoints.
+    Uses Ward linkage, so d = the extra within-cluster spread the merge costs. Ward is
+    monotonic (the tree only grows upward) and matches both the deck's stated default and
+    ``fig_dendrogram``. Centroid linkage was used here until 2026-08-09 and produced a visible
+    dendrogram INVERSION on these points (root merge 2.50 below its own child at 2.62), which
+    contradicted the "cut at the largest vertical gap" frame two slides later.
     """
     X = np.array([[0.2, 0.2], [0.7, 0.5], [0.4, 1.0], [3.0, 0.3], [3.5, 0.7],
                   [1.8, 2.7], [2.4, 3.0]], dtype=float)
     n = len(X)
-    Z = linkage(X, method="centroid")
+    Z = linkage(X, method="ward")
+    assert np.all(np.diff(Z[:, 2]) >= 0), f"dendrogram inversion: {Z[:, 2]}"
     comp = {i: [i] for i in range(n)}
     for t in range(len(Z)):
         comp[n + t] = comp[int(Z[t, 0])] + comp[int(Z[t, 1])]
@@ -507,7 +512,7 @@ def fig_agglo_anim():
             pa, pb = X[merged[0]].mean(0), X[merged[1]].mean(0)
             aL.scatter([pa[0], pb[0]], [pa[1], pb[1]], marker="x", s=85, color="black", lw=2.4, zorder=5)
             aL.plot([pa[0], pb[0]], [pa[1], pb[1]], color="black", lw=1.6, ls="--", zorder=2)
-            aL.set_title(f"merge {s}: nearest midpoints, d = {d:.2f}", fontsize=9)
+            aL.set_title(f"merge {s}: cheapest merge, d = {d:.2f}", fontsize=9)
         else:
             aL.set_title("start: every point is its own cluster", fontsize=9)
         # right: dendrogram revealed up to s merges (latest in red)
@@ -519,12 +524,38 @@ def fig_agglo_anim():
             aR.plot([x1, x2], [dd, dd], color=c, lw=lw)
             aR.plot([x2, x2], [h2, dd], color=c, lw=lw)
         aR.set_xlim(-0.6, n - 0.4); aR.set_ylim(0, hmax * 1.12)
-        aR.set_xticks([]); aR.set_ylabel("merge distance", fontsize=8)
+        aR.set_xticks([]); aR.set_ylabel("merge distance (Ward)", fontsize=8)
         aR.set_xlabel("data points (leaves)", fontsize=8)
         aR.tick_params(labelsize=7)
         aR.set_title("dendrogram", fontsize=9)
         aR.spines[["top", "right"]].set_visible(False)
         save(fig, f"clu_agglo_anim_{s + 1}.pdf")
+
+
+def fig_kmeans_noise():
+    """k-means on pure noise: it returns k tidy clusters and a respectable silhouette.
+
+    The payoff for the whole evaluation section - clustering ALWAYS returns something.
+    """
+    rng = np.random.RandomState(SEED)
+    X = rng.uniform(0, 1, size=(300, 2))            # no structure whatsoever
+    lab = KMeans(n_clusters=4, n_init=10, random_state=SEED).fit_predict(X)
+    km = KMeans(n_clusters=4, n_init=10, random_state=SEED).fit(X)
+    sil = silhouette_score(X, lab)
+    logging.info("k-means on uniform noise: silhouette = %.2f", sil)
+
+    fig, (aL, aR) = plt.subplots(1, 2, figsize=(8.4, 3.7))
+    aL.scatter(X[:, 0], X[:, 1], s=14, c="0.45", edgecolors="white", linewidths=0.3)
+    aL.set_aspect("equal"); _clean(aL)
+    aL.set_title("300 points, drawn uniformly at random", fontsize=10)
+    _scatter(aR, X, lab, s=14)
+    aR.scatter(km.cluster_centers_[:, 0], km.cluster_centers_[:, 1],
+               marker="x", s=90, c="black", lw=2.4, zorder=5)
+    aR.set_aspect("equal")
+    aR.set_title(f"k-means, k = 4  (silhouette = {sil:.2f})", fontsize=10)
+    fig.suptitle("There was no structure. It found four clusters anyway.",
+                 fontsize=11, y=1.04)
+    save(fig, "clu_kmeans_noise.pdf")
 
 
 def main():
@@ -537,6 +568,7 @@ def main():
     fig_kmeans_init()
     fig_elbow()
     fig_kmeans_fail()
+    fig_kmeans_noise()
     fig_dbscan_circles()
     fig_dbscan_anim()
     fig_hdbscan()

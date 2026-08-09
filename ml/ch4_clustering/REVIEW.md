@@ -1,5 +1,21 @@
 # L13 Clustering (ml/ch4_clustering) - content & teaching review
 
+> **STATUS 2026-08-09.** This review sat unapplied for five weeks (the `.tex` was untouched from
+> 2026-06-23 until today). A second, independent **student review** of the rendered pages was run
+> today and found a partly disjoint set of faults. Applied from the priority table below:
+> **#1** (caption/page-number collision), **#2** (dendrogram inversion - now Ward, see
+> `DECISIONS.md` #12), **#4** (pure-noise predict-first frame, `clu_kmeans_noise.pdf`),
+> **#6** (k-medoids "Noise?" cell). Also fixed today, found only by the student pass: a literal
+> `min\_samples` backslash in a DBSCAN figure title, and a "predict-first" on the DBSCAN frame
+> that had no `\pause` so the answer was already on screen.
+>
+> **Still open:** #3 (HDBSCAN figure titles), #5 (annotate the wider-zoo gallery), #7 (by-hand
+> silhouette), #8 (frame the HDBSCAN sketch as optional depth), #9 (computed curse-of-dim curve),
+> plus the student's finding that mini-batch's "slightly worse clusters" carries no number.
+>
+> Deck is now **47 frames / 66 pages** (was 46 / 63), so the frame numbers cited below are the
+> pre-2026-08-09 ones.
+
 Reviewed 2026-07-07 (Claude). Scope: `L13_clustering.tex` (46 frame-numbers / 63 physical
 pages), `L13_clustering_OUTLINE.md`, all figures in `fig/`, generator `py_src/cluster_demos.py`.
 Method: close read of the `.tex`, visual pass on every rendered page (7 contact sheets), and

@@ -9,6 +9,42 @@ this file holds the choice and a pointer.
 
 ---
 
+## #12 - L13's agglomerative animation uses Ward, not centroid linkage
+
+**Date:** 2026-08-09 · **Status:** active
+
+**Decision.** `fig_agglo_anim` in `ml/ch4_clustering/py_src/cluster_demos.py` builds its
+dendrogram with **Ward** linkage. The frame's story changes from "merge the two clusters whose
+midpoints are closest" to "merge the two clusters that cost the least extra spread."
+
+**Why.** Centroid linkage is the one linkage that can produce non-monotonic merges, and on these
+seven toy points it did. The merge distances ran `0.58 0.64 0.65 0.67 2.62 2.50` - the **root
+merge (2.50) sat below its own child (2.62)**, so the red root bar was drawn *underneath* the
+black bar it was supposed to span. That directly contradicts the next frame, which teaches
+"the largest vertical gap is a natural place to cut," a rule that only holds if merge height
+never falls. Ward gives `0.58 0.64 0.67 0.75 3.70 4.63` - strictly increasing. It also matches
+the deck's own claim two frames later that Ward is "the common default," and `fig_dendrogram`
+already used Ward, so the two dendrograms in the deck were previously built with different
+linkages.
+
+**Cost accepted.** The "distance between the midpoints you can see on the left" reading is gone;
+Ward's merge cost is not a distance between the two `x` markers. The markers still show where
+each cluster sits and the dashed line still shows which two merge, so the visual survives, but
+the number in the title is no longer something the student can measure off the scatter.
+
+**Alternatives rejected.** *Nudging the seven toy points* so centroid linkage happens to stay
+monotonic - keeps the midpoint story, but leaves an inversion-capable linkage in a figure that
+teaches monotonicity, so it fixes the symptom on this data only. *Leaving it and adding a
+warning* - turns a bug into a caveat, but the next frame still teaches a rule the picture breaks.
+
+**Guard added.** The generator now asserts `np.all(np.diff(Z[:, 2]) >= 0)` and raises if the
+linkage ever inverts again, so this cannot come back silently.
+
+**What would change this.** Wanting the midpoint-distance reading back badly enough to redesign
+the toy points around single linkage (also monotonic) instead.
+
+---
+
 ## #11 - ch16 borrows 33 full-bleed video stills, at a density that is deliberately high
 
 **Date:** 2026-08-08 · **Status:** active
