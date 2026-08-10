@@ -38,8 +38,27 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
    ```
 
    Every acronym listed must be **spelled out somewhere in the deck**, at or before first use. Frame titles and forward references count as uses and define nothing. See the Abbreviations bullet in `ml/SLIDE_STYLE.md` for the failure modes. (Shipped `CFI`, `LOCO`, `SAGE`, `ICE`, `SHAP`, `LIME`, `GAM` undefined across the interpretability chapter, 2026-07-28 - caught by the instructor, not by a read-through.)
-3. **Student review - opt-in, ASK FIRST.** One **Sonnet** subagent reads ONLY the rendered slide PNGs, as a sharp first-time student, and reports factual errors, hidden / overlapping content, undefined notation, and confusing explanations. It is the reviewer bake-off winner for deck QA (0 false positives; catches *semantic* faults the overflow pass misses - e.g. a diagram that contradicts its own adjacent equation). **Before launching it, ask the instructor whether to run it** - it is one agent, roughly 40-90k tokens and 5-8 min. Yes -> launch it; no -> skip to step 5.
-4. **Verify + apply** - verify each finding against the source (Sonnet is strong but not infallible), apply the quick wins, re-render to confirm.
+3. **Student review - opt-in, ASK FIRST.** One **Sonnet** subagent per deck reads ONLY the rendered slide PNGs (render at `-r 150` so body text is legible). It must never open the `.tex` - seeing the source contaminates the review, and the whole point is to see what a student in the room sees. One agent, roughly 40-90k tokens and 5-8 min per deck. **Ask before launching**, every time.
+
+   **Default to the PEDAGOGY review.** Ask what it was like to *learn* from the deck, and explicitly forbid proofreading ("a separate pass already found the typos, clipped text and undefined terms - ignore any you notice"). Tell it two constraints a reader does not otherwise feel: you cannot re-read a slide once it is gone, and you cannot pause the lecturer. Then ask for exactly these:
+
+   1. **Pacing** by page range, and the single frame most needing the lecturer to stop for five minutes.
+   2. **What it accepted without actually understanding** - claims it nodded along to but could not explain to a friend. Usually the most valuable section.
+   3. **Where it wanted a worked example and did not get one.**
+   4. **Self-efficacy checklist** - 4-6 deck-specific "could you now actually do X?" items, answered yes / partly / no with what is missing.
+   5. **Three exam questions it could now answer, and three it could not** but feels it should.
+   6. **What to cut**, unsentimentally.
+   7. **Whether the running example helped or was overhead.**
+   8. **Where a 90-minute session should end**, and why there.
+   9. **The three questions it would bring to office hours.**
+
+   Add 1-2 deck-specific probes where the deck does something unusual (e.g. "this lecture teaches a technique that then measurably failed - did that feel like a wasted lecture, or did the failure teach more than a success would?").
+
+   **The QA-shaped variant** (report factual errors, clipped content, undefined notation) is the older form of this step. It is now largely redundant: layout is covered by the margin scan in step 2, acronyms by step 2b, and arithmetic by the author. Run it only for a deck dense in conceptual diagrams, where an inverted label is possible. Note that a pedagogy reviewer catches those anyway, because a slide teaching the opposite of the truth is confusing first.
+
+   *Evidence (2026-08-10, ch17_rag).* The QA pass on three decks returned mostly layout findings plus one real catch: a 2x2 on grounding whose off-diagonal labels were swapped, which `pdflatex`, the margin scan and the acronym grep had all passed. The pedagogy pass on the same three decks found what none of those could: a forward dependency (semantic chunking used embeddings 20 slides before they were taught), a worked-example asymmetry repeated in all three decks (the first method in a section gets hand-computed numbers, its siblings get a formula and a result chart), and the chapter-level gap that a student finished able to *evaluate* a RAG system but not *build* one. All three reviewers independently chose the same kind of session break, arguing from cognitive load. See `_learnings/2026-08-10-2210_automated-deck-checks-cannot-see-meaning.md`.
+
+4. **Verify + apply** - verify each finding against the source (Sonnet is strong but not infallible), apply the quick wins, re-render to confirm. Expect roughly half a dozen new overflows: almost every added frame or paragraph pushes something past the bottom edge, so re-run the margin scan after *each* batch, not once at the end.
 5. **Clean + commit** - `clean_latex.py`, then commit the deck as its own unit.
 
 ## Definition of done
@@ -54,7 +73,7 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 ## Hard rules (each of these has caused real damage)
 
 1. Python runs through `./ma/Scripts/python.exe`. Never `uv run --with ...`, never a bare `python` for repo scripts.
-2. No parallel heavy compute and no subagent fan-outs (multi-agent code review included) without explicit user approval. "Quick" always means zero subagents. The one recognized single-agent exception is the deck **student review** (step 3 of the deck-polish loop) - it is a standard step, but still ask before launching it. (Froze the machine 2026-05-21; drained the usage quota 2026-07-06.)
+2. No parallel heavy compute and no subagent fan-outs (multi-agent code review included) without explicit user approval. "Quick" always means zero subagents. The one recognized exception is the deck **student review** (step 3 of the deck-polish loop), one agent per deck - it is a standard step, but still ask before launching it, and say how many decks and roughly what it will cost. (Froze the machine 2026-05-21; drained the usage quota 2026-07-06.)
 3. pdflatex twice, always. One pass leaves a blank Outline frame and stale page counters.
 4. `_quarto.yml` paths are case-sensitive on CI (Linux) even though Windows hides the mismatch locally.
 
