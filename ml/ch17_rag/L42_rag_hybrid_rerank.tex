@@ -1,0 +1,1238 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Retrieval-Augmented Generation}
+\subtitle{Part 2: combining, reordering, and making it fast}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+% Section transition slide: popblue title + one motivation line.
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Where we stopped}
+  \vspace{0.4em}
+  Last lecture ended with two methods and no winner:
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{p{0.42\textwidth}p{0.42\textwidth}}
+    \toprule
+    \textbf{BM25} & \textbf{Embeddings} \\
+    \midrule
+    Non-zero score \emph{if and only if} a query word literally appears.
+    &
+    Never exactly zero, never guaranteed either. \\[0.4em]
+    On our paraphrase question it scored \textbf{\color{armred}exactly 0.000} and
+    landed at rank \textbf{17 of 18}.
+    &
+    On the same question it put the right chunk at rank \textbf{4}. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \keybox{Different \textbf{guarantees}, not different strengths. Today: keep both, and
+  then put the survivors in the right order.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  \begin{center}
+    {\large We took \textbf{16 questions} about the cheese factory,}\\[0.3em]
+    {\large each with one chunk that answers it,}\\[0.3em]
+    {\large and ran both methods over the same 18 chunks.}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{center}
+    {\Large\color{popblue}\textbf{On how many of the 16 do the two disagree?}}
+  \end{center}
+
+  \vspace{1.2em}
+  \begin{center}
+  {\small\color{gray}Commit to a number before the next slide.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The answer: almost never, and then catastrophically}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.42\linewidth]{fig/l42_01_win_scatter.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small On \textbf{15 of 16} questions the two land within two ranks of each other, and on
+  12 of them both put the answer first. On the sixteenth, BM25 does not degrade - it stops.}
+
+  \vspace{0.3em}
+  \takebox{The argument for combining is not ``each wins different questions''. It is that
+  \textbf{one of them can fail completely}, and you cannot tell which question in advance.}
+\end{frame}
+
+\begin{frame}{Three ways to spend the rest of this lecture}
+  \vspace{0.7em}
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{Fix the question} before it reaches either method. Real users
+      do not type keywords.
+    \item[\textbf{2.}] \textbf{Fuse the two ranked lists} into one, without pretending the
+      two scores are comparable.
+    \item[\textbf{3.}] \textbf{Reorder the survivors} with a slower, better model, and make
+      the whole thing fast enough to ship.
+  \end{enumerate}
+
+  \vspace{1.2em}
+  \watchbox{Everything measured today runs on an \textbf{18-chunk toy corpus} with a strong
+  multilingual embedder. That is the setting where these techniques have the \emph{least}
+  to offer. Watch what the numbers actually say, not what the technique is supposed to do.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{Fixing the question}
+\sectiontransition{Fixing the question}{Nobody types keywords. They type a paragraph with an
+apology in it.}
+
+\begin{frame}{What your user actually sends}
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.94\textwidth]
+    \small
+    \textit{``Sorry to bother you again. Last week the hydraulic gauge on line two was
+    reading strangely during the second pressing stage and the operator logged it in the
+    maintenance report. I could not find the number anywhere, so what pressure is the Lori
+    press actually supposed to run at?''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.7em}
+  Forty-nine words. The question is \textbf{eleven} of them, at the very end. The rest is a
+  story about last week, and it is full of words that match the \emph{wrong} chunks:
+  \texttt{gauge}, \texttt{maintenance}, \texttt{logged}, \texttt{line two}.
+
+  \vspace{0.8em}
+  \keybox{\textbf{Keyword extraction} means: pull the searchable terms out of this, and
+  search with those instead.}
+\end{frame}
+
+\begin{frame}{Three families, and they disagree about what a keyword is}
+  \vspace{0.8em}
+  \begin{columns}[T]
+    \column{0.31\textwidth}
+      \textbf{\color{armorange}Statistical}\\[0.4em]
+      {\small Count things. No model, no training, no network call. Microseconds.}\\[0.5em]
+      {\small \texttt{RAKE} and \texttt{YAKE}, both spelled out in a moment}
+    \column{0.31\textwidth}
+      \textbf{\color{armblue}Embedding-based}\\[0.4em]
+      {\small Which phrase is closest in meaning to the whole text? Needs the encoder you
+      already have.}\\[0.5em]
+      {\small \texttt{KeyBERT}}
+    \column{0.31\textwidth}
+      \textbf{\color{armred}Just ask a model}\\[0.4em]
+      {\small ``List the search terms.'' Best output, worst latency, and it costs money per
+      question.}
+  \end{columns}
+
+  \vspace{1.2em}
+  \takebox{We will run all three on that one question, then \textbf{measure what each does
+  to retrieval}. The ranking of the three is not what you would guess.}
+\end{frame}
+
+\begin{frame}{RAKE: cut at the stopwords}
+  \vspace{0.5em}
+  \textbf{Rapid Automatic Keyword Extraction} (\textbf{RAKE}), from around 2010. Three steps,
+  no training data:
+
+  \vspace{0.7em}
+  \begin{enumerate}
+    \item[\textbf{1.}] Split the text at every stopword and punctuation mark. What survives
+      between the cuts is a candidate phrase.
+    \item[\textbf{2.}] For each word: $\text{score}(w) = \text{degree}(w) / \text{freq}(w)$,
+      where degree counts how many words share a candidate phrase with it, itself
+      included - not just its immediate neighbours.
+    \item[\textbf{3.}] A phrase scores the sum of its words.
+  \end{enumerate}
+
+  \vspace{0.9em}
+  \keybox{Read step 2 again: a word in a \textbf{long} phrase gets a high degree. So RAKE
+  systematically prefers long multi-word phrases over single important words.}
+\end{frame}
+
+\begin{frame}{RAKE on our question}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/l42_02_rake.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small ``second pressing stage'' is three words that each stand next to two others, so
+  each scores $3/1 = 3$ and the phrase scores 9. Meanwhile \texttt{pressure} sits alone
+  between two stopwords: $1/1 = 1$, dead last.}
+\end{frame}
+
+\begin{frame}{YAKE: five statistics, no training}
+  \vspace{0.4em}
+  \textbf{Yet Another Keyword Extractor} (\textbf{YAKE}), around 2018. It scores each term
+  by combining five features, all computable from the single document in front of it:
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Feature} & \textbf{Intuition} \\
+    \midrule
+    casing        & words written in capitals or as acronyms tend to matter \\
+    position      & terms that appear early tend to matter \\
+    frequency     & normalised against the document's own average \\
+    context       & a term with \emph{few} distinct neighbours is more specific \\
+    spread        & appearing in many sentences means it is a topic, not an aside \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \watchbox{YAKE reports \textbf{lower is better}. Every one of the five features is about
+  the text \emph{itself} - none of them knows what a cheese press is.}
+\end{frame}
+
+\begin{frame}{YAKE on our question}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/l42_03_yake.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small \texttt{pressure} and \texttt{press} score \textbf{0.63}; \texttt{gauge},
+  \texttt{maintenance} and \texttt{week} score \textbf{0.44} and therefore win. They arrive
+  earlier in the text, and position is one of the five features.}
+\end{frame}
+
+\begin{frame}{YAKE, by hand}
+  \vspace{0.4em}
+  Five features per word, then one combination. Real values from our question:
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{lccccc|c}
+    \toprule
+    \textbf{word} & \textbf{case} & \textbf{pos} & \textbf{freq} & \textbf{rel} &
+    \textbf{diff} & \textbf{score} \\
+    \midrule
+    \texttt{lori}     & \textbf{1.000} & 0.476 & 1.000 & 1.333 & 0.333 & \textbf{0.317} \\
+    \texttt{week}     & 0.000 & \textbf{0.327} & 1.000 & 1.333 & 0.333 & 0.436 \\
+    \texttt{press}    & 0.000 & 0.476 & 1.000 & 1.333 & 0.333 & 0.635 \\
+    \texttt{pressure} & 0.000 & 0.476 & 1.000 & 1.333 & 0.333 & 0.635 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  \begin{center}
+    $\displaystyle \text{score} \;=\;
+      \frac{\text{rel} \times \text{pos}}
+           {\text{case} \;+\; \text{freq}/\text{rel} \;+\; \text{diff}/\text{rel}}
+      \qquad \text{lower is better}$
+  \end{center}
+\end{frame}
+
+\begin{frame}{What that table quietly admits}
+  \vspace{0.8em}
+  Look down the columns. \texttt{freq}, \texttt{rel} and \texttt{diff} are
+  \textbf{identical for every word}: 1.000, 1.333, 0.333.
+
+  \vspace{0.9em}
+  On a 49-word question, every content word appears once, in one sentence, with one
+  neighbour on each side. Three of the five features have nothing to distinguish.
+
+  \vspace{0.9em}
+  \trapbox{So on a short query, YAKE is not really using five statistics. It is using
+  \textbf{casing and position}, and the rest is along for the ride. \texttt{lori} wins here
+  purely because it is capitalised mid-sentence.}
+
+  \vspace{0.6em}
+  {\small\color{gray}YAKE was designed for documents, not for questions. Applying it to a
+  one-paragraph query is using it outside the setting it was built for - which is worth
+  knowing before you reach for it.}
+\end{frame}
+
+\begin{frame}{KeyBERT: ask the encoder instead of counting}
+  \vspace{0.6em}
+  A small library from 2020, and the whole algorithm fits on this slide:
+
+  \vspace{0.8em}
+  \begin{enumerate}
+    \item[\textbf{1.}] Embed the whole question into one vector.
+    \item[\textbf{2.}] Take every candidate phrase of 1 to 3 words. Embed each one.
+    \item[\textbf{3.}] Keep the phrases whose vector is closest to the question's vector.
+  \end{enumerate}
+
+  \vspace{1.0em}
+  \keybox{It reuses the embedding model you already loaded for retrieval, so it costs one
+  extra batch of very short texts. No new model, no training.}
+
+  \vspace{0.6em}
+  {\small Because it works in meaning space, a phrase can win without being frequent,
+  early, or long.}
+\end{frame}
+
+\begin{frame}{KeyBERT on our question}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/l42_04_keybert.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small \texttt{pressure} is now third and \texttt{lori press} fourth, out of 33
+  candidates. Neither statistical method put them anywhere near the top.}
+\end{frame}
+
+\begin{frame}{Or just ask a language model}
+  \vspace{0.4em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textbf{Prompt:} ``Extract the search terms from this question. Return only the terms.''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt, width=0.9\textwidth]
+    \small \texttt{Lori press \quad pressure \quad operating pressure}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.6em}
+  Cleanest output of the four. It threw the story away, which is exactly what you wanted.
+  What it costs you:
+
+  \vspace{0.4em}
+  \begin{itemize}
+    \item {\small A network round trip \textbf{before} the search even starts.}
+    \item {\small Money on every question, forever.}
+    \item {\small Non-determinism: the same question can produce different terms tomorrow.}
+    \item {\small It can invent a term that appears \emph{nowhere} in your documents.}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.2em}
+  \begin{center}
+    {\large Four keyword sets, one target chunk, the same 18 documents.}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{center}
+    {\Large\color{popblue}\textbf{Which of them finds the answer,}}\\[0.4em]
+    {\Large\color{popblue}\textbf{and does any of them beat sending}}\\[0.4em]
+    {\Large\color{popblue}\textbf{the whole rambling question?}}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{center}
+  {\small\color{gray}Vote for one.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Measured, and it is not a clean win}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/l42_05_keyword_payoff.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small The raw question already reached rank 2. \textbf{RAKE and YAKE bought nothing}:
+  the answer stayed at rank 2, and both handed BM25 the phrase ``line two'', which pushed the
+  chunk about \emph{model PRS-400 on line two} into first place. So the answer did not move,
+  but what sits above it got worse. Only KeyBERT reached rank 1.}
+\end{frame}
+
+\begin{frame}{Why the cleanest keywords lost}
+  \vspace{0.5em}
+  The language model returned \texttt{Lori press pressure operating pressure}. BM25 ranked
+  the correct chunk \textbf{third}, behind the vacuum packer.
+
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    The answer chunk says ``\ldots operates at 2.5 bar during the first
+    \textbf{pressing} stage.''\\
+    It never contains the word \textbf{pressure}. The vacuum-packer chunk does.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.7em}
+  Worse: the model said \texttt{pressure} twice, and our scorer sums over query terms, so
+  that word counted double.
+
+  \vspace{0.7em}
+  \trapbox{The vocabulary-mismatch problem from last lecture reappears \textbf{inside} the
+  keyword extractor. A perfect human-sounding keyword is still just a string, and BM25 only
+  matches strings.}
+\end{frame}
+
+\begin{frame}{What to take from that experiment}
+  \vspace{0.8em}
+  \begin{itemize}
+    \item Keyword extraction is a \textbf{rewrite of the query}. Any rewrite can help or
+      hurt, and which one it does is an empirical question about \emph{your} corpus.
+    \item The statistical methods optimise for ``what is this text about''. A rambling
+      question is mostly about last week.
+    \item The meaning-based method did best here, because it is the only one that knows
+      \texttt{pressure} and \texttt{press} are related.
+    \item Extraction matters most for the \textbf{keyword half} of a hybrid system. The
+      embedding half was barely affected: it handled the raw question fine.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \takebox{Ship it behind a measurement, never on the argument that it sounds sensible.}
+\end{frame}
+
+\begin{frame}{The opposite move: add words instead of removing them}
+  \vspace{0.6em}
+  \textbf{Query expansion.} Keep the question, and append terms it \emph{should} have used.
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Source of the extra terms} & \textbf{Example} \\
+    \midrule
+    a hand-written synonym list & \texttt{press} $\to$ \texttt{press, mould, platen} \\
+    the other language your users type in & the Armenian for \texttt{pressure}
+      $\to$ \texttt{pressure, bar} \\
+    a language model, per query & ``give me five ways to say this'' \\
+    the top result of a first search & take its words, search again \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \keybox{In a bilingual factory this is not optional. The manuals are in English and the
+  engineer asks in Armenian, so \emph{every} content word misses and BM25 scores
+  \textbf{exactly zero} until somebody bridges the two vocabularies.}
+\end{frame}
+
+\begin{frame}{Expansion on the question BM25 could not see}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.50\linewidth]{fig/l42_06_expansion.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small Generic synonyms (\texttt{temperature}, \texttt{degrees}, \texttt{heat}) lift it
+  from rank 17 to 6; domain words (\texttt{cellar}, \texttt{ripening}, \texttt{ageing})
+  reach rank 2.}
+
+  \vspace{0.2em}
+  \watchbox{The added terms are synonyms of \emph{the question's own words}. Picking words
+  out of the answer would prove nothing.}
+\end{frame}
+
+\begin{frame}{Expansion has a cost too}
+  \vspace{0.8em}
+  Every word you add is a word that can match something irrelevant.
+
+  \vspace{0.9em}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+      \textbf{\color{paramgreen}What you buy}\\[0.4em]
+      {\small Recall. A question phrased in the wrong vocabulary stops scoring zero.}
+    \column{0.46\textwidth}
+      \textbf{\color{armred}What you pay}\\[0.4em]
+      {\small Precision. \texttt{heat} also matches pasteurisation, and
+      \texttt{ageing} matches the maintenance schedule.}
+  \end{columns}
+
+  \vspace{1.1em}
+  \takebox{Expansion is a \textbf{recall} tool. It is safe precisely when something later
+  in the pipeline can throw the extra rubbish away again - which is what the last two
+  sections of this lecture are for.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Fusing two ranked lists}
+\sectiontransition{Fusing two ranked lists}{Two searches, two orderings, one answer box.
+The obvious way to combine them is wrong.}
+
+\begin{frame}{The obvious idea: add the scores}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/l42_07_score_scales.pdf}
+  \end{center}
+  \vspace{-0.7em}
+  \trapbox{BM25 has \textbf{no upper bound}: it grows with the number of query terms and
+  their rarity. Cosine is stuck in $[-1, 1]$, and for a real encoder almost everything
+  lands in a narrow band near the top. Add them and the bigger number decides everything.}
+\end{frame}
+
+\begin{frame}{Then normalise them first?}
+  \vspace{0.6em}
+  The standard fix is min-max: rescale each list to $[0, 1]$ before adding. It breaks in
+  three ways, all of them quiet:
+
+  \vspace{0.7em}
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{The scale depends on the batch.} The best score in
+      \emph{this} result set becomes 1.0, whether it was a brilliant match or the least bad
+      of eighteen failures.
+    \item[\textbf{2.}] \textbf{One outlier rescales everybody.} A single very high BM25
+      score squashes the rest of that list toward zero.
+    \item[\textbf{3.}] \textbf{It destroys the one honest signal BM25 has.} A score of
+      exactly zero means ``no query word appears here''. After normalisation it is just the
+      bottom of the range.
+  \end{enumerate}
+
+  \vspace{0.9em}
+  \keybox{Each of those is easy to say and easy to disbelieve. So here they are, measured.}
+\end{frame}
+
+\begin{frame}{The same three failures, with numbers}
+  \vspace{0.5em}
+  One query, our eighteen chunks. BM25 runs from \textbf{0.000} to \textbf{3.021}; cosine
+  from \textbf{0.710} to \textbf{0.858}.
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{p{0.30\textwidth}p{0.60\textwidth}}
+    \toprule
+    \textbf{1. Batch-dependent} &
+    One chunk, unchanged, scored twice: \textbf{0.394} among all 18 candidates,
+    \textbf{0.211} among the top 8. Same chunk, same query, different number. \\[0.4em]
+    \textbf{2. Outliers squash} &
+    Triple only the top score and second place collapses from \textbf{0.672} to
+    \textbf{0.224}, without moving. \\[0.4em]
+    \textbf{3. The honest zero dies} &
+    Min-max sends the \emph{worst} chunk to 0.00 - whether it scored 0.000 (no query word
+    appears at all) or 1.5 (a real, weaker match). \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \trapbox{The third is the one that should bother you most. \textbf{BM25's zero means ``not
+  in the language of this chunk''. Min-max's zero means ``last in this batch''.} Those are
+  different facts, and normalisation prints them as the same number.}
+\end{frame}
+
+\begin{frame}{What normalisation does to the picture}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{fig/l42_18_normalisation.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  \keybox{So throw the scores away and keep only what is comparable between the two systems:
+  the \textbf{order}.}
+\end{frame}
+
+\begin{frame}{Reciprocal Rank Fusion}
+  \vspace{0.7em}
+  \textbf{Reciprocal Rank Fusion} (\textbf{RRF}), from a 2009 information-retrieval paper by
+  Cormack and colleagues. One line:
+
+  \vspace{0.6em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=3pt, width=0.72\textwidth]
+    \vspace{0.2em}
+    \begin{center}
+    $\displaystyle \text{RRF}(d) \;=\; \sum_{\text{lists } i} \frac{1}{k + \text{rank}_i(d)}$
+    \end{center}
+    \vspace{0.2em}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.8em}
+  A document collects a small contribution from every list it appears in. Nothing else is
+  used: not the score, not the units, not the range.
+
+  \vspace{0.8em}
+  \begin{itemize}
+    \item {\small It extends to \textbf{any} number of lists, including a third one from a
+      different index.}
+    \item {\small A document missing from a list simply contributes nothing from it.}
+    \item {\small $k$ is a constant, conventionally \textbf{60}.}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{What the constant $k$ is for}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.50\linewidth]{fig/l42_08_rrf_curve.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small With $k = 0$, rank 1 is worth twice rank 2 and one list can dictate the result.
+  With $k = 60$ the weights are nearly flat: rank 1 gives 0.0164 and rank 2 gives 0.0161.}
+
+  \vspace{0.3em}
+  \keybox{Large $k$ says: \emph{being in both lists matters more than being first in one of
+  them}. That is the entire design.}
+\end{frame}
+
+\begin{frame}{By hand: two lists for one question}
+  \vspace{0.4em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.86\textwidth]
+    \small \textit{``Are incoming deliveries checked for drug residues?''}
+    \quad {\scriptsize the answer is the milk-testing chunk}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{clcl}
+    \toprule
+    \textbf{Rank} & \textbf{BM25} & & \textbf{Embeddings} \\
+    \midrule
+    1 & PRS-410 spare parts & & \textbf{\color{paramgreen}milk testing} \\
+    2 & ripening cellar     & & press maintenance \\
+    3 & \textbf{\color{paramgreen}milk testing} & & gloves and knives \\
+    4 & PRS-380 press       & & vacuum packing \\
+    5 & pasteurisation      & & pasteurisation \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  {\small \textbf{Five of the seven} question words appear in \emph{no} chunk at all. BM25's
+  top two matched on \texttt{for} and \texttt{are} and nothing else.}
+\end{frame}
+
+\begin{frame}{By hand: the fusion, $k = 60$}
+  \vspace{0.3em}
+  \begin{center}
+  \small
+  \begin{tabular}{lccl}
+    \toprule
+    \textbf{Chunk} & \textbf{BM25} & \textbf{Dense} & \textbf{Fused score} \\
+    \midrule
+    \textbf{\color{paramgreen}milk testing} & 3 & 1
+      & $\frac{1}{63} + \frac{1}{61} = 0.0159 + 0.0164 = \mathbf{0.0323}$ \\[0.35em]
+    pasteurisation & 5 & 5
+      & $\frac{1}{65} + \frac{1}{65} = 0.0154 + 0.0154 = \mathbf{0.0308}$ \\[0.35em]
+    PRS-410 spare parts & 1 & -
+      & $\frac{1}{61} + 0 \phantom{{}=0.0000} = \mathbf{0.0164}$ \\[0.35em]
+    ripening cellar & 2 & -
+      & $\frac{1}{62} + 0 \phantom{{}=0.0000} = \mathbf{0.0161}$ \\[0.35em]
+    press maintenance & - & 2
+      & $0 + \frac{1}{62} \phantom{{}=0.0000} = \mathbf{0.0161}$ \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \takebox{\textbf{Fifth in both beats first in one.} Pasteurisation, mediocre twice, ends
+  up above the chunk BM25 was most confident about. And the right answer moves from rank 3
+  to rank 1 without anyone tuning a weight.}
+\end{frame}
+
+\begin{frame}{Now run it on all 16 questions}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/l42_09_hybrid_gain.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small Fusion beat BM25 comfortably and \textbf{did not beat the embeddings alone}:
+  0.913 against 0.922. On the one question where BM25 was blind, fusion took the answer from
+  rank 4 to rank \textbf{9}.
+
+  \vspace{0.3em}
+  Those two numbers are the same fact. That single question costs
+  $(\tfrac{1}{4}-\tfrac{1}{9})/16 \approx 0.009$ of the average - which is the entire gap.
+  So fusion is not quietly worse everywhere; it is \textbf{fine on 15 questions and bad on
+  one}.}
+\end{frame}
+
+\begin{frame}{Why fusion lost here, and what that teaches}
+  \vspace{0.5em}
+  RRF sees ranks. It cannot see that BM25's ranking on the paraphrase question was
+  \textbf{pure tie-breaking noise}, because every score there was 0.000.
+
+  \vspace{0.8em}
+  \trapbox{A rank-based method treats a confident list and a meaningless list identically.
+  That is the price of being scale-free.}
+
+  \vspace{0.8em}
+  Practical repairs, in the order you should try them:
+
+  \vspace{0.4em}
+  \begin{itemize}
+    \item {\small Fuse only each list's \textbf{top-k}, so the noisy tail never votes.}
+    \item {\small Drop a list entirely when its top score is zero or near-zero.}
+    \item {\small Weight the lists, once you have a measurement that justifies the weights.}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{So when is hybrid worth it?}
+  \vspace{0.5em}
+  Eighteen chunks and an embedder that is good at this domain is the worst possible
+  advertisement for hybrid search. It earns its place when:
+
+  \vspace{0.5em}
+  \begin{itemize}
+    \item {\small the corpus is large enough that a near-miss neighbour is always there to
+      outrank the right chunk;}
+    \item {\small queries contain \textbf{part numbers, clause references, surnames} - strings
+      with no meaning to embed;}
+    \item {\small the vocabulary is outside the embedder's training data: internal jargon,
+      product names, abbreviations your factory invented;}
+    \item {\small \textbf{your language is not well covered} - the Armenian case from last
+      lecture. A weak embedder makes the lexical half essential.}
+  \end{itemize}
+
+  \vspace{0.7em}
+  \takebox{Add the second retriever because you can name the queries it rescues, then check
+  that it did. ``Everyone uses hybrid'' is not a measurement.}
+\end{frame}
+
+\section{Filtering before you rank}
+\sectiontransition{Filtering before you rank}{The fastest way to improve a search is to stop
+searching things that were never eligible.}
+
+\begin{frame}{Metadata filtering: the cheapest quality win there is}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.66\linewidth]{fig/l42_10_metadata_filter.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small The fields we stored back in the chunking section - access level, revision date,
+  document type - finally do something.}
+\end{frame}
+
+\begin{frame}{Filtering is where access control actually happens}
+  \vspace{0.6em}
+  In Section 1 of the last lecture we said a model has no permissions. Here is the
+  mechanism:
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Filter} & \textbf{What it prevents} \\
+    \midrule
+    \texttt{access\_level $\leq$ user's level} & the intern retrieving the salary table \\
+    \texttt{revision = current}                & answering from a 2019 procedure \\
+    \texttt{doc\_type $\neq$ draft}            & citing something nobody approved \\
+    \texttt{date $>$ 2023}                     & quoting a price list from before inflation \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \trapbox{Do the permission filter \textbf{before} the search, not after. Filtering
+  afterwards means the forbidden chunk was retrieved, scored, and possibly logged - and
+  your ten results have quietly become two.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Reranking}
+\sectiontransition{Reranking}{The fast model gets you a shortlist. Something slower and
+smarter decides the order.}
+
+\begin{frame}{The bottleneck built into the bi-encoder}
+  \vspace{0.6em}
+  A bi-encoder compresses a chunk into one vector \textbf{before it has ever seen your
+  question}. That vector has to serve every question anyone will ever ask.
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    ``Model PRS-400 replaces the older PRS-220 press on line two.''\\[0.3em]
+    One vector, and it must answer \emph{``what replaced the PRS-220?''},
+    \emph{``what is on line two?''} and \emph{``which presses are new?''} equally well.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  \keybox{The query and the chunk \textbf{never look at each other}. Speed comes from
+  exactly that, and so does the ceiling on quality.}
+\end{frame}
+
+\begin{frame}{The fix, and why you cannot afford it}
+  \vspace{-0.4em}
+  \begin{center}
+    \includegraphics[width=0.52\linewidth]{fig/11_bi_vs_cross_encoder.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small The \textbf{cross-encoder} reads question and chunk together, with attention
+  running across both. It is the same transformer, used differently.}
+
+  \vspace{0.4em}
+  \watchbox{There is no vector to precompute, so nothing can be done offline. Every
+  (question, chunk) pair needs its own forward pass \textbf{at query time}.}
+\end{frame}
+
+\begin{frame}{Put a number on ``cannot afford''}
+  \vspace{0.8em}
+  Measured on this laptop's CPU, with a small 12-layer encoder standing in for a
+  cross-encoder of the same size:
+
+  \vspace{0.9em}
+  \begin{center}
+  \small
+  \begin{tabular}{lr}
+    \toprule
+    \textbf{Work} & \textbf{Time} \\
+    \midrule
+    encode one question (bi-encoder)                & about 40 ms \\
+    compare it against 1,000,000 stored vectors     & 80 to 100 ms \\
+    score 100 pairs with the cross-encoder          & about 3 seconds \\
+    \midrule
+    \textbf{score 1,000,000 pairs with the cross-encoder} & \textbf{about 9 hours} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  {\footnotesize\color{gray}Scan measured directly: \textbf{82 ms}. Extrapolated from smaller
+  indexes: \textbf{100 ms}. A 20 percent spread is normal, which is why every row says
+  ``about''.}
+
+  \vspace{0.3em}
+  \takebox{\small A better GPU moves every row of this table and does not change its shape.
+  Per document the cheap model spends about \textbf{0.0001 ms}, the expensive one about
+  \textbf{30 ms}.}
+\end{frame}
+
+\begin{frame}{The cascade}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.66\linewidth]{fig/l42_11_cascade.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \keybox{\small Cheap and wide first, expensive and narrow last. This shape is everywhere in
+  production search, and it is the one diagram from this chapter you will reuse.
+
+  \vspace{0.25em}
+  Two stages is the common case. \textbf{Late interaction} (three slides on) is the optional
+  middle one: too slow for a million chunks, fast enough for a few thousand.}
+\end{frame}
+
+\begin{frame}{Choosing the width of each stage}
+  \vspace{0.7em}
+  \begin{itemize}
+    \item \textbf{The reranker can only reorder what stage one returned.} If the answer is
+      not in your 100 candidates, no reranker in the world will find it. This is the recall
+      ceiling from the chunking section, one stage later.
+    \item \textbf{So widen stage one until recall stops improving}, then stop. Going from
+      100 to 500 candidates costs you five times the reranking latency.
+    \item \textbf{Rerank only what you can pay for.} The cost is linear in the number of
+      candidates and you feel every one of them.
+    \item \textbf{The final cut is a token budget}, not a quality judgement: three good
+      chunks in the prompt beat ten mediocre ones.
+  \end{itemize}
+
+  \vspace{0.7em}
+  \takebox{Measure recall at stage one and precision at stage two. They are different jobs
+  and they fail differently.}
+\end{frame}
+
+\begin{frame}{A middle option: let the tokens meet, but late}
+  \vspace{0.6em}
+  \textbf{ColBERT} (2020) keeps one vector \emph{per token} instead of one per chunk, and
+  compares them only at scoring time. That is called \textbf{late interaction}.
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=3pt, width=0.78\textwidth]
+    \vspace{0.1em}
+    \begin{center}
+    $\displaystyle \text{score}(q, d) \;=\; \sum_{t \in q} \max_{u \in d}\; \cos(v_t, v_u)$
+    \end{center}
+    \vspace{0.1em}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.7em}
+  Every query token finds its own best partner in the document and keeps that similarity.
+  The name for the inner operation is \textbf{MaxSim}, short for maximum similarity.
+
+  \vspace{0.7em}
+  \keybox{The document tokens are still precomputed offline. Only the cheap comparison
+  happens per query - so this sits between a bi-encoder and a cross-encoder in both cost
+  and quality.}
+\end{frame}
+
+\begin{frame}{MaxSim, computed on real token vectors}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/l42_12_maxsim.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small \texttt{Lor} finds \texttt{Lor} at 0.96 and \texttt{press} finds \texttt{press} at
+  0.93. Note that \texttt{pressure} matches \texttt{press} at 0.87 - the thing plain
+  keyword matching could never do.}
+
+  \vspace{0.2em}
+  {\scriptsize\color{gray} Token vectors from our ordinary encoder, not a trained ColBERT:
+  this shows the mechanism. A model trained for late interaction pushes the unrelated
+  cells much lower than they are here.}
+\end{frame}
+
+\begin{frame}{Three shapes, one trade-off}
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    & \textbf{Bi-encoder} & \textbf{Late interaction} & \textbf{Cross-encoder} \\
+    \midrule
+    query meets chunk & never & at scoring time & inside the model \\
+    stored per chunk  & 1 vector & 1 vector per token & nothing \\
+    cost per query    & one scan & many small products & one pass \emph{per chunk} \\
+    used for          & search millions & rerank thousands & rerank tens \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \takebox{The single axis is \textbf{how late the question meets the document}. Later means
+  better and slower, every time. Pick a different point on that axis at each stage of the
+  cascade.}
+\end{frame}
+
+\begin{frame}{The case reranking cannot solve}
+  \vspace{0.5em}
+  Two chunks from the same manual, both retrieved, both about the Lori press:
+
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.92\textwidth]
+    \small
+    \textbf{rev 2}, 2019-03-11: ``the Lori press is held at \textbf{2.0 bar} for the whole
+    pressing cycle.''\\[0.35em]
+    \textbf{rev 4}, 2024-06-02: ``the Lori press starts at \textbf{2.5 bar} and is raised to
+    3.2 bar after twenty minutes.''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.7em}
+  \begin{center}
+    {\large The question: \textit{``What pressure should the Lori press run at?''}}
+  \end{center}
+
+  \vspace{0.7em}
+  \begin{center}
+  {\small\color{gray}Both are relevant. Only one is true today.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Measured on the two revisions}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.44\linewidth]{fig/l42_13_revisions.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \trapbox{The \textbf{superseded} revision scores higher, by 0.008. No threshold separates
+  those two numbers, and a cross-encoder would not help: it is asked \emph{is this chunk
+  relevant}, and both chunks honestly are.}
+\end{frame}
+
+\begin{frame}{What actually fixes it}
+  \vspace{0.7em}
+  Relevance is the wrong question. The right one is \emph{which of these is still in
+  force}, and that is a fact about the document, not about its text.
+
+  \vspace{0.8em}
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{Filter.} Index only the current revision, or filter on it at
+      query time. Cheapest, and correct whenever ``current'' is well defined.
+    \item[\textbf{2.}] \textbf{Sort by metadata after reranking.} Among chunks of comparable
+      relevance, prefer the newest revision.
+    \item[\textbf{3.}] \textbf{Pass both to the model, with their dates attached}, and let
+      the answer say ``the current procedure (rev 4) is 2.5 bar, raised to 3.2''.
+    \end{enumerate}
+
+  \vspace{0.9em}
+  \takebox{This is why the metadata fields went in during chunking. A retrieval system with
+  no revision dates cannot be made correct by a better model, only by a better index.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Making the search fast}
+\sectiontransition{Making the search fast}{Three techniques, in the order you should
+actually reach for them.}
+
+\begin{frame}{Start by not building an index at all}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.54\linewidth]{fig/l42_14_brute_force.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Comparing a question against \emph{every} vector is one matrix-vector product.
+  Our 4,000-chunk factory archive: well under a millisecond. A million chunks: about a
+  tenth of a second, on a laptop, with no index at all.}
+\end{frame}
+
+\begin{frame}{So when does brute force stop being enough?}
+  \vspace{0.7em}
+  Usually not because of time. Because of one of these:
+
+  \vspace{0.6em}
+  \begin{itemize}
+    \item \textbf{Memory.} 10 million chunks at 384 dimensions in float32 is about
+      \textbf{15 GB}, and it has to be resident to be scanned.
+    \item \textbf{Concurrency.} 100 milliseconds per query is fine for one user and
+      hopeless for a hundred at once on the same machine.
+    \item \textbf{It is not the only thing you do.} The scan competes with the encoder, the
+      reranker and the model generating the answer.
+  \end{itemize}
+
+  \vspace{1.0em}
+  \takebox{Under roughly 100,000 chunks, an exact scan is usually the right engineering
+  answer, and it has a property no approximate index has: it \textbf{cannot} miss.}
+\end{frame}
+
+\begin{frame}{HNSW: a skip list in high dimensions}
+  \vspace{0.0em}
+  \begin{center}
+    \includegraphics[width=0.78\linewidth]{fig/l42_15_hnsw.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small \textbf{Hierarchical Navigable Small World} (\textbf{HNSW}), 2016. Each vector is
+  a node linked to its near neighbours. A few nodes are copied into sparse upper layers, so
+  a search starts with long jumps and finishes with short ones.}
+\end{frame}
+
+\begin{frame}{Why that shape is fast}
+  \vspace{0.7em}
+  \begin{itemize}
+    \item Search enters at the top layer, walks greedily to the closest node it can see,
+      then drops a layer and repeats. Each layer refines the previous one's answer.
+    \item Cost is roughly \textbf{logarithmic} in the number of vectors instead of linear.
+      Ten times more documents is a few more hops, not ten times the work.
+    \item The same idea as a skip list over a sorted array - except there is no sorted
+      order in 384 dimensions, so the graph's edges have to stand in for one.
+  \end{itemize}
+
+  \vspace{0.9em}
+  \watchbox{Building the graph is not free: it is memory-hungry and insertion is much
+  slower than appending to an array. Deleting is worse - most implementations only mark
+  nodes as removed and need a periodic rebuild.}
+\end{frame}
+
+\begin{frame}{Approximate means approximate}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.54\linewidth]{fig/l42_16_ann_recall.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small \textbf{Approximate Nearest Neighbour} (\textbf{ANN}) search: group the vectors,
+  then look inside only the nearest few groups. Scanning 3.2\% of this index recovered 98.8\%
+  of the true top 10. Scanning 1.2\% recovered 57.5\%.}
+
+  \vspace{0.3em}
+  \trapbox{Every ANN index has a knob that trades recall for speed. The default is somebody
+  else's compromise, and it never announces the documents it silently skipped.}
+\end{frame}
+
+\begin{frame}{Know your recall number}
+  \vspace{0.8em}
+  It costs one afternoon and it is the only way to know what your index is doing:
+
+  \vspace{0.7em}
+  \begin{enumerate}
+    \item[\textbf{1.}] Take a few hundred real queries.
+    \item[\textbf{2.}] Run them through your approximate index, keeping the top 10.
+    \item[\textbf{3.}] Run the same queries through an \textbf{exact} scan. On a sample of
+      the corpus if the whole thing does not fit.
+    \item[\textbf{4.}] Report the overlap. That fraction is your recall.
+  \end{enumerate}
+
+  \vspace{0.9em}
+  \keybox{Then turn the knob until recall is where you want it and latency is what you can
+  pay. A system at 85\% recall is not broken - but you should be the one who chose 85\%.}
+\end{frame}
+
+\begin{frame}{Quantization: the same vectors, smaller}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/l42_17_quantization.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small Store each dimension in one byte instead of four: a quarter of the memory, and
+  97\% of the true top 10 survived. Store one \emph{bit} per dimension and the ranking
+  mostly collapses - rescoring the shortlist in full precision recovered part of it.}
+
+  \vspace{0.2em}
+  {\scriptsize\color{gray} Measured on synthetic clustered vectors. Real embedding models
+  tolerate binary quantization better than this; the discipline of measuring what it cost
+  you is the transferable part.}
+\end{frame}
+
+\begin{frame}{The order to reach for these}
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Corpus size} & \textbf{What to use} & \textbf{What to check} \\
+    \midrule
+    under 100k chunks & exact scan & nothing, it cannot miss \\
+    100k to 10M       & HNSW, float32 & recall against an exact sample \\
+    beyond that       & HNSW + int8, rescore the top & recall, and memory per node \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \takebox{Every row down this table trades a guarantee for a resource. Take the trade
+  deliberately, with the recall number in your hand, and not one row earlier than you have
+  to.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item \textbf{Fix the question first.} Extraction is a rewrite: it helped once in four
+      tests and hurt twice. Expansion took a 0.000 score from rank 17 to rank 2.
+    \item \textbf{Never add BM25 and cosine.} One is unbounded, the other sits in a narrow
+      band; the sum is just BM25.
+    \item \textbf{RRF fuses ranks, not scores.} Fifth in both beats first in one. Here it
+      beat BM25 and not the embeddings.
+    \item \textbf{Filter on metadata}, before the search rather than after.
+    \item \textbf{Cascade:} millions of chunks, hundreds of candidates, tens reranked, three
+      in the prompt. Later interaction is better and slower.
+    \item \textbf{Reranking cannot fix everything.} Two contradictory revisions are both
+      relevant; only the date decides.
+    \item \textbf{Brute force is fine to about 100k chunks.} Past that, know your recall
+      number.
+  \end{itemize}
+
+  \vspace{0.3em}
+  \takebox{\textbf{Next:} the retrieval is done. Now the model has to use it - assembling
+  the context, forcing citations, and measuring whether any of this worked.}
+\end{frame}
+
+\end{document}
+
+% ============================================================================
+% Provenance
+%
+% RUNNING EXAMPLE: continues L41's cheese factory. The corpus is imported unchanged from
+%   py_src/l41_data.py (18 chunks); L42's additions live in py_src/l42_data.py so no L41
+%   file was touched. The 16-query evaluation set, the rambling question and the two
+%   contradictory revisions are new here.
+%
+% SOURCE MATERIAL (instructor-side; cited on slides only as a name and a rough year):
+%   - Reciprocal Rank Fusion and the k=60 convention: Cormack, Clarke & Buettcher, SIGIR
+%     2009, "Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning
+%     Methods".
+%   - RAKE: Rose, Engel, Cramer & Cowley, 2010. YAKE: Campos et al., 2018/2020.
+%     KeyBERT: Grootendorst, 2020 (a library, not a paper - the slide says so).
+%   - ColBERT / late interaction / MaxSim: Khattab & Zaharia, SIGIR 2020.
+%   - HNSW: Malkov & Yashunin, 2016 (TPAMI 2018). The skip-list framing is the paper's own.
+%
+% FIGURES - all Python-generated (py_src/l42_*.py -> fig/l42_*.pdf). The l42_ prefix keeps
+% them clear of L41's 01..15 files. Tagged REAL vs ILLUSTRATIVE:
+%   REAL (measured this session; every number below is in logs/l42_*.log):
+%     l42_01 win scatter        - 16 queries x 18 chunks, BM25 rank vs dense rank
+%     l42_02 RAKE               - our RAKE implementation on the rambling question
+%     l42_03 YAKE               - our YAKE implementation (published five features)
+%     l42_04 KeyBERT            - real e5-small cosines over 33 candidate phrases
+%     l42_05 keyword payoff     - retrieval rank per keyword set
+%     l42_06 query expansion    - BM25 rank 17 -> 6 -> 2
+%     l42_07 score scales       - BM25 0.000-3.021 vs cosine 0.710-0.858, same query
+%     l42_08 RRF weight curve   - the function 1/(k+rank), exact
+%     l42_09 hybrid gain        - MRR and worst rank for BM25 / dense / RRF
+%     l42_11 cascade            - latencies timed on this laptop CPU (see stand-in note)
+%     l42_12 MaxSim heatmap     - real e5-small token vectors (NOT a trained ColBERT)
+%     l42_13 revisions          - real cosines, 0.8760 (rev 2) vs 0.8680 (rev 4)
+%     l42_14 brute force        - timed matrix-vector products, 4k to 250k vectors
+%     l42_16 ANN recall         - k-means/IVF recall@10 vs fraction of the index scanned
+%     l42_17 quantization       - measured recall@10 after int8 / binary / binary+rescore
+%   ILLUSTRATIVE (schematic, and the slide or the figure says so):
+%     l42_10 metadata filtering, l42_15 HNSW layers
+%   REUSED from L41: fig/11_bi_vs_cross_encoder.pdf on the cross-encoder frame.
+%
+% HONESTY NOTES - three things the measurements changed:
+%   1. THE HYBRID CLAIM WAS INVERTED BY THE DATA. The chapter plan opens L42 with a
+%      "which queries does each method win" scatter, implying they fail on different
+%      queries. Measured over 16 queries: they agree within two ranks on 15 of 16, and RRF
+%      fusion scored MRR 0.913 against dense-alone 0.922 and BM25-alone 0.837. Fusion beat
+%      the weaker half and did NOT beat the stronger one; truncating each list to its
+%      top-3/5/10 before fusing did not change that (0.912 / 0.917 / 0.914). The deck says
+%      this outright rather than hiding it, and the motivation for hybrid was rewritten
+%      from "they win different queries" to "one of them can fail completely, and you
+%      cannot tell which query in advance" - which follows from the scoring function, as in
+%      L41. The frames "Why fusion lost here" and "So when is hybrid worth it?" exist
+%      because of this result. l42_retrieval_figs.py raises if hybrid ever beats both, so
+%      the negative result cannot silently rot.
+%   2. KEYWORD EXTRACTION IS NOT A FREE WIN. RAKE and YAKE both moved BM25's top hit from
+%      the correct chunk to the PRS-400 chunk (their top phrases include "line two"). The
+%      language model's keywords, which look the best, gave BM25 rank 3 because the answer
+%      chunk says "pressing" and never "pressure". Only KeyBERT reached rank 1. Planned as
+%      "here is how to clean up a query"; shipped as "measure your rewrite".
+%   3. THE LLM KEYWORD ROW IS AUTHORED, NOT SCRIPTED. There is no API key in this
+%      environment, so LLM_KEYWORDS in l42_data.py was written by the assistant that built
+%      the deck (itself a language model) rather than fetched by a logged API call. Flagged
+%      here because everything else on these slides came out of a script.
+%
+% OTHER MEASUREMENT CAVEATS:
+%   - RAKE/YAKE/KeyBERT are our own implementations (l42_keywords.py); no yake/rake-nltk/
+%     keybert package is installed in the `ma` venv. RAKE is faithful; YAKE follows the
+%     published five features and n-gram rule but skips Levenshtein de-duplication.
+%   - The cascade timings use intfloat/multilingual-e5-small as a stand-in for a
+%     same-sized cross-encoder (identical work per pair: one forward pass over the
+%     concatenated texts). Stated on the slide. Wall-clock numbers move a few tens of
+%     percent between runs on this laptop, so the prose rounds ("about 40 ms", "about 9
+%     hours") and the figure carries the exact measurement.
+%   - l42_14/16/17 use synthetic clustered vectors, not the 18 real chunks: the questions
+%     are about behaviour at 10^4-10^5 vectors. Binary quantization measured 15% recall
+%     here, which is harsher than real embeddings behave; the slide says so.
+%   - On an 18-chunk corpus, IDF calls ordinary English words rare ("are" has df 2). That
+%     is why BM25's top hits on the drug-residues query matched on "for" and "are". The
+%     RRF worked example uses it as-is because the arithmetic being taught is unaffected.
+%
+% KEY PEDAGOGICAL DECISIONS:
+%   - The deck states its own limitation up front (frame "Three ways to spend the rest of
+%     this lecture"): 18 chunks and a strong embedder is where these techniques have the
+%     least to offer. Every negative result later is then honest rather than deflating.
+%   - Keyword extraction gets nine frames (instructor request): one "how it works" frame
+%     and one "on our question" frame per method, then a measured comparison.
+%   - The cascade funnel carries measured milliseconds, not invented ones, because it is
+%     the diagram people will copy out of this chapter.
+%   - Section 4 is deliberately descriptive - no derivations. The one thing it insists on
+%     is that students measure their own recall number.
+%
+% FORWARD POINTER:
+%   L43 - context assembly, prompting for grounding, failure modes, and evaluation
+%   (recall@k, MRR, nDCG by hand; faithfulness and LLM-as-judge; building an eval set).
+% ============================================================================

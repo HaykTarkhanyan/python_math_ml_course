@@ -1,0 +1,1257 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Retrieval-Augmented Generation}
+\subtitle{Part 1: finding the right context}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+% Section transition slide: popblue title + one motivation line.
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{A question about your own factory}
+  \vspace{0.4em}
+  The maintenance engineer asks a strong language model:
+
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.86\textwidth]
+    \textit{``What pressure should the Lori cheese press run at?''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.4em}
+  It answers immediately, fluently, and in full sentences:
+
+  \vspace{0.6em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt, width=0.86\textwidth]
+    \textit{``Typically around 4 to 6 bar, depending on the mould size.''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.5em}
+  \begin{center}
+  {\large\color{armred}\textbf{It has never seen your factory.}}\\[0.2em]
+  {\small The number is invented. Nothing in the answer tells you that.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The same question, with one paragraph attached}
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textbf{Context:} ``The Lori press operates at 2.5 bar during the first pressing stage.
+    After twenty minutes the pressure is raised to 3.2 bar for the second stage.''
+
+    \vspace{0.5em}
+    \textbf{Question:} What pressure should the Lori cheese press run at?
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textit{``2.5 bar for the first stage, raised to 3.2 bar after twenty minutes.''}
+    \hfill {\scriptsize [source: press manual, rev.~4]}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.6em}
+  Same model. Same question. The only thing that changed is what was in front of it.
+\end{frame}
+
+\begin{frame}{That is the whole idea}
+  \vspace{0.6em}
+  \keybox{\textbf{Retrieval-Augmented Generation (RAG)} means: before answering, go and
+  fetch the relevant text, and put it in the prompt.}
+
+  \vspace{1.0em}
+  The idea takes one slide. The engineering takes the rest of the chapter, because of one
+  question:
+
+  \vspace{0.8em}
+  \begin{center}
+    {\large How do you find \textbf{that one paragraph}, out of \textbf{4{,}000 documents},}\\[0.3em]
+    {\large in \textbf{200 milliseconds}, for a question phrased in words}\\[0.3em]
+    {\large that may appear \textbf{nowhere in the document}?}
+  \end{center}
+
+  \vspace{0.9em}
+  \begin{center}
+  {\small\color{gray}Everything in this lecture is about that search. The generation half
+  is the easy half.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{Why retrieve at all}
+\sectiontransition{Why retrieve at all}{The model already knows a lot. It just does not know
+anything about you.}
+
+\begin{frame}{What a trained model actually knows}
+  \vspace{0.5em}
+  Everything the model knows is frozen into its weights at training time. That gives you
+  four problems at once:
+
+  \vspace{0.8em}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \textbf{\color{armred}It is out of date.}\\
+      {\small Training stopped on some date. Yesterday's price change is not in there.}
+
+      \vspace{0.9em}
+      \textbf{\color{armred}It never saw your data.}\\
+      {\small Your manuals, contracts and incident reports were never public.}
+    \column{0.48\textwidth}
+      \textbf{\color{armred}It cannot cite.}\\
+      {\small A fact recalled from weights has no source attached to it.}
+
+      \vspace{0.9em}
+      \textbf{\color{armred}It has no permissions.}\\
+      {\small A model cannot show one answer to a manager and another to an intern.}
+  \end{columns}
+
+  \vspace{1.0em}
+  \takebox{Retrieval fixes all four at once, because the answer arrives as \textbf{text you
+  control}, not as a memory you hope is right.}
+\end{frame}
+
+\begin{frame}{The obvious objection}
+  \vspace{0.5em}
+  \begin{center}
+  \textit{``Modern models have huge context windows. Why not paste all 4{,}000 documents?''}
+  \end{center}
+
+  \vspace{1.0em}
+  Three reasons, in increasing order of how much they hurt:
+
+  \vspace{0.6em}
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{It does not fit.} A few thousand documents is tens of millions
+      of tokens. No window is that large.
+    \item[\textbf{2.}] \textbf{It is expensive.} You pay per token, on \emph{every single
+      question}, for 4{,}000 documents of which one is relevant.
+    \item[\textbf{3.}] \textbf{It gets worse answers.} Accuracy drops when the relevant
+      sentence is buried in a long context, rather than sitting at the top of a short one.
+  \end{enumerate}
+
+  \vspace{1.0em}
+  \keybox{Retrieval is not a workaround for small context windows. Giving the model
+  \textbf{less, but the right less}, is what makes the answer good.}
+\end{frame}
+
+\begin{frame}{RAG is two pipelines, not one}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/01_rag_loop.pdf}
+  \end{center}
+  \vspace{0.2em}
+  \keybox{The expensive work happens \textbf{once, offline}. When a user asks something,
+  only the bottom row runs. Hold on to this split: it is the reason half the design
+  decisions later in this lecture make sense.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Chunking}
+\sectiontransition{Chunking}{The least glamorous step in the pipeline, and the one that
+quietly decides your ceiling.}
+
+\begin{frame}{Why not just index whole documents?}
+  \vspace{0.6em}
+  Because retrieval returns whatever unit you indexed.
+
+  \vspace{0.9em}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      \textbf{Index whole manuals}\\[0.4em]
+      {\small You get back a 90-page manual. You have moved the problem, not solved it:
+      the model still has to find the paragraph.}
+    \column{0.47\textwidth}
+      \textbf{Index single sentences}\\[0.4em]
+      {\small You get back ``It must then be raised.'' Raised from what? To what? The
+      sentence lost its context.}
+  \end{columns}
+
+  \vspace{1.2em}
+  \keybox{A \textbf{chunk} is the unit you retrieve. It should be small enough to be
+  specific, and large enough to stand alone when it lands in the prompt.}
+
+  \vspace{0.6em}
+  {\small There is a second reason, which returns in Section 4: a chunk becomes
+  \emph{one vector}, and one vector can only represent one meaning.}
+\end{frame}
+
+\begin{frame}{The five strategies, on the same text}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/02_chunking_strategies.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small Boundaries computed by running each strategy, not drawn by hand. Note that the two
+  \emph{structural} strategies, sentence and paragraph, both keep the answer intact, while
+  the two \emph{arithmetic} ones destroy it.}
+\end{frame}
+
+\begin{frame}{Cut where the author already cut}
+  \vspace{0.6em}
+  Fixed-size chunking treats text as a character array. But your documents already contain
+  the author's own decisions about where one idea ends:
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Boundary} & \textbf{What it usually means} \\
+    \midrule
+    sentence break     & one statement \\
+    \textbf{paragraph break} & one idea, which is usually what you want \\
+    heading            & one topic \\
+    list item          & one step of a procedure \\
+    table row          & one record, and never split one of these \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \keybox{\textbf{Paragraph chunking} is the cheapest good default. It costs one
+  \texttt{split} call, needs no model, and respects a boundary a human already placed
+  deliberately. Start here, and only get cleverer if it measurably fails.}
+\end{frame}
+
+\begin{frame}{The overlap trap}
+  \vspace{0.4em}
+  The standard fix for ``fixed-size chunking cut my sentence in half'' is to make chunks
+  overlap. Look at what that actually measured:
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Strategy} & \textbf{Chunks} & \textbf{Answer sentence} \\
+    \midrule
+    Fixed size, 60 characters              & 5 & \color{armred}\textbf{split} \\
+    Fixed size, 60 characters + 15 overlap & 7 & \color{armred}\textbf{still split} \\
+    By sentence                            & 4 & \color{paramgreen}\textbf{intact} \\
+    By paragraph                           & 2 & \color{paramgreen}\textbf{intact} \\
+    Recursive (merge up to 150)            & 2 & \color{paramgreen}\textbf{intact} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.8em}
+  \trapbox{\textbf{Overlap did not save it.} The answer sentence is 67 characters and the
+  chunks are 60. No overlap puts a 67-character sentence inside a 60-character box. Overlap
+  protects boundaries; it cannot protect a unit of meaning bigger than the chunk.}
+\end{frame}
+
+\begin{frame}{So which one should you use?}
+  \vspace{0.6em}
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Your documents} & \textbf{Start with} & \textbf{Why} \\
+    \midrule
+    Clean prose, real paragraphs & \textbf{paragraph} & the author already did the work \\
+    Manuals, contracts, headings & \textbf{recursive}  & respects structure, caps the size \\
+    Transcripts, chat logs       & \textbf{fixed + overlap} & there is no structure to respect \\
+    Tables and records           & \textbf{one row per chunk} & a split row is a wrong answer \\
+    Long undivided walls of text & \textbf{semantic}   & nothing else has a boundary to use \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  {\footnotesize\color{gray}That last row needs a tool we do not have yet. We come back to it
+  at the end of the lecture, once the machinery exists.}
+
+  \vspace{0.5em}
+  \takebox{There is no best chunking strategy, only a best strategy \textbf{for the shape of
+  your documents}. Pick by looking at the documents, then measure, then change your mind.}
+\end{frame}
+
+\begin{frame}{The recall ceiling}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.48\linewidth]{fig/03_recall_ceiling.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \trapbox{If chunking destroyed the answer, \textbf{nothing downstream recovers it}. Not a
+  better embedding model, not a reranker, not a bigger language model. When a RAG system is
+  bad, people tune the model. The problem is usually here.
+
+  \vspace{0.3em}
+  {\footnotesize(\emph{Reranking}, on the axis above, means re-scoring a shortlist with a
+  slower, more accurate model. It gets its own lecture next time.)}}
+\end{frame}
+
+\begin{frame}{Store more than the text}
+  \vspace{0.6em}
+  Each chunk should carry the facts you will need \emph{about} it:
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Field} & \textbf{Why you will want it} \\
+    \midrule
+    source document & so the answer can cite something \\
+    section heading & so a chunk that says ``it'' still has a subject \\
+    revision date   & so a 2019 procedure loses to the 2024 one \\
+    access level    & so an intern does not retrieve the salary table \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \takebox{Two of these pay off later: \textbf{revision date} decides a contradiction in
+  the next lecture's reranking section, and \textbf{access level} is how the permission
+  problem from Section 1 actually gets solved.}
+\end{frame}
+
+\begin{frame}{The problem that sets up the rest of the lecture}
+  \vspace{0.8em}
+  Your chunk says:
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.82\textwidth]
+    \small ``Ripening cellars are held at 10 degrees and 85 percent humidity.''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.3em}
+  Your user asks:
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.82\textwidth]
+    \small ``How warm is the room where the cheese matures?''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  \begin{center}
+    {\large The chunk \textbf{is} the answer.}\\[0.3em]
+    {\large They share \textbf{no content word at all}.}
+  \end{center}
+
+  \vspace{0.7em}
+  \begin{center}
+  {\small\color{gray}Remember this pair. We will run it through both retrieval methods.}
+  \end{center}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Finding chunks by words}
+\sectiontransition{Finding chunks by words}{The method from 1990s search engines that is
+still, in 2026, half of every serious system.}
+
+\begin{frame}{Start with the dumbest possible thing}
+  \vspace{0.6em}
+  Query: \texttt{lori press bar}. Count how many query words appear in each chunk.
+
+  \vspace{0.9em}
+  \begin{center}
+  \small
+  \begin{tabular}{clc}
+    \toprule
+    & \textbf{Chunk} & \textbf{Query-word occurrences} \\
+    \midrule
+    D1 & ``The Lori press operates at 2.5 bar\ldots''            & 3 \\
+    D2 & ``Press maintenance\ldots press\ldots press\ldots bar'' & 4 \\
+    D3 & ``Cheese brining\ldots for Lori cheese.''               & 1 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  D2 wins. But D2 is a maintenance schedule that never mentions Lori cheese, and D1 is the
+  chunk that actually answers the question.
+
+  \vspace{0.7em}
+  \watchbox{Counting fails for three separate reasons. We will fix them one at a time, and
+  the result will be BM25.}
+\end{frame}
+
+\begin{frame}{Fix 1: rare words carry more information}
+  \vspace{0.7em}
+  ``The'' appears in nearly every chunk. ``Lori'' appears in a handful. Matching on
+  ``Lori'' tells you far more.
+
+  \vspace{0.9em}
+  \begin{center}
+    $\displaystyle \text{idf}(t) \;=\; \log\frac{N - n_t + 0.5}{n_t + 0.5}$
+  \end{center}
+
+  \vspace{0.6em}
+  {\small where $N$ is the number of chunks in the corpus and $n_t$ how many of them
+  contain term $t$. This is the \textbf{inverse document frequency}: rare term, big weight.}
+
+  \vspace{0.9em}
+  For our factory archive ($N = 4{,}000$):
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Term} & \textbf{Appears in} & \textbf{idf} \\
+    \midrule
+    \texttt{lori}  & 120 chunks & \textbf{3.47} \\
+    \texttt{bar}   & 210 chunks & 2.89 \\
+    \texttt{press} & 380 chunks & 2.25 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{This already has a name: tf-idf}
+  \vspace{0.6em}
+  Multiply how often a term appears here by how rare it is overall, and sum over the query:
+
+  \vspace{0.7em}
+  \begin{center}
+    $\displaystyle \text{tf-idf}(q, d) \;=\; \sum_{t \in q}
+    \underbrace{tf_{t,d}}_{\substack{\text{term frequency:}\\ \text{how often, here}}}
+    \;\cdot\;
+    \underbrace{\text{idf}(t)}_{\substack{\text{inverse document frequency:}\\ \text{how rare, overall}}}$
+  \end{center}
+
+  \vspace{0.9em}
+  This is the classic weighting behind every search engine built before the 2000s, and it is
+  still the first thing to try. It fixes the ``the'' problem completely.
+
+  \vspace{0.9em}
+  \keybox{\textbf{A term is worth something when it is frequent \emph{here} and rare
+  \emph{everywhere else}.} That single sentence is the whole idea, and it survives into
+  BM25 unchanged.}
+\end{frame}
+
+\begin{frame}{But tf-idf still gets our example wrong}
+  \vspace{0.6em}
+  Query \texttt{lori press bar}, scored with tf-idf:
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{clcc}
+    \toprule
+    & \textbf{Chunk} & \textbf{tf-idf} & \\
+    \midrule
+    D1 & the one that answers the question & 8.62 & \\
+    D2 & the maintenance schedule          & \textbf{9.65} & \color{armred}\textbf{wins} \\
+    D3 & brining                           & 3.47 & \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  D2 wins because it says \texttt{press} \textbf{three times}, and tf-idf takes that
+  literally: three times the term, three times the weight. It also never notices that D2 is
+  more than twice as long as D1.
+
+  \vspace{0.8em}
+  \watchbox{So tf-idf fixed \emph{rarity} and nothing else. Two problems remain: repetition
+  counts too much, and long chunks get a free advantage. \textbf{BM25 is tf-idf with exactly
+  those two repairs.}}
+\end{frame}
+
+\begin{frame}{Fix 2: predict first}
+  \vspace{1.2em}
+  \begin{center}
+    {\large A chunk mentions \texttt{pressure} \textbf{50 times}.}\\[0.7em]
+    {\large Another mentions it \textbf{once}.}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{center}
+    {\Large\color{popblue}\textbf{Is the first one 50 times more relevant?}}
+  \end{center}
+
+  \vspace{1.6em}
+  \begin{center}
+  {\small\color{gray}Decide before the next slide.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Fix 2: term frequency saturates}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.52\linewidth]{fig/04_bm25_saturation.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  \begin{center}
+    $\displaystyle \text{saturation}(tf) \;=\; \frac{tf}{k_1 + tf}$
+  \end{center}
+  \vspace{0.3em}
+  \keybox{The 2nd mention is strong evidence. The 50th is almost none. $k_1$ sets how fast
+  the curve flattens.}
+\end{frame}
+
+\begin{frame}{Fix 3: long chunks cheat}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.48\linewidth]{fig/05_bm25_length_norm.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  \begin{center}
+    $\displaystyle B \;=\; (1 - b) + b\,\frac{dl}{avdl}$
+  \end{center}
+  \vspace{0.3em}
+  {\small A long chunk contains more of every word, so it wins by being long rather than by
+  being relevant. $B$ divides that advantage out: $dl$ is this chunk's length, $avdl$ the
+  corpus average.}
+
+  \vspace{0.3em}
+  \watchbox{$b = 0$ turns the correction off, $b = 1$ applies it fully. Usually 0.5 to 0.8.}
+\end{frame}
+
+\begin{frame}{Putting the three fixes together}
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=3pt, width=0.9\textwidth]
+    \vspace{0.2em}
+    \begin{center}
+    $\displaystyle
+      \text{BM25}(q, d) \;=\; \sum_{t \in q}
+      \underbrace{\frac{tf_{t,d}}{k_1\left((1-b) + b\frac{dl}{avdl}\right) + tf_{t,d}}}_{\text{saturates, and discounts long chunks}}
+      \;\cdot\;
+      \underbrace{\text{idf}(t)}_{\text{rare terms count more}}
+    $
+    \end{center}
+    \vspace{0.2em}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  One sum over the query terms. Each term contributes ``how often it appears here, damped''
+  times ``how rare it is overall''.
+
+  \vspace{0.9em}
+  {\small Usual settings: $k_1 \approx 1.5$ (range 1.2 to 2), $b \approx 0.75$ (range 0.5
+  to 0.8). There is no theory that fixes them; they are tuned.}
+\end{frame}
+
+\begin{frame}{By hand, on three real chunks}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/06_bm25_worked.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small\
+  \textbf{D1} is short (12 tokens, $B = 0.70$) and hits all three terms, including the rare
+  \texttt{lori}.\quad
+  \textbf{D2} says \texttt{press} three times but is 30 tokens long ($B = 1.38$) and never
+  says \texttt{lori}.\quad
+  \textbf{D3} has only \texttt{lori}.}
+\end{frame}
+
+\begin{frame}{Three scorers, one right answer}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/07_count_vs_bm25.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \takebox{Counting is wrong. \textbf{tf-idf is also wrong.} Only once repetition saturates
+  and length is discounted does D1 come first - and then it wins by nearly double. No
+  larger model was involved at any point.}
+\end{frame}
+
+\begin{frame}{A formula can have decorative parts}
+  \vspace{0.7em}
+  You will often see BM25 written with an extra factor in the numerator:
+
+  \vspace{0.6em}
+  \begin{center}
+    $\displaystyle \frac{tf \cdot (k_1 + 1)}{k_1 B + tf} \cdot \text{idf}(t)
+    \qquad\text{instead of}\qquad
+    \frac{tf}{k_1 B + tf} \cdot \text{idf}(t)$
+  \end{center}
+
+  \vspace{0.9em}
+  $(k_1 + 1)$ does not depend on the chunk or the term. It multiplies \emph{every} score by
+  the same constant.
+
+  \vspace{0.9em}
+  \keybox{It changes every number and \textbf{cannot change the ranking}. It exists for
+  historical compatibility. Worth internalising in general: when you meet an unfamiliar
+  formula, ask which parts can actually reorder the output.}
+\end{frame}
+
+\begin{frame}{Where this method is unbeatable}
+  \vspace{0.7em}
+  BM25 matches \textbf{literal strings}. That sounds primitive until you notice what
+  people actually type:
+
+  \vspace{0.9em}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+      \small
+      \texttt{PRS-400}\\
+      \texttt{Article 47.2}\\
+      \texttt{ISO 22000}\\
+      \texttt{invoice \#88214}\\
+      \texttt{Paniryan}
+    \column{0.5\textwidth}
+      {\small Part numbers, clause references, standards, invoice IDs, surnames. A model
+      that ``understands meaning'' has no advantage here. There is no meaning. There is a
+      string, and either you find it or you do not.}
+  \end{columns}
+
+  \vspace{1.1em}
+  \keybox{BM25 gives you a \textbf{guarantee}: if the term is in the chunk, that chunk
+  gets a non-zero score. Keep the word guarantee in mind for two slides' time.}
+\end{frame}
+
+\begin{frame}{And where it stops working}
+  \vspace{0.8em}
+  Back to the pair from Section 2:
+
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.86\textwidth]
+    \small
+    \textbf{Chunk:} ``Ripening cellars are held at 10 degrees and 85 percent humidity.''\\
+    \textbf{Query:} ``How warm is the room where the cheese matures?''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.8em}
+  Shared content words: \textbf{none}. \texttt{warm} $\neq$ \texttt{degrees},
+  \texttt{room} $\neq$ \texttt{cellars}, \texttt{matures} $\neq$ \texttt{ripening}.
+
+  \vspace{0.9em}
+  \trapbox{Every term contributes $tf = 0$, so the sum is \textbf{exactly zero}. Not a low
+  score. No score. BM25 does not think this chunk is a weak match, it does not see it at all.
+
+  \vspace{0.4em}
+  The same literalism means \texttt{press}, \texttt{pressing} and \texttt{pressure} are three
+  unrelated terms unless you bolt on a stemmer, and a stemmer for Armenian is its own
+  project.}
+
+  \vspace{0.4em}
+  \begin{center}
+  {\small\color{gray}This is called \textbf{vocabulary mismatch}, and it is why the next
+  section exists.}
+  \end{center}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Finding chunks by meaning}
+\sectiontransition{Finding chunks by meaning}{If matching words fails, match what the words
+mean.}
+
+\begin{frame}{You already have most of this}
+  \vspace{0.7em}
+  In the RNN chapter you saw \textbf{word vectors}: train on enough text and words used in
+  similar contexts end up close together, with cosine similarity as the measure of close.
+
+  \vspace{1.0em}
+  Two things change for retrieval:
+
+  \vspace{0.6em}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      \textbf{The unit is a chunk}\\[0.3em]
+      {\small Not one word but a whole passage, compressed into a single vector.}
+    \column{0.47\textwidth}
+      \textbf{The goal is retrieval}\\[0.3em]
+      {\small Not ``similar in general'' but specifically: \emph{does this chunk answer
+      this question?}}
+  \end{columns}
+
+  \vspace{1.1em}
+  \keybox{Those are not the same objective. A question and its answer are often not similar
+  sentences at all. That difference is what the training has to fix.}
+\end{frame}
+
+\begin{frame}{Reminder: what cosine similarity measures}
+  \vspace{0.4em}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+      \vspace{-0.3em}
+      \includegraphics[width=\linewidth]{fig/16_cosine_geometry.pdf}
+    \column{0.44\textwidth}
+      \vspace{0.6em}
+      $\displaystyle \cos(\mathbf{a}, \mathbf{b}) =
+        \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\|\,\|\mathbf{b}\|}$
+
+      \vspace{0.9em}
+      {\small It measures the \textbf{angle} between two vectors, and deliberately ignores
+      how long they are.
+
+      \vspace{0.6em}
+      Here the long document is exactly 3 times the short one. Same direction, triple the
+      magnitude.}
+  \end{columns}
+
+  \vspace{0.5em}
+  \keybox{Both score \textbf{0.992}. Straight-line distance would have called them very
+  different: \textbf{0.14} versus \textbf{1.97}. For text that is the wrong answer, because
+  a document should not become less relevant simply by being longer.}
+\end{frame}
+
+\begin{frame}{Which is why vectors get normalised}
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+      \vspace{-0.6em}
+      \includegraphics[width=\linewidth]{fig/17_cosine_normalised.pdf}
+    \column{0.54\textwidth}
+      \vspace{1.2em}
+      {\small Divide every vector by its own length and they all land on the unit circle.
+      The short and long documents collapse onto the \textbf{same point}, because they only
+      ever differed in magnitude.
+
+      \vspace{0.8em}
+      Once everything is normalised, the dot product \emph{is} the cosine. So similarity
+      search becomes one matrix multiplication, which is why it is fast.}
+  \end{columns}
+
+  \vspace{0.2em}
+  \watchbox{This is why libraries have a \texttt{normalize\_embeddings=True} flag, and why
+  forgetting it quietly changes your rankings. Cosine of 1 means same direction, 0 means
+  unrelated, and for text embeddings you will rarely see anything below about 0.6.}
+\end{frame}
+
+\begin{frame}{The corpus as points in space}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/08_embedding_space.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small Real vectors from a real multilingual model. Retrieval is now just: embed the
+  question, take the nearest chunks.}
+
+  \vspace{0.1em}
+  {\footnotesize\color{gray}Careful: the vectors really have \textbf{384} dimensions, so this
+  2-D shadow is an impression, not the retrieval signal. All \textbf{18} chunks are plotted,
+  only a few labelled.}
+\end{frame}
+
+\begin{frame}{How the vectors are trained to be useful}
+  \vspace{0.6em}
+  Collect pairs that belong together: a question and the passage that answers it.
+
+  \vspace{0.9em}
+  \begin{center}
+    \textbf{Pull each pair together. Push everything else apart.}
+  \end{center}
+
+  \vspace{0.9em}
+  \begin{center}
+    $\displaystyle
+      \mathcal{L} \;=\; -\log
+      \frac{\exp\!\big(\text{sim}(q, d^{+})/\tau\big)}
+           {\exp\!\big(\text{sim}(q, d^{+})/\tau\big) \;+\; \sum_{j}\exp\!\big(\text{sim}(q, d_j^{-})/\tau\big)}
+    $
+  \end{center}
+
+  \vspace{0.9em}
+  {\small Read it as a classification problem: among all candidate passages, the correct
+  one $d^{+}$ should get the highest similarity. $\tau$ is a \textbf{temperature}: small
+  $\tau$ sharpens the competition and punishes near-misses harder.}
+
+  \vspace{0.6em}
+  \watchbox{This objective is called \textbf{InfoNCE}. The name is not important; the shape
+  is: one positive on top, everything else pushed down.}
+\end{frame}
+
+\begin{frame}{The same loss, by hand}
+  \vspace{0.4em}
+  Query: \texttt{What pressure should the press run at for Lori cheese?}\\
+  Three candidate passages, real similarities from a real model:
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{llc}
+    \toprule
+    & \textbf{Passage} & \textbf{sim} \\
+    \midrule
+    $d^{+}$   & the press runs at 2.5 bar   & \textbf{0.834} \\
+    $d_1^{-}$ & pasteurisation, 72 degrees  & 0.779 \\
+    $d_2^{-}$ & ripening cellar, 10 degrees & 0.745 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  Divide each by $\tau$, exponentiate, normalise so they sum to 1, then the loss is
+  $-\log$ of the probability given to $d^{+}$:
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{lccc|c}
+    \toprule
+    & $p(d^{+})$ & $p(d_1^{-})$ & $p(d_2^{-})$ & \textbf{loss} \\
+    \midrule
+    $\tau = 1.0$  & 0.350 & 0.331 & 0.320 & 1.051 \\
+    $\tau = 0.1$  & \textbf{0.504} & 0.290 & 0.207 & \textbf{0.686} \\
+    $\tau = 0.05$ & \textbf{0.667} & 0.221 & 0.113 & \textbf{0.405} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{What that table just told you about temperature}
+  \vspace{0.7em}
+  At $\tau = 1$ the three probabilities are \textbf{0.350, 0.331, 0.320}. The model has
+  effectively said ``any of these three, I do not mind''.
+
+  \vspace{0.8em}
+  And yet the similarities were 0.834 against 0.745 - the right answer really was ahead. The
+  problem is that \textbf{all cosine similarities live in a narrow band}, so the gaps between
+  them are small in absolute terms.
+
+  \vspace{0.9em}
+  \keybox{$\tau$ divides before the exponential, so a small $\tau$ \textbf{stretches small
+  gaps into large ones}. It is the knob that turns ``0.834 versus 0.745'' into a confident
+  decision, and it is why the loss drops from 1.05 to 0.41 without a single weight changing.}
+
+  \vspace{0.6em}
+  {\small\color{gray}Keep this in mind: the narrow-band problem comes back twice more, once
+  for chunking and once for Armenian.}
+\end{frame}
+
+\begin{frame}{What that objective actually does}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.82\linewidth]{fig/09_contrastive_before_after.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small A real training run on toy data. Each line joins a query to its own passage.
+  Before training the pairs are scattered; afterwards each pair has collapsed onto a single
+  point and the gap between ``correct pair'' and ``any other pair'' has roughly doubled.}
+\end{frame}
+
+\begin{frame}{Where the negatives come from}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.40\linewidth]{fig/10_in_batch_negatives.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small For query $i$, the answer is passage $i$. Every other passage in the batch is a
+  free negative.}
+
+  \vspace{0.1em}
+  \keybox{64 pairs give 64 positives and 4{,}032 negatives, with no extra labelling. That is
+  why contrastive training is cheap.}
+\end{frame}
+
+\begin{frame}{Why this can possibly be fast enough}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/12_offline_vs_online.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  The query and the chunk are encoded \textbf{separately}. So every chunk vector can be
+  computed once, offline, and stored.
+
+  \vspace{0.6em}
+  \takebox{At query time you run the encoder \textbf{once}, on the question, then compare
+  vectors. This is the offline/online split from Section 1, and it is the entire reason
+  this approach is usable.}
+\end{frame}
+
+\begin{frame}{Back to the row we skipped}
+  \vspace{0.7em}
+  Remember the chunking table, and the one row we could not fill in:
+
+  \vspace{0.6em}
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    Long undivided walls of text & \textbf{semantic} & nothing else has a boundary to use \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  You now have everything that row needs. Embed each sentence, measure how similar each one
+  is to the next, and \textbf{cut where the similarity drops} - because a drop means the
+  topic changed.
+
+  \vspace{0.9em}
+  \keybox{This is the same offline pass we just described, used for a different purpose: not
+  to search the chunks, but to \textbf{decide where the chunks should begin}.}
+\end{frame}
+
+\begin{frame}{Semantic chunking, measured}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/18_semantic_chunking.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small On this passage the method found \textbf{both} real topic changes. It also invented
+  \textbf{two more}.}
+\end{frame}
+
+\begin{frame}{Semantic chunking is not free}
+  \vspace{0.7em}
+  Look at why it over-split. Every similarity between neighbouring sentences sits between
+  \textbf{0.819} and \textbf{0.876}:
+
+  \vspace{0.6em}
+  \begin{center}
+    {\large 0.876 \quad \color{armred}0.819\color{black} \quad \color{armred}0.827\color{black}
+     \quad \color{armred}0.827\color{black} \quad 0.833 \quad \color{armred}0.823\color{black}
+     \quad 0.861}
+  \end{center}
+
+  \vspace{0.9em}
+  The entire signal lives in a band \textbf{0.06 wide}. A threshold anywhere in there is
+  making very fine distinctions on very little evidence.
+
+  \vspace{0.9em}
+  \watchbox{Semantic chunking is a real technique, not a bad one. But it costs an embedding
+  pass over your whole corpus and hands you a \textbf{threshold to tune}. Paragraph chunking
+  costs nothing and has no knobs. Reach for this when you have measured that structure is
+  failing you, not by default.}
+\end{frame}
+
+\begin{frame}{Two shapes: encode apart, or encode together}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/11_bi_vs_cross_encoder.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small The \textbf{bi-encoder} is what we just built: fast, precomputable, and the query
+  never looks at the chunk. The \textbf{cross-encoder} reads both together, is far more
+  accurate, and must run once per pair - so it cannot search a million chunks.}
+
+  \vspace{0.3em}
+  \takebox{Next lecture: search wide with the cheap one, re-score the survivors with the
+  expensive one.}
+\end{frame}
+
+\begin{frame}{Practical: prefixes are not decoration}
+  \vspace{0.7em}
+  Many embedding models are trained \textbf{asymmetrically}: questions and passages are fed
+  in with different prefixes.
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{At index time} & \texttt{passage: Ripening cellars are held at 10 degrees\ldots} \\
+    \textbf{At query time} & \texttt{query: How warm is the ripening room?} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \trapbox{Forget the prefixes and nothing crashes. You simply get quietly worse retrieval,
+  with no error message anywhere. This is one of the most common silent bugs in a RAG
+  system.}
+\end{frame}
+
+\begin{frame}{Now run the hard query through both}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.68\linewidth]{fig/13_where_each_dies.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Measured on our 18-chunk corpus. On the paraphrase, BM25 scores exactly 0.000 and
+  lands at rank 17 of 18; the embedding model puts the right chunk at rank 4.}
+\end{frame}
+
+\begin{frame}{The honest comparison}
+  \vspace{0.6em}
+  It is tempting to say ``each method is better at different things''. Our own measurements
+  do not support that cleanly: on exact identifiers, the embedding model did \emph{just as
+  well} as BM25.
+
+  \vspace{0.9em}
+  The real difference is not who scores higher. It is what each one \textbf{guarantees}:
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{p{0.42\textwidth}p{0.42\textwidth}}
+    \toprule
+    \textbf{BM25} & \textbf{Embeddings} \\
+    \midrule
+    Score is non-zero \emph{if and only if} a query term literally appears.
+    &
+    Score is never exactly zero, and never guaranteed either. \\[0.5em]
+    Fails \textbf{completely} on rephrasing.
+    &
+    Degrades \textbf{gradually}, keeps finding roughly-related things. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \takebox{One guarantees exact terms. The other covers rephrasing. Neither gives both -
+  which is why the next lecture stops choosing.}
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{When your language is not English}
+\sectiontransition{When your language is not English}{Everything so far assumed a good
+embedding model exists for your language.}
+
+\begin{frame}{The assumption hiding in Section 4}
+  \vspace{0.7em}
+  Every claim about embeddings assumed the model represents your language well. For English
+  that is safe. For Armenian it is not.
+
+  \vspace{0.9em}
+  Two compounding problems:
+
+  \vspace{0.6em}
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{Tokenization.} English-centric vocabularies fragment Armenian
+      into many more pieces per word. You met this in the RNN chapter as the
+      \emph{Armenian tax}.
+    \item[\textbf{2.}] \textbf{Training data.} Multilingual models see far less Armenian than
+      English, so Armenian occupies a smaller, blurrier region of the space.
+  \end{enumerate}
+
+  \vspace{1.0em}
+  \watchbox{Blurry means everything looks moderately similar to everything. A generic
+  multilingual model scored our correct Armenian passage \textbf{0.854} and a completely
+  unrelated one \textbf{0.797}. A gap of 0.057 is not much to build a threshold on.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.4em}
+  \begin{center}
+    {\large On an Armenian retrieval benchmark, which scores higher?}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+      \begin{center}
+      \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.6pt, arc=2pt]
+        \textbf{Google's commercial}\\\textbf{embedding model}
+      \end{tcolorbox}
+      \end{center}
+    \column{0.46\textwidth}
+      \begin{center}
+      \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.6pt, arc=2pt]
+        \textbf{A 560M open model}\\\textbf{fine-tuned on 10{,}000}\\\textbf{synthetic pairs}
+      \end{tcolorbox}
+      \end{center}
+  \end{columns}
+
+  \vspace{1.6em}
+  \begin{center}
+  {\small\color{gray}Commit to an answer.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{ATE-2}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.6\linewidth]{fig/14_ate2_scores.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small \textbf{Armenian Text Embeddings 2 (ATE-2)}, from Metric AI Lab. Scores are the
+  average on an Armenian embedding benchmark, native Armenian text, higher is better.}
+\end{frame}
+
+\begin{frame}{The recipe is smaller than you would guess}
+  \vspace{0.4em}
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{fig/15_ate2_recipe.pdf}
+  \end{center}
+  \vspace{0.2em}
+  {\small Take the multilingual \textbf{mE5} encoder. Build 10{,}000 training pairs by
+  machine-translating English Reddit title/body pairs into Armenian. Fine-tune. That is the
+  whole method.}
+
+  \vspace{0.5em}
+  \keybox{The pairs are \textbf{noisy} translations, not a hand-curated corpus, and the
+  reported gain over the starting model is around 11 to 12 percent on average.}
+\end{frame}
+
+\begin{frame}{Two lessons worth more than the numbers}
+  \vspace{0.9em}
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{Bigger and more general is not automatically better for
+      \emph{your} language.}\\[0.3em]
+      {\small A 560M open model beat a large commercial one, because it was pointed at one
+      language instead of a hundred.}
+
+    \vspace{0.9em}
+    \item[\textbf{2.}] \textbf{Targeting beats volume.}\\[0.3em]
+      {\small Ten thousand noisy, automatically generated pairs were enough to match what
+      far larger training sets buy. You do not need a million examples to make a real
+      difference in a low-resource language.}
+  \end{enumerate}
+
+  \vspace{1.1em}
+  \takebox{If you build Armenian retrieval, start from a model adapted to Armenian, and
+  remember that producing your own domain pairs is a realistic project, not a research
+  programme.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.3em}
+  \small
+  \begin{itemize}
+    \item \textbf{RAG} is: retrieve the right text, then let the model read it. The
+      retrieval is the hard part.
+    \item It is \textbf{two pipelines}. Indexing runs once, offline; only the query path
+      runs per question.
+    \item \textbf{Chunking sets the ceiling} - nothing downstream recovers what it loses.
+      Paragraph chunking is the cheapest good default.
+    \item \textbf{tf-idf} = frequent here, rare elsewhere. Most of the way there, and it
+      still ranked our example wrong.
+    \item \textbf{BM25} = tf-idf plus two repairs: repetition saturates, long chunks get
+      discounted. Unbeatable on exact strings, \emph{exactly zero} on rephrasing.
+    \item \textbf{Cosine} measures angle, not length, so a long document is not penalised
+      for being long.
+    \item \textbf{Embeddings} are trained contrastively to pull questions and answers
+      together, and degrade gracefully where BM25 stops dead.
+    \item For \textbf{Armenian}, a targeted fine-tune on 10{,}000 pairs beat a commercial
+      model.
+  \end{itemize}
+
+\end{frame}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\bfseries\color{popblue} You can now retrieve.}\\[0.7em]
+    {\large You have two methods with complementary guarantees,}\\[0.25em]
+    {\large and no principled reason to pick one.}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.8pt, arc=3pt,
+                    width=0.82\textwidth]
+    \begin{center}
+      \textbf{Next:} extract the keywords, fuse the two ranked lists, and re-score what
+      survives with a model that finally lets the query and the chunk look at each other.
+
+      \vspace{0.5em}
+      {\small Whether combining them actually helps is a \textbf{measurement}, not a given.
+      Hold on to one fact from today: a BM25 rank means nothing when the score is zero.}
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+  \vfill
+\end{frame}
+
+\end{document}
+
+% ============================================================================
+% Provenance
+%
+% SOURCE MATERIAL (instructor-side, ml/ch17_rag/papers/ and ml/text_embedding/):
+%   - BM25 formulation, including the length-normalisation factor B (eq 3.12), the assembled
+%     scoring function (eq 3.15), the parameter ranges 1.2<k1<2 and 0.5<b<0.8, and the note
+%     that a (k1+1) numerator does not affect ranking: Robertson & Zaragoza (2009),
+%     "The Probabilistic Relevance Framework: BM25 and Beyond", papers/01, PDF pages 29-30
+%     and section 3.5. Read from the PDF, not from memory.
+%   - Bi-encoder / cross-encoder framing: Sentence-BERT, ml/text_embedding/papers/02.
+%   - Contrastive training and in-batch negatives: SimCSE (03) and E5 (04). The query:/
+%     passage: prefix convention is E5's.
+%   - ATE-2 numbers (0.805 / 0.774 / 0.767), the 278M/560M sizes, the mE5 base model, the
+%     10k translated-Reddit synthetic pairs and the 11-12% average gain: the ATE-2
+%     announcement, huggingface.co/blog/Metric-AI/ate-2, fetched 2026-08-10.
+%     NOTE: ml/text_embedding/papers/08 is ATE-1, a DIFFERENT model with different numbers
+%     (retrieval 58.15 -> 79.35). Never mix ATE-1 and ATE-2 figures on one slide.
+%
+% FIGURES - all Python-generated (py_src/ -> fig/), tagged REAL vs ILLUSTRATIVE:
+%   REAL (measured or exactly computed):
+%     02 chunking      - boundaries from actually running all five strategies
+%                        (l41_chunking_fig.py). Measured: fixed-60 splits the answer, and so
+%                        does fixed-60 WITH 15-char overlap, because the answer sentence is
+%                        67 chars. Sentence, paragraph and recursive keep it intact.
+%     04, 05           - the BM25 component functions plotted exactly
+%     06, 07           - exact BM25 arithmetic over three real chunks. The corpus statistics
+%                        (N=4000, df, avdl=20) describe a HYPOTHETICAL archive and are stated
+%                        as such in l41_data.py; the arithmetic on them is exact.
+%                        07 is a THREE-way comparison after the instructor asked for tf-idf:
+%                        raw count ranks D2/D1/D3, tf-idf ALSO ranks D2/D1/D3 (9.65 vs 8.62),
+%                        only BM25 ranks D1 first. That tf-idf also fails is the point of the
+%                        frame, and it was computed, not assumed.
+%     16, 17           - exact 2-D cosine arithmetic (l41_similarity_figs.py). The long
+%                        document is exactly 3x the short one: identical cosine 0.9919,
+%                        Euclidean distances 0.14 vs 1.97.
+%     18 semantic      - real e5-small similarity between consecutive sentences. MEASURED
+%                        OUTCOME: it found both true topic boundaries AND two false ones,
+%                        because every neighbour similarity sits in a 0.06-wide band
+%                        (0.819 to 0.876). The deck reports this honestly rather than
+%                        tuning the threshold until the answer looked clean.
+%     08, 10, 13       - real intfloat/multilingual-e5-small embeddings (l41_embed_figs.py)
+%     09               - a real InfoNCE training run on toy data, seed 509
+%     14               - ATE-2 scores transcribed from the announcement post
+%   ILLUSTRATIVE (schematic, no data):
+%     01 RAG loop, 03 recall ceiling (percentages invented, and the slide says so),
+%     11 bi/cross encoder, 12 offline/online, 15 ATE-2 recipe
+%
+% KEY PEDAGOGICAL DECISIONS:
+%   - The offline/online split is introduced in section 1 and called back three times
+%     (chunking, bi-encoder speed, prefixes). It is the spine of the deck.
+%   - Section 4 does NOT re-teach word vectors or cosine similarity: those were covered in
+%     ch7_rnn/L21 (word2vec, GloVe) and referenced in ch9_attention/L24. It signposts and
+%     starts from what changes for retrieval.
+%   - The Armenian tokenization figure was CUT: ch7_rnn/L21_road_to_attention.tex:259 already
+%     has "The Armenian tax" frame with real tiktoken measurements. Signposted instead.
+%
+% A CLAIM THAT DID NOT SURVIVE MEASUREMENT (important - do not reinstate):
+%   The chapter plan originally specified a mirrored "each method fails where the other
+%   succeeds" pair of frames, with dense retrieval failing on exact identifiers. Measured on
+%   the 18-chunk corpus with five competing part numbers, exact-identifier top-1 accuracy was
+%   BM25 4/5 and dense 4/5 - IDENTICAL. The claim was cut rather than shipped. What replaced
+%   it ("The honest comparison" frame) argues from guarantees, which follows from the scoring
+%   function and does not depend on corpus size. The vocabulary-mismatch result IS real and
+%   measured: BM25 scores exactly 0.000, rank 17/18, against dense rank 4.
+%   Full write-up: _learnings/2026-08-10-2016_rag-figure-contradicted-its-own-claim.md
+%   Measurement harness kept at py_src/probe_retrieval_claims.py.
+%
+% FORWARD POINTER:
+%   L42 - keyword extraction, reciprocal rank fusion, metadata filtering, reranking and the
+%   retrieve-then-rerank cascade, ColBERT late interaction, vector indexes (HNSW).
+%   L43 - context assembly, grounding, and evaluation.
+% ============================================================================

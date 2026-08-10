@@ -1,0 +1,1312 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Retrieval-Augmented Generation}
+\subtitle{Part 3: answering, and knowing whether you answered well}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+% Section transition slide: popblue title + one motivation line.
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Your retrieval works now}
+  \vspace{0.2em}
+  Two lectures of work later, the engineer asks again:
+
+  \vspace{0.3em}
+  \begin{center}
+    \includegraphics[width=0.78\linewidth]{fig/l43_01_cold_open_retrieval.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small The correct, current procedure - press manual revision 4 - comes back at
+  \textbf{rank 1}. Measured on our 20-chunk corpus with a real embedding model.}
+\end{frame}
+
+\begin{frame}{And here is the answer it produced}
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt, width=0.92\textwidth]
+    \small
+    \textit{``The Lori press runs at 2.5 bar. The pressure stays at 2.5 bar throughout the
+    pressing stage. This is the setting used for Lori cheese, and the same setting applies
+    to every press in the factory.''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.4em}
+  Every sentence is supported by a chunk that was actually retrieved. And the answer is
+  wrong: the \textbf{2024} revision raises the pressure to \textbf{3.2 bar} after twenty
+  minutes. The model quoted the \textbf{2019} revision, which was also sitting in the
+  context.
+
+  \vspace{0.7em}
+  \begin{center}
+  {\small\color{gray}The answer text is an illustration of this failure pattern, not a
+  captured model run. The retrieval above it is measured.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Every retrieval number was perfect}
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{What we measured} & \textbf{Score} & \\
+    \midrule
+    Did the right chunk come back first?      & 1.00 & \color{paramgreen}\textbf{perfect} \\
+    How high did it rank, on average?         & 1.00 & \color{paramgreen}\textbf{perfect} \\
+    Was the whole ordering sensible?          & 0.97 & \color{paramgreen}\textbf{near perfect} \\
+    \midrule
+    Was the answer right?                     & \color{armred}\textbf{no} & \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \trapbox{You can score a retrieval system perfectly and still ship a system that gives
+  wrong answers. Retrieval metrics measure \textbf{what arrived in the prompt}. They say
+  nothing about \textbf{what the model did with it}, and nothing about whether the corpus
+  itself is consistent.}
+
+  \vspace{0.5em}
+  \begin{center}
+  {\small\color{gray}By the end of this lecture you will know what those three numbers are,
+  and why all three missed.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{Assembling the context}
+\sectiontransition{Assembling the context}{You have a ranked list. The model needs a
+prompt. That is not the same object.}
+
+\begin{frame}{Three decisions between the list and the prompt}
+  \vspace{0.6em}
+  The retriever hands you 100 chunks with scores. You cannot paste 100 chunks. Someone has
+  to decide:
+
+  \vspace{0.9em}
+  \begin{columns}[T]
+    \column{0.31\textwidth}
+      \textbf{\color{popblue}How many?}\\[0.3em]
+      {\small A token budget you are paying for on every question.}
+    \column{0.31\textwidth}
+      \textbf{\color{popblue}In what order?}\\[0.3em]
+      {\small Position inside the prompt is not neutral.}
+    \column{0.31\textwidth}
+      \textbf{\color{popblue}Which are the same?}\\[0.3em]
+      {\small Overlapping chunks and old revisions repeat the same sentence.}
+  \end{columns}
+
+  \vspace{1.2em}
+  \keybox{This step has no model in it and no maths. It is plumbing. It is also where a
+  surprising share of real RAG bugs live, because nobody thinks it is worth attention.}
+\end{frame}
+
+\begin{frame}{How much actually fits}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/l43_02_token_budget.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Real token counts from one technical document of 24{,}519 tokens, cut into
+  800-character chunks. Equal-sized chunks are \emph{not} equal-cost: 150 to 340 tokens each,
+  because tables and formulas tokenize badly.}
+
+  \vspace{0.3em}
+  \watchbox{A 2{,}000-token context holds \textbf{11 of the 128 chunks} - 8.6\% of one
+  document. Your budget is far smaller than it feels.}
+\end{frame}
+
+\begin{frame}{Where in the prompt matters}
+  \vspace{0.7em}
+  Models do not read a prompt uniformly. A widely reproduced result (Liu et al., 2023) is
+  that accuracy is highest when the needed passage sits near the \textbf{start} or the
+  \textbf{end} of a long context, and lowest when it is buried in the middle.
+
+  \vspace{1.0em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Do} & \textbf{Why} \\
+    \midrule
+    Put the highest-scoring chunk first   & it is the one you are betting on \\
+    Keep the context short                & fewer places for the answer to hide \\
+    Label each chunk with an id           & so the model can cite it \\
+    Include the metadata line             & date and source change the reading \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \watchbox{Do not sort your chunks alphabetically, by document name, or by upload date
+  because it was easier to implement. Sort by score, and know that you did.}
+\end{frame}
+
+\begin{frame}{The same sentence, three times}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.72\linewidth]{fig/l43_03_dedup_similarity.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Measured on our corpus. The three chunks about press pressure - two revisions and
+  the original paragraph - all sit above 0.89. Two chunks with nothing in common still sit
+  at \textbf{0.767}.}
+\end{frame}
+
+\begin{frame}{The dedup trap}
+  \vspace{0.5em}
+  The obvious rule is: drop any chunk that is more than 0.90 similar to one you already
+  kept. Look at what that rule does here.
+
+  \vspace{0.9em}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      \textbf{\color{armred}What it deletes}\\[0.4em]
+      {\small Revision 2 and revision 4 score 0.952 against each other. One of them gets
+      dropped. Nothing in a cosine tells you which one is current.}
+    \column{0.47\textwidth}
+      \textbf{\color{armred}Why the threshold is a guess}\\[0.4em]
+      {\small Unrelated text already scores 0.767 on this model. The usable range is
+      0.77 to 1.00, not 0 to 1, and it moves when you change model.}
+  \end{columns}
+
+  \vspace{1.1em}
+  \takebox{Deduplicate on \textbf{metadata first} - same document, same section, newer
+  revision wins - and only then on similarity. A date is a fact. A cosine is an opinion.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Prompting so the answer stays grounded}
+\sectiontransition{Prompting so the answer stays grounded}{The model will happily answer
+from memory. You have to make that the harder option.}
+
+\begin{frame}{What all of that actually produces}
+  \vspace{0.3em}
+  {\footnotesize Three decisions, one filter, three chunks. This is the literal string the
+  model receives - nothing is hidden behind an abstraction:}
+
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt,
+                    width=0.96\textwidth, left=4pt, right=4pt, top=3pt, bottom=3pt]
+    \ttfamily\scriptsize
+    Answer the question using ONLY the context below.\\
+    Cite the block number you used, like [1].\\
+    If the context does not contain the answer, reply exactly: I don't know.\\[0.4em]
+    CONTEXT\\
+    \lbrack1\rbrack\ (press\_manual, rev 4, 2024)\\
+    Press manual revision 4, issued 2024: the Lori press starts at 2.5 bar and is\\
+    raised to 3.2 bar after twenty minutes.\\[0.3em]
+    \lbrack2\rbrack\ (equipment\_log, rev 1, 2022)\\
+    Model PRS-400 replaces the older PRS-220 press on line two.\\[0.4em]
+    QUESTION\\
+    What pressure should the Lori press run at?\\[0.4em]
+    ANSWER
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.2em}
+  {\footnotesize\color{gray}Produced by \texttt{ml/ch17\_rag/rag\_demo.py}, which you can run
+  and change. Retrieval, filtering and this prompt are about 140 lines in total.}
+\end{frame}
+
+\begin{frame}{The prompt is a contract}
+  \vspace{0.4em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.92\textwidth]
+    \small\ttfamily
+    Answer using ONLY the passages below.\\
+    After every sentence, cite the passage id, like [3].\\
+    If the passages do not contain the answer, reply exactly:\\
+    "I do not know from the documents I have."\\[0.6em]
+    {[1]} (rev.4, 2024) The Lori press starts at 2.5 bar, raised to\\
+    \phantom{[1]} 3.2 bar after twenty minutes.\\
+    {[2]} (rev.2, 2019) The Lori press is held at 2.5 bar throughout.\\[0.6em]
+    Question: What pressure should the Lori press run at?
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.4em}
+  \keybox{Three separate instructions: \textbf{restrict the source}, \textbf{demand a
+  citation}, \textbf{license a refusal}. Drop any one of them and you lose a different
+  guarantee.}
+\end{frame}
+
+\begin{frame}{Licensing ``I do not know''}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.68\linewidth]{fig/l43_04_grounding_outcomes.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \keybox{A model that never refuses will invent. A model that refuses too easily is
+  useless. This is a \textbf{trade-off you choose}, and where you set it depends on what a
+  wrong answer costs: a wrong pressure setting breaks a press, a wrong film recommendation
+  does not.}
+\end{frame}
+
+\begin{frame}{Making the refusal reachable}
+  \vspace{0.7em}
+  ``Say you do not know if you are unsure'' does not work well, because the model has no
+  calibrated sense of unsure. Give it a mechanical test instead:
+
+  \vspace{0.9em}
+  \begin{itemize}
+    \item \textbf{Name the exact refusal string.} A fixed sentence you can detect in code
+      and count. ``I do not know'' phrased twelve ways is not measurable.
+    \item \textbf{Make refusal a valid answer, not a failure.} If the prompt only shows
+      examples of successful answers, refusing looks off-distribution.
+    \item \textbf{Refuse per claim, not per question.} ``The pressure is 2.5 bar [1]; the
+      humidity is not in these documents'' beats refusing the whole thing.
+    \item \textbf{Add a retrieval-score floor.} If the best chunk scores far below what a
+      real match scores, do not call the model at all.
+  \end{itemize}
+
+  \vspace{0.9em}
+  \watchbox{The score floor needs a number, and that number is corpus-specific. Ours would
+  have to sit above 0.767, because that is what two unrelated chunks already score.}
+\end{frame}
+
+\begin{frame}{What a citation does and does not prove}
+  \vspace{0.8em}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+      \textbf{\color{paramgreen}A citation gives you}\\[0.5em]
+      {\small
+      A place to look.\\[0.4em]
+      A reader who can check in ten seconds.\\[0.4em]
+      A trail when the answer is later found to be wrong.}
+    \column{0.5\textwidth}
+      \textbf{\color{armred}A citation does not give you}\\[0.5em]
+      {\small
+      Any guarantee that the cited passage says it.\\[0.4em]
+      Any guarantee that the passage is current.\\[0.4em]
+      Any guarantee the model used it rather than attached it afterwards.}
+  \end{columns}
+
+  \vspace{1.2em}
+  \trapbox{Citations are a \textbf{verification aid}, not a correctness mechanism. The
+  system that produces the citation is the same system you do not trust. That is the whole
+  problem with checking a model's work using the model.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{How this breaks}
+\sectiontransition{How this breaks}{Four places a pipeline leaks, and the uncomfortable
+fact that your metrics only see two of them.}
+
+\begin{frame}{Where a pipeline leaks}
+  \vspace{0.3em}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/l43_05_failure_ladder.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small The green boxes are the ones a standard evaluation catches. The two hardest
+  failures - a destroyed chunk and a self-contradicting corpus - are in red.}
+
+  \vspace{0.25em}
+  \keybox{\footnotesize The first two leaks you have already met: \textbf{chunking} was
+  lecture 41's recall ceiling, \textbf{retrieval} was most of lecture 42. The next three
+  slides cover what is left - the failures that appear \emph{after} retrieval succeeded.}
+\end{frame}
+
+\begin{frame}{Failure 1: retrieved, and then ignored}
+  \vspace{0.7em}
+  The correct chunk is in the prompt. The model answers from its training data anyway.
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textbf{Context:} ``The Lori press starts at 2.5 bar\ldots''\\
+    \textbf{Answer:} ``Cheese presses typically operate between 4 and 6 bar.''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  It happens most when the retrieved fact \textbf{contradicts what the model already
+  believes}, and when the context is long enough that the relevant line is easy to skip.
+
+  \vspace{0.8em}
+  \takebox{Cheap defences: a shorter context, the relevant chunk placed first, and an
+  explicit ``only from the passages'' instruction. All three make the training-data answer
+  the harder path.}
+\end{frame}
+
+\begin{frame}{Failure 2: right answer, wrong citation}
+  \vspace{0.7em}
+  The answer is correct. The bracket after it points at the wrong passage.
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textit{``The ripening cellars are held at 10 degrees [2].''}\\[0.3em]
+    \ldots where passage [2] is the brine tank, and passage [4] is the cellar.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  This looks harmless and is not. It is the failure that \textbf{destroys trust fastest},
+  because it is the one a careful reader finds first: they click the citation, it does not
+  say that, and now they doubt everything else on the page.
+
+  \vspace{0.8em}
+  \watchbox{It is also easy to check mechanically: for every cited id, test whether that
+  passage actually supports that sentence. You do not need a human for this, and almost
+  nobody does it.}
+\end{frame}
+
+\begin{frame}{Failure 3: the sources disagree}
+  \vspace{0.6em}
+  This is the one from the cold open, and it is different in kind from the other two.
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.92\textwidth]
+    \small
+    \textbf{[1] rev.4, 2024:} starts at 2.5 bar, raised to 3.2 bar after twenty minutes.\\
+    \textbf{[2] rev.2, 2019:} held at 2.5 bar for the whole pressing stage.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  Retrieval did its job: both relevant chunks came back. Generation did its job: the answer
+  is grounded in a retrieved passage, with a citation. \textbf{The corpus is the thing that
+  is broken.}
+
+  \vspace{0.9em}
+  \trapbox{No metric in this lecture catches this, because every metric asks ``is the answer
+  supported by the context?'' and the answer is \textbf{yes}. Only \textbf{metadata} fixes
+  it: index the revision date, filter to current, and prefer the newest at retrieval time.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Measuring retrieval}
+\sectiontransition{Measuring retrieval}{Three numbers, each answering a different question.
+All three are computed by hand on this slide.}
+
+\begin{frame}{The cure, actually applied}
+  \vspace{0.4em}
+  We diagnosed the opening failure and prescribed a fix. Here it is running, on the same
+  question, with one line changed:
+
+  \vspace{0.5em}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      {\footnotesize\textbf{\color{armred}Before} - no filter}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        left=3pt, right=3pt, top=3pt, bottom=3pt]
+        \ttfamily\scriptsize
+        \lbrack1\rbrack\ rev 2, \textbf{2019}\\
+        \lbrack2\rbrack\ rev 4, 2024\\
+        \lbrack3\rbrack\ PRS-400 log
+      \end{tcolorbox}
+      {\footnotesize The superseded revision is \textbf{first}. The model quotes it, cites it
+      correctly, and is wrong.}
+    \column{0.47\textwidth}
+      {\footnotesize\textbf{\color{paramgreen}After} - \texttt{current == True}}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        left=3pt, right=3pt, top=3pt, bottom=3pt]
+        \ttfamily\scriptsize
+        \lbrack1\rbrack\ rev 4, \textbf{2024}\\
+        \lbrack2\rbrack\ PRS-400 log\\
+        \lbrack3\rbrack\ pasteurisation
+      \end{tcolorbox}
+      {\footnotesize The 2019 revision never reaches the prompt. The answer is now the
+      current procedure.}
+  \end{columns}
+
+  \vspace{0.7em}
+  \takebox{Nothing about the model, the embedder or the metrics changed. \textbf{One
+  metadata field and one filter} fixed a failure that every retrieval number called perfect.}
+\end{frame}
+
+\begin{frame}{What you need before any number exists}
+  \vspace{0.7em}
+  Every metric here needs the same thing: a list of questions where somebody has written
+  down \textbf{which chunk is the right one}.
+
+  \vspace{0.9em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Question} & \textbf{Correct chunk} \\
+    \midrule
+    ``How small do we chop it up?''              & curd cutting \\
+    ``How is the raw milk made safe\ldots?''      & pasteurisation \\
+    ``How hard does the machine squeeze the cheese?'' & press, 2.5 bar \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  Run the retriever on each question, find the \textbf{position} of the correct chunk in
+  the results, and every metric below is a function of those positions.
+
+  \vspace{0.8em}
+  \keybox{Where this list comes from when you have no users yet is a whole section of this
+  lecture. For now, assume somebody wrote it.}
+\end{frame}
+
+\begin{frame}{recall@k: did it get into the prompt at all?}
+  \vspace{0.6em}
+  \begin{center}
+    $\displaystyle \text{recall@}k \;=\;
+    \frac{\text{questions whose correct chunk is in the top } k}{\text{all questions}}$
+  \end{center}
+
+  \vspace{0.8em}
+  By hand, on the three questions above, with the positions our retriever actually
+  produced:
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Question} & \textbf{Position} & \textbf{in top 1?} & \textbf{in top 5?} \\
+    \midrule
+    chop it up          & 1  & \color{paramgreen}yes & \color{paramgreen}yes \\
+    raw milk made safe  & 2  & \color{armred}no      & \color{paramgreen}yes \\
+    squeeze the cheese  & 10 & \color{armred}no      & \color{armred}no \\
+    \midrule
+    & & \textbf{1/3 = 0.33} & \textbf{2/3 = 0.67} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \keybox{This is \textbf{the} metric for RAG. The generator reads all $k$ chunks, so it
+  does not care whether the answer was 1st or 5th - only whether it was there.}
+\end{frame}
+
+\begin{frame}{recall@k over the whole set}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.575\linewidth]{fig/l43_06_recall_at_k.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small Measured. Ignore the flat orange line for now - it comes back in two sections.}
+
+  \vspace{0.2em}
+  \watchbox{recall@$k$ only ever goes up with $k$. That is not a free win: bigger $k$ means
+  more tokens, more cost, and more places for the answer to hide.}
+\end{frame}
+
+\begin{frame}{Mean Reciprocal Rank: how high did it land?}
+  \vspace{0.4em}
+  \begin{center}
+    $\displaystyle \text{MRR} \;=\; \frac{1}{|Q|}\sum_{q \in Q} \frac{1}{\text{rank}_q}$
+  \end{center}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.66\linewidth]{fig/l43_07_mrr.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small \textbf{Mean Reciprocal Rank (MRR)} punishes depth harshly: rank 1 is worth ten
+  times rank 10, and rank 10 and rank 50 are almost the same number. It only looks at the
+  \emph{first} correct chunk.}
+\end{frame}
+
+\begin{frame}{When one hit is not the whole story}
+  \vspace{0.7em}
+  recall@$k$ and MRR both treat relevance as \textbf{yes or no}. Real questions are not
+  like that:
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{lc}
+    \toprule
+    \textbf{Chunk} & \textbf{How useful} \\
+    \midrule
+    Press manual rev.4, 2024 - the current, complete procedure & \textbf{3} \\
+    ``The Lori press operates at 2.5 bar\ldots'' - part of the answer & \textbf{2} \\
+    Press manual rev.2, 2019 - right topic, superseded & \textbf{1} \\
+    Brining, PRS-380 - unrelated & \textbf{0} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.4em}
+  {\footnotesize\color{gray}These grades are a \textbf{judgement call}, not a formula.
+  Someone else could defend giving the superseded revision a 0. Everything below is exact
+  arithmetic on a subjective input, which is the honest description of \emph{every} graded
+  relevance metric.}
+
+  \vspace{1.0em}
+  \keybox{We want a metric that (a) uses these \textbf{grades}, and (b) rewards putting the
+  3 above the 1. That is \textbf{normalized Discounted Cumulative Gain (nDCG)}.}
+\end{frame}
+
+\begin{frame}{nDCG, computed}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{fig/l43_08_ndcg.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small \textbf{Discounted Cumulative Gain (DCG)} adds up the grades, each divided by
+  $\log_2(\text{rank}+1)$. \textbf{Ideal DCG (IDCG)} is the same sum for the best possible
+  ordering, here $3, 2, 1, 0, 0$. Dividing one by the other puts the score on $[0,1]$ so
+  queries with different numbers of relevant chunks are comparable.}
+\end{frame}
+
+\begin{frame}{Reading nDCG honestly}
+  \vspace{0.6em}
+  Our retriever put a superseded 2019 document above a chunk that was more useful, and
+  still scored \textbf{0.97}.
+
+  \vspace{0.9em}
+  \begin{center}
+    $\displaystyle \text{nDCG@5} = \frac{4.631}{4.762} = 0.973$
+  \end{center}
+
+  \vspace{0.9em}
+  Two things are true at once:
+
+  \vspace{0.5em}
+  \begin{itemize}
+    \item Given the grades, 0.97 is \textbf{correct}. Swapping ranks 2 and 3 is a small
+      mistake and the metric says so.
+    \item The consequence of that small mistake was a \textbf{wrong answer}, because the
+      generator read the 2019 sentence and believed it.
+  \end{itemize}
+
+  \vspace{0.9em}
+  \trapbox{A retrieval metric scores the \emph{ordering}. It has no idea what the text
+  inside the chunks says, so it cannot know that rank 2 and rank 1 disagree with each
+  other.}
+\end{frame}
+
+\begin{frame}{Which one to actually report}
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{p{0.20\textwidth}p{0.34\textwidth}p{0.34\textwidth}}
+    \toprule
+    \textbf{Metric} & \textbf{Answers} & \textbf{Use it when} \\
+    \midrule
+    recall@$k$ & Did the answer make it into the prompt? & Always. This is the one that
+    caps your whole system. \\[0.4em]
+    MRR & How near the top was the first good chunk? & You show a ranked list to a person,
+    or $k$ is very small. \\[0.4em]
+    nDCG & Was the whole ordering sensible, with grades? & You have graded relevance and
+    a reranker to compare. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \takebox{Report \textbf{recall@$k$ at the $k$ you actually use in production}. A recall@100
+  of 0.99 is meaningless if you paste 5 chunks into the prompt.}
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{Measuring generation}
+\sectiontransition{Measuring generation}{Now the harder half: scoring an answer when nobody
+wrote down what the right answer was.}
+
+\begin{frame}{Three questions retrieval cannot answer}
+  \vspace{0.9em}
+  \begin{center}
+  \begin{columns}[T]
+    \column{0.30\textwidth}
+      \begin{center}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+        \textbf{Faithfulness}\\[0.4em]
+        {\small Is the answer supported by the context we gave it?}
+      \end{tcolorbox}
+      \end{center}
+    \column{0.30\textwidth}
+      \begin{center}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+        \textbf{Answer relevance}\\[0.4em]
+        {\small Does the answer address the question that was asked?}
+      \end{tcolorbox}
+      \end{center}
+    \column{0.30\textwidth}
+      \begin{center}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+        \textbf{Context precision}\\[0.4em]
+        {\small Was the context worth the tokens it cost?}
+      \end{tcolorbox}
+      \end{center}
+  \end{columns}
+  \end{center}
+
+  \vspace{1.2em}
+  \keybox{These three come from \textbf{Ragas} (Retrieval Augmented Generation Assessment),
+  2023. Their point is that all three can be computed \textbf{without a reference answer} -
+  which matters, because you do not have one.}
+\end{frame}
+
+\begin{frame}{Faithfulness: break the answer into claims}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{fig/l43_09_faithfulness.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  \begin{center}
+    $\displaystyle F \;=\; \frac{|V|}{|S|}
+    \quad\text{= supported statements / all statements}$
+  \end{center}
+  \vspace{0.2em}
+  {\small Split the answer into standalone statements, then check each one against the
+  context on its own.}
+\end{frame}
+
+\begin{frame}{What faithfulness measured, and what it missed}
+  \vspace{0.7em}
+  It caught the over-generalisation: nothing in the context says the setting applies to
+  every press. Good.
+
+  \vspace{0.9em}
+  It marked \textit{``the pressure stays at 2.5 bar throughout the pressing stage''} as
+  \textbf{supported} - and it is, by the 2019 revision that was sitting in the context.
+
+  \vspace{1.0em}
+  \trapbox{\textbf{Faithfulness checks each claim against the context. It never checks the
+  context against itself.} A perfectly faithful answer to an inconsistent corpus is still a
+  wrong answer.}
+
+  \vspace{0.9em}
+  \begin{center}
+  {\small\color{gray}This is not a flaw in the metric. It is the metric doing exactly what
+  it says, and you assuming it said more.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Answer relevance: run the question backwards}
+  \vspace{0.7em}
+  You have no reference answer, so you cannot compare to one. The trick:
+
+  \vspace{0.8em}
+  \begin{enumerate}
+    \item[\textbf{1.}] Hide the question. Show a model only the \textbf{answer}, and ask it
+      to write the question this answers.
+    \item[\textbf{2.}] Do that a few times, getting several reconstructed questions.
+    \item[\textbf{3.}] Measure how close those land to the \textbf{real} question, with the
+      embedding cosine from the retrieval lecture.
+  \end{enumerate}
+
+  \vspace{1.0em}
+  \keybox{If the answer really addressed the question, you can recover the question from
+  it. A vague or padded answer could have been written for many questions, so the
+  reconstructions drift.}
+
+  \vspace{0.7em}
+  {\small Note what this does \emph{not} check: nothing about truth. An answer can be
+  confidently wrong and perfectly relevant.}
+\end{frame}
+
+\begin{frame}{Answer relevance, measured}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{fig/l43_10_answer_relevance.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small Real cosines. A precise answer scores \textbf{0.948}; ``pressing is important and
+  the settings depend on the equipment'' scores \textbf{0.790}.}
+
+  \vspace{0.2em}
+  \watchbox{The vague answer still scores 0.790, and two unrelated chunks scored 0.767
+  earlier. \textbf{The scale does not start at zero.} Only the comparison between two
+  systems on the same data means anything.}
+\end{frame}
+
+\begin{frame}{Was the context worth its tokens?}
+  \vspace{0.5em}
+  \textbf{Context relevance}, as originally defined: of the sentences you pasted, how many
+  were needed?
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{lc}
+    \toprule
+    \textbf{Sentence in the cold-open context} & \textbf{Needed?} \\
+    \midrule
+    rev.4: starts at 2.5 bar, raised to 3.2 bar & \color{paramgreen}yes \\
+    rev.2: held at 2.5 bar throughout            & no \\
+    ``The Lori press operates at 2.5 bar\ldots''  & \color{paramgreen}yes \\
+    ``Cheese brining follows the pressing stage.'' & no \\
+    ``The brine tank is kept at 12 degrees\ldots'' & no \\
+    ``The PRS-380 is rated for harder cheeses\ldots'' & no \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  \begin{center}
+    $\displaystyle \text{context relevance} \;=\; \frac{2}{6} \;=\; 0.33$
+  \end{center}
+  \vspace{0.3em}
+  {\small Two thirds of what you paid for did nothing.}
+\end{frame}
+
+\begin{frame}{Context precision: reward putting them first}
+  \vspace{0.5em}
+  The version in current tooling works on \textbf{chunks} and cares about \textbf{order}:
+
+  \vspace{0.4em}
+  \begin{center}
+    $\displaystyle \text{context precision@}K \;=\;
+    \frac{\sum_{k=1}^{K} \text{precision@}k \cdot v_k}{\text{number of relevant chunks in the top }K}$
+  \end{center}
+  \vspace{0.2em}
+  {\small where $v_k = 1$ if the chunk at position $k$ is relevant, and precision@$k$ is the
+  fraction of the first $k$ chunks that are relevant.}
+
+  \vspace{0.6em}
+  Two retrievals, same two relevant chunks out of five:
+
+  \vspace{0.3em}
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Relevant at} & \textbf{Terms} & \textbf{Score} \\
+    \midrule
+    ranks 1, 2 & $\tfrac{1}{1}=1.00$, \; $\tfrac{2}{2}=1.00$ & $(1.00+1.00)/2 = \mathbf{1.00}$ \\
+    ranks 2, 4 & $\tfrac{1}{2}=0.50$, \; $\tfrac{2}{4}=0.50$ & $(0.50+0.50)/2 = \mathbf{0.50}$ \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  \takebox{Same chunks retrieved, half the score, because the junk was in front. This is the
+  metric that tells you a \textbf{reranker} would help.}
+\end{frame}
+
+\begin{frame}{Every one of these needs a judge}
+  \vspace{0.7em}
+  Look at what the three metrics actually required:
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Step} & \textbf{Who does it} \\
+    \midrule
+    Split an answer into standalone statements & a model \\
+    Decide whether a statement follows from the context & a model \\
+    Write the question that an answer answers & a model \\
+    Decide which sentences were needed & a model \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \keybox{This is \textbf{LLM-as-judge}, and it is not a shortcut anyone took out of
+  laziness. There is no formula that decides whether a sentence follows from a paragraph.
+  A human can do it; a human cannot do it 10{,}000 times a night, on every commit.}
+\end{frame}
+
+\begin{frame}{And every one of these judges is suspect}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/l43_11_judge_agreement.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Reported by the Ragas authors on 50 Wikipedia questions, against two human
+  annotators. The purpose-built pipeline agrees 0.95 of the time on faithfulness. Simply
+  asking a model ``which answer is better'' agrees \textbf{0.40} of the time - worse than
+  flipping a coin.}
+\end{frame}
+
+\begin{frame}{How to use a judge without lying to yourself}
+  \vspace{0.7em}
+  \begin{itemize}
+    \item \textbf{Decompose the task.} ``Is this statement supported, yes or no'' is a
+      question a model answers well. ``Score this answer out of 10'' is not.
+    \item \textbf{Calibrate once against humans.} Label 50 examples yourself. If the judge
+      disagrees with you 30\% of the time, its scores are decoration.
+    \item \textbf{Use it for comparison, never as an absolute.} ``0.81'' means nothing.
+      ``0.81 versus 0.74 for last week's version, same judge, same questions'' means
+      something.
+    \item \textbf{Freeze the judge.} Change the judge model or its prompt and every previous
+      number becomes uncomparable. Version it like code.
+    \item \textbf{Watch the known biases.} Judges prefer longer answers, prefer whichever
+      candidate is shown first, and prefer text written by themselves.
+  \end{itemize}
+
+  \vspace{0.7em}
+  \trapbox{Never let the judge be the same model, with the same prompt, as the generator.
+  You are asking it to mark its own homework.}
+\end{frame}
+
+\begin{frame}{Which generation number to reach for}
+  \vspace{0.3em}
+  {\small Six numbers is too many to compute every time you touch something. Reach for them
+  in this order:}
+
+  \vspace{0.4em}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{p{0.23\textwidth}p{0.24\textwidth}p{0.38\textwidth}}
+    \toprule
+    \textbf{Symptom} & \textbf{Measure first} & \textbf{Because} \\
+    \midrule
+    Plausible but wrong &
+    \textbf{recall@k} &
+    if the chunk never arrived, nothing after it matters \\[0.25em]
+    Right chunk there, answer still wrong &
+    \textbf{faithfulness} &
+    separates ``ignored the context'' from ``context was bad'' \\[0.25em]
+    Faithful, still wrong &
+    \textbf{look at the corpus} &
+    no metric catches a corpus that contradicts itself \\[0.25em]
+    Answer drifts off the question &
+    \textbf{answer relevance} &
+    catches waffle that is technically supported \\[0.25em]
+    Costs too much, quality fine &
+    \textbf{context precision} &
+    how much of the prompt earned its tokens \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.25em}
+  \takebox{\scriptsize Always upstream first. \textbf{recall@k is the cheapest and most
+  upstream}, so it is almost always the right first measurement - and the one most often
+  skipped in favour of staring at the generated text.}
+\end{frame}
+
+\begin{frame}{The cold open, scored}
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{lcl}
+    \toprule
+    \textbf{Metric} & \textbf{Score} & \textbf{What it was looking at} \\
+    \midrule
+    recall@1              & 1.00 & the right chunk came back first \\
+    MRR                   & 1.00 & it came back first \\
+    nDCG@5                & 0.97 & the ordering was nearly ideal \\
+    faithfulness          & 0.75 & 3 of 4 claims supported by the context \\
+    answer relevance      & high & it is clearly an answer about press pressure \\
+    context relevance     & 0.33 & most of the context was wasted \\
+    \midrule
+    \textbf{correct?}     & \color{armred}\textbf{no} & \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \takebox{The only number that looked bad was context relevance, and it was bad for an
+  unrelated reason. \textbf{Metrics are necessary and not sufficient.} Read some of your
+  system's answers, by hand, every week. There is no substitute and there never has been.}
+\end{frame}
+
+% ============================================================ SECTION 6
+\section{Building an eval set from nothing}
+\sectiontransition{Building an eval set from nothing}{You have a corpus, no users, and no
+labelled questions. Start anyway.}
+
+\begin{frame}{The obvious idea, and it is a good one}
+  \vspace{0.7em}
+  Take a chunk. Ask a model to write a question that this chunk answers. Now you have a
+  labelled pair, because \textbf{you know which chunk it came from}.
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textbf{Chunk:} ``Ripening cellars are held at 10 degrees and 85 percent humidity.''\\[0.3em]
+    $\rightarrow$ \textbf{Question:} ``At what temperature and humidity are ripening cellars
+    held?''\\[0.3em]
+    $\rightarrow$ \textbf{Correct chunk:} this one, by construction.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  Two hundred chunks, two hundred questions, one afternoon, no annotators.
+
+  \vspace{0.7em}
+  \keybox{This is genuinely the right first move. It gets you from ``no idea'' to
+  ``measurable'' in a day. But it has one specific defect, and it is worth a slide.}
+\end{frame}
+
+\begin{frame}{The defect, measured}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.82\linewidth]{fig/l43_12_eval_set_trap.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Same eight facts, same corpus, same retriever. The generated questions reuse the
+  chunk's own words, so both retrievers find them \textbf{every time}. Phrase the same eight
+  questions the way a person would, and BM25 drops to \textbf{0.00} and embeddings to
+  \textbf{0.38}.}
+\end{frame}
+
+\begin{frame}{Your eval set was measuring the wrong thing}
+  \vspace{0.6em}
+  A question copied from a chunk shares that chunk's vocabulary. Retrieval by shared words
+  is then trivial. \textbf{This is nearly a tautology} - which is exactly why it is
+  dangerous. It looks like a measurement.
+
+  \vspace{0.9em}
+  \trapbox{Your dashboard reports recall@1 = 1.00. Your users experience something much
+  worse. Nothing in the pipeline is broken and nothing in the dashboard is lying.}
+
+  \vspace{0.9em}
+  \begin{center}
+  {\small\color{gray}Honest caveat: our eight ``as asked'' questions were deliberately
+  written to avoid the chunk's words, so 0.008 word overlap is an extreme. Real user
+  questions land in between. The gap is smaller than this - it is never zero.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Fixing it}
+  \vspace{0.8em}
+  \begin{itemize}
+    \item \textbf{Instruct the generator to paraphrase.} ``Ask as a factory worker who has
+      never read this document would ask, using none of its technical terms.''
+    \item \textbf{Generate several styles per chunk.} Terse, rambling, misspelled, in
+      Armenian, with the part number, without it.
+    \item \textbf{Add multi-chunk questions on purpose,} so single-shot retrieval cannot
+      pass by accident.
+    \item \textbf{Read a sample yourself and throw out the bad ones.} Twenty minutes of
+      this is worth more than another thousand generated questions.
+    \item \textbf{Replace them with real ones as soon as you have real ones.} Log user
+      questions from day one. Fifty real questions beat five hundred synthetic ones.
+    \end{itemize}
+
+  \vspace{0.8em}
+  \takebox{Synthetic questions are \textbf{scaffolding}, not a benchmark. They tell you
+  whether you broke something between Tuesday and Wednesday. They do not tell you how good
+  your system is.}
+\end{frame}
+
+% ============================================================ SECTION 7
+\section{Beyond the naive pipeline}
+\sectiontransition{Beyond the naive pipeline}{Everything so far assumed one question, one
+search, one answer. Drop that assumption.}
+
+\begin{frame}{The question is not always the query}
+  \vspace{0.7em}
+  Users do not type search queries. They type this:
+
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    \textbf{User:} What pressure does the Lori press run at?\\
+    \textbf{System:} 2.5 bar, raised to 3.2 bar after twenty minutes [1].\\
+    \textbf{User:} \textit{And the other one?}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.9em}
+  Embedding ``And the other one?'' retrieves nothing useful, because on its own it means
+  nothing.
+
+  \vspace{0.9em}
+  \keybox{\textbf{Query rewriting}: before retrieving, use the conversation so far to write
+  a standalone query - ``What pressure does the PRS-380 press run at?'' - and search with
+  that. Cheap, mechanical, and the single highest-value addition to a chat-shaped RAG
+  system.}
+\end{frame}
+
+\begin{frame}{Search with the answer you do not have}
+  \vspace{0.6em}
+  A question and its answer often share no vocabulary - the whole problem from lecture one.
+  So do not search with the question.
+
+  \vspace{0.8em}
+  \begin{enumerate}
+    \item[\textbf{1.}] Ask a model to \emph{invent} a plausible answer. It will be wrong.
+      That is fine.
+    \item[\textbf{2.}] Search with that fake answer instead of the question.
+    \item[\textbf{3.}] A fake answer looks like a passage, so it lands near real passages.
+  \end{enumerate}
+
+  \vspace{0.9em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.92\textwidth]
+    \small
+    \textbf{Question:} ``How warm is the room where the cheese matures?''\\[0.3em]
+    \textbf{Invented answer:} ``The maturing room is kept cool and damp. Temperature is held
+    at around \textbf{11 degrees} with high relative humidity so the rind does not dry out.''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.5em}
+  {\small The real chunk says \textbf{10} degrees. The invented answer is factually wrong.
+  \textbf{Hypothetical Document Embeddings (HyDE)} does not care - it only needs the fake
+  answer to be shaped like the real one.}
+\end{frame}
+
+\begin{frame}{HyDE, measured on our corpus}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.74\linewidth]{fig/l43_13_hyde.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Real measurement. Embeddings: rank 4 $\rightarrow$ rank 1. BM25 is the striking
+  one: the question shares no content word with the chunk, so it scores \textbf{exactly
+  0.000} and lands last. The invented answer scores \textbf{3.857} and ranks first.}
+
+  \vspace{0.2em}
+  \watchbox{The price is an extra model call before every search: more latency, more cost,
+  and a hallucinated passage in your pipeline that must never reach the user.}
+\end{frame}
+
+\begin{frame}{Some questions need two searches}
+  \vspace{0.7em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.86\textwidth]
+    \small ``What pressure does the press that replaced the PRS-220 run at?''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.7em}
+  {\scriptsize\color{gray}Three presses here: \textbf{PRS-220} (recalled, 2019),
+  \textbf{PRS-400} (its replacement), \textbf{PRS-380} (harder cheeses).}
+
+  No single chunk answers this. You need \textbf{``PRS-400 replaces the older PRS-220''},
+  and then, knowing the model number, the chunk about the press pressure. One search cannot
+  use a fact it has not read yet.
+
+  \vspace{0.8em}
+  \begin{center}
+  {\small On our 20-chunk corpus, one embedding search put the two needed chunks at ranks
+  \textbf{1} and \textbf{8} - so a top-5 prompt is missing half the answer.}
+  \end{center}
+
+  \vspace{0.6em}
+  \watchbox{\small Honest caveat: BM25 happened to get both into its top 5 here, because the
+  question contains the word ``pressure''. With 20 chunks that is luck, not evidence. The
+  structural point stands: the second hop depends on a fact the first hop supplies.}
+\end{frame}
+
+\begin{frame}{Letting the system decide how many searches}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/l43_14_agentic_loop.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small \textbf{Agentic retrieval}: the model writes its own search query, reads the
+  result, and decides whether it needs another one. Multi-hop stops being a special case.}
+
+  \vspace{0.2em}
+  \watchbox{You trade a fixed cost for an unbounded one. Cap the number of loops, log every
+  query it writes, and expect a question that never terminates.}
+\end{frame}
+
+\begin{frame}{When no chunk can hold the answer}
+  \vspace{0.7em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.88\textwidth]
+    \small ``Which suppliers are involved in the incidents that led to a recall?''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.5em}
+  The answer is spread across forty documents and exists only as a \textbf{pattern between}
+  them. Top-$k$ retrieval returns five paragraphs, and five paragraphs cannot contain a
+  pattern over forty.
+
+  \vspace{0.5em}
+  \keybox{\textbf{Graph RAG}: while indexing, extract entities and relationships from each
+  chunk - supplier, press, incident, recall - and build a graph. At query time, traverse the
+  graph, then retrieve the text behind the relevant nodes.}
+
+  \vspace{0.4em}
+  \watchbox{The indexing cost is large: a model call per chunk, redone whenever the corpus
+  changes. Use it when your questions are genuinely about connections.}
+\end{frame}
+
+% ============================================================ SECTION 8
+\section{When not to use RAG}
+\sectiontransition{When not to use RAG}{The most useful thing this chapter can teach you is
+when to close the tab.}
+
+\begin{frame}{Four questions to ask first}
+  \vspace{0.3em}
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{fig/l43_15_when_not_rag.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small Retrieval is for \textbf{unstructured text that does not fit}. If your data is
+  structured, small, or the problem is not about knowledge at all, you are building
+  machinery you do not need.}
+\end{frame}
+
+\begin{frame}{The four alternatives, concretely}
+  \vspace{0.7em}
+  \begin{itemize}
+    \item \textbf{It is a database question.} ``How many wheels did line two produce in
+      March?'' is a \texttt{SELECT}. Embedding your sales table is a way of getting a slower,
+      less reliable \texttt{SUM}.
+    \item \textbf{The whole corpus fits.} Ten policy documents, 40{,}000 tokens, a handful
+      of questions a day: paste them and skip the pipeline. Retrieval is a response to
+      \emph{scale}.
+    \item \textbf{The problem is behaviour, not knowledge.} If the answers are factually
+      right but the tone, format or language is wrong, retrieval cannot fix it. That is
+      fine-tuning, or a better prompt.
+    \item \textbf{The question is about everything.} Counting, averaging, ranking across
+      the whole corpus. Next slide.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \takebox{Reach for RAG when the corpus is large, textual, changing, and the questions are
+  answerable from a \textbf{few} passages. That is a narrow target, and it is a very common
+  one.}
+\end{frame}
+
+\begin{frame}{Why RAG cannot count}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.64\linewidth]{fig/l43_16_aggregation.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Illustrative archive: 400 incident reports, of which 37 mention the press. A
+  top-$k$ retriever hands the model at most $k$ of them, so the model counts $k$ and reports
+  it with total confidence.}
+
+  \vspace{0.2em}
+  \trapbox{The failure is \textbf{structural}, not a tuning problem. A better embedder, a
+  reranker or a bigger model changes nothing. Count in a database, then hand the number to
+  the model.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.3em}
+  \small
+  \begin{itemize}
+    \item \textbf{Assembly is plumbing that matters}: token budget, order, and dedup on
+      metadata, not on a cosine whose floor here was 0.77.
+    \item \textbf{The prompt is a contract}: restrict the source, demand citations, license
+      a refusal. A citation is a place to look, not a proof.
+    \item \textbf{recall@$k$}, at the $k$ you really use, is the metric that matters. MRR
+      and nDCG describe the ordering, not the outcome.
+    \item \textbf{Faithfulness, answer relevance, context precision} score generation with
+      no reference answer - all three need a model as the judge, and \textbf{the judge is
+      suspect}: purpose-built prompts agree with humans 0.95 of the time, ``which is
+      better?'' agrees 0.40.
+    \item \textbf{Synthetic eval sets flatter you}: recall@1 of 1.00 on copied questions,
+      0.38 on the same facts in a user's words.
+    \item \textbf{Sometimes the answer is not RAG}: SQL, a longer prompt, or a fine-tune.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \takebox{\small \textbf{Measure the generation, not just the search - and read the
+  answers yourself.}}
+\end{frame}
+
+\end{document}
+
+% ============================================================================
+% Provenance
+%
+% SOURCE MATERIAL (instructor-side):
+%   - Faithfulness (F = |V|/|S|), answer relevance (mean cosine between the real question
+%     and n questions regenerated from the answer), and context relevance (extracted
+%     sentences / total sentences): Ragas, Es et al. (2023), arXiv 2309.15217, section 3.
+%     Read from papers/llm_readable/06_ragas_2309.15217.txt, not from memory.
+%   - The judge-agreement bars (0.95/0.78/0.70, 0.72/0.52/0.63, 0.54/0.40/0.52) are Table 1
+%     of that paper: agreement with two human annotators on WikiEval, 50 Wikipedia pages.
+%   - Context precision@K = sum_k (precision@k * v_k) / (relevant items in top K): the
+%     current Ragas library definition, verified against docs.ragas.io 2026-08-10. The
+%     2023 paper defines the sentence-level "context relevance" instead; the deck shows
+%     both and says which is which.
+%   - The position effect in long contexts ("lost in the middle"): Liu et al. (2023),
+%     cited qualitatively with NO curve drawn, because the paper is not in papers/.
+%
+% FIGURES - all Python-generated (py_src/l43_*.py -> fig/l43_*.pdf):
+%   REAL (measured at generation time or exact arithmetic on stated inputs):
+%     01 cold-open retrieval  - real e5-small cosines over the 20-chunk corpus
+%     02 token budget         - real tiktoken cl100k_base counts over a real 24,519-token
+%                               document (papers/llm_readable/01) cut at 800 characters
+%     03 dedup similarity     - real e5-small cosines between the revision chunks
+%     06 recall@k             - measured ranks on the 8-question eval set
+%     07 MRR                  - three of those measured ranks, arithmetic exact
+%     08 nDCG                 - measured cold-open ranking; relevance GRADES are a human
+%                               judgement by one stated rule, the arithmetic is exact
+%     09 faithfulness         - exact 3/4 on a stated four-statement decomposition of an
+%                               illustrative answer (the slide says the answer is illustrative)
+%     10 answer relevance     - real e5-small cosines; the reconstructed questions are
+%                               hand-written stand-ins for the generation step, stated as such
+%     11 judge agreement      - transcribed from Ragas Table 1
+%     12 eval-set trap        - measured word overlap and recall@1, both question sets
+%     13 HyDE                 - measured ranks, question vs invented answer, dense and BM25
+%     16 aggregation          - exact arithmetic on stated archive parameters (400/37)
+%   ILLUSTRATIVE (schematic, no data, no numbers shown):
+%     04 grounding outcomes, 05 failure ladder, 14 agentic loop, 15 when-not-to-use-RAG
+%
+% MEASUREMENT DISCIPLINE (this chapter's standing rule):
+%   Both question sets in l43_data.py EVAL_SET were written and committed BEFORE the first
+%   measurement run, so the outcome could not be tuned. Probes: py_src/l43_probe_claims.py
+%   (model-backed) and py_src/l43_probe_metrics.py (arithmetic). Every number on a slide
+%   appears in logs/l43_probe_*.log first.
+%
+% CLAIMS THAT DID NOT SURVIVE MEASUREMENT (do not reinstate):
+%   - The intended cold open was "the model blends the 3 bar fault threshold into its
+%     answer". Measured: the fault chunk ranks 7th for that query under both BM25 and
+%     dense, so it would never reach a top-5 prompt. The cold open was rebuilt around what
+%     the retriever actually returns - two contradictory revisions of the same procedure at
+%     ranks 1 and 2 - which is a better lesson anyway.
+%   - The intended multi-hop claim was "single-shot retrieval cannot get both chunks".
+%     Measured: dense put them at ranks 1 and 8 (fails at k=5), but BM25 put them at 1 and 4
+%     (succeeds). The slide reports both and states that a 20-chunk corpus cannot settle it.
+%   - No claim about long-context accuracy is drawn as a curve; the source is not local.
+%
+% KEY PEDAGOGICAL DECISIONS:
+%   - The cold open shows PERFECT retrieval metrics with a WRONG answer, which is the exact
+%     gap L41/L42 leave the student in. It is scored again at the end of section 5, so the
+%     deck closes its own loop.
+%   - Three separate frames make the same structural point with independent measurements:
+%     the cosine floor is high (0.767 unrelated), so a similarity threshold is corpus- and
+%     model-specific and absolute scores mean nothing. Dedup, answer relevance, refusal floor.
+%   - recall@k, MRR and nDCG are each worked by hand on a small concrete example before any
+%     aggregate curve appears, per the chapter's teaching stance.
+%   - Reranking is NOT taught here - it is L42's. This deck only points at it once, as the
+%     thing context precision would tell you to add.
+%
+% FORWARD POINTER:
+%   End of the chapter. Homework on the rag.qmd page: build and evaluate a small retriever
+%   over an Armenian corpus, including an eval set generated from its own chunks.
+% ============================================================================

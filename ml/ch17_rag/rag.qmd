@@ -1,0 +1,92 @@
+---
+title: "17 RAG — որոնում և գեներացիա"
+---
+
+::: {.callout-warning}
+🚧 Երեք դասախոսության սլայդերն էլ պատրաստ են (L41, L42, L43)։ Տեսանյութ և տնային աշխատանք դեռ չկա։
+:::
+
+::: {.callout-note}
+Հենվում է **ch7-ի (word2vec, բառային վեկտորներ, cosine similarity)** և **ch9-ի (attention, encoder-ներ)** վրա։ L41-ը **չի** վերաուսուցանում բառային վեկտորները — ենթադրում է, որ դրանք արդեն տեսել եք L21-ում։
+:::
+
+# 🎲 Random
+
+TBD
+
+# 📚 Նյութը
+
+Երեք դասախոսություն (սլայդերը `ml/ch17_rag/` պանակում)։
+
+- **L41 — Retrieval: finding the right context** — ամբողջ գլխի դժվար կեսը՝ **ինչպե՞ս գտնել այն մեկ պարբերությունը** 4,000 փաստաթղթի մեջ։ Chunking-ը (հինգ ռազմավարություն), **tf-idf**-ը և ապա **BM25**-ը՝ ամբողջական արտածմամբ և ձեռքով հաշված օրինակով, cosine similarity-ի հիշեցում, **embedder**-ները՝ contrastive ուսուցմամբ (**InfoNCE**-ը նույնպես ձեռքով հաշված, in-batch negatives), semantic chunking-ը՝ որպես embedder-ների առաջին կիրառություն, և վերջում՝ **հայերենը և ATE-2**-ը։ [PDF](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/ch17_rag/L41_rag_retrieval.pdf)
+- **L42 — Combining and refining** — keyword extraction (RAKE, YAKE, KeyBERT), query expansion, RRF-ով երկու ցուցակի ձուլում, metadata filtering, reranking և cascade-ը, ColBERT-ի MaxSim, վեկտորային ինդեքսներ և քվանտացում։ [PDF](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/ch17_rag/L42_rag_hybrid_rerank.pdf)
+- **L43 — Generation and evaluation** — context assembly, grounding, ինչպես է կոտրվում, չափումներ (recall@k, MRR, nDCG, faithfulness), eval set զրոյից, HyDE և agentic RAG, և երբ **չարժե** RAG օգտագործել։ [PDF](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/ch17_rag/L43_rag_generation_eval.pdf)
+
+::: {.callout-important}
+## Գլխի ամենակարևոր թիվը — BM25-ը չի վատանում, այն պարզապես կանգ է առնում
+
+Chunk-ը՝ *"Ripening cellars are held at 10 degrees and 85 percent humidity."*
+Հարցը՝ *"How warm is the room where the cheese matures?"*
+
+Chunk-ը **հենց պատասխանն է**։ Ընդհանուր բովանդակային բառ՝ **ոչ մեկը**։
+
+| Մեթոդ | Ճիշտ chunk-ի տեղը | Միավոր |
+|---|---|---|
+| **BM25** | 17-րդը 18-ից | **ուղիղ 0.000** |
+| **Embedder** | 4-րդը 18-ից | 0.801 |
+
+BM25-ի միավորը զրո է **ոչ թե ցածր** — բանաձևը գումար է query-ի բառերի վրա, և եթե ոչ մի բառ չկա, գումարը զրո է։ Այսինքն՝ BM25-ը չի կարծում, թե սա թույլ համընկնում է․ **այն ընդհանրապես չի տեսնում այս chunk-ը**։
+
+**Այս մեկ փաստը վերադառնում է L42-ում** և բացատրում, թե ինչու hybrid-ը մեր տվյալների վրա չաշխատեց։
+:::
+
+::: {.callout-warning}
+## Երկու պնդում, որոնք չդիմացան չափմանը
+
+Երկուսն էլ **հանվեցին սլայդերից** և փոխարինվեցին չափված արդյունքով։
+
+**1. «Embedder-ը վատ է ճշգրիտ համարների վրա»։** 18 chunk, հինգ մրցակցող մասերի համար (`PRS-400`, `PRS-220`, `PRS-380`, `PRS-410`, `VAC-400`)՝ top-1 ճշտությունը **BM25 4/5, embedder 4/5** — նույնը։ Փոխարենը գրվեց այն, ինչ բխում է բանաձևից․ BM25-ը տալիս է **երաշխիք**, embedder-ը՝ **ծածկույթ**։
+
+**2. «Hybrid-ը հաղթում է երկուսին էլ»։** 16 հարց, 18 chunk.
+
+| Մեթոդ | MRR | Ամենավատ տեղը |
+|---|---|---|
+| BM25 | 0.837 | 17 |
+| **Dense** | **0.922** | **4** |
+| RRF hybrid | 0.913 | 9 |
+
+RRF-ը հաղթեց BM25-ին բայց **պարտվեց dense-ին**, և paraphrase հարցը դարձրեց **ավելի վատ** (4 → 9)։ Պատճառը հենց վերևի թիվն է․ RRF-ը տեսնում է **տեղերը, ոչ թե միավորները**, ուստի չի կարող հասկանալ, որ BM25-ի 17-րդ տեղը զրոյական միավորի պատահական աղմուկ էր — և միևնույն է հաշվում է այն որպես ձայն։
+
+`l42_retrieval_figs.py`-ը **սխալ է նետում**, եթե hybrid-ը երբևէ հաղթի երկուսին էլ, որպեսզի բացասական արդյունքը լուռ չհնանա։
+:::
+
+::: {.callout-tip}
+## Չորս գաղափար, որ արժե հիշել նույնիսկ եթե RAG երբեք չկառուցեք
+
+- **Chunking-ը դնում է առաստաղը։** Եթե chunking-ը կորցրեց պատասխանը, ոչ մի հետագա քայլ այն **չի վերականգնի**։ Overlap-ը չի փրկում՝ չափված՝ 60 նիշանոց chunk-երը 15 նիշ overlap-ով **դեռ** կիսում են 67 նիշանոց նախադասությունը։
+- **tf-idf-ը դեռ բավարար չէ։** Նույն օրինակի վրա՝ պարզ հաշվարկը սխալ է, **tf-idf-ը նույնպես սխալ է** (9.65 ընդդեմ 8.62), և միայն BM25-ն է ճիշտ։ BM25 = tf-idf + երկու նորոգում։
+- **Ձեր eval set-ը կարող է ստել։** Երբ հարցերը արտագրված են հենց chunk-երից՝ recall@1 = **1.00** երկու մեթոդի համար։ Երբ հարցերը գրված են այնպես, ինչպես մարդիկ իրականում հարցնում են՝ dense **0.375**, BM25 **0.000**։ Նույն համակարգը, նույն տվյալները։
+- **Ավելի մեծն ու ավելի ընդհանուրը ավտոմատ ավելի լավը չէ ձեր լեզվի համար։** ATE-2-large-ը (560M, բաց) **0.805**, gemini-embedding-001-ը՝ **0.774**։ Բաղադրատոմսը՝ mE5 + **10,000** աղմկոտ սինթետիկ զույգ։
+:::
+
+::: {.callout-note}
+## Աշխատող կոդ — `rag_demo.py`
+
+Ամբողջ pipeline-ը մեկ ֆայլում, ~140 տող, առանց աբստրակցիաների.
+`chunk → embed → BM25 + dense → RRF → metadata filter → prompt`։
+
+```bash
+USE_TF=0 ./ma/Scripts/python.exe ml/ch17_rag/rag_demo.py
+USE_TF=0 ./ma/Scripts/python.exe ml/ch17_rag/rag_demo.py --no-filter
+```
+
+Այն **չի** կանչում լեզվական մոդել — կանգ է առնում prompt-ի վրա և տպում է այն։ Հենց prompt-ն է այն բանը, որ սովորաբար չեք տեսնում։
+
+`--no-filter`-ով վերարտադրվում է L43-ի cold open-ը․ **2019 թվականի հնացած տարբերակը հայտնվում է `[1]` դիրքում**, 2024-ի ընթացիկից առաջ։ Առանց այդ դրոշի՝ ֆիլտրը հանում է հնացածը և ճիշտ պատասխանն է մնում։ Մեկ metadata դաշտ, մեկ տող կոդ։
+:::
+
+# 🏡 Տնային
+
+TBD
+
+<a href="http://s01.flagcounter.com/more/1oO"><img src="https://s01.flagcounter.com/count2/1oO/bg_FFFFFF/txt_000000/border_CCCCCC/columns_2/maxflags_10/viewers_0/labels_0/pageviews_1/flags_0/percent_0/" alt="Flag Counter"></a>
