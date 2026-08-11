@@ -118,6 +118,50 @@
   values just come from somewhere else.}
 \end{frame}
 
+\begin{frame}{Cross-attention, with actual numbers}
+  \vskip 2pt
+  The decoder is writing an English sentence and has produced ``the''. The encoder has already
+  read the French source. Where should ``the'' look?
+
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{l26_cross_attention.pdf}
+  \end{center}
+
+  \vskip -2pt
+  {\footnotesize One head, $d_k = 4$. Scores $+0.339$, $-0.273$, $+0.304$ become weights
+  \textbf{0.399}, \textbf{0.216}, \textbf{0.385} after softmax -- and they sum to 1, exactly as
+  in L24.}
+\end{frame}
+
+\begin{frame}{What actually changed}
+  \vskip 10pt
+  Compare with the self-attention you computed in L24. The formula is character-for-character
+  the same:
+  \vskip 4pt
+  \begin{center}
+    $\text{Attention}(Q, K, V) = \text{softmax}\!\left(\dfrac{QK^\top}{\sqrt{d_k}}\right) V$
+  \end{center}
+
+  \vskip 8pt
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    & \textbf{Self-attention} & \textbf{Cross-attention} \\
+    \midrule
+    $Q$ comes from & this sequence & \textbf{the decoder} \\
+    $K, V$ come from & this sequence & \textbf{the encoder} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \keybox{That is the entire difference: \textbf{two of the three inputs come from somewhere
+  else}. No new mechanism, no new maths -- which is why the original paper could reuse the same
+  block for both.}
+\end{frame}
+
 \begin{frame}{Three architectures}
   \vskip 4pt
   \begin{center}
@@ -241,7 +285,9 @@ something.}
     \item[\textbf{2.}] \textbf{Because it parallelises, it scales.} You can afford more data and
       more parameters.
     \item[\textbf{3.}] \textbf{Because it scales, it kept getting better} -- and past certain
-      sizes, qualitatively so.
+      sizes, qualitatively so. The clearest example is \textbf{in-context learning}: give a
+      model a few examples in the prompt and it follows the pattern, \emph{with no weight
+      updates at all}. Small models essentially cannot do this; past a certain scale they can.
   \end{enumerate}
 
   \vskip 12pt
@@ -270,20 +316,24 @@ something.}
   The usual story is ``attention is the bottleneck''. The arithmetic says: \textbf{not until
   the sequence gets long}.
 
-  \vskip 10pt
-  With $d_{\text{model}} = 4096$, attention only overtakes the feed-forward at
-  \textbf{16,384 tokens}. Below that, most of the compute is in the per-token MLP, not in
-  attention at all.
+  \vskip 8pt
+  You can work out where it flips in two lines. Attention costs about $n^2 d$; the
+  feed-forward costs about $n d^2 f$, where $f$ is the widening factor (usually 4). Set them
+  equal:
+  \vskip 2pt
+  \begin{center}
+    $n^2 d = n d^2 f \quad\Longrightarrow\quad \boxed{n = d \cdot f}$
+  \end{center}
+
+  \vskip 6pt
+  So for $d_{\text{model}} = 4096$ and $f = 4$, the crossover is at
+  $4096 \times 4 = \mathbf{16{,}384}$ tokens. Halve the model and you halve the crossover.
 
   \vskip 12pt
   \watchbox{So for a 2,048-token context, optimising attention is optimising the smaller half.
-  The quadratic term is real and it is what caps long context -- but ``quadratic'' describes how
-  the cost \emph{grows}, not where the cost \emph{is} at every size. The crossover is worth
-  knowing before you optimise the wrong thing.}
-
-  \vskip 6pt
-  {\small FlashAttention, sliding-window and sparse variants all attack the $n^2$ term; they
-  come later in this chapter.}
+  ``Quadratic'' describes how the cost \emph{grows}, not where the cost \emph{is} at every
+  size -- worth knowing before you optimise the wrong thing. FlashAttention and the sparse
+  variants attack the $n^2$ term, later in this chapter.}
 \end{frame}
 
 \begin{frame}{The honest limit: almost no inductive bias}

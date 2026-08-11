@@ -304,3 +304,82 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- L26: cross-attention, worked ------------------------------------------------------
+def fig_cross_attention():
+    """A decoder token's query against the ENCODER's keys and values, with real numbers.
+
+    Added after the L26 student review: cross-attention was the only genuinely new mechanism
+    in the L24-L26 arc that never got the worked-numbers treatment self-attention had in L24.
+    """
+    rng = np.random.default_rng(SEED)
+    d_model, d_k = 8, 4
+    source = ["le", "chat", "noir"]          # what the encoder read (French)
+    Wq, Wk, Wv = (rng.normal(size=(d_model, d_k)) * 0.5 for _ in range(3))
+
+    enc_out = rng.normal(size=(len(source), d_model))     # the encoder's output
+    dec_tok = rng.normal(size=(1, d_model))               # the decoder writing "the ..."
+
+    # The whole trick: Q comes from the DECODER, K and V come from the ENCODER.
+    Q = dec_tok @ Wq
+    K, V = enc_out @ Wk, enc_out @ Wv
+    scores = (Q @ K.T / np.sqrt(d_k))[0]
+    weights = softmax(scores)
+    out = weights @ V
+
+    log.info("cross-attention worked example (d_k=%d):", d_k)
+    for w, s, a in zip(source, scores, weights):
+        log.info("  source token %-5s score %+.3f -> weight %.3f", w, s, a)
+    log.info("  weights sum to %.6f; output vector = %s",
+             weights.sum(), np.array2string(out, precision=3))
+    if abs(weights.sum() - 1) > 1e-9:
+        raise ValueError("cross-attention weights must sum to 1")
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.2),
+                             gridspec_kw={"width_ratios": [1.25, 1]})
+
+    ax = axes[0]
+    ax.axis("off")
+    ax.set_xlim(0, 10); ax.set_ylim(0, 6)
+    ax.add_patch(FancyBboxPatch((0.3, 3.6), 4.2, 1.9, boxstyle="round,pad=0.02",
+                                facecolor="#F2F6FB", edgecolor="#C8D6E8", lw=1.2))
+    ax.text(2.4, 5.15, "ENCODER output", ha="center", fontsize=8.5,
+            color=ARM_BLUE, fontweight="bold")
+    for i, wtok in enumerate(source):
+        ax.add_patch(FancyBboxPatch((0.55 + i * 1.32, 3.9), 1.15, 0.75,
+                                    boxstyle="round,pad=0.02", facecolor=ARM_BLUE,
+                                    edgecolor="none"))
+        ax.text(1.12 + i * 1.32, 4.28, wtok, ha="center", va="center", fontsize=9,
+                color="white", fontweight="bold")
+    ax.text(2.4, 3.35, "supplies K and V", ha="center", fontsize=8, color=ARM_BLUE)
+
+    ax.add_patch(FancyBboxPatch((6.2, 3.6), 3.2, 1.9, boxstyle="round,pad=0.02",
+                                facecolor="#FDF3F3", edgecolor="#EFCFCF", lw=1.2))
+    ax.text(7.8, 5.15, "DECODER, writing now", ha="center", fontsize=8.5,
+            color=ARM_RED, fontweight="bold")
+    ax.add_patch(FancyBboxPatch((7.05, 3.9), 1.5, 0.75, boxstyle="round,pad=0.02",
+                                facecolor=ARM_RED, edgecolor="none"))
+    ax.text(7.8, 4.28, "the", ha="center", va="center", fontsize=9,
+            color="white", fontweight="bold")
+    ax.text(7.8, 3.35, "supplies Q", ha="center", fontsize=8, color=ARM_RED)
+
+    for i, a in enumerate(weights):
+        ax.add_patch(FancyArrowPatch((7.05, 4.28), (1.7 + i * 1.32, 4.28),
+                                     arrowstyle="-|>", mutation_scale=11,
+                                     color=GREEN, lw=0.6 + 5.5 * a,
+                                     connectionstyle="arc3,rad=-0.30"))
+    ax.text(4.9, 1.9, "arrow thickness = attention weight",
+            ha="center", fontsize=8, color=GREEN, style="italic")
+
+    ax = axes[1]
+    bars = ax.bar(source, weights, color=[GREEN if a == weights.max() else ARM_BLUE
+                                          for a in weights])
+    ax.bar_label(bars, fmt="%.3f", fontsize=9.5, fontweight="bold", padding=2)
+    ax.set_ylim(0, weights.max() * 1.3)
+    ax.set_ylabel("attention weight")
+    ax.set_title("softmax over the encoder tokens", fontsize=9.5)
+    ax.tick_params(axis="x", length=0)
+    fig.tight_layout()
+    save(fig, "l26_cross_attention")
+    return source, scores, weights

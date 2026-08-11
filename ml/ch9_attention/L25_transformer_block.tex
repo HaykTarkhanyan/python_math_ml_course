@@ -124,8 +124,10 @@
 
   \vskip 8pt
   \keybox{\textbf{The parameter count does not grow.} Each head works in a smaller space:
-  $d_k = d_{\text{model}}/h$. With $d_{\text{model}} = 512$ and $h = 8$, every head is 64-dimensional.
-  You are not adding capacity, you are \textbf{splitting} it into independent views.}
+  $d_k = d_{\text{model}}/h$. With $d_{\text{model}} = 512$ and $h = 8$, every head is 64-dimensional,
+  so each $W^Q_i$ is $512 \times 64$. Eight of them is
+  $8 \times 512 \times 64 = \mathbf{262{,}144}$ -- exactly one $512 \times 512$ matrix. You are not
+  adding capacity, you are \textbf{splitting} it into independent views.}
 
   \vskip 6pt
   {\small And because the heads do not talk to each other until the concat, they are one more
@@ -146,8 +148,8 @@ free to learn a different pattern.}
   \end{center}
 
   \vskip 2pt
-  {\footnotesize \textbf{Attention entropy} measures how spread out a head's attention is: low
-  means it concentrates on a few tokens, high means it hedges across many.}
+  {\footnotesize \textbf{Attention entropy} $= -\sum_j a_{ij}\log a_{ij}$, averaged over rows:
+  low means a head concentrates on a few tokens, high means it hedges across many.}
 \end{frame}
 
 \begin{frame}{Two heads, same layer, same sentence}
@@ -215,8 +217,9 @@ free to learn a different pattern.}
   \vskip -2pt
   \trapbox{Left: the largest difference across the whole output vector is
   $\mathbf{1.1 \times 10^{-16}}$ -- floating-point zero. Self-attention is
-  \textbf{permutation-equivariant}: permute the inputs and you permute the outputs, nothing
-  else. A bag of words and a sentence are the same object to it.}
+  \textbf{permutation-equivariant}: permute the inputs and the outputs come back in the same
+  permuted order, unchanged. (Not \emph{invariant} -- the outputs do move; each one just stays
+  attached to its own token.) A bag of words and a sentence are the same object to it.}
 \end{frame}
 
 \begin{frame}{Why that had to be true}
@@ -229,6 +232,11 @@ free to learn a different pattern.}
     \item The softmax is over a set of scores.
     \item The output is a \emph{sum}, and addition does not care about order.
   \end{itemize}
+
+  \vskip 6pt
+  {\small Concretely: in \emph{both} sentences, ``dog'' attends to the same three vectors
+  $\{$dog, bites, man$\}$ and gets the same three weights. Only the order in which we
+  \emph{listed} them changed, and the sum does not notice.}
 
   \vskip 10pt
   \keybox{An RNN got order for free -- it processed tokens one at a time, so position was
@@ -295,8 +303,9 @@ free to learn a different pattern.}
       token separately, usually widening $4\times$ and back. Most of the parameters live here.
 
       \vskip 6pt
-      \textbf{Add \& Norm} -- the residual connection (\textbf{ResNet, L17}) plus LayerNorm
-      (BatchNorm's cousin, \textbf{L15}).}
+      \textbf{Add \& Norm} -- the residual connection (\textbf{ResNet, L17}) plus LayerNorm:
+      BatchNorm's idea from \textbf{L15}, but normalising across each token's \emph{own
+      features} instead of across the batch.}
   \end{columns}
 
   \vskip 4pt
@@ -312,16 +321,21 @@ free to learn a different pattern.}
 
   \vskip 8pt
   \begin{center}
-    $\mathbf{x} \leftarrow \mathbf{x} + \text{Attention}(\text{Norm}(\mathbf{x}))$
+    $\mathbf{x} \leftarrow \text{Norm}\big(\mathbf{x} + \text{Attention}(\mathbf{x})\big)$
     \qquad then \qquad
-    $\mathbf{x} \leftarrow \mathbf{x} + \text{FFN}(\text{Norm}(\mathbf{x}))$
+    $\mathbf{x} \leftarrow \text{Norm}\big(\mathbf{x} + \text{FFN}(\mathbf{x})\big)$
   \end{center}
 
-  \vskip 8pt
+  \vskip 6pt
   \takebox{Two consequences. \textbf{Gradients} reach the early layers unimpeded, which is why
   you can stack 96 of these -- exactly the ResNet argument from L17. And every sublayer's output
   is a \textbf{correction} to a running representation, not a fresh one, which is why the same
   token's vector can accumulate meaning gradually with depth.}
+
+  \vskip 6pt
+  \watchbox{Read the order carefully: the norm comes \emph{after} the addition, matching the
+  diagram and the 2017 paper. Modern models move it \textbf{inside}, and we come back to why
+  in three slides.}
 \end{frame}
 
 \bbbcap{attn_mlp_flow.png}{The flow through a block: attention lets tokens talk, then the MLP
@@ -369,7 +383,8 @@ processes each one alone. Repeat.}
     \toprule
     \textbf{2017} & \textbf{Now} & \textbf{Why} \\
     \midrule
-    Norm \emph{after} the sublayer & \textbf{Pre-LN} (normalise first) & trains stably, no warmup \\
+    $\text{Norm}(\mathbf{x} + f(\mathbf{x}))$ & $\mathbf{x} + f(\text{Norm}(\mathbf{x}))$ &
+      \textbf{Pre-LN}: trains stably, no warmup \\
     LayerNorm & \textbf{RMSNorm} & cheaper, no mean subtraction \\
     ReLU in the FFN & \textbf{SwiGLU} & gated, better quality per parameter \\
     \bottomrule
