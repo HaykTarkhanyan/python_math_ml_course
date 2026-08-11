@@ -1,0 +1,587 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Agents and Tool Use}
+\subtitle{Connecting a language model to the rest of the world}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+% A monospace block, for the one canonical snippet or trace per topic.
+\newcommand{\codebox}[1]{%
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt,
+                    width=0.94\textwidth, left=4pt, right=4pt, top=3pt, bottom=3pt]
+    \ttfamily\scriptsize #1
+  \end{tcolorbox}
+  \end{center}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{A question a language model cannot answer}
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.8\textwidth]
+    \centering\textit{``Will it rain in Yerevan today?''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.8em}
+  This is not a hard question. It is an \textbf{impossible} one, and for a reason no amount of
+  training fixes: the answer did not exist when the model was trained, and it will be different
+  tomorrow.
+
+  \vspace{1.0em}
+  \keybox{A language model produces \textbf{text}. It has no clock, no network, no filesystem.
+  Whatever it says about today's weather, it made up.}
+\end{frame}
+
+\begin{frame}{Give it a way to look}
+  \vspace{0.6em}
+  Now suppose the model can ask for one thing to be run on its behalf:
+
+  \codebox{get\_weather(city="Yerevan")\\[0.4em]
+  $\rightarrow$ \{"temp\_c": 20, "condition": "clear", "rain\_prob": 0.05\}}
+
+  \vspace{0.4em}
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                    width=0.8\textwidth]
+    \centering\textit{``No rain expected in Yerevan today - clear, around 20 degrees.''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.6em}
+  Same model, same question. The only change is that something outside it was allowed to run.
+
+  \vspace{0.5em}
+  \begin{center}
+  {\small\color{gray}The rest of this lecture is about \textbf{who} decides to run it, and
+  \textbf{where} the thing that runs lives.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{The one idea}
+\sectiontransition{The one idea}{Everything else in this lecture is a variation on it.}
+
+\begin{frame}{The model decides, your code does}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{fig/01_decide_vs_do.pdf}
+  \end{center}
+  \vspace{-0.2em}
+  \keybox{\textbf{The model never runs anything.} It emits a structured request - a piece of
+  text saying which function it wants and with which arguments. Your program decides whether to
+  honour it, runs it, and hands back the result.}
+\end{frame}
+
+\begin{frame}{Why that split matters more than it looks}
+  \vspace{0.7em}
+  Because it means every safety and correctness question has an obvious home:
+
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Question} & \textbf{Where it is answered} \\
+    \midrule
+    Can this user delete the database?   & your code, before executing \\
+    Is this argument even valid?         & your code, before executing \\
+    Should the model see this result?    & your code, after executing \\
+    Which tool is right for this task?   & the model \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \trapbox{A model asking to run \texttt{delete\_all\_records()} is not a security breach. It is
+  a \textbf{string}. It becomes a breach only if your code executes it without checking.}
+\end{frame}
+
+\begin{frame}{Four approaches, three questions}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.84\linewidth]{fig/02_four_approaches.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small The first three rows are one ladder: each keeps the idea above it and changes exactly
+  one thing about \emph{how a tool gets invoked}.}
+
+  \vspace{0.3em}
+  \watchbox{\small \textbf{Skills is not the fourth rung.} It sits below the line because it
+  answers a different question: the first three are ways to give the model a \emph{capability},
+  skills is a way to give it \emph{knowledge}. It shares the third column with them, and
+  nothing else.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Direct orchestration}
+\sectiontransition{Direct orchestration}{You decide what runs. The model only writes the
+sentence at the end.}
+
+\begin{frame}{The idea}
+  \vspace{0.7em}
+  You look at the question, you decide it needs the weather, you fetch it, and you paste the
+  result into the prompt yourself.
+
+  \codebox{weather = get\_weather("Yerevan")\quad\textcolor{gray}{\# you decided this}\\[0.3em]
+  prompt = f"Weather: \{weather\}$\backslash$n$\backslash$nQuestion: \{q\}"\\[0.3em]
+  answer = model(prompt)}
+
+  \vspace{0.5em}
+  \takebox{This is exactly what the RAG chapter did. Retrieval is direct orchestration where
+  the tool happens to be a search index.}
+
+  \vspace{0.6em}
+  {\small It is the simplest thing that works, it is completely predictable, and for a single
+  known task it is often the right answer. People skip past it too quickly.}
+\end{frame}
+
+\begin{frame}{Where it stops}
+  \vspace{0.8em}
+  It works because \emph{you} knew the question needed the weather.
+
+  \vspace{0.9em}
+  Now the user asks:
+
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.82\textwidth]
+    \centering\textit{``Should I take an umbrella to the meeting?''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.8em}
+  Now you need the weather \emph{and} the calendar, and only for some phrasings of the question.
+  You are now writing an if-statement over natural language.
+
+  \vspace{0.7em}
+  \trapbox{Direct orchestration makes \textbf{you} the router. That is fine for one tool and
+  hopeless for twenty, because routing natural language is the one job the model is better at
+  than your code.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Tool calling}
+\sectiontransition{Tool calling}{Hand the routing decision to the model, and keep the execution.}
+
+\begin{frame}{The idea}
+  \vspace{0.6em}
+  You describe your tools once, in a schema. The model reads the descriptions and, when it
+  wants one, says so.
+
+  \codebox{tools = [\{"type": "function", "function": \{\\
+  \quad "name": "get\_weather",\\
+  \quad "description": "Current weather and today's forecast for a city.",\\
+  \quad "parameters": \{"type": "object",\\
+  \qquad "properties": \{\\
+  \qquad\quad "city":  \{"type": "string", "description": "e.g. Yerevan"\},\\
+  \qquad\quad "units": \{"type": "string", "enum": ["metric", "imperial"]\}\},\\
+  \qquad "required": ["city"]\}\}\}]}
+
+  \vspace{-0.2em}
+  {\footnotesize Note \texttt{enum}: it constrains what the model may put there. Anything JSON
+  Schema can express - enums, arrays, nested objects, optional versus required - you can use.}
+
+  \vspace{0.4em}
+  \watchbox{The \textbf{description} is not documentation, it is the routing instruction. It is
+  the only thing the model uses to decide whether this tool is the right one. A vague
+  description is a routing bug.}
+\end{frame}
+
+\begin{frame}{What comes back is not an answer}
+  \vspace{0.7em}
+  When the model wants a tool, it does not reply with text. It replies with a request:
+
+  \codebox{\{"tool\_calls": [\{\\
+  \quad "id": "call\_01",\\
+  \quad "function": \{"name": "get\_weather",\\
+  \qquad\qquad\qquad "arguments": "\{$\backslash$"city$\backslash$": $\backslash$"Yerevan$\backslash$"\}"\}\}]\}}
+
+  \vspace{0.5em}
+  Your code runs it, then sends the result back as a new message, and the model produces the
+  final sentence.
+
+  \vspace{0.7em}
+  \keybox{Two round trips to the model for one user question. This is the shape you will meet
+  in every provider's API, under slightly different names.}
+\end{frame}
+
+\begin{frame}{Gotchas that will cost you an afternoon}
+  \vspace{0.6em}
+  \begin{itemize}
+    \item \textbf{Arguments come back as a JSON string}, not an object. It is generated text, so
+      it can be malformed. Parse defensively.
+    \item \textbf{The model can invent arguments} that are the right type and the wrong value.
+      A valid city name is not a real city.
+    \item \textbf{It can call the same tool twice}, or call nothing and answer anyway.
+    \item \textbf{Your tool result must be sent back with the matching call id}, or the model
+      loses track of which answer belongs to which request.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \trapbox{Every one of these is your code's problem, not the model's. The split from the first
+  section is doing real work here: the model \emph{decided}, so everything about whether that
+  decision was safe or sane lands on your side of the line.}
+\end{frame}
+
+\begin{frame}{The cost nobody mentions}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/03_tool_schema_cost.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  \vspace{-0.2em}
+  \watchbox{\small A one-parameter tool is \textbf{104 tokens}; a realistic one with a date
+  range and filters is \textbf{220}. The question they serve is \textbf{9}. Schemas are sent on
+  \textbf{every request}, used or not - so fifty tools is five to eleven thousand tokens per
+  turn describing capabilities nobody asked for, and the model is choosing from fifty
+  descriptions instead of five.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{MCP}
+\sectiontransition{MCP}{Same decision, different address. The tool moves out of your process.}
+
+\begin{frame}{The idea}
+  \vspace{0.7em}
+  With tool calling, the function lives in your codebase. You wrote it, you ship it, you own it.
+
+  \vspace{0.9em}
+  \textbf{Model Context Protocol (MCP)} moves the tool behind a standard interface. A tool is a
+  \emph{server}; your application is a \emph{client} that asks what it offers.
+
+  \vspace{0.9em}
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Tool calling} & \textbf{MCP} \\
+    \midrule
+    the function is in your code & the function is behind a protocol \\
+    you wrote every tool & you can plug in tools you did not write \\
+    adding a tool means a deploy & adding a tool means a config line \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.8em}
+  \keybox{The model side does not change at all. It still just says ``call this''. MCP is an
+  answer to \textbf{where the tool lives}, not to who decides.}
+\end{frame}
+
+\begin{frame}{Why a protocol is worth the ceremony}
+  \vspace{0.8em}
+  Because the interesting tools are the ones you did not write.
+
+  \vspace{0.9em}
+  A filesystem server, a database server, a browser, someone's internal ticketing system - each
+  written once, by whoever knows that system best, and usable by any client that speaks the
+  protocol.
+
+  \vspace{1.0em}
+  \takebox{This is the same argument as any protocol in computing. \texttt{HTTP} did not make
+  requests possible; it made it unnecessary for every client and every server to agree
+  bilaterally in advance.}
+
+  \vspace{0.7em}
+  \watchbox{The cost is a process boundary: a server to run, to authenticate, to keep alive, and
+  to blame when it is down. For one tool in one app, that ceremony is not worth it.}
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{Skills}
+\sectiontransition{Skills}{What if the thing you are adding is not code, but knowledge?}
+
+\begin{frame}{The idea}
+  \vspace{0.7em}
+  Not everything you want to add is executable. Often what the model is missing is not a
+  capability but an \textbf{instruction}: your house style, your escalation policy, the six
+  steps your team follows to close a ticket.
+
+  \vspace{0.9em}
+  A \textbf{skill} is a folder with a markdown file in it. The model is told the skill's name
+  and one-line description, and reads the body only when it decides the skill applies.
+
+  \codebox{---\\
+  name: close-ticket\\
+  description: Use when a support ticket needs closing.\\
+  ---\\[0.4em]
+  1. Check the customer replied.\\
+  2. Summarise the resolution in two sentences.\\
+  3. Tag the owning team. Never close without a tag.}
+\end{frame}
+
+\begin{frame}{Why this is not just a longer prompt}
+  \vspace{0.8em}
+  Because of the third column from the ladder: \textbf{what is loaded up front}.
+
+  \vspace{0.9em}
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    & \textbf{Loaded always} & \textbf{Loaded on demand} \\
+    \midrule
+    System prompt & everything & nothing \\
+    Tool schemas  & every schema, every request & nothing \\
+    \textbf{Skills} & \textbf{name + one line} & \textbf{the whole body} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \keybox{\small You can have two hundred skills and pay for two hundred single lines. That is
+  the entire trick, and it is the direct answer to the token cost measured two sections ago.}
+
+  \vspace{0.4em}
+  \watchbox{\small The price: the model must choose correctly from one-line descriptions alone.
+  Same failure mode as a bad tool description, one level up.}
+\end{frame}
+
+% ============================================================ SECTION 6
+\section{The loop}
+\sectiontransition{The loop}{Everything so far ran once. An agent is what happens when it runs
+again.}
+
+\begin{frame}{One call is not an agent}
+  \vspace{0.7em}
+  Every approach so far had the same shape: the model asks for one thing, you run it, it answers.
+  One round trip, then done.
+
+  \vspace{0.9em}
+  Now ask something that cannot be answered in one:
+
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.86\textwidth]
+    \centering\textit{``Find the cheapest flight to Tbilisi next weekend and check if I am free.''}
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.8em}
+  You cannot know how many tool calls that takes. It depends on what the first one returns.
+
+  \vspace{0.7em}
+  \keybox{So stop fixing the number. Let the model keep going until it decides it is done. That
+  decision is the whole difference between \emph{tool use} and an \emph{agent}.}
+\end{frame}
+
+\begin{frame}{The loop}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/04_agent_loop.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small Structurally it is a \texttt{while} loop with one exit.}
+\end{frame}
+
+\begin{frame}{The loop, written out}
+  \vspace{0.5em}
+  \codebox{while True:\\
+  \quad reply = model(messages, tools=tools)\\
+  \quad if not reply.tool\_calls:\qquad\textcolor{gray}{\# no request = it is done}\\
+  \qquad return reply.text\\
+  \quad for call in reply.tool\_calls:\\
+  \qquad result = run(call)\qquad\quad\textcolor{gray}{\# your code, your checks}\\
+  \qquad messages.append(result)}
+
+  \vspace{0.5em}
+  That really is the whole mechanism. \textbf{And it is not what you should ship}, because
+  every guard from the last two slides is missing from it.
+
+  \vspace{0.6em}
+  \watchbox{\small Add the turn cap, the repeat detector, the spend cap, argument validation and
+  the transcript log, and this doubles in size. The \emph{idea} stays small; the
+  \emph{production loop} never does. Be suspicious of any framework that shows you only the
+  seven lines.}
+\end{frame}
+
+\begin{frame}{The green box is where the difficulty lives}
+  \vspace{0.7em}
+  ``Enough to answer?'' is not a function you write. In practice it is the model itself: on each
+  turn it either requests another tool, or stops requesting and writes prose. The absence of a
+  tool call \emph{is} the stopping signal.
+
+  \vspace{0.9em}
+  \trapbox{Which means \textbf{nothing guarantees it stops.} There is no proof of termination,
+  no bound on the number of turns, and no error raised when it goes wrong. A loop that never
+  converges looks exactly like a loop that is still working.}
+
+  \vspace{0.8em}
+  \keybox{So you impose a cap. And the moment you do, you have created a second failure mode:
+  a task that was going to succeed on turn twelve, cut off at turn ten.}
+\end{frame}
+
+\begin{frame}{Three ways it fails to stop}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/05_loop_failures.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small \textbf{No progress}: the same call with the same arguments, because the result did not
+  change the model's mind. \textbf{Oscillation}: two tools that undo each other. \textbf{Cap
+  hit}: real work, truncated - the only one of the three where the loop was doing fine.}
+\end{frame}
+
+\begin{frame}{What to actually do about it}
+  \vspace{0.6em}
+  \begin{itemize}
+    \item \textbf{Cap the turns}, and treat hitting the cap as a \emph{failure to report}, not a
+      silent truncation. The user must be told the task was cut off.
+    \item \textbf{Detect repeats}: same tool, same arguments, twice in a row is a loop, not
+      progress. Break and say so.
+    \item \textbf{Cap the spend}, not just the turns. Turns are a proxy; tokens are the bill.
+    \item \textbf{Log every turn}: the tool name, the exact arguments, the raw result, the
+      token count and the elapsed time. When an agent does something strange, that transcript
+      is the only artefact that explains it - and it is the first thing people forget to keep.
+  \end{itemize}
+
+  \vspace{0.6em}
+  \takebox{None of these makes the loop correct. They make it \textbf{bounded and legible},
+  which is what you can actually have.}
+\end{frame}
+
+% ============================================================ SECTION 7
+\section{Choosing}
+\sectiontransition{Choosing}{They are layers, not competitors.}
+
+\begin{frame}{Decision guide}
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{p{0.40\textwidth}p{0.50\textwidth}}
+    \toprule
+    \textbf{If...} & \textbf{Reach for} \\
+    \midrule
+    one known task, fixed shape & \textbf{direct orchestration} - do not over-engineer \\[0.3em]
+    the user's phrasing decides what runs & \textbf{tool calling} \\[0.3em]
+    the tool is not yours, or is shared across apps & \textbf{MCP} \\[0.3em]
+    you are adding knowledge, not capability & \textbf{skills} \\[0.3em]
+    the number of steps is unknown in advance & \textbf{an agent loop}, with a cap \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  \takebox{\small Start at the top and move down only when something forces you. Every row
+  below the first buys flexibility with a failure mode, and the failure modes compound. They
+  also \textbf{stack}: a production system is usually a loop, over tool calls, some arriving by
+  MCP, guided by skills.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.4em}
+  \small
+  \begin{itemize}
+    \item \textbf{The model decides, your code does.} It never executes anything; it emits a
+      request. Every safety check lives on your side of that line.
+    \item \textbf{Direct orchestration} makes you the router. Simple, predictable, and it stops
+      scaling the moment phrasing decides what runs.
+    \item \textbf{Tool calling} hands routing to the model. The description is the routing
+      instruction, and the schemas cost you tokens on every request - 104 for one tool, against
+      a 9-token question.
+    \item \textbf{MCP} answers \emph{where the tool lives}, not who decides. It buys tools you
+      did not write, and costs you a process boundary.
+    \item \textbf{Skills} add knowledge rather than capability, and are loaded on demand - which
+      is the direct answer to the schema token cost.
+    \item \textbf{An agent} is the same machinery with a decision that sends you back. Nothing
+      guarantees it stops, so bound it and log it.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\bfseries\color{popblue} One line separates a tool from an agent.}\\[0.8em]
+    {\large It is the line that decides whether to go around again -}\\[0.25em]
+    {\large and it is the one nobody can prove terminates.}
+  \end{center}
+  \vfill
+\end{frame}
+
+\end{document}
+
+% ============================================================================
+% Provenance
+%
+% ADAPTED FROM: ml/agents/source/approaches.tex, "Connecting Tools and Knowledge to an LLM -
+% Direct orchestration vs Tool calling vs MCP vs Skills", written for the Metric internship
+% programme and imported unmodified into ml/agents/source/ on 2026-08-11. That deck supplied
+% the ladder (direct orchestration -> tool calling -> MCP -> skills), the three comparison
+% axes (who decides / where the tool lives / what is loaded up front), the "the model decides,
+% your code does" framing, and the Yerevan weather running example.
+%
+% WHAT CHANGED IN THE PORT:
+%   - Theme: Madrid + custom colour block -> house default/dove via \input{../preamble}.
+%   - Added a cold open, [plain] section transitions, and a recap, per ml/SLIDE_STYLE.md.
+%   - Code density cut hard: the source is a hands-on session with full runnable listings;
+%     the style guide allows at most one canonical snippet per topic. Kept one schema, one
+%     tool_call response, one SKILL.md. Dropped the OpenRouter client code entirely.
+%   - Essential figures are now Python-generated (py_src/l44_figs.py) rather than TikZ.
+%   - Dropped the source's closing "Bridge to text-to-SQL", which was internship-specific.
+%
+% WHAT WAS ADDED (not in the source deck):
+%   - THE ENTIRE LOOP SECTION (section 6). The source covers tool USE and has no agent loop:
+%     no planning, no observe-act-repeat, no stopping condition, no non-termination failure
+%     modes. This is exactly the gap ch17_rag/L43's student review identified - it asked what
+%     the "enough to answer?" check actually is and the chapter could not answer. Written
+%     from scratch here.
+%   - The "why that split matters" frame, which turns the decides/does distinction into a
+%     table of where each safety question is answered.
+%
+% FIGURES (py_src/ -> fig/):
+%   REAL:
+%     03 tool schema cost - measured with tiktoken cl100k_base. One realistic tool definition
+%        is 104 tokens; "Will it rain in Yerevan today?" is 9. So 50 tools is 5,200 tokens of
+%        schema on every request, 578x the question. The script asserts a schema costs more
+%        than the question, so the framing cannot silently invert.
+%   ILLUSTRATIVE:
+%     01 decide vs do, 02 the four-approach ladder, 04 the agent loop, 05 loop failure modes.
+%
+% OPEN / NOT DONE:
+%   - No measured agent behaviour anywhere. Turn counts, oscillation and cap-hits are drawn,
+%     not observed, because there is no API key in this environment. Figure 05 is schematic
+%     and the deck does not claim otherwise. If a key becomes available, running a real loop
+%     and plotting the actual turn distribution would be the single biggest improvement.
+%   - No homework. No chapter .qmd yet, so this deck is not on the site.
+%   - MCP section is descriptive only - no worked server, per the style guide's code limits.
+% ============================================================================
