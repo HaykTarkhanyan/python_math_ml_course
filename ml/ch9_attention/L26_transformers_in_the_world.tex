@@ -1,0 +1,413 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true, xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\graphicspath{{fig/}{fig/borrowed/}{fig/borrowed/3b1b/}{fig/borrowed/paper/}}
+
+\newcommand{\bbb}{{\scriptsize\color{gray} 3Blue1Brown}}
+\newcommand{\paper}[1]{{\scriptsize\color{gray} #1}}
+
+\newcommand{\bbbcap}[2]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=south west, font=\tiny, text=white!60]
+        at ([shift={(0.26cm,0.16cm)}]current page.south west) {3Blue1Brown};
+      \node[anchor=south, font=\small\itshape, text=white, fill=black!60,
+            inner sep=5pt, rounded corners, text width=0.86\paperwidth, align=center]
+        at ([shift={(0,0.85cm)}]current page.south) {#2};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+\newcommand{\keybox}[1]{\fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small #1}}}
+\newcommand{\trapbox}[1]{\fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small #1}}}
+\newcommand{\takebox}[1]{\fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small #1}}}
+\newcommand{\watchbox}[1]{\fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small #1}}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{Transformers in the World}
+\subtitle{The family, how it learns, and what it is still bad at}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{The same block, three different jobs}
+  \vskip 8pt
+  You can now build a Transformer block. But the block alone does not tell you whether you are
+  building \textbf{BERT}, \textbf{GPT} or a translation system.
+
+  \vskip 10pt
+  The difference is not the block. It is one decision:
+
+  \vskip 10pt
+  \begin{center}
+    {\large\color{popblue}\textbf{who is allowed to look at whom?}}
+  \end{center}
+
+  \vskip 12pt
+  \keybox{Change the attention mask and the same architecture becomes a text classifier, a
+  chatbot, or a translator. That is this lecture's first section - and then we ask why this
+  design beat everything else, and where it is still weak.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{The family}
+\sectiontransition{The family}{One block, three ways of wiring it.}
+
+\begin{frame}{The original: an encoder and a decoder}
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+      \vskip -2pt
+      % Figure 1 sits at roughly x 206-432pt, y 381-728pt on the 612x792pt page.
+      % trim is left/bottom/right/top, so cut everything outside that box.
+      \includegraphics[height=0.60\textheight, keepaspectratio,
+                       trim=195 402 170 55, clip]{vaswani_fig1_page.pdf}\\
+      \paper{Vaswani et al. (2017), Figure 1}
+    \column{0.57\textwidth}
+      \vskip 8pt
+      {\small The 2017 paper was about \textbf{translation}, so it has two stacks:
+
+      \vskip 6pt
+      \textbf{Encoder} -- reads the source sentence. Every token may see every other token.
+
+      \vskip 6pt
+      \textbf{Decoder} -- writes the target sentence, one token at a time, so it is
+      \textbf{causally masked} (L25).
+
+      \vskip 8pt
+      They are joined by \textbf{cross-attention}: the decoder supplies the queries, and the
+      \emph{encoder's} output supplies the keys and values.}
+  \end{columns}
+
+  \vskip 4pt
+  \keybox{Self-attention asks ``what in \emph{this} sentence matters to me?'' Cross-attention
+  asks ``what in \emph{that other} sequence matters to me?'' Identical mechanism; the keys and
+  values just come from somewhere else.}
+\end{frame}
+
+\begin{frame}{Three architectures}
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{l26_three_arch.pdf}
+  \end{center}
+  \vskip -2pt
+  \takebox{Nobody changed the block. \textbf{Encoder-only} sees in both directions and is good
+  at understanding. \textbf{Decoder-only} sees only backwards, which makes it able to generate.
+  \textbf{Encoder-decoder} keeps both and joins them with cross-attention.}
+\end{frame}
+
+\begin{frame}{Why decoder-only won the last five years}
+  \vskip 8pt
+  \begin{itemize}
+    \item \textbf{One objective, unlimited data.} Predicting the next token needs no labels, so
+      any text on the internet is training data.
+    \item \textbf{It subsumes the others.} ``Translate this: \ldots'' is just a prompt. Tasks
+      that needed a separate architecture became a formatting question.
+    \item \textbf{It is the simplest thing to scale.} One stack, one loss, no encoder to keep
+      in sync.
+  \end{itemize}
+
+  \vskip 10pt
+  \watchbox{This is a statement about the last few years, not a theorem. Encoder-only models
+  are still the right tool when you want an \emph{embedding} rather than a continuation -- which
+  is exactly what the retrieval chapter used them for.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{How it learns}
+\sectiontransition{How it learns}{One objective, and the trick that turns it into a chatbot.}
+
+\begin{frame}{The objective you have already seen}
+  \vskip 8pt
+  In \textbf{L21} we factorised a language model:
+  \vskip 4pt
+  \begin{center}
+    $P(y_1, \ldots, y_T) = \prod_{t=1}^{T} P(y_t \mid y_{<t})$
+  \end{center}
+
+  \vskip 8pt
+  That is all GPT is trained to do. Show it a prefix, ask for the next token, compare with the
+  truth, backpropagate. The loss is plain cross-entropy.
+
+  \vskip 10pt
+  \keybox{Nothing about the objective is new. What changed is that the \textbf{causal mask}
+  (L25) lets every position in a sequence be a training example in the same forward pass, and
+  that the architecture is parallel enough to make internet-scale data affordable.}
+
+  \vskip 6pt
+  {\small So the modern language model is an old idea with a new engine.}
+\end{frame}
+
+\bbbcap{snape_prediction.png}{Next-token prediction, in practice: the model outputs a
+distribution over the whole vocabulary, and one continuation is far more likely than the rest.}
+
+\begin{frame}{From a vector to a word}
+  \vskip 4pt
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+      \vskip -4pt
+      \includegraphics[width=\linewidth]{unembedding_matrix.png}\\ \bbb
+    \column{0.50\textwidth}
+      \vskip 10pt
+      {\small After the last block, the final token's vector is multiplied by an
+      \textbf{unembedding matrix} -- one row per vocabulary entry, so roughly 50,000 numbers
+      come out.
+
+      \vskip 8pt
+      Those are \textbf{logits}. A softmax turns them into a probability distribution, and you
+      sample from it.
+
+      \vskip 8pt
+      That is the entire output stage.}
+  \end{columns}
+
+  \vskip 4pt
+  \keybox{The model does not choose a word. It produces a \emph{distribution} over every word,
+  and the choosing is a separate decision -- which is where temperature and the other decoding
+  strategies live, later in this chapter.}
+\end{frame}
+
+\begin{frame}{Autocomplete is not a chatbot}
+  \vskip 8pt
+  A model trained this way continues text. Given ``the capital of Armenia is'', it says
+  ``Yerevan''. Given ``how do I reset my password?'', it might continue with
+  \emph{another question}, because that is what web pages look like.
+
+  \vskip 10pt
+  The fix that started the current era is embarrassingly simple: put the conversation in a
+  format where the helpful continuation \emph{is} the likely one.
+
+  \vskip 8pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.86\textwidth]
+    \ttfamily\scriptsize
+    You are a helpful assistant.\\
+    User: how do I reset my password?\\
+    Assistant:
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 4pt
+  \takebox{Now the most likely continuation of the \emph{text} is the answer you wanted. The
+  system prompt is not a new capability - it is a \textbf{framing} that makes autocomplete
+  behave like a conversation. Fine-tuning, and then training on human preferences, make it
+  reliable - that is the \texttt{llm\_training} track.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Why it won, and what it costs}
+\sectiontransition{Why it won, and what it costs}{Every architecture buys something with
+something.}
+
+\begin{frame}{Why transformers won}
+  \vskip 8pt
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{It parallelises.} An RNN had to walk the sequence in order.
+      Attention is three big matmuls over the whole sequence at once (L24), which is exactly the
+      workload a GPU wants.
+    \item[\textbf{2.}] \textbf{Because it parallelises, it scales.} You can afford more data and
+      more parameters.
+    \item[\textbf{3.}] \textbf{Because it scales, it kept getting better} -- and past certain
+      sizes, qualitatively so.
+  \end{enumerate}
+
+  \vskip 12pt
+  \keybox{Notice the shape of that argument: the win is not that attention is a cleverer model
+  of language. It is that attention is a \textbf{better fit for the hardware}, and everything
+  else followed from being able to train bigger. Architecture that suits the machine beats
+  architecture that suits your intuition.}
+\end{frame}
+
+\begin{frame}{The bill: attention is quadratic}
+  \vskip 4pt
+  Every token attends to every token, so the score matrix is $n \times n$. Double the context
+  and you quadruple that cost.
+
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{l26_quadratic.pdf}
+  \end{center}
+
+  \vskip -2pt
+  {\small Computed for $d_{\text{model}} = 4096$ with a $4\times$ feed-forward.}
+\end{frame}
+
+\begin{frame}{Read that graph carefully}
+  \vskip 8pt
+  The usual story is ``attention is the bottleneck''. The arithmetic says: \textbf{not until
+  the sequence gets long}.
+
+  \vskip 10pt
+  With $d_{\text{model}} = 4096$, attention only overtakes the feed-forward at
+  \textbf{16,384 tokens}. Below that, most of the compute is in the per-token MLP, not in
+  attention at all.
+
+  \vskip 12pt
+  \watchbox{So for a 2,048-token context, optimising attention is optimising the smaller half.
+  The quadratic term is real and it is what caps long context -- but ``quadratic'' describes how
+  the cost \emph{grows}, not where the cost \emph{is} at every size. The crossover is worth
+  knowing before you optimise the wrong thing.}
+
+  \vskip 6pt
+  {\small FlashAttention, sliding-window and sparse variants all attack the $n^2$ term; they
+  come later in this chapter.}
+\end{frame}
+
+\begin{frame}{The honest limit: almost no inductive bias}
+  \vskip 6pt
+  Every architecture in this course encoded an assumption about its data:
+
+  \vskip 6pt
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Model} & \textbf{Built-in assumption} & \textbf{Consequence} \\
+    \midrule
+    Decision tree (ch4) & axis-aligned splits matter & works on tiny tabular data \\
+    CNN (ch6) & nearby pixels are related & learns vision from thousands of images \\
+    RNN (ch7) & order matters, recent matters more & handles sequences by construction \\
+    \textbf{Transformer} & \textbf{almost nothing} & \textbf{needs enormous data} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  A Transformer does not know that neighbouring words are related, or even that words have an
+  order -- we had to \emph{bolt position on} in L25.
+
+  \vskip 6pt
+  \trapbox{That weakness is the same fact as its strength. Assuming nothing means it can learn
+  any structure, and \textbf{must} learn all of it from data. This is why a ViT loses to a CNN
+  on a small image dataset and wins on a huge one, and why transformers arrived only once the
+  data and the compute did.}
+\end{frame}
+
+\begin{frame}{Same block, everywhere}
+  \vskip 8pt
+  \begin{center}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Domain} & \textbf{What became a token} & \textbf{Chapter} \\
+    \midrule
+    Text & subword pieces & this one, and \texttt{llm\_training} \\
+    Images (ViT) & 16$\times$16 patches & ch12, vision-language models \\
+    Audio & spectrogram frames or codec codes & ch13 \\
+    Proteins & amino acids & AlphaFold \\
+    Actions & robot commands & ch15, vision-language-action \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \takebox{Nobody redesigned the block for any of these. They redesigned what counts as a
+  \textbf{token}. That is the practical legacy of the architecture: if you can serialise your
+  problem into a sequence of vectors, you can throw a Transformer at it.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vskip 4pt
+  \small
+  \begin{itemize}
+    \item \textbf{One block, three wirings.} Encoder-only (BERT) understands, decoder-only (GPT)
+      generates, encoder-decoder (T5) translates. The difference is the mask, not the block.
+    \item \textbf{Cross-attention} is ordinary attention with the keys and values taken from
+      another sequence.
+    \item \textbf{Training is L21's objective} -- predict the next token -- made affordable by
+      the causal mask and by hardware-friendly parallelism.
+    \item \textbf{The output is a distribution}, not a word. A system prompt turns autocomplete
+      into a chatbot by making the helpful continuation the likely one.
+    \item \textbf{It won because it fits the GPU}, not because it is a better theory of language.
+    \item \textbf{It is quadratic in sequence length}, but at $d_{\text{model}}=4096$ that only
+      dominates past 16,384 tokens.
+    \item \textbf{It assumes almost nothing}, so it can learn anything and needs vast data to
+      do it.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\bfseries\color{popblue} That is the T in GPT.}\\[0.9em]
+    {\large You have built the block, wired the family,}\\[0.25em]
+    {\large and priced what it costs.}\\[1.3em]
+    {\large\color{paramgreen}\textbf{Next in this chapter:} tokenization, decoding,}\\[0.2em]
+    {\large\color{paramgreen}and how these models are actually trained at scale.}
+  \end{center}
+  \vfill
+\end{frame}
+
+\end{document}
+
+% ============================================================================
+% Provenance
+%
+% PLAN: ml/ch9_attention/ATTENTION_CHAPTER_PLAN.md, section "L26", approved 2026-07-19.
+% Frame order follows that outline. The 2026 applications montage became a TABLE ("same block,
+% everywhere") rather than a web-image montage - it makes the same point, needs no external
+% images, and doubles as a map of where the rest of the course uses transformers.
+%
+% SOURCES:
+%   - misc/dl4nlp/02_transformers.tex - the encoder/decoder/cross-attention treatment, the three
+%     architectures, "how transformers learn", "why transformers won", and the complexity frame.
+%   - 3Blue1Brown Ch5, frames in fig/borrowed/3b1b/: snape_prediction.png, unembedding_matrix.png.
+%     Credit line only, per the instructor's 2026-07-21 decision.
+%   - Vaswani et al. (2017), arXiv 1706.03762. Page 3 extracted with pypdf to
+%     fig/borrowed/paper/vaswani_fig1_page.pdf and cropped to Figure 1 on the slide.
+%
+% FIGURES - py_src/l25_l26_figs.py:
+%   REAL:
+%     l26_quadratic - attention FLOPs (2 n^2 d) against feed-forward FLOPs (2 n d^2 f), computed.
+%       The crossover is solved rather than eyeballed: n = d * f = 16,384 tokens for d=4096, f=4.
+%       This produced the "read that graph carefully" frame, which is NOT in the approved plan:
+%       the arithmetic contradicts the usual "attention is the bottleneck" summary at typical
+%       context lengths, and that seemed worth a frame of its own.
+%   ILLUSTRATIVE (labelled "schematic" on the figure):
+%     l26_three_arch - encoder-only / decoder-only / encoder-decoder.
+%
+% DELIBERATE CHOICES:
+%   - "Why decoder-only won" carries an explicit hedge that it is a statement about the last few
+%     years, not a theorem, and points at the retrieval chapter's use of encoder-only models.
+%   - The inductive-bias frame completes the ledger started in ch4 (trees), ch6 (CNN) and ch7
+%     (RNN), as the plan intended. It is framed as strength and weakness being the same fact.
+%
+% NOT DONE:
+%   - Decoding strategies (temperature, top-k, nucleus) are teased once and left to the later
+%     part of the chapter, per the plan.
+%   - No homework frame; the numpy attention exercise lives on attention.qmd.
+% ============================================================================

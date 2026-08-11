@@ -1,0 +1,486 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true, xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\graphicspath{{fig/}{fig/borrowed/}{fig/borrowed/3b1b/}{fig/borrowed/paper/}}
+
+% credit / citation lines (identical to L24)
+\newcommand{\bbb}{{\scriptsize\color{gray} 3Blue1Brown}}
+\newcommand{\paper}[1]{{\scriptsize\color{gray} #1}}
+
+\newcommand{\bbbslide}[1]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=south west, font=\tiny, text=white!60]
+        at ([shift={(0.26cm,0.16cm)}]current page.south west) {3Blue1Brown};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+\newcommand{\bbbcap}[2]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=south west, font=\tiny, text=white!60]
+        at ([shift={(0.26cm,0.16cm)}]current page.south west) {3Blue1Brown};
+      \node[anchor=south, font=\small\itshape, text=white, fill=black!60,
+            inner sep=5pt, rounded corners, text width=0.86\paperwidth, align=center]
+        at ([shift={(0,0.85cm)}]current page.south) {#2};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+% callout boxes, matching L24's fcolorbox house pattern
+\newcommand{\keybox}[1]{\fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small #1}}}
+\newcommand{\trapbox}[1]{\fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small #1}}}
+\newcommand{\takebox}[1]{\fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small #1}}}
+\newcommand{\watchbox}[1]{\fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small #1}}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{The Transformer Block}
+\subtitle{Many heads, position, and the residual stream}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Where we got to}
+  \vskip 6pt
+  Last lecture built \textbf{one head} of self-attention, end to end: every token emits a
+  \textcolor{popblue}{query}, a \textcolor{orange1}{key} and a \textcolor{paramgreen}{value};
+  scores are $QK^\top/\sqrt{d_k}$; softmax turns them into weights; the output is a weighted
+  sum of values.
+
+  \vskip 6pt
+  \begin{center}
+    \includegraphics[width=0.44\linewidth]{single_head_full.png}\\ \bbb
+  \end{center}
+
+  \vskip 2pt
+  \takebox{That head can already move a word's meaning toward its context. It is also,
+  as we are about to see, \textbf{completely blind to word order}.}
+\end{frame}
+
+\begin{frame}{Three things stand between that and a Transformer}
+  \vskip 10pt
+  \begin{enumerate}
+    \item[\textbf{1.}] \textbf{One head is not enough.} A single pattern of who-looks-at-whom
+      cannot capture syntax and meaning and position at once.
+    \item[\textbf{2.}] \textbf{Attention cannot see order.} We will prove this, not assert it.
+    \item[\textbf{3.}] \textbf{One layer is not a network.} Something has to hold the stack
+      together and let gradients through.
+  \end{enumerate}
+
+  \vskip 14pt
+  \keybox{Each of the three has a fix, and the three fixes bolted onto one head of attention
+  \emph{are} the Transformer block. That is the whole lecture.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{Many heads}
+\sectiontransition{Many heads}{One pattern of attention is never enough.}
+
+\begin{frame}{Run it $h$ times, in parallel}
+  \vskip 6pt
+  Nothing about one head changes. You simply learn $h$ independent sets of
+  $W^Q, W^K, W^V$, run them at the same time, concatenate the outputs, and mix them with one
+  more matrix $W^O$:
+  \vskip 6pt
+  \begin{center}
+  $\text{MultiHead}(X) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\, W^O$,
+  \qquad $\text{head}_i = \text{Attention}(XW_i^Q, XW_i^K, XW_i^V)$
+  \end{center}
+
+  \vskip 8pt
+  \keybox{\textbf{The parameter count does not grow.} Each head works in a smaller space:
+  $d_k = d_{\text{model}}/h$. With $d_{\text{model}} = 512$ and $h = 8$, every head is 64-dimensional.
+  You are not adding capacity, you are \textbf{splitting} it into independent views.}
+
+  \vskip 6pt
+  {\small And because the heads do not talk to each other until the concat, they are one more
+  big batched matmul -- the parallelism argument from last lecture survives intact.}
+\end{frame}
+
+\bbbcap{multihead.png}{Multi-head attention: the same mechanism, many times over, each head
+free to learn a different pattern.}
+
+\begin{frame}{Do heads actually specialise, or is that a story?}
+  \vskip 6pt
+  Easy to claim, so let us measure it. Take a real pretrained encoder, feed it one sentence,
+  and pull out the actual attention weights from every head in one layer.
+
+  \vskip 6pt
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{l25_head_entropy.pdf}
+  \end{center}
+
+  \vskip 2pt
+  {\footnotesize \textbf{Attention entropy} measures how spread out a head's attention is: low
+  means it concentrates on a few tokens, high means it hedges across many.}
+\end{frame}
+
+\begin{frame}{Two heads, same layer, same sentence}
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{l25_real_heads.pdf}
+  \end{center}
+  \vskip -2pt
+  \takebox{Head 1 concentrates (entropy \textbf{0.92}); head 0 spreads (entropy \textbf{1.85}) --
+  in the \emph{same} layer, on the \emph{same} sentence, with the same input. Different views
+  is not a metaphor; it is what the weights do.}
+\end{frame}
+
+\begin{frame}{What the specialisations look like}
+  \vskip 8pt
+  Across models and layers, heads reliably fall into recognisable jobs:
+
+  \vskip 8pt
+  \begin{center}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Kind of head} & \textbf{What it attends to} \\
+    \midrule
+    positional & the previous token, or the next one \\
+    syntactic  & the verb belonging to this subject; the noun this adjective modifies \\
+    coreference & the name a pronoun refers to \\
+    lexical    & the other half of a multi-token name (\emph{Harry} $\leftrightarrow$ \emph{Potter}) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \watchbox{Read these labels with some suspicion. Nobody assigned these jobs; they are
+  patterns \emph{we} recognise afterwards, and plenty of heads do nothing so tidy. The measured
+  claim is the one on the last slide: the heads differ. The names are our interpretation.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Position}
+\sectiontransition{Position}{Attention has no idea which word came first.}
+
+\begin{frame}{Predict first}
+  \vskip 20pt
+  \begin{center}
+    {\large Take the same three word vectors in two orders:}\\[1.0em]
+    {\Large \textbf{``dog bites man''}\qquad vs \qquad\textbf{``man bites dog''}}
+  \end{center}
+
+  \vskip 22pt
+  \begin{center}
+    {\Large\color{popblue}\textbf{Does one head of self-attention give\\ the word ``dog'' a
+    different output vector?}}
+  \end{center}
+
+  \vskip 16pt
+  \begin{center}{\small\color{gray}Commit to an answer.}\end{center}
+\end{frame}
+
+\begin{frame}{No. Not slightly different -- identical.}
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.78\linewidth]{l25_permutation.pdf}
+  \end{center}
+  \vskip -2pt
+  \trapbox{Left: the largest difference across the whole output vector is
+  $\mathbf{1.1 \times 10^{-16}}$ -- floating-point zero. Self-attention is
+  \textbf{permutation-equivariant}: permute the inputs and you permute the outputs, nothing
+  else. A bag of words and a sentence are the same object to it.}
+\end{frame}
+
+\begin{frame}{Why that had to be true}
+  \vskip 8pt
+  Look back at the mechanism and there is nowhere for order to enter:
+
+  \vskip 8pt
+  \begin{itemize}
+    \item $\mathbf{q}_i \cdot \mathbf{k}_j$ depends on the two \emph{vectors}, not on $i$ or $j$.
+    \item The softmax is over a set of scores.
+    \item The output is a \emph{sum}, and addition does not care about order.
+  \end{itemize}
+
+  \vskip 10pt
+  \keybox{An RNN got order for free -- it processed tokens one at a time, so position was
+  implicit in the computation. Attention threw the recurrence away to gain parallelism
+  (L24), and \textbf{order was what it paid}. So order has to be put back by hand.}
+
+  \vskip 6pt
+  {\small The fix is almost crude: add a position-dependent vector to each embedding
+  before the first block, so that ``dog in slot 1'' and ``dog in slot 3'' are different inputs.}
+\end{frame}
+
+\begin{frame}{Sinusoidal positional encoding}
+  \vskip 4pt
+  \begin{center}
+  $PE_{(pos,\,2i)} = \sin\!\left(\dfrac{pos}{10000^{2i/d_{\text{model}}}}\right)$
+  \qquad
+  $PE_{(pos,\,2i+1)} = \cos\!\left(\dfrac{pos}{10000^{2i/d_{\text{model}}}}\right)$
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \includegraphics[width=0.66\linewidth]{l25_pe_heatmap.pdf}
+  \end{center}
+
+  \vskip 2pt
+  {\small Each dimension is a sine wave; dimensions further down the embedding oscillate more
+  slowly. Every position gets a distinct fingerprint, and no learned parameters are involved.}
+\end{frame}
+
+\begin{frame}{Why sinusoids rather than just the number $pos$}
+  \vskip 4pt
+  \begin{center}
+    \includegraphics[width=0.60\linewidth]{l25_pe_dotprod.pdf}
+  \end{center}
+  \vskip -2pt
+  \keybox{The similarity between two encodings depends on \textbf{how far apart} the positions
+  are, not on where they sit. Measured here: the curves for positions 10, 25 and 40 agree to
+  within \textbf{0.0000}. So a head can learn ``attend three tokens back'' once and reuse it
+  everywhere -- including at positions longer than anything it was trained on.}
+
+  \vskip 4pt
+  {\small Modern models mostly use \textbf{RoPE} instead, which rotates $\mathbf{q}$ and
+  $\mathbf{k}$ by an angle proportional to position. Same goal, better extrapolation.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{The block}
+\sectiontransition{The block}{What you actually stack.}
+
+\begin{frame}{The Transformer block}
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+      \vskip -6pt
+      \includegraphics[width=\linewidth]{l25_block.pdf}
+    \column{0.55\textwidth}
+      \vskip 12pt
+      {\small
+      \textbf{Multi-head attention} -- tokens exchange information. The \emph{only} place in the
+      whole block where tokens see each other.
+
+      \vskip 6pt
+      \textbf{Feed-forward network (FFN)} -- an ordinary MLP (\textbf{L14}) applied to each
+      token separately, usually widening $4\times$ and back. Most of the parameters live here.
+
+      \vskip 6pt
+      \textbf{Add \& Norm} -- the residual connection (\textbf{ResNet, L17}) plus LayerNorm
+      (BatchNorm's cousin, \textbf{L15}).}
+  \end{columns}
+
+  \vskip 4pt
+  \keybox{Three familiar pieces from three earlier chapters. The only genuinely new component
+  in a Transformer is the attention -- everything else you already met.}
+\end{frame}
+
+\begin{frame}{The residual stream is the real object}
+  \vskip 8pt
+  It is tempting to read the block as ``attention, then an MLP''. A more useful reading:
+  there is a \textbf{stream} of token vectors running straight through the network, and each
+  sublayer \emph{writes an update into it}.
+
+  \vskip 8pt
+  \begin{center}
+    $\mathbf{x} \leftarrow \mathbf{x} + \text{Attention}(\text{Norm}(\mathbf{x}))$
+    \qquad then \qquad
+    $\mathbf{x} \leftarrow \mathbf{x} + \text{FFN}(\text{Norm}(\mathbf{x}))$
+  \end{center}
+
+  \vskip 8pt
+  \takebox{Two consequences. \textbf{Gradients} reach the early layers unimpeded, which is why
+  you can stack 96 of these -- exactly the ResNet argument from L17. And every sublayer's output
+  is a \textbf{correction} to a running representation, not a fresh one, which is why the same
+  token's vector can accumulate meaning gradually with depth.}
+\end{frame}
+
+\bbbcap{attn_mlp_flow.png}{The flow through a block: attention lets tokens talk, then the MLP
+processes each one alone. Repeat.}
+
+\begin{frame}{Masking: how a decoder avoids reading the future}
+  \vskip 4pt
+  A model trained to predict the next token must not be allowed to look at it. The fix is one
+  line: add $-\infty$ above the diagonal \emph{before} the softmax.
+
+  \vskip 6pt
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{l25_causal_mask.pdf}
+  \end{center}
+
+  \vskip -2pt
+  {\small $e^{-\infty} = 0$, so those weights become \textbf{exactly} zero -- measured here as
+  $0.000$ attention paid to any future token -- and each row still sums to one.}
+\end{frame}
+
+\begin{frame}{Why that trick matters more than it looks}
+  \vskip 10pt
+  Without masking, you would have to train on one prediction at a time: feed the first $t$
+  tokens, predict token $t{+}1$, repeat.
+
+  \vskip 10pt
+  With masking, a single forward pass over a sequence of length $n$ produces
+  \textbf{$n$ training signals at once} -- every prefix is being predicted simultaneously, and
+  none of them can cheat.
+
+  \vskip 12pt
+  \keybox{This is a large part of why pretraining on internet-scale text is affordable at all.
+  The causal mask is not a safety measure; it is a \textbf{throughput} decision that happens to
+  enforce correctness.}
+\end{frame}
+
+\begin{frame}{Modern block recipe}
+  \vskip 8pt
+  The 2017 block has been tuned. Three changes you will meet in every current model:
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{2017} & \textbf{Now} & \textbf{Why} \\
+    \midrule
+    Norm \emph{after} the sublayer & \textbf{Pre-LN} (normalise first) & trains stably, no warmup \\
+    LayerNorm & \textbf{RMSNorm} & cheaper, no mean subtraction \\
+    ReLU in the FFN & \textbf{SwiGLU} & gated, better quality per parameter \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 12pt
+  \watchbox{None of these changes the story. If you understand attention, residuals and a
+  per-token MLP, you understand a 2026 model -- the rest is engineering that moved a few
+  percent and then stayed.}
+\end{frame}
+
+\begin{frame}{Now stack it}
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+      \vskip -4pt
+      \includegraphics[width=\linewidth]{deep_stack.png}\\ \bbb
+    \column{0.47\textwidth}
+      \vskip 10pt
+      {\small Blocks are identical in shape and stacked $N$ deep: 12 for the original BERT, 96
+      for GPT-3.
+
+      \vskip 8pt
+      Each pass alternates \textbf{tokens talking} (attention) with \textbf{each token
+      thinking alone} (the MLP).
+
+      \vskip 8pt
+      A token's vector starts as ``the word \emph{king}'' and, layer by layer, accumulates
+      everything the context implies -- who this king is, what happened to him, what the
+      sentence expects next.}
+  \end{columns}
+
+  \vskip 4pt
+  \takebox{Same block, many times. That is the entire architecture.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vskip 4pt
+  \small
+  \begin{itemize}
+    \item \textbf{Multi-head} = the same attention run $h$ times on \emph{splits} of the
+      embedding, then concatenated. No extra parameters, several independent views. Measured:
+      12 heads in one layer, attention entropy from 0.92 to 1.85.
+    \item \textbf{Attention cannot see order} -- proved, not asserted: reversing a sentence
+      changed the output by $1.1\times10^{-16}$. Position must be added by hand.
+    \item \textbf{Sinusoidal encodings} give every position a fingerprint whose similarity
+      depends on distance, not absolute location. Modern models use RoPE for the same reason.
+    \item \textbf{The block} = multi-head attention, then a per-token MLP, each wrapped in a
+      residual and a norm. Attention is the only new part; residuals are L17 and norms are L15.
+    \item \textbf{Causal masking} sets future weights to exactly zero, which turns one forward
+      pass into $n$ training examples.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\bfseries\color{popblue} You can now build one.}\\[0.9em]
+    {\large What you cannot yet say is why \emph{this} arrangement}\\[0.25em]
+    {\large beat everything else that was tried -}\\[0.25em]
+    {\large or what it is still bad at.}\\[1.3em]
+    {\large\color{paramgreen}\textbf{Next:} the family, how it learns, and the honest limits.}
+  \end{center}
+  \vfill
+\end{frame}
+
+\end{document}
+
+% ============================================================================
+% Provenance
+%
+% PLAN: ml/ch9_attention/ATTENTION_CHAPTER_PLAN.md, section "L25", approved by the instructor
+% 2026-07-19. Frame order follows that outline; the optional "modern block recipe" frame was
+% kept rather than cut.
+%
+% SOURCES:
+%   - misc/dl4nlp/02_transformers.tex - multi-head, positional encoding, the block, and the
+%     modern-variant table were adapted from it (already in the house palette).
+%   - 3Blue1Brown Ch5/Ch6, transcripts in research/, frames in fig/borrowed/3b1b/ with a
+%     manifest. Used: multihead.png, attn_mlp_flow.png, deep_stack.png, single_head_full.png.
+%     Credit line only, per the instructor's 2026-07-21 decision (no licence tag).
+%   - Vaswani et al. (2017) for the PE formula; the architecture figure itself is used in L26.
+%
+% FIGURES - py_src/l25_l26_figs.py and py_src/l25_real_attention.py:
+%   REAL (every number quoted on a slide comes from these scripts' logs):
+%     l25_permutation    - the same three tokens in two orders give per-token outputs differing
+%                          by 1.1e-16 without positional encoding, and 1.797 with it. The script
+%                          RAISES if the no-PE gap exceeds 1e-9, so the deck's central claim in
+%                          section 2 cannot silently become false.
+%     l25_pe_heatmap     - the sinusoidal matrix, computed from the formula on the slide.
+%     l25_pe_dotprod     - PE similarity depends on offset not absolute position; the curves for
+%                          positions 10/25/40 agree to within 0.0000.
+%     l25_causal_mask    - masked attention pays exactly 0.000 to future tokens; script asserts it.
+%     l25_real_heads     - REAL attention weights pulled from intfloat/multilingual-e5-small
+%     l25_head_entropy     (12 layers x 12 heads) on the 3b1b running sentence, so the chapter
+%                          keeps one example from L24's single head through to multi-head.
+%                          Layer 6: sharpest head 1 (entropy 0.92), most diffuse head 0 (1.85).
+%   ILLUSTRATIVE (labelled "schematic" on the figure itself):
+%     l25_block          - the block as a data-flow diagram.
+%
+% DELIBERATE CHOICES:
+%   - The permutation result is the section-2 predict-first payoff. It is stated as a proof
+%     ("not slightly different - identical") because it is one: the mechanism has no term in i
+%     or j, which the following frame spells out.
+%   - The "what heads learn" frame carries an explicit warning that the labels are our
+%     interpretation, not measured. The measured claim is the entropy spread on the frame before.
+%   - RoPE and ALiBi are named in one line and not derived, per the plan.
+%
+% NOT DONE:
+%   - No homework frame (house rule: homework lives on the chapter .qmd).
+%   - Cross-attention is deferred to L26, where it belongs with the encoder-decoder family.
+% ============================================================================

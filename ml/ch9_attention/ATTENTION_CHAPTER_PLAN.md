@@ -238,8 +238,35 @@ Scope questions 1-5 resolved 2026-07-19 (see "Decisions"). Still open:
 - [x] Plan + outline drafted, then revised to 3 decks after a critique pass (this file).
 - [x] Scope approved by instructor (2026-07-19); one open item left: the HW/practical decision.
 - [x] 3b1b key-frame extraction: **29 frames** in `fig/borrowed/3b1b/` (+ manifest `README.md`).
-- [ ] Web-image pull (Vaswani figure, attention heatmap, BertViz, captioning, 2026 montage).
-- [ ] Figure scripts (`py_src/`).
-- [ ] Build L24 -> L25 -> L26 (one at a time; 2x pdflatex, overflow check, aux clean, provenance).
-- [ ] Build L24, then L25 (2x pdflatex, overflow check, aux clean, provenance block).
-- [ ] `attention.qmd` + `_quarto.yml` registration.
+- [x] Web-image pull: **Vaswani Figure 1 only** (2026-08-11). Page 3 of arXiv 1706.03762
+      extracted with pypdf to `fig/borrowed/paper/`, cropped on the slide. The attention
+      heatmap was NOT borrowed - it is generated from a real model instead (see below), which
+      is better than a published picture because it is reproducible from this repo. BertViz
+      moved to the homework as an optional exercise; the 2026 montage became a table.
+- [x] Figure scripts: `py_src/l25_l26_figs.py` (7 figures) and `py_src/l25_real_attention.py`
+      (2 figures, real attention weights from intfloat/multilingual-e5-small).
+- [x] Build L25 (26pp) and L26 (20pp): 2x pdflatex, margin scan clean, aux cleaned,
+      provenance blocks written. L24 was already built.
+- [x] `attention.qmd` updated for all three decks + the numpy attention homework.
+- [ ] Video links once recorded; Google Form questionnaire still TBD.
+
+## Open questions, resolved 2026-08-11
+
+1. **Homework:** option (a) - implement scaled dot-product attention in numpy - with the
+   BertViz exploration as the optional extra. On the `.qmd`. The exercise asks students to
+   reproduce the deck's own permutation-equivariance result as its third check, so a wrong
+   implementation is self-detecting.
+2. **Interactive angle:** BertViz link included in the homework rather than as a separate
+   interactive section.
+3. **Deck 3 (L26) scope:** kept both the quadratic wall and the applications survey, but the
+   survey became a TABLE mapping each modality to what counts as a token and to the chapter
+   that covers it - no external images, and it doubles as a map of the rest of the course.
+   L26 came out at 20 pages, so length was never a problem.
+
+## Unplanned frame that the arithmetic forced
+
+L26 has a frame, "Read that graph carefully", which is not in this outline. Computing the
+attention and feed-forward FLOPs properly put the crossover at **16,384 tokens** for
+d_model=4096 - meaning that at a typical 2k context the feed-forward, not attention, dominates.
+That contradicts the usual "attention is the bottleneck" summary strongly enough to deserve
+its own frame.
