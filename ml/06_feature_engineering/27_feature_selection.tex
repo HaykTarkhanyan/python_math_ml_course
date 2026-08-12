@@ -202,8 +202,8 @@
 \end{frame}
 
 \begin{frame}{Refresher: what each chapter-5 tool measures}
-  \begin{center}\small
-    \renewcommand{\arraystretch}{1.25}
+  \begin{center}\footnotesize
+    \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{@{}l l l@{}}
       \textbf{Tool} & \textbf{The question it answers} & \textbf{From} \\ \hline
       \textbf{Permutation feature importance} (PFI) & how much does the model \emph{rely} on it? & L23 \\
@@ -401,47 +401,6 @@ SelectKBest(mutual_info_regression,
   500, never from 500 to 15. A feature that fails on its own may be indispensable in company.}
 \end{frame}
 
-\begin{frame}{Multivariate filters}
-  Filters that look at features \emph{together}, without the cost of a wrapper:
-  \vfill
-  \begin{itemize}\small
-    \item \textbf{Minimum Redundancy Maximum Relevance} (mRMR). Greedily pick the feature
-      maximising (relevance to $y$) $-$ (mean correlation with what you already picked). Directly
-      attacks the \texttt{temp}/\texttt{atemp} problem: the second one adds relevance but also
-      redundancy.
-    \item \textbf{Cluster-and-represent.} Hierarchically cluster the features by correlation, keep
-      one representative per cluster. Crude, cheap, effective when $p$ is huge.
-    \item \textbf{Hilbert-Schmidt Independence Criterion Lasso} (HSIC-Lasso). Kernel-based, catches
-      non-linear dependence, scales to many thousands of features.
-  \end{itemize}
-  \vfill
-  \footnotesize Libraries: \texttt{mrmr-selection}, \texttt{scikit-feature}. These are not the main
-  event in most projects, but they earn their keep in genomics and sensor data, where $p$ is in the
-  tens of thousands and half the columns are near-duplicates.
-\end{frame}
-
-\begin{frame}{How many features pass by pure chance?}
-  Score \textbf{10{,}000 columns of random numbers} against the bike target:
-  \vskip 3pt
-  \begin{center}
-    \includegraphics[width=0.84\linewidth]{fig/fs_multiple_testing.pdf}
-  \end{center}
-  \vskip -2pt
-  \begin{columns}[T]
-    \column{0.53\textwidth}
-    \footnotesize \textbf{528} clear $\alpha = 0.05$. The best random column reaches
-    $p = 1.17 \times 10^{-4}$ --- a number most people would call significant without blinking.
-    \column{0.45\textwidth}
-    \footnotesize The $p$-values are \emph{uniform}, exactly as theory says. 5\% of them land below
-    $0.05$ because that is what $0.05$ \emph{means}.
-  \end{columns}
-  \vskip 3pt
-  \callout{armred}{Control the family-wise error rate with \textbf{Bonferroni} ($\alpha/m$) or the
-  false discovery rate with \textbf{Benjamini-Hochberg} (1995) --- \texttt{SelectFwe},
-  \texttt{SelectFdr}. Both remove all 528. \textbf{Almost nobody applies them to a feature pool},
-  and last lecture's 230 mechanical candidates are exactly this problem at smaller scale.}
-\end{frame}
-
 % ================================================================
 \section{Wrapper methods}
 
@@ -502,16 +461,22 @@ X_sel = X[:, rfe.support_]
 \end{frame}
 
 \begin{frame}[fragile]{Sequential selection: forward and backward}
+  Both work in \textbf{rounds}, and in every round they cross-validate \emph{whole subsets} ---
+  never a feature on its own.
+  \vskip 4pt
   \begin{columns}[T]
-    \column{0.52\textwidth}
+    \column{0.53\textwidth}
     \footnotesize
-    \textbf{Forward} --- start empty, repeatedly add the feature that most improves
-    cross-validation. Fast when you want \emph{few} features.
-    \vskip 4pt
-    \textbf{Backward} --- start full, repeatedly drop the one whose removal hurts least. Fast when
-    you want to drop only a few. \emph{This is Leave-One-Covariate-Out, run greedily to
-    exhaustion.}
-    \column{0.46\textwidth}
+    \textbf{Forward} --- start with \textbf{nothing}.
+    \begin{itemize}\scriptsize
+      \item Round 1: cross-validate all $p$ \emph{one-feature} models, keep the single best feature.
+      \item Round 2: try that winner paired with each of the remaining $p-1$, keep the best pair.
+      \item Round $j$: try the $j-1$ survivors plus each remaining candidate.
+    \end{itemize}
+    \vskip 3pt
+    \textbf{Backward} --- start with \textbf{everything}. Each round, try deleting each surviving
+    feature in turn, and permanently drop the one you miss least.
+    \column{0.45\textwidth}
 {\lstset{basicstyle=\ttfamily\scriptsize}
 \begin{lstlisting}
 SequentialFeatureSelector(
@@ -520,13 +485,35 @@ SequentialFeatureSelector(
     direction="forward",   # or "backward"
     cv=5).fit(X, y)
 \end{lstlisting}}
+    \vskip 2pt
+    \scriptsize A feature picked in round 1 is \textbf{never reconsidered} later. That is exactly
+    what ``greedy'' means here.
   \end{columns}
-  \vfill
-  \callout{armred}{\textbf{Both are greedy, and greedy fails on the exclusive-or (XOR) trap.}
-  Forward selection
-  evaluates $x_1$ alone (useless), then $x_2$ alone (useless), and never adds either --- so it
-  never discovers that together they are perfect. Backward selection has the mirror problem. When
-  features only pay off jointly, \emph{no} greedy method finds them.}
+  \vskip 2pt
+  \callout{paramgreen}{Forward is cheap when you want \emph{few} features, backward when you want to
+  drop only a few. \textbf{Backward is Leave-One-Covariate-Out, run greedily to exhaustion.}}
+\end{frame}
+
+\begin{frame}{Sequential selection is not recursive elimination}
+  Backward selection and \texttt{RFE} both start full and shrink one feature at a time. They choose
+  \emph{which} feature to drop completely differently:
+  \vskip 5pt
+  \begin{center}\footnotesize
+    \renewcommand{\arraystretch}{1.35}
+    \begin{tabular}{@{}l l l@{}}
+      & \textbf{RFE} & \textbf{Backward SFS} \\ \hline
+      What picks the victim & the model's own \texttt{coef\_} & the cross-validated score \\
+      Model fits per round & \textbf{one} & one \emph{per surviving feature} $\times$ \texttt{cv} \\
+      Needs importances? & yes & no, any estimator with a score \\
+      Cost, $230 \rightarrow 15$ & $\approx 215$ fits & $\approx 16{,}700$ fits \\
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \callout{armred}{\texttt{RFE} \textbf{trusts} the model's ranking; sequential selection
+  \textbf{measures} what each removal actually costs --- more honest, and about eighty times
+  dearer. \textbf{Both are greedy, so both fail the exclusive-or (XOR) trap:} forward tries $x_1$
+  alone (useless), then $x_2$ alone (useless), and never adds either. When features only pay off
+  jointly, \emph{no} greedy method finds them.}
 \end{frame}
 
 \begin{frame}{Boruta: asking a different question}
@@ -539,7 +526,8 @@ SequentialFeatureSelector(
       It has the same distribution and, by construction, \emph{no relationship to $y$}.
     \item Fit a random forest on real $+$ shadow features together.
     \item Any real feature scoring above the \textbf{maximum} shadow importance gets a hit.
-      (The maximum, not the mean --- this is the multiple-testing correction from slide 20, built in.)
+      (The maximum, not the mean. With enough shadows, some will beat the average by luck alone ---
+      testing against the best of them is what stops noise sneaking through.)
     \item Repeat with fresh shuffles. Over many iterations, a feature that consistently beats the
       best shadow is \textbf{confirmed}; one that consistently loses is \textbf{rejected}.
   \end{enumerate}
@@ -706,7 +694,7 @@ cross_val_score(pipe, X, y, cv=5)
                 text width=3.5cm, align=center, minimum height=0.75cm},
       a/.style={->, thick, armblue}]
       \node[q] (p) {$p >$ a few thousand?};
-      \node[r, right=of p] (pf) {filter first: variance $+$ mutual information $+$ false discovery rate};
+      \node[r, right=of p] (pf) {filter first: variance $+$ mutual information};
       \node[q, below=of p] (goal) {minimal set, or \emph{all} relevant?};
       \node[r, right=of goal] (bor) {all-relevant $\rightarrow$ \textbf{Boruta}};
       \node[q, below=of goal] (cost) {can you afford $\mathcal{O}(p)$ refits?};
@@ -772,6 +760,17 @@ cross_val_score(pipe, X, y, cv=5)
 %     stability split is 68/99 (not 50/50).
 %   - Unplanned finding promoted to a frame: Boruta rejects holiday/weekday/workingday while
 %     stability selection keeps weekday at 100%. Same data, opposite verdicts, different questions.
+%   - REMOVED 2026-08-12 (instructor): "Multivariate filters" (mRMR, cluster-and-represent,
+%     HSIC-Lasso) and "How many features pass by pure chance?" (the 10,000-noise-column
+%     multiplicity experiment, Bonferroni / Benjamini-Hochberg). Knock-ons fixed: the Boruta
+%     frame's "max, not mean" aside no longer cites the deleted slide and explains itself;
+%     the decision flowchart no longer routes to false discovery rate. fig/fs_multiple_testing.pdf
+%     is now unused (kept on disk, still regenerated by py_src/fs_figs.py). Note M13 in the
+%     outline (528 of 10,000 pass at alpha=0.05) is no longer taught anywhere in the chapter.
+%   - ADDED 2026-08-12: "Sequential selection is not recursive elimination". The old single
+%     sequential-selection frame never said how forward selection picks, and sat directly after
+%     RFE without distinguishing itself -- a student read it as "backward == RFE". Fit counts
+%     (215 vs ~16,700 for 230 -> 15 at cv=5) are arithmetic, not measured by fe_measure.py.
 %   - Deliberately NOT covered (chapter 5 owns them): PFI, CFI, LOCO, SAGE, SHAP mechanics.
 %   - Scope: regression only, matching deck 26, by instructor decision.
 % =============================================================
