@@ -9,9 +9,10 @@ Tuesday/Thursday pattern). Times on the "Metric" Google Calendar.
 
 ---
 
-## Delivered ✅ — [01] through [24]
+## Delivered ✅ — [01] through [24], plus [26] and [27]
 
-Last delivered: **[24] SHAP & LIME**, notes exported 2026-07-30.
+Last delivered: **[26] Feature engineering** and **[27] Feature selection** on 2026-08-12,
+notes exported the same day. **[28] classic methods was cut for time** and needs a new slot.
 
 | # | Lecture |
 |---|---|
@@ -39,8 +40,10 @@ Last delivered: **[24] SHAP & LIME**, notes exported 2026-07-30.
 | [22] | Interpreting linear models & trees — glass boxes, split credit, RuleFit |
 | [23] | PFI & feature effects — PFI/CFI/LOCO/SAGE, fANOVA, ICE→PDP→M-plot→ALE, Friedman's H |
 | [24] | SHAP & LIME — Shapley values, the four SHAP plots, LIME, counterfactuals |
+| [26] | Feature engineering — same row / many rows / outside the data, target-encoding leakage |
+| [27] | Feature selection — filter / wrapper / embedded, Boruta, stability selection |
 
-Videos for [22]–[24] are recorded but not yet published.
+Videos for [22]–[24] are recorded but not yet published. [26] and [27] are not yet recorded.
 
 ---
 
@@ -48,7 +51,8 @@ Videos for [22]–[24] are recorded but not yet published.
 
 | Date | Day | Session | Material |
 |---|---|---|---|
-| **Aug 12** | Wed | Feature engineering + feature selection + classic methods | `26_feature_engineering` · `27_feature_selection` · `28_svm_and_classic_methods` |
+| ~~**Aug 12**~~ | Wed | ✅ Feature engineering + feature selection — **delivered**, notes exported. Classic methods was cut for time. | `26_feature_engineering` · `27_feature_selection` |
+| **next slot** | — | Classic methods — **slipped from Aug 12**, needs rescheduling | `28_svm_and_classic_methods` |
 | **Aug 14** | Fri | Time series lecture | `30_classical_time_series` · `31_ml_time_series` |
 | **Aug 16** | Sun | *Practical* — Armenia electricity / gas usage | `32_electricity_forecast_solution.ipynb` |
 | **Aug 19** | Wed | Clustering | `L13_clustering` |
