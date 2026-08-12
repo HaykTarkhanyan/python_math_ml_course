@@ -153,6 +153,230 @@ def lda_qda():
     save(fig, "cm_lda_qda.pdf")
 
 
+# ------------------------------------------------ why "scale first" is not advice
+def scaling_matters():
+    """One useless column with big numbers destroys KNN. The same data, scaled, recovers it.
+
+    Feature 1 carries all the signal; feature 2 is pure noise on a 100x larger range.
+    Accuracies are measured on a held-out split, not asserted.
+    """
+    rng = np.random.RandomState(SEED)
+    n = 400
+    y = rng.randint(0, 2, n)
+    f1 = rng.normal(0, 1, n) + np.where(y == 1, 1.6, -1.6)   # informative
+    f2 = rng.normal(0, 1, n) * 100.0                          # pure noise, huge range
+    X = np.c_[f1, f2]
+    tr, te = np.arange(n) % 4 != 0, np.arange(n) % 4 == 0     # 75/25, deterministic
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.9))
+    accs = {}
+    for ax, scaled in zip(axes, [False, True]):
+        Xw = X.copy()
+        if scaled:
+            Xw = (Xw - Xw[tr].mean(0)) / Xw[tr].std(0)        # statistics from train only
+        clf = KNeighborsClassifier(n_neighbors=15).fit(Xw[tr], y[tr])
+        acc = clf.score(Xw[te], y[te])
+        accs["scaled" if scaled else "raw"] = acc
+        step = (Xw[:, 0].max() - Xw[:, 0].min() + Xw[:, 1].max() - Xw[:, 1].min()) / 300.0
+        xx, yy = _mesh(Xw, h=step, pad=0.4)
+        Z = clf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+        ax.contourf(xx, yy, Z, cmap=CMAP_LIGHT, alpha=0.9)
+        ax.contour(xx, yy, Z, levels=[0.5], colors=ORANGE, linewidths=2)
+        _scatter(ax, Xw, y)
+        head = "standardized" if scaled else "raw units"
+        ax.set_title(f"{head}  --  test accuracy {acc:.0%}", fontsize=12)
+        ax.set_xlabel("feature 1  (the signal)")
+        ax.set_ylabel("feature 2  (pure noise)")
+        ax.set_xticks([]); ax.set_yticks([])
+    log.info(f"scaling_matters: raw={accs['raw']:.3f} scaled={accs['scaled']:.3f}")
+    save(fig, "cm_scaling_matters.pdf")
+
+
+# ---------------------------------------------------------- the RBF width knob
+def svm_gamma():
+    """gamma sets how wide each support vector's bump is: underfit -> good -> islands."""
+    X, y = make_moons(n_samples=260, noise=0.26, random_state=SEED)
+    X = (X - X.mean(0)) / X.std(0)
+    tr, te = np.arange(len(X)) % 4 != 0, np.arange(len(X)) % 4 == 0
+    xx, yy = _mesh(X, pad=0.6)
+
+    gammas = [0.05, 1.0, 60.0]
+    labels = ["too small: almost linear", "about right", "too large: islands"]
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.6))
+    for ax, g, lab in zip(axes, gammas, labels):
+        clf = SVC(kernel="rbf", C=10, gamma=g).fit(X[tr], y[tr])
+        tr_acc, te_acc = clf.score(X[tr], y[tr]), clf.score(X[te], y[te])
+        Z = clf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+        ax.contourf(xx, yy, Z, cmap=CMAP_LIGHT, alpha=0.9)
+        ax.contour(xx, yy, Z, levels=[0.5], colors=ORANGE, linewidths=2)
+        _scatter(ax, X, y)
+        ax.set_title(rf"$\gamma$ = {g}  --  {lab}", fontsize=11)
+        ax.set_xlabel(f"train {tr_acc:.0%}    test {te_acc:.0%}", fontsize=11)
+        ax.set_xticks([]); ax.set_yticks([])
+        log.info(f"svm_gamma: gamma={g} train={tr_acc:.3f} test={te_acc:.3f}")
+    save(fig, "cm_svm_gamma.pdf")
+
+
+# -------------------------------------------- LDA: the generative story in 1-D
+def lda_story():
+    """Three panels: raw data -> one scaled Gaussian per class -> the taller one wins.
+
+    Everything (means, pooled sd, priors, boundary) is estimated from the sample --
+    nothing is hand-placed, so the crossing point is a real computed quantity.
+    """
+    rng = np.random.RandomState(SEED)
+    n0, n1 = 60, 40                       # unequal on purpose: the prior will show
+    x0 = rng.normal(-1.4, 1.0, n0)
+    x1 = rng.normal(1.6, 1.0, n1)
+    mu0, mu1 = x0.mean(), x1.mean()
+    # pooled sd = LDA's "shared Sigma" assumption, in one dimension
+    sd = np.sqrt(((n0 - 1) * x0.var(ddof=1) + (n1 - 1) * x1.var(ddof=1))
+                 / (n0 + n1 - 2))
+    pi0, pi1 = n0 / (n0 + n1), n1 / (n0 + n1)
+
+    grid = np.linspace(-5.5, 5.5, 700)
+
+    def scaled(pi, mu):
+        """pi_k * p(x | y=k) -- the quantity LDA actually compares."""
+        return pi * np.exp(-0.5 * ((grid - mu) / sd) ** 2) / (sd * np.sqrt(2 * np.pi))
+
+    f0, f1 = scaled(pi0, mu0), scaled(pi1, mu1)
+    # equal variances => exactly one crossing, available in closed form
+    boundary = 0.5 * (mu0 + mu1) + (sd ** 2 / (mu1 - mu0)) * np.log(pi0 / pi1)
+    top = max(f0.max(), f1.max())
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.3))
+
+    # (1) the raw data
+    ax = axes[0]
+    ax.scatter(x0, rng.uniform(-0.10, 0.10, n0), c=RED, s=20, alpha=0.85,
+               edgecolor="white", linewidth=0.4)
+    ax.scatter(x1, rng.uniform(-0.10, 0.10, n1), c=BLUE, s=20, alpha=0.85,
+               edgecolor="white", linewidth=0.4)
+    ax.set_ylim(-0.6, 0.6)
+    ax.set_yticks([])
+    ax.set_title("1. One feature, two classes")
+    ax.text(0.5, -0.42, "they overlap -- no clean cut", ha="center", fontsize=10,
+            color=GREY, transform=ax.transData)
+
+    # (2) a Gaussian per class, each scaled by its prior, evaluated at a query point
+    ax = axes[1]
+    ax.plot(grid, f0, color=RED, lw=2.2)
+    ax.plot(grid, f1, color=BLUE, lw=2.2)
+    xq = 0.0
+    h0 = float(pi0 * np.exp(-0.5 * ((xq - mu0) / sd) ** 2) / (sd * np.sqrt(2 * np.pi)))
+    h1 = float(pi1 * np.exp(-0.5 * ((xq - mu1) / sd) ** 2) / (sd * np.sqrt(2 * np.pi)))
+    ax.vlines(xq, 0, max(h0, h1), color=GREY, ls=":", lw=1.6)
+    ax.scatter([xq, xq], [h0, h1], c=[RED, BLUE], s=55, zorder=5,
+               edgecolor="white", linewidth=1.0)
+    ax.annotate(f"{h0:.3f}", (xq, h0), textcoords="offset points", xytext=(8, 2),
+                color=RED, fontsize=10, fontweight="bold")
+    ax.annotate(f"{h1:.3f}", (xq, h1), textcoords="offset points", xytext=(8, -4),
+                color=BLUE, fontsize=10, fontweight="bold")
+    ax.set_title(r"2. Score each class: $\pi_k \, p(x \mid y{=}k)$")
+    ax.set_ylim(0, top * 1.25)
+    ax.set_yticks([])
+
+    # (3) whoever is taller wins -> the boundary is where they cross
+    ax = axes[2]
+    ax.plot(grid, f0, color=RED, lw=2.2)
+    ax.plot(grid, f1, color=BLUE, lw=2.2)
+    ax.fill_between(grid, 0, top * 1.25, where=f0 >= f1, color="#F3CDD0", alpha=0.75)
+    ax.fill_between(grid, 0, top * 1.25, where=f1 > f0, color="#CBD6EC", alpha=0.75)
+    ax.axvline(boundary, color=ORANGE, lw=2.2)
+    ax.annotate(f"boundary\nx = {boundary:.2f}", (boundary, top * 1.10),
+                textcoords="offset points", xytext=(8, 0), color=ORANGE,
+                fontsize=10, fontweight="bold")
+    ax.set_title("3. Predict the taller curve")
+    ax.set_ylim(0, top * 1.25)
+    ax.set_yticks([])
+
+    for ax in axes:
+        ax.set_xlim(-5.5, 5.5)
+        ax.set_xlabel("x")
+    save(fig, "cm_lda_story.pdf")
+
+
+# --------------------------------------- generative = you can sample new data
+def generative_sampling():
+    """Fit a Gaussian per class, then draw brand-new points from the fitted model.
+
+    Means and covariances are estimated from the real sample; the right panel is
+    drawn from those estimates, so not one of its points appeared in training.
+    """
+    rng = np.random.RandomState(SEED)
+    n = 240
+    X0 = rng.multivariate_normal([-1.7, 0.2], [[0.62, 0.28], [0.28, 0.50]], n)
+    X1 = rng.multivariate_normal([1.5, 0.6], [[1.60, -0.85], [-0.85, 1.05]], n)
+
+    # this IS the model: one mean + one covariance per class, estimated from data
+    m0, C0 = X0.mean(0), np.cov(X0.T)
+    m1, C1 = X1.mean(0), np.cov(X1.T)
+    S0 = rng.multivariate_normal(m0, C0, n)     # never-seen points
+    S1 = rng.multivariate_normal(m1, C1, n)
+
+    fig, axes = plt.subplots(1, 2, figsize=(8.8, 3.9))
+    panels = [("real training data", X0, X1), ("sampled from the fitted model", S0, S1)]
+    for ax, (title, A, B) in zip(axes, panels):
+        ax.scatter(A[:, 0], A[:, 1], c=RED, s=18, alpha=0.75,
+                   edgecolor="white", linewidth=0.4)
+        ax.scatter(B[:, 0], B[:, 1], c=BLUE, s=18, alpha=0.75,
+                   edgecolor="white", linewidth=0.4)
+        for mean, cov, col in [(m0, C0, RED), (m1, C1, BLUE)]:
+            _cov_ellipse(ax, mean, cov, col)
+        ax.set_title(title)
+        ax.set_xlim(-4.6, 5.2); ax.set_ylim(-3.2, 3.6)
+        ax.set_xticks([]); ax.set_yticks([])
+    axes[1].text(0.5, -0.08, "not one of these points was in the training set",
+                 ha="center", fontsize=10, color=GREY, transform=axes[1].transAxes)
+    save(fig, "cm_generative_sampling.pdf")
+
+
+# ------------------------------------------- what Sigma^{-1} actually measures
+def mahalanobis():
+    """Same Euclidean distance, different Mahalanobis distance -- the whole idea."""
+    rng = np.random.RandomState(SEED)
+    cov = np.array([[4.0, 0.0], [0.0, 1.0]])      # four times wider than tall
+    pts = rng.multivariate_normal([0.0, 0.0], cov, 260)
+    A, B = np.array([2.0, 0.0]), np.array([0.0, 2.0])
+    cinv = np.linalg.inv(cov)
+    d2A, d2B = float(A @ cinv @ A), float(B @ cinv @ B)
+    # these are the exact numbers quoted on the slide; fail loudly if they drift
+    assert np.isclose(d2A, 1.0) and np.isclose(d2B, 4.0), (d2A, d2B)
+
+    fig, axes = plt.subplots(1, 2, figsize=(8.8, 4.0))
+    for ax, kind in zip(axes, ["euclid", "maha"]):
+        ax.scatter(pts[:, 0], pts[:, 1], c=GREY, s=12, alpha=0.35, zorder=1)
+        if kind == "euclid":
+            circ = plt.Circle((0, 0), 2.0, fill=False, edgecolor=GREY, ls="--",
+                              lw=2.0, zorder=4)
+            ax.add_patch(circ)
+            ax.set_title("Euclidean: both are 2 away")
+            note = "one ruler for every direction"
+        else:
+            for c, col in [(1.0, ORANGE), (2.0, POP)]:
+                _cov_ellipse(ax, [0, 0], cov, col, nstd=c)
+            ax.set_title(r"Mahalanobis: the class's own ruler")
+            note = "wide axis = cheap, narrow axis = expensive"
+        # A sits at the right edge, so its label goes below the point, not beside it
+        offsets = {"A": (10, 8), "B": (10, 8)} if kind == "euclid" \
+            else {"A": (-16, -30), "B": (8, 10)}
+        for pt, lab, col in [(A, "A", RED), (B, "B", BLUE)]:
+            ax.scatter(*pt, c=col, s=110, marker="X", edgecolor="white",
+                       linewidth=1.3, zorder=6)
+            d2 = d2A if lab == "A" else d2B
+            txt = lab if kind == "euclid" else f"{lab}:  $d^2={d2:.0f}$"
+            ax.annotate(txt, pt, textcoords="offset points", xytext=offsets[lab],
+                        color=col, fontsize=11, fontweight="bold", zorder=7)
+        ax.scatter(0, 0, c="black", s=40, marker="+", zorder=6)
+        ax.set_xlim(-6.6, 6.6); ax.set_ylim(-3.4, 3.4)
+        ax.set_aspect("equal")
+        ax.set_xticks([]); ax.set_yticks([])
+        ax.text(0.5, -0.09, note, ha="center", fontsize=10, color=GREY,
+                transform=ax.transAxes)
+    save(fig, "cm_mahalanobis.pdf")
+
+
 # ---------------------------------------------------------- SVM hard margin
 def svm_margin():
     X, y = make_blobs(n_samples=60, centers=[[-1.6, -1.2], [1.6, 1.2]],
@@ -312,6 +536,11 @@ def synthesis():
 if __name__ == "__main__":
     log.info("generating classic-methods figures ...")
     knn_boundary()
+    scaling_matters()
+    svm_gamma()
+    lda_story()
+    generative_sampling()
+    mahalanobis()
     lda_qda()
     svm_margin()
     svm_soft_margin()

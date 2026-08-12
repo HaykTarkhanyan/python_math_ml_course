@@ -38,9 +38,11 @@
 % ================================================================
 % HOOK
 \begin{frame}{Five classic ideas worth knowing}
-  Trees and boosting (L09--L12) win most tabular problems today. But five \textbf{classic}
-  methods still show up everywhere --- in interviews, in libraries, and as the \emph{ideas}
-  behind modern tools. Each has \textbf{one beautiful, transferable idea}.
+  The last two lectures were about \textbf{which columns} the model sees --- building them
+  ([26]) and cutting them ([27]). This one is about \textbf{how it draws the boundary} once it
+  has them. Trees and boosting ([17]--[20]) win most tabular problems today, but five
+  \textbf{classic} methods still show up everywhere --- in interviews, in libraries, and as the
+  \emph{ideas} behind modern tools. Each has \textbf{one beautiful, transferable idea}.
   \vfill
   \begin{center}\small
     \renewcommand{\arraystretch}{1.25}
@@ -111,6 +113,18 @@ no training, all the work at prediction time.}
   \end{itemize}
 \end{frame}
 
+\begin{frame}{``Scale first'' is a prerequisite, not advice}
+  \begin{center}
+    \includegraphics[width=0.80\linewidth]{fig/cm_scaling_matters.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Feature 2 is \textbf{pure noise} --- it carries no information about the class whatsoever. But
+    its numbers are $100\times$ bigger, so it swallows the distance and KNN ends up slicing along
+    the useless axis. \textbf{Test accuracy 65\%.} One \texttt{StandardScaler} later, on the very
+    same data: \textbf{95\%}. Nothing was added --- a column was merely stopped from shouting.}}
+\end{frame}
+
 \begin{frame}{KNN: where the idea still wins}
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
     \textbf{Transferable idea --- similarity search.} Nearest neighbors in an \textbf{embedding
@@ -152,38 +166,99 @@ then let Bayes' rule turn that into a decision.}
     whole product.}}
 \end{frame}
 
-\begin{frame}{Why it works despite a false assumption}
+\begin{frame}{By hand: computing $P(y \mid \xv)$ for one message}
+  Message: \texttt{"free money"}. Toy counts estimated from the training set:
+  \vskip 2pt
   \begin{columns}[T]
-    \column{0.5\textwidth}
-    \textbf{Predict-first:} the independence assumption is wrong --- shouldn't the classifier fail?
-    \pause
-    \vskip 4pt
-    \textbf{No.} We only need the \textbf{argmax} to be right, not the probabilities --- the
-    estimated numbers are often badly off, but the \emph{ranking} of classes survives.
-    \vskip 4pt
-    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
-      Multiplying $p$ simple 1-D estimates \textbf{dodges the curse of dimensionality}, needs
-      \textbf{little data}, and is \textbf{very fast}.}}
-    \column{0.5\textwidth}
-    \footnotesize \textbf{By hand:} message \texttt{"free money"}, toy training counts:
-    \vskip 3pt
-    \renewcommand{\arraystretch}{1.15}
+    \column{0.33\textwidth}
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
     \centering
     \begin{tabular}{l c c}
        & \textbf{spam} & \textbf{ham} \\
       \hline
-      prior & 0.4 & 0.6 \\
-      \texttt{free} & 0.4 & 0.02 \\
-      \texttt{money} & 0.3 & 0.05 \\
+      $P(y)$ & 0.4 & 0.6 \\
+      $P(\texttt{free}\mid y)$ & 0.4 & 0.02 \\
+      $P(\texttt{money}\mid y)$ & 0.3 & 0.05 \\
       \hline
     \end{tabular}
-    \vskip 4pt
-    \raggedright score $\propto$ prior $\times$ likelihoods:\\[2pt]
-    spam: $0.4\cdot0.4\cdot0.3 = \mathbf{0.048}$\\
-    ham:\ \ $0.6\cdot0.02\cdot0.05 = 0.0006$\\[2pt]
-    $\Rightarrow$ \textbf{spam} wins $\sim\!80{:}1$ --- argmax right, even though \texttt{free} \&
-    \texttt{money} truly co-occur.
+    \column{0.67\textwidth}
+    \footnotesize
+    \textbf{Step 1 --- score each class:} prior $\times$ the two likelihoods.
+    \[
+      s_{\text{spam}} = 0.4\cdot0.4\cdot0.3 = 0.048,
+      \qquad
+      s_{\text{ham}} = 0.6\cdot0.02\cdot0.05 = 0.0006.
+    \]
+    \textbf{Step 2 --- divide by the total.} That total \emph{is} $P(\xv)$ --- the denominator
+    Bayes' rule quietly drops when you only need the winner:
+    \[
+      P(\text{spam}\mid\xv) = \frac{0.048}{0.048 + 0.0006}
+        = \frac{0.048}{0.0486} = \mathbf{0.988},
+      \quad P(\text{ham}\mid\xv) = 0.012.
+    \]
   \end{columns}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Two different questions.} For \emph{which class} you never need Step 2 --- the ratio
+    $0.048 : 0.0006$ already says spam by $80{:}1$. For \emph{how confident}, you must normalize.
+    \emph{(In code the products are summed in logs, so a long message cannot underflow to zero.)}}}
+\end{frame}
+
+\begin{frame}{One unseen word can veto an entire class}
+  Suppose \texttt{crypto} never appeared in a \emph{ham} message in training. Then
+  $P(\texttt{crypto}\mid\text{ham}) = 0/n = 0$, and for \emph{any} message containing it:
+  \[
+    s_{\text{ham}} \;=\; 0.6 \cdot 0.02 \cdot 0.05 \cdot \mathbf{0} \;=\; \mathbf{0}.
+  \]
+  \textbf{Exactly zero} --- no matter how ham-like every other word in the message was. A product
+  has no mercy: one missing count deletes the whole class from consideration.
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Laplace (add-one) smoothing:} pretend every word was seen once more than it actually
+    was, $P(w\mid y) = \dfrac{\text{count}+1}{\text{total}+|V|}$. With a 10,000-word vocabulary and
+    5,000 ham words, $P(\texttt{crypto}\mid\text{ham}) = \frac{1}{15{,}000} \approx 0.000067$
+    instead of $0$ --- vanishingly small, but \textbf{still in the running}.}}
+\end{frame}
+
+\begin{frame}{Why it works despite a false assumption}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Predict-first:} the independence assumption is wrong --- \texttt{free} and
+    \texttt{money} really do co-occur. Shouldn't the classifier fail?
+    \pause
+    \vskip 4pt
+    \textbf{No.} We only need the \textbf{argmax} to be right, not the probabilities --- the
+    estimated numbers are often badly off, but the \emph{ranking} of classes survives.
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Multiplying $p$ simple 1-D estimates \textbf{dodges the curse of dimensionality}, needs
+      \textbf{little data}, and is \textbf{very fast}.}}
+  \end{columns}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    This is exactly why that $\mathbf{0.988}$ is \textbf{not} a trustworthy 98.8\%. Counting each
+    word as independent evidence double-counts correlated words, so the products get pushed toward
+    0 and 1. The \textbf{order} is right; the \textbf{number} is overconfident.}}
+\end{frame}
+
+\begin{frame}{The rule is optimal. The estimate is not.}
+  Suppose you \emph{knew} the true $P(\xv\mid y)$ and $P(y)$. Then predicting
+  $\argmax_y P(y\mid\xv)$ is \textbf{provably the best any classifier can do} --- the
+  \textbf{Bayes classifier}. No model, however clever, beats it.
+  \vskip 3pt
+  Its error is still not zero, because two classes can genuinely produce the same $\xv$:
+  \[
+    \text{Bayes error} \;=\; 1 - \mathbb{E}_{\xv}\Big[\max_y P(y\mid\xv)\Big].
+  \]
+  That is the \textbf{irreducible floor} --- the same noise term from the bias-variance
+  decomposition ([06]). You will \emph{see} it later in this section, as the overlap where the red
+  and blue curves cross.
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    So Naive Bayes, LDA and QDA all apply the \textbf{same optimal rule}. They differ only in how
+    they estimate $P(\xv\mid y)$: diagonal Gaussian, shared full Gaussian, per-class Gaussian.
+    \textbf{When they lose, Bayes' rule never failed} --- the density estimate did.}}
 \end{frame}
 
 \begin{frame}{Generative vs discriminative}
@@ -217,6 +292,29 @@ then let Bayes' rule turn that into a decision.}
     Same Bayes formula as NB --- \textbf{only the covariance assumption changes}.}}
 \end{frame}
 
+\begin{frame}{The whole idea, in one dimension}
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{fig/cm_lda_story.pdf}
+  \end{center}
+  \vskip -6pt
+  \begin{columns}[T]
+    \column{0.60\textwidth}
+    \begin{enumerate}\scriptsize
+      \item Two overlapping classes. No cut separates them.
+      \item \textbf{Fit one Gaussian per class}, scaled by that class's share $\pi_k$. At $x=0$:
+        \textbf{0.117} red against \textbf{0.044} blue.
+      \item \textbf{Predict whoever is taller} --- the boundary is just where the curves cross.
+    \end{enumerate}
+    \column{0.40\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.94\linewidth}{\scriptsize
+      Red has 60 points to blue's 40, so $\pi_k$ pushes the crossing \emph{right} of the midpoint
+      --- the commoner class gets more territory.}}
+  \end{columns}
+  \vskip 2pt
+  {\scriptsize \textbf{That is all LDA and QDA do.} The rest of this section is only about what
+  ``a bell in $p$ dimensions'' means.}
+\end{frame}
+
 \begin{frame}{First, in two dimensions: what $\Sigma^{-1}$ measures}
   One class, mean $\bm{\mu}=(0,0)$, and a blob \textbf{four times wider than it is tall}:
   \[
@@ -237,6 +335,18 @@ then let Bayes' rule turn that into a decision.}
     much the class \emph{naturally varies} there: 2 units along a wide axis is unremarkable, 2 units
     along a narrow one is not. That is all \textbf{Mahalanobis distance} means --- and it is the
     only new idea in the formula on the next slide.}}
+\end{frame}
+
+\begin{frame}{The same two points, drawn}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{fig/cm_mahalanobis.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Left:} one ruler for every direction --- A and B are both 2 away, so Euclidean distance
+    calls them equally typical. \textbf{Right:} the dashed rings are the class's \emph{own} contours
+    of equal distance. A lands on the inner ring, B on the outer one. Same points, same blob ---
+    the only thing that changed is \textbf{which ruler} we measured with.}}
 \end{frame}
 
 \begin{frame}{From a blob to a score: the discriminant}
@@ -331,10 +441,55 @@ then let Bayes' rule turn that into a decision.}
   \footnotesize Strong low-data baseline; assumes roughly Gaussian features.
 \end{frame}
 
+\begin{frame}{Generative means you can \emph{generate}}
+  \begin{center}
+    \includegraphics[width=0.72\linewidth]{fig/cm_generative_sampling.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    A discriminative model (logreg, SVM) only answers \emph{``which side?''}. A generative one
+    carries a description of how each class \emph{looks}, so you can \textbf{run it backwards} and
+    draw new data. Naive Bayes too: sample words from $P(w \mid \text{spam})$ and out comes a fake
+    spam message. \textbf{This is the idea behind GANs and diffusion} --- learn $P(\xv)$ well
+    enough that samples from it convince.}}
+\end{frame}
+
 % ================================================================
 \section{Margins \& kernels: Support Vector Machines}
 \sectiontransition{Margins \& kernels}{The centerpiece: the widest street, and a trick that bends
 it around any shape --- derived, not asserted.}
+
+\begin{frame}{Where it came from: Vapnik, 1963 to 2012}
+  \begin{center}\scriptsize
+    \renewcommand{\arraystretch}{1.22}\setlength{\tabcolsep}{5pt}
+    \begin{tabular}{@{}l l p{7.5cm}@{}}
+      \textbf{Year} & \textbf{Who} & \textbf{What} \\
+      \hline
+      1963 & Vapnik \& Chervonenkis & ``Generalized Portrait'' --- the maximum-margin idea.
+        Linear only. Moscow. \\
+      1964 & Aizerman, Braverman \& Rozonoer & kernels, under the name ``potential functions'' \\
+      1974 & Vapnik \& Chervonenkis & statistical learning theory --- \emph{why} a wide margin
+        should generalize \\
+      \textbf{1992} & Boser, Guyon \& Vapnik & margin $+$ kernel trick $=$ \textbf{SVM}
+        (at the COLT conference) \\
+      \textbf{1995} & Cortes \& Vapnik & ``Support-Vector Networks'' --- the \textbf{soft margin};
+        this is the version in \texttt{sklearn} \\
+      \textbf{2012} & Krizhevsky, Sutskever \& Hinton & \textbf{AlexNet} wins ImageNet: top-5 error
+        \textbf{15.3\%} against \textbf{26.2\%} for second place \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{Before 1992}, the answer to a hard pattern-recognition problem was a
+    \textbf{backpropagation neural net} --- LeCun's \emph{LeNet} on handwritten digits (1989), built
+    at the same AT\&T Bell Labs where Vapnik was then working. SVM became competitive there
+    \emph{and} carried a theory of why, so for some fifteen years kernel methods were the
+    respectable choice while neural nets were unfashionable and hard to train.
+    \textbf{Then the irony of 2012:} every ImageNet winner \emph{before} AlexNet was hand-engineered
+    features fed into an \textbf{SVM}. Deep learning did not dethrone some vague ``classical ML'' ---
+    it dethroned this exact pipeline.}}
+\end{frame}
 
 \begin{frame}{Maximum margin: the widest street}
   \begin{columns}[T]
@@ -361,14 +516,14 @@ it around any shape --- derived, not asserted.}
   \vskip 2pt
   \begin{columns}[T]
     \column{0.54\textwidth}
-    \small Maximize the smallest distance $\gamma$:
+    \small Maximize the smallest distance $M$ (the \textbf{m}argin):
     \begin{align*}
-      \max_{\thetav,\theta_0}\ \gamma \quad \text{s.t.}\quad
-      \frac{\yi(\thetav^\top\xv^{(i)}+\theta_0)}{\|\thetav\|} \ge \gamma.
+      \max_{\thetav,\theta_0}\ M \quad \text{s.t.}\quad
+      \frac{\yi(\thetav^\top\xv^{(i)}+\theta_0)}{\|\thetav\|} \ge M.
     \end{align*}
     Rescaling $(\thetav,\theta_0)\!\to\!(c\thetav,c\theta_0)$ leaves the \emph{same} hyperplane, so
-    that scale is a free choice --- fix it as $\|\thetav\| = 1/\gamma$. The
-    constraint becomes $\yi(\thetav^\top\xv^{(i)}+\theta_0)\ge 1$, and $\gamma = 1/\|\thetav\|$:
+    that scale is a free choice --- fix it as $\|\thetav\| = 1/M$. The
+    constraint becomes $\yi(\thetav^\top\xv^{(i)}+\theta_0)\ge 1$, and $M = 1/\|\thetav\|$:
     \column{0.46\textwidth}
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{
       \[
@@ -429,7 +584,7 @@ it around any shape --- derived, not asserted.}
       \min_{\thetav,\theta_0}\ \tfrac12\|\thetav\|^2 + C\sumin \max(0,\,1-\yi f_i).
     \]
     That is \textbf{$L_2$-regularized ERM} with the \textbf{hinge loss} --- the same recipe as
-    every model since L02, a new loss.
+    Ridge and regularized logistic regression ([07]), just a different loss.
     \column{0.5\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{fig/cm_hinge_loss.pdf}
@@ -459,8 +614,12 @@ it around any shape --- derived, not asserted.}
   \]
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
     The first one is the whole story: $\thetav$ is a \textbf{weighted sum of the training points}.
-    Put it back into $L$ (algebra) and every $\thetav$ cancels out --- what survives is the
-    \textbf{dual} on the next slide.}}
+    Put it back into $L$ and every $\thetav$ cancels out.}}
+  \vskip 4pt
+  \textbf{Predict-first:} once $\thetav$ is gone, what is left for the algorithm to look at?
+  \pause
+  \emph{Nothing but dot products between pairs of training points} --- and that one fact is what
+  the next slide turns into the kernel trick.
 \end{frame}
 
 \begin{frame}{The dual: what the algorithm actually touches}
@@ -528,6 +687,11 @@ it around any shape --- derived, not asserted.}
     \begin{center}
       \includegraphics[width=\linewidth]{fig/cm_svm_kernels.pdf}
     \end{center}
+    \vskip 5pt
+    {\footnotesize \textbf{Predict-first:} RBF's $\phi$ has \textbf{infinitely many} dimensions.
+    How long does one of those inner products take?
+    \pause
+    \emph{One exponential.}}
   \end{columns}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
@@ -557,6 +721,20 @@ it around any shape --- derived, not asserted.}
     vectors far more than \emph{far} ones --- a soft, \emph{learned} version of KNN.}}
 \end{frame}
 
+\begin{frame}{$\gamma$: how wide is each bump?}
+  In $k(\xv,\xv') = \exp(-\gamma\|\xv-\xv'\|^2)$, \textbf{$\gamma$ sets the width} of the similarity
+  bump around each support vector --- the second knob to tune, alongside $C$.
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{fig/cm_svm_gamma.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Read the right-hand panel carefully: $\gamma=60$ scores \textbf{100\% on train} and
+    \textbf{88\%} on test --- the \emph{same} test score as the far-too-simple model on the left.
+    Perfect training accuracy bought \textbf{nothing}. And $C$ and $\gamma$ \textbf{interact}, so
+    tune them together on a grid, never one after the other.}}
+\end{frame}
+
 \begin{frame}[fragile]{SVM in practice --- and where it still wins}
 \begin{lstlisting}
 from sklearn.svm import SVC
@@ -578,10 +756,41 @@ clf.fit(X_train, y_train)
     \end{itemize}
     \column{0.5\textwidth}
     \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\scriptsize
-      \textbf{Honest:} on everyday tabular data, trees \& boosting usually win now (L09--L12).
+      \textbf{Honest:} on everyday tabular data, trees \& boosting usually win now ([17]--[20]).
       SVM's lasting gift is the \textbf{kernel trick} --- next, Gaussian processes reuse it for
       \emph{uncertainty}.}}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Two questions this lecture has dodged}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{More than two classes?}
+    \vskip 2pt
+    {\footnotesize SVM is \textbf{binary by construction} --- one hyperplane has two sides.
+    \texttt{sklearn} hides the workaround:
+    \begin{itemize}\footnotesize
+      \item \texttt{SVC} fits \textbf{one-vs-one}: $\binom{K}{2}$ classifiers, then a vote.
+        10 classes $\Rightarrow$ \textbf{45} fits.
+      \item \texttt{LinearSVC} fits \textbf{one-vs-rest}: $K$ classifiers.
+    \end{itemize}
+    \vskip 2pt
+    Logistic regression, by contrast, went multiclass \emph{natively} with softmax ([11]).}
+    \column{0.5\textwidth}
+    \textbf{What about regression?}
+    \vskip 2pt
+    {\footnotesize \texttt{SVR} swaps the hinge for an \textbf{$\varepsilon$-insensitive tube}:
+    predict within $\varepsilon$ of the target and it costs \textbf{nothing}.
+    \[
+      L_\varepsilon(y, \hat y) = \max\big(0,\; |y - \hat y| - \varepsilon\big).
+    \]
+    The same trick, mirrored --- the margin became a \emph{tube}, and only the points that fall
+    \textbf{outside} it become support vectors.}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Both keep the property that matters: the model stays \textbf{sparse in the data}, and the
+    kernel trick carries over unchanged.}}
 \end{frame}
 
 % ================================================================
@@ -680,7 +889,7 @@ boundary, it returns a mean \emph{and} calibrated uncertainty everywhere.}
   \begin{center}\scriptsize
     \renewcommand{\arraystretch}{1.3}\setlength{\tabcolsep}{5pt}
     \begin{tabular}{l c c c p{4.6cm}}
-      \textbf{Method} & \textbf{Scale?} & \textbf{Boundary} & \textbf{Calibrated?} & \textbf{Reach for it when\dots} \\
+      \textbf{Method} & \textbf{Needs scaling?} & \textbf{Boundary} & \textbf{Calibrated?} & \textbf{Reach for it when\dots} \\
       \hline
       KNN        & yes & local/jagged & no  & quick baseline; retrieval in embeddings \\
       Naive Bayes& --  & probabilistic & no & text / tiny data / very fast \\
@@ -693,6 +902,29 @@ boundary, it returns a mean \emph{and} calibrated uncertainty everywhere.}
   \vfill
   \footnotesize What beats them today: \textbf{trees/boosting} on tabular; \textbf{neural nets} on
   perception/text. These remain the \emph{ideas} underneath.
+\end{frame}
+
+\begin{frame}{The same formula, three times}
+  All three predict by \textbf{averaging over remembered examples, weighted by similarity}:
+  \vskip 6pt
+  \begin{center}
+    \renewcommand{\arraystretch}{2.0}
+    \begin{tabular}{@{}r l@{}}
+      \textbf{SVM} &
+        $f(\xv) \;=\; \sum_{\text{SV}} \alpha_i\,\yi\; k(\xv^{(i)}, \xv)$ \\
+      \textbf{Gaussian process} &
+        $\mu_* \;=\; \sum_i \alpha_i\; k(\xv_i, \xv_*)$ \\
+      \textbf{Attention} &
+        $\mathbf{out} \;=\; \sum_i \underbrace{\text{softmax}\big(\mathbf q^\top \mathbf k_i\big)}_{\text{a similarity}}\; \mathbf v_i$ \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    The difference is \textbf{who chooses the kernel}. SVM and GP take a \emph{fixed} one you pick by
+    hand (RBF, polynomial); attention \textbf{learns} it --- queries and keys are trained
+    projections. Statisticians had the fixed version in \textbf{1964} (Nadaraya-Watson regression),
+    the same year as Aizerman's kernels. \emph{A transformer is a learnable version of an idea as old
+    as the margin.}}}
 \end{frame}
 
 \begin{frame}{The transferable ideas (the real point)}
@@ -709,6 +941,32 @@ boundary, it returns a mean \emph{and} calibrated uncertainty everywhere.}
     optimization --- long after you stop training a raw SVM.}}
 \end{frame}
 
+\begin{frame}{Where these ideas live now}
+  \begin{center}\scriptsize
+    \renewcommand{\arraystretch}{1.35}\setlength{\tabcolsep}{6pt}
+    \begin{tabular}{@{}l p{7.7cm}@{}}
+      \textbf{From this lecture} & \textbf{Where you meet it today} \\
+      \hline
+      Nearest neighbors & every \textbf{vector database}; the retrieval step in RAG; picking which
+        few-shot examples to paste into a prompt \\
+      Generative vs discriminative & a language model models $P(\text{text})$; a classifier models
+        $P(y\mid\xv)$. Diffusion is generative too \\
+      Mahalanobis distance & multivariate \textbf{outlier detection}; \textbf{data-drift} monitoring
+        of a deployed model \\
+      One Gaussian per group & \textbf{Gaussian mixture models} (the clustering chapter) \\
+      Kernel as similarity & \textbf{attention} --- previous slide \\
+      Uncertainty from a GP & \textbf{Bayesian hyperparameter search}; active learning
+        (``which point should I label next?'') \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vskip 3pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    And the kernel idea did not simply \emph{lose} in 2012. An infinitely wide neural network
+    behaves like a kernel machine, and at initialization like a \textbf{Gaussian process}
+    (Jacot, Gabriel \& Hongler, 2018). The idea was \textbf{absorbed}, not replaced.}}
+\end{frame}
+
 \begin{frame}{Recap}
   \begin{itemize}\small
     \item \textbf{KNN} --- vote of nearest neighbors; $k$ is the bias-variance knob; scale first.
@@ -722,23 +980,13 @@ boundary, it returns a mean \emph{and} calibrated uncertainty everywhere.}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
     \textbf{Keepers:} max-margin; the dual sees only dot-products; SVM $\equiv$ logreg's cousin;
-    the kernel trick; generative-vs-discriminative; similarity is retrieval.}}
-\end{frame}
-
-\begin{frame}{HW --- run the classics, compare the ideas}
-  \begin{enumerate}\small
-    \item Fit \texttt{KNeighborsClassifier}, \texttt{GaussianNB},
-      \texttt{LinearDiscriminantAnalysis} / \texttt{QuadraticDiscriminantAnalysis}, and
-      \texttt{SVC} (linear vs \texttt{rbf}) on the cheese / Titanic data; compare to your
-      trees / logistic-regression baselines.
-    \item \textbf{Plot decision boundaries}: KNN $k=1$ vs $k=50$; linear vs RBF SVM on
-      \texttt{moons}/\texttt{circles}. Scale the features first and show it matters for KNN \& SVM.
-    \item Write 2--3 sentences: which idea surprised you most?
-  \end{enumerate}
-  \vskip 2pt
-  \textbf{Bonus:} sweep SVM \texttt{C} and \texttt{gamma} and watch the boundary;
-  \texttt{GaussianProcessRegressor} on the 1-D rent toy (plot the uncertainty band);
-  \texttt{MultinomialNB} on a spam mini-set; LDA as a 2-D projection vs PCA.
+    the kernel trick; generative-vs-discriminative; similarity is retrieval --- and
+    \textbf{SVM, GP and attention are one formula} with a fixed, fixed, and learned kernel.}}
+  \vskip 4pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next: [30] Classical time series.} Every model in the course so far --- including all
+    five today --- assumed the rows were interchangeable. Time series breaks that assumption, and
+    almost everything you know about splitting and validating has to be rebuilt.}}
 \end{frame}
 
 \end{document}
@@ -746,19 +994,97 @@ boundary, it returns a mean \emph{and} calibrated uncertainty everywhere.}
 % =============================================================
 % Provenance:
 %   - Classic methods deck, SVM-centered (KNN, Naive Bayes, LDA/QDA, SVM+kernel trick, GP).
-%     Built from L12b_svm_and_classic_methods (outline: ../04_trees/
-%     L12b_classic_methods_survey_OUTLINE.md, v5).
+%     Outline: ../04_trees/L12b_classic_methods_survey_OUTLINE.md, v5.
+%   - RENAMED 2026-08-12: L12b_svm_and_classic_methods -> 28_svm_and_classic_methods. The deck was
+%     left on the legacy L-scheme because its playlist number depended on how many feature-
+%     engineering lectures ran first; that settled at 26/27, and 30_classical_time_series had
+%     already reserved 28-29 for this chapter. The source outline keeps its old name in 04_trees.
 %   - SVM derivation, dual, soft-margin/hinge-ERM, feature-map blow-up, and kernel trick adapted
 %     from LMU SL (lecture_sl/slides/linear-svm + nonlinear-svm, CC BY 4.0), restyled to house
 %     palette + theta/theta_0 notation. RKHS/representer theorem, universal approximation, and full
 %     KKT deliberately cut (as LMU itself keeps them commented out).
-%   - Figures: py_src/make_classic_figures.py (ma venv, seed 509) -> cm_knn_boundary, cm_lda_qda,
+%   - ADDED 2026-08-12 (instructor: "explain LDA/QDA a lot better", "ring example of how we'll
+%     calculate P(y|x)", "a bit of context on SVM"):
+%       * "By hand: computing P(y|x) for one message" -- the old NB frame stopped at the
+%         unnormalized scores 0.048 / 0.0006, so students never saw where a probability comes
+%         from. Now Step 2 divides by the total and names it as P(x). 0.048/0.0486 = 0.988.
+%         The "why it works" frame keeps the concept and now explains why 0.988 is overconfident.
+%       * "The whole idea, in one dimension" + fig/cm_lda_story.pdf -- the section used to open
+%         straight into Mahalanobis algebra. The 3-panel figure (data -> pi_k * p(x|k) -> taller
+%         curve wins) is the mechanism with no matrices. Boundary/means/pooled sd are all
+%         estimated from the sample; the prior-shift point is exact from the closed form.
+%       * "The same two points, drawn" + fig/cm_mahalanobis.pdf -- the Sigma^{-1} frame was pure
+%         algebra with no picture. Same A=(2,0), B=(0,2) as the algebra frame; the script asserts
+%         d^2 = 1 and 4 so the figure can never disagree with the slide.
+%       * "Where it came from: Vapnik, 1963 to 2012" -- placed before the margin derivation.
+%         Dates web-checked: V&C generalized portrait 1963; Aizerman/Braverman/Rozonoer potential
+%         functions 1964; V&C statistical learning theory 1974; Boser/Guyon/Vapnik COLT 1992;
+%         Cortes & Vapnik "Support-Vector Networks" 1995; AlexNet (Krizhevsky, Sutskever & Hinton)
+%         2012, ImageNet top-5 15.3% vs 26.2% for second place. Before-1992 baseline = backprop
+%         neural nets (LeCun LeNet 1989, same AT&T Bell Labs). Phrased "became competitive on those
+%         digit benchmarks", not "beat", per source. The 2012 punchline -- pre-AlexNet ImageNet
+%         winners were hand-engineered features + SVM -- is what makes the date land for this deck.
+%       * "The same formula, three times" (wrap-up) -- SVM / GP / attention written one under the
+%         other to show one shape: a similarity-weighted average over remembered examples. The
+%         distinction drawn is fixed vs learned kernel; Nadaraya-Watson 1964 is the fixed-kernel
+%         ancestor of attention (web-checked). Direct bridge to ch9 attention.
+%       * "Where these ideas live now" (wrap-up) -- concrete modern home for each idea, answering
+%         the instructor's "how are some of these useful today, idea-wise". Closing claim (infinite-
+%         width nets behave like kernel machines / GPs at init) is Jacot, Gabriel & Hongler 2018.
+%   - ADDED 2026-08-12 (round 2, deck-improvement pass):
+%       * "Scale first is a prerequisite, not advice" + fig/cm_scaling_matters.pdf -- the deck said
+%         "scale first" three times and never showed it, while the HW frame asks students to
+%         demonstrate exactly that. Feature 2 is pure noise on a 100x range: KNN test accuracy
+%         65% raw vs 95% standardized. Both numbers measured on a held-out quarter, not asserted.
+%       * "One unseen word can veto an entire class" -- Laplace smoothing was named and never
+%         demonstrated. 1/(5000+10000) = 6.67e-5 instead of an exact zero.
+%       * "gamma: how wide is each bump?" + fig/cm_svm_gamma.pdf -- C had a frame and a figure;
+%         gamma had a formula and a code comment, though the HW asks students to sweep both.
+%         Measured: gamma=0.05 -> 88/88 train/test, 1.0 -> 97/95, 60 -> 100/88. The punchline is
+%         that gamma=60 memorizes perfectly and lands on the SAME test score as the underfit model.
+%       * "Next: [30]" box on Recap -- the deck had none; every other deck in ml/ does.
+%       * "Two questions this lecture has dodged" -- SVM multiclass and SVR were never mentioned,
+%         though the HW fits SVC on multi-class data and two chapters of the course are regression.
+%         Verified via Context7 against the sklearn svm docs: SVC is one-vs-one (K choose 2
+%         classifiers, decision_function_shape reshapes to ovr by default), LinearSVC is
+%         one-vs-rest (K classifiers); SVR uses the epsilon-insensitive loss and stays sparse.
+%   - ADDED 2026-08-12 (round 3, "missing teaching moments" pass, instructor picked 3 of 9):
+%       * "The rule is optimal. The estimate is not." -- the generative section applied Bayes' rule
+%         for six frames without ever saying the rule is PROVABLY optimal given the true densities,
+%         or that the Bayes error is the irreducible floor. This reframes NB/LDA/QDA as three
+%         density estimates behind one shared optimal rule, and ties back to [06] bias-variance.
+%         Placed just before generative-vs-discriminative so the contrast lands on solid ground.
+%       * "Generative means you can generate" + fig/cm_generative_sampling.pdf -- closes the
+%         generative section. Left panel real data, right panel drawn from the fitted per-class
+%         Gaussians (means/covariances estimated from the real sample, so the synthetic points are
+%         genuinely new). Makes "models how each class looks" concrete and seeds ch8b GANs + ch10
+%         diffusion three chapters early.
+%       * Two predict-first stagings, no new material: "once theta is gone, what is left?"
+%         (-> only dot products) on the Lagrangian frame, and "RBF's phi is infinite-dimensional,
+%         how long does that inner product take?" (-> one exponential) on the kernel-trick frame.
+%         Both facts were already in the deck, stated flat; the \pause turns them into the beats
+%         they deserve to be.
+%   - REMOVED 2026-08-12 (instructor): the in-deck "HW --- run the classics" frame. Per
+%     ml/SLIDE_STYLE.md homework lives on the chapter qmd, not in the slides. The full assignment
+%     (and its bonus list) was already written out in 07_classic_methods.qmd, so nothing was lost;
+%     the two qmd lines that pointed readers at "the last frame" were reworded in the same pass.
+%     Recap is now the closing frame, which is where the "Next:" box belongs anyway.
+%   - FIXED 2026-08-12 (defects found reading the deck end to end):
+%       * gamma collided: it meant the MARGIN in the primal derivation and the RBF bandwidth eight
+%         slides later. The margin is now M. sklearn's `gamma` is only ever the kernel width.
+%       * "Scale?" column header was ambiguous (feature scaling vs scaling to big data) and read as
+%         a contradiction on the GP row -> "Needs scaling?".
+%       * Stale legacy lecture numbers: L09--L12 -> [17]--[20] (x2), L02 -> [07].
+%       * Cold open now bridges from [26]/[27], delivered in the same session, instead of reaching
+%         back to the trees chapter.
+%   - Figures: py_src/make_classic_figures.py (ma venv, seed 509) -> cm_knn_boundary,
+%     cm_scaling_matters, cm_svm_gamma, cm_lda_story, cm_mahalanobis, cm_lda_qda,
 %     cm_svm_margin, cm_svm_soft_margin, cm_hinge_loss, cm_circles_lift, cm_svm_kernels, cm_gp_band,
 %     cm_synthesis. All real matplotlib on 2D/1D toys; Armenian-flag palette.
 %   - Pedagogy: SVM is the focus (9 frames, derived); the other four are intuition-first survey.
 %     Kernel through-line SVM dual -> kernel trick -> GP is the spine. Predict-first frames:
 %     KNN k=1, NB false-assumption, PCA-vs-LDA, SVM widest line, circles separability, GP uncertainty.
-%   - Callbacks: preprocessing (scaling), overfitting/CV (bias-variance knobs), L02 ERM + regularization
-%     (hinge, C), L06 logreg (discriminative, hinge<->log-loss), calibration (NB/SVM uncalibrated),
+%   - Callbacks: preprocessing (scaling), overfitting/CV (bias-variance knobs), [07] regularization
+%     (hinge, C), [11] logreg (discriminative, hinge<->log-loss), calibration (NB/SVM uncalibrated),
 %     PCA/dim-reduction (LDA), tuning (GP -> Bayesian optimization), trees/boosting (tabular winners).
 % =============================================================

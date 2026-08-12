@@ -30,7 +30,7 @@
 >
 > Everything in the old "Tier 1" and "Tier 2" lists, plus most of Tier 3:
 >
-> - **SVM (linear + kernel), k-NN, Naive Bayes, LDA/QDA** → `07_classic_methods/L12b_svm_and_classic_methods.tex`
+> - **SVM (linear + kernel), k-NN, Naive Bayes, LDA/QDA** → `07_classic_methods/28_svm_and_classic_methods.tex`
 > - **PCA / dimensionality reduction** → `ch4b_dimensionality_reduction/L13b`
 > - **Nested resampling** → folded into `02_main_concepts/08_hyperparameter_tuning.tex`
 > - **CNNs** → `ch6_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)

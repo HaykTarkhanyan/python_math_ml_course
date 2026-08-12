@@ -88,7 +88,7 @@ files, so lock names/numbers now to avoid re-sweeping.
 
 **Why deferred:** the macro is defined locally in FIVE decks across THREE chapters -
 `ml/04_trees/{18,19,20}`, `ml/02_main_concepts/09_regression_metrics.tex`, and
-`ml/07_classic_methods/L12b_svm_and_classic_methods.tex`. Hoisting to `ml/preamble.tex` with
+`ml/07_classic_methods/28_svm_and_classic_methods.tex`. Hoisting to `ml/preamble.tex` with
 `\newcommand` clashes ("already defined") with every local def, so a safe hoist must atomically
 remove all five locals + add one to preamble + recompile all five. That is a cross-chapter cleanup,
 not a trees-chapter change - do it as its own focused task.
@@ -96,7 +96,7 @@ not a trees-chapter change - do it as its own focused task.
 - [ ] **Interim (Phase 2):** copy the macro into deck [17] so its new section transitions work
   (keeps the trees chapter uniform with 18/19/20).
 - [ ] **Deferred cleanup (own task, all 3 chapters):** hoist to preamble, remove all 5 locals,
-  recompile [17]-[20] + `09_regression_metrics` + `L12b_svm_and_classic_methods`, verify each.
+  recompile [17]-[20] + `09_regression_metrics` + `28_svm_and_classic_methods`, verify each.
 
 ---
 

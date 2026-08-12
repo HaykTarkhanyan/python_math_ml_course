@@ -48,7 +48,7 @@ Videos for [22]–[24] are recorded but not yet published.
 
 | Date | Day | Session | Material |
 |---|---|---|---|
-| **Aug 12** | Wed | Feature engineering + feature selection + classic methods | `26_feature_engineering` · `27_feature_selection` · `L12b_svm_and_classic_methods` |
+| **Aug 12** | Wed | Feature engineering + feature selection + classic methods | `26_feature_engineering` · `27_feature_selection` · `28_svm_and_classic_methods` |
 | **Aug 14** | Fri | Time series lecture | `30_classical_time_series` · `31_ml_time_series` |
 | **Aug 16** | Sun | *Practical* — Armenia electricity / gas usage | `32_electricity_forecast_solution.ipynb` |
 | **Aug 19** | Wed | Clustering | `L13_clustering` |
@@ -154,5 +154,10 @@ Experiment tracking (MLflow / W&B), data drift, model deployment, error analysis
 
 ### Deliberately out of scope
 
-Recommender systems, MLOps, Gaussian processes, survival analysis, online learning,
-multi-target regression. Each is a separate course.
+Recommender systems, MLOps, survival analysis, online learning, multi-target regression.
+Each is a separate course.
+
+**Gaussian processes** were on this list until 2026-08-12. They are *not* a chapter, but [28]
+gives them a short survey section (distribution over functions, the conditioning identity,
+Bayesian optimization) because the kernel through-line from SVM makes them nearly free to teach
+there. Out of scope as a topic; in scope as one of five classic ideas.

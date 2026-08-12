@@ -36,8 +36,10 @@ Two payoff adjacencies: **LDA/QDA = "Naive Bayes that allows feature correlation
 - **Style:** house style — real matplotlib for data plots, TikZ for schematics, Armenian-flag
   palette, `\fcolorbox` callouts, `\pause` predict-first frames, section-transition `[plain]`
   slides, hook before `\tableofcontents`, Recap + light HW, provenance block.
-- **Placement / numbering:** OPEN, not a priority per instructor. Suggested rename
-  `L12b_svm_and_classic_methods.tex`.
+- **Placement / numbering:** RESOLVED 2026-08-12 - the deck ships as
+  `ml/07_classic_methods/28_svm_and_classic_methods.tex`. (Built as
+  `L12b_svm_and_classic_methods.tex`; renumbered to [28] once the feature-engineering lectures
+  settled at 26/27 and `30_classical_time_series` had reserved 28-29 for this chapter.)
 
 ## SVM correctness cribsheet (verify all at build via Context7/sklearn; notation = theta, theta_0)
 - Decision fn f(x) = theta^T x + theta_0; predict sign(f). Signed distance of a point to the
@@ -249,7 +251,8 @@ Skip (too deep for this course): `slides-nonlinsvm-rkhs-repr` (RKHS / represente
 it commented out too), `slides-linsvm-optimization` (solver internals).
 
 ## Open decisions (pending instructor)
-1. Rename deck file `..._survey` -> `..._svm_and_classic_methods`?
+1. ~~Rename deck file `..._survey` -> `..._svm_and_classic_methods`?~~ DONE - it shipped as
+   `28_svm_and_classic_methods.tex` (2026-08-12).
 2. Reuse LMU figures with attribution, or regenerate all data plots in house style? (Recommend:
    regenerate the boundary/loss/circles plots; reuse the geometry schematics with a source line.)
 3. GP `GaussianProcessRegressor` band in the body (frame 23) or HW-only? (Currently body.)
