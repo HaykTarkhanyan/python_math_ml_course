@@ -1,0 +1,791 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Reinforcement Learning}
+\subtitle{Part 4: optimising the policy directly}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Part 4 of 7. The policy gradient theorem, REINFORCE, actor-critic, TRPO and PPO.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{Three lectures of doing it indirectly}
+  \small
+  Everything so far follows the same detour:
+
+  \vskip 8pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.86\textwidth]
+    \begin{center}
+      \small
+      estimate values $\;\longrightarrow\;$ take $\argmax_a$ $\;\longrightarrow\;$ get a policy
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 10pt
+  \small
+  We never wanted the values. We wanted the behaviour. The values were a device for producing
+  it.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    \small
+    \textbf{So why not optimise the behaviour itself?} Write the policy as $\pi_\theta(a|s)$,
+    define $J(\theta)$ as the expected return, and do gradient ascent on it like every other
+    model in this course.
+
+    \vskip 4pt
+    There is one obstacle, and it is a real one: \emph{the thing you are averaging over depends
+    on the parameters you are differentiating}. This lecture removes that obstacle and then
+    spends the rest of its time making the result usable.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{Why bother}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Learn the behaviour, not the scoreboard}
+
+    \vskip 0.6cm
+    {\large Three things $\argmax_a Q$ simply cannot do.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Two ways to be an agent}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Value-based}}]
+        \small
+        Learn $Q(s,a)$, then act greedily.
+
+        \vskip 4pt
+        \textbf{Good:} sample-efficient, off-policy replay.
+
+        \vskip 2pt
+        \textbf{Bad:} needs $\argmax_a$, so actions must be few and discrete. Try that with a
+        robot arm's continuous torques.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Policy-based}}]
+        \small
+        Learn $\pi_\theta(a|s)$ directly and improve it.
+
+        \vskip 4pt
+        \textbf{Good:} continuous actions, naturally stochastic, optimises what you care about.
+
+        \vskip 2pt
+        \textbf{Bad:} high variance, and normally on-policy -- yesterday's data is stale.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \small
+  Three concrete failures of the value-based route:
+
+  \begin{itemize}\itemsep2pt
+    \item \textbf{Continuous actions.} $\argmax_a$ over a real-valued torque is its own
+          optimisation problem, at every single step.
+    \item \textbf{Stochastic optima.} In rock-paper-scissors the best policy is uniformly
+          random. A greedy policy cannot represent that.
+    \item \textbf{Huge action spaces.} A language model's action space is the entire vocabulary
+          at every token.
+  \end{itemize}
+
+  \vskip 4pt
+  \begin{center}
+    \small
+    That last one decides the question for the rest of this chapter.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Where this lecture is going}
+  \begin{center}
+    \includegraphics[width=0.99\linewidth]{pg_family.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \footnotesize
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    Keep this picture for the rest of the chapter. Lectures 6 and 7 do not introduce a new
+    family -- they walk further right along this one. \textbf{GRPO is PPO with one box removed.}
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{The policy gradient theorem}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Differentiating an expectation\\ you cannot differentiate}
+
+    \vskip 0.6cm
+    {\large Six lines that make the whole family possible.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The obstacle, stated precisely}
+  \small
+  We want to maximise the expected return over trajectories the policy itself generates:
+  \[ J(\theta) = \E_{\tau \sim \pi_\theta}\big[ R(\tau) \big] = \int P(\tau;\theta)\, R(\tau)\, d\tau \]
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Why the usual move fails}}]
+        \small
+        In supervised learning the data is fixed and only the prediction depends on $\theta$.
+
+        \vskip 4pt
+        Here $\theta$ changes \textbf{which trajectories you see}. The distribution is the thing
+        being optimised.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{And $R(\tau)$ is a black box}}]
+        \small
+        The reward may be a game score, a unit test, or a human's opinion. There is no
+        $\nabla_\theta R$. There may not even be a formula.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    So: differentiate the \emph{probability}, never the reward.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The log-derivative trick}
+  \small
+  One identity does all the work: $\;\nabla_\theta P = P \,\nabla_\theta \log P$
+  (just the chain rule on $\log$, rearranged).
+
+  \vskip 3pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt]
+    \footnotesize
+    \begin{align*}
+      \nabla_\theta J(\theta) &= \nabla_\theta \int P(\tau;\theta) R(\tau)\, d\tau
+        && \text{\scriptsize $R$ does not depend on $\theta$} \\[2pt]
+      &= \int \nabla_\theta P(\tau;\theta)\, R(\tau)\, d\tau
+        && \text{\scriptsize move the gradient inside} \\[2pt]
+      &= \int P(\tau;\theta)\, \nabla_\theta \log P(\tau;\theta)\, R(\tau)\, d\tau
+        && \text{\scriptsize the identity above} \\[2pt]
+      &= \E_{\tau \sim \pi_\theta}\big[\, \nabla_\theta \log P(\tau;\theta)\, R(\tau) \,\big]
+        && \text{\scriptsize \textbf{an expectation again -- so we can sample it}}
+    \end{align*}
+  \end{tcolorbox}
+
+  \vskip 2pt
+  The trajectory probability factorises, so the dynamics drop out (\textbf{no model needed}),
+  just as they did for importance sampling:
+
+  \vskip 1pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt]
+    \scriptsize
+    \vskip -6pt
+    \[ \log P(\tau;\theta) = \cancel{\log p(s_0)} + \sum_t \Big[ \log \pi_\theta(a_t|s_t) + \cancel{\log P(s_{t+1}|s_t,a_t)} \Big]
+       \;\Longrightarrow\; \nabla_\theta \log P = \sum_t \nabla_\theta \log \pi_\theta(a_t|s_t) \]
+    \vskip -10pt
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{What it says, and REINFORCE}
+  \begin{center}
+    {\large $\nabla_\theta J(\theta) \;=\; \E_{\pi_\theta}\big[\nabla_\theta \log \pi_\theta(a_t|s_t) \cdot G_t\big]$}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \textbf{In words:} take the actions you actually played, and adjust their probabilities in
+    proportion to how well things went afterwards. Good outcome -- make that action more
+    likely. Bad outcome -- less likely.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  \textbf{REINFORCE} (Williams, 1992) is this used literally:
+
+  \vskip 3pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt, width=0.8\textwidth]
+    \footnotesize
+    \begin{enumerate}\itemsep1pt
+      \item Run an episode with $\pi_\theta$, storing every $(s_t, a_t, r_t)$.
+      \item Compute the return $G_t$ from each step onwards.
+      \item $\theta \leftarrow \theta + \alpha \sum_t G_t \nabla_\theta \log \pi_\theta(a_t|s_t)$.
+    \end{enumerate}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    Three lines, no model, no $\argmax$, works with any reward you can compute.
+    \textbf{And in this raw form it barely works.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{REINFORCE has a variance problem}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \includegraphics[width=\linewidth]{reinforce_variance.pdf}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \vskip 6pt
+      \small
+      Two actions, one state. Action A returns about $11$, action B about $9$ -- so A is
+      better and the gradient \emph{should} point towards A.
+
+      \vskip 4pt
+      Batches of $20$ episodes, repeated $4000$ times:
+
+      \vskip 3pt
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \scriptsize
+        Plain REINFORCE points the \textbf{wrong way $33.9\%$} of the time. Sd $1.13$.
+      \end{tcolorbox}
+
+      \vskip 3pt
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+        \scriptsize
+        With a baseline of $10$: wrong way \textbf{$0.0\%$}, sd $0.11$ -- a $10\times$
+        reduction, \emph{same} average.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 2pt
+  \footnotesize
+  \textbf{Why it works:} both returns are positive, so plain REINFORCE pushes \emph{both}
+  actions up and only the sizes differ. Centring on the average makes the better action
+  positive and the worse one negative -- the signal stops fighting itself.
+\end{frame}
+
+% ==================================================================================
+\section{Making the gradient usable}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Same gradient, less noise}
+
+    \vskip 0.6cm
+    {\large Baselines, advantages, and a dial you have already met.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why subtracting a baseline is free}
+  \small
+  Replace $G_t$ with $G_t - b(s_t)$ for any function $b$ that does not depend on the action.
+  The claim is that this changes the variance but \textbf{not} the expected gradient:
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt]
+    \footnotesize
+    \begin{align*}
+      \E_{a \sim \pi}\big[ \nabla_\theta \log \pi_\theta(a|s)\, b(s) \big]
+        &= b(s) \sum_a \pi_\theta(a|s)\, \nabla_\theta \log \pi_\theta(a|s)
+        && \text{\scriptsize $b(s)$ is a constant w.r.t.\ $a$} \\[2pt]
+        &= b(s) \sum_a \nabla_\theta \pi_\theta(a|s)
+        && \text{\scriptsize the identity, backwards} \\[2pt]
+        &= b(s)\, \nabla_\theta \sum_a \pi_\theta(a|s)
+        && \text{\scriptsize swap sum and gradient} \\[2pt]
+        &= b(s)\, \nabla_\theta 1 \;=\; \mathbf{0}
+        && \text{\scriptsize probabilities sum to one}
+    \end{align*}
+  \end{tcolorbox}
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{A free lunch, and they are rare.} You may subtract \emph{anything} that does not
+    depend on the action and the gradient stays correct in expectation. The best choice is the
+    one that shrinks the variance most, which is roughly $b(s) = V(s)$.
+
+    \vskip 3pt
+    \textbf{Remember this proof.} It is exactly why GRPO is allowed to use the mean reward of a
+    group of answers as its baseline -- lecture 7.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Advantage, and the actor-critic}
+  \begin{center}
+    {\large $A(s,a) = Q(s,a) - V(s)$}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+    \small \emph{``Was this action better or worse than what I normally do here?''}
+  \end{center}
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Actor}}]
+        \small The policy $\pi_\theta$. Chooses what to do. Trained by the policy gradient.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Critic}}]
+        \small An estimate of $V_\phi(s)$. Provides the baseline. Trained by regression on
+        returns.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \small
+  The baseline from the previous slide, \emph{learned} instead of assumed. It accepts a little
+  bias in exchange for a large drop in variance -- and it is the reason a value function
+  reappears inside methods whose whole point was to avoid one.
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{Remember the critic.} It is a second full-sized network. For a 70B language model
+    that is 70B extra parameters to hold and train -- and when you meet GRPO in lecture 7, its
+    entire selling point is \textbf{throwing this away}.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{GAE: the dial from lecture 2, again}
+  \small
+  How should the critic estimate the advantage? The same bias-variance dial as $n$-step returns:
+
+  \vskip 6pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Estimator} & \textbf{Bias} & \textbf{Variance} \\
+    \midrule
+    $\hat{A} = r_t + \gamma V(s_{t+1}) - V(s_t)$ \; (one step) & high (leans on $V$) & low \\
+    $\hat{A} = G_t - V(s_t)$ \; (full return) & none & high \\
+    \textbf{GAE}$(\lambda)$: exponentially weighted average of all $n$-step versions & tunable & tunable \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Generalised Advantage Estimation} (Schulman et al., 2015)}]
+    \small
+    \[ \hat{A}^{\text{GAE}}_t = \sum_{l \ge 0} (\gamma\lambda)^l\, \delta_{t+l},
+       \qquad \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t) \]
+    \vskip 2pt
+    $\lambda = 0$ gives the one-step version; $\lambda = 1$ gives the full return. In practice
+    $\lambda \approx 0.95$, and it is one of the few hyperparameters genuinely worth tuning.
+  \end{tcolorbox}
+
+  \vskip 4pt
+  \begin{center}
+    \small
+    Same idea as TD($\lambda$), applied to advantages instead of values.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{Trust regions and PPO}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Do not take a step\\ you cannot walk back}
+
+    \vskip 0.6cm
+    {\large The single most important idea for everything that follows.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why one bad step is fatal here and not in chapter 5}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Supervised learning}}]
+        \small
+        Too large a learning rate ruins the model.
+
+        \vskip 4pt
+        You lower it, reload the checkpoint, and rerun. \textbf{The dataset is still there.}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Reinforcement learning}}]
+        \small
+        Too large a step ruins the policy.
+
+        \vskip 4pt
+        The ruined policy now \textbf{collects the next batch of data}. It explores badly, so it
+        learns badly, so it explores worse.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    \small
+    This is the feedback loop that makes RL training feel unstable in a way supervised training
+    does not. There is no fixed dataset to fall back on: \textbf{the data supply is downstream
+    of the model's quality.}
+
+    \vskip 4pt
+    So the goal is not just ``take a good step''. It is ``take the biggest step you can while
+    being sure you have not broken the thing that feeds you''.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The surrogate objective, and a familiar ratio}
+  \small
+  There is a second problem, and the fix for it turns out to fix the first. After one gradient
+  step the data you collected is \emph{off-policy} -- it came from $\pi_{\text{old}}$. Lecture 2
+  told us what to do about that:
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.86\textwidth]
+    \[ L(\theta) = \E\Big[\, \underbrace{\frac{\pi_\theta(a|s)}{\pi_{\text{old}}(a|s)}}_{r_t(\theta)}\; \hat{A}_t \Big] \]
+    \vskip -4pt
+    \begin{center}\small
+      the importance ratio, cut down from a whole-trajectory product to \textbf{one step}
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{itemize}\itemsep2pt
+    \item At $\theta = \theta_{\text{old}}$ the ratio is $1$ and this has the same gradient as
+          plain policy gradient. So it is a legitimate stand-in.
+    \item Away from $\theta_{\text{old}}$ it corrects for the mismatch -- which means you can
+          take \textbf{several} gradient steps on one batch of data instead of throwing it away.
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{And there is the trap.} Nothing stops the optimiser making $r_t(\theta)$ enormous
+    for one lucky action with a big advantage. The correction is only valid while the two
+    policies are close, and the objective actively rewards making them far apart.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{TRPO: put a fence around it}
+  \small
+  Trust Region Policy Optimization (Schulman et al., 2015) states the obvious fix as a
+  constrained problem:
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt, width=0.8\textwidth]
+    \[ \max_\theta\; \E\big[\, r_t(\theta)\, \hat{A}_t \,\big]
+       \qquad \text{subject to} \qquad \E\big[\, \mathrm{KL}(\pi_{\text{old}} \,\|\, \pi_\theta) \,\big] \le \delta \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    \emph{``Improve as much as you like, but do not move the distribution more than $\delta$.''}
+  \end{center}
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{What it gets right}}]
+        \small
+        Monotonic improvement guarantees, and it genuinely stabilised policy gradients for the
+        first time.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Why nobody uses it}}]
+        \small
+        Enforcing that constraint needs the Fisher information matrix and conjugate gradients.
+        It is second-order, fiddly, and awkward to fit alongside dropout or parameter sharing.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    The question that produced PPO: \emph{can we get the fence with only first-order machinery?}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Proximal Policy Optimization: clip instead of constrain}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{ppo_clip.pdf}
+  \end{center}
+
+  \vskip -4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.9\textwidth]
+    \[ L^{\text{CLIP}}(\theta) = \E\Big[\, \min\big(\, r_t(\theta)\hat{A}_t,\;
+       \mathrm{clip}(r_t(\theta),\, 1-\epsilon,\, 1+\epsilon)\, \hat{A}_t \,\big) \Big] \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 2pt
+  \footnotesize
+  \textbf{PPO} -- no constraint, no second derivatives, just a $\min$ and a $\mathrm{clip}$, and
+  it runs in any autodiff framework. Schulman et al., 2017.
+\end{frame}
+
+\begin{frame}{Reading the clip properly}
+  \small
+  The $\min$ is the part people get wrong, so read both halves of the figure:
+
+  \vskip 6pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Good action, $\hat{A} > 0$}}]
+        \small
+        You want to raise its probability. The objective rises until $r_t = 1+\epsilon$, then
+        goes \textbf{flat}.
+
+        \vskip 3pt
+        Past that point the gradient is zero: pushing further gains nothing.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Bad action, $\hat{A} < 0$}}]
+        \small
+        You want to lower its probability -- and here the clip is \emph{not} symmetric.
+
+        \vskip 3pt
+        The $\min$ keeps the steeper branch, so an action that is much more likely than it
+        should be still gets pushed down hard.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{The asymmetry is deliberate.} Removing the incentive to over-commit to a good action
+    is safe. Removing the ability to escape a bad action would not be -- so the clip lets you
+    always run away from mistakes, and only limits your enthusiasm.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The full objective, term by term}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.8pt, arc=2pt, width=0.96\textwidth]
+    \[ L(\theta,\phi) = \underbrace{L^{\text{CLIP}}(\theta)}_{\text{(1) improve the policy}}
+       \;-\; c_1 \underbrace{\big(V_\phi(s) - V^{\text{targ}}\big)^2}_{\text{(2) train the critic}}
+       \;+\; c_2 \underbrace{\mathcal{H}\big[\pi_\theta(\cdot|s)\big]}_{\text{(3) stay curious}} \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \footnotesize
+  \begin{enumerate}\itemsep4pt
+    \item \textbf{The clipped surrogate.} Everything on the last two slides.
+    \item \textbf{The value loss.} The critic must be accurate or the advantages are garbage.
+          Usually the same network body with two heads, which is why the two losses are added
+          rather than optimised separately.
+    \item \textbf{The entropy bonus.} Rewards the policy for staying uncertain. Without it a
+          policy that finds something that works will collapse onto it and stop exploring --
+          and once entropy hits zero, no gradient can revive it.
+  \end{enumerate}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Memorise the shape of this: clip $+$ value $+$ entropy.} In lecture 6 you will see
+    it again with a KL-to-reference penalty added, and in lecture 7 with term (2) deleted
+    entirely.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{PPO in practice}
+  \small
+  PPO's reputation comes from being hard to break, not from being subtle. The knobs that matter:
+
+  \vskip 6pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Knob} & \textbf{Typical} & \textbf{What goes wrong} \\
+    \midrule
+    clip $\epsilon$ & $0.1 - 0.2$ & too big and the trust region stops meaning anything \\
+    epochs per batch & $3 - 10$ & too many and $\pi_\theta$ drifts far from $\pi_{\text{old}}$,
+      where the ratio is no longer trustworthy \\
+    GAE $\lambda$ & $0.95$ & the bias-variance dial \\
+    entropy coef $c_2$ & $0 - 0.01$ & too small: entropy collapse. Too big: it never commits \\
+    advantage norm. & per batch & unnormalised advantages make the step size depend on the
+      reward scale \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{What to watch while it trains:} the KL between $\pi_\theta$ and $\pi_{\text{old}}$,
+    the fraction of samples being clipped, and the policy entropy. If entropy is falling towards
+    zero, the run is dying whatever the reward curve says. \emph{This is the single most useful
+    diagnostic in the chapter, and it is the same one used for reasoning models in lecture 7.}
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Continuous control}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}The other branch}
+
+    \vskip 0.6cm
+    {\large Where the actions are torques, not tokens.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{DDPG, TD3, SAC}
+  \footnotesize
+  \begin{center}
+  \begin{tabular}{p{2.1cm} p{5.0cm} p{5.4cm}}
+    \toprule
+    \textbf{Method} & \textbf{Idea} & \textbf{The problem it fixes} \\
+    \midrule
+    \textbf{Deep Deterministic Policy Gradient}\newline (\textbf{DDPG}, 2015) &
+      A \emph{deterministic} actor $\mu_\theta(s)$ outputs the action; the critic's gradient
+      $\nabla_a Q$ tells it which way to move. Off-policy, with replay. &
+      $\argmax_a$ over continuous actions -- the actor \emph{is} the argmax, learned. \\[6pt]
+    \textbf{Twin Delayed DDPG}\newline (\textbf{TD3}, 2018) &
+      Two critics and take the smaller; update the actor less often than the critic; smooth the
+      target over nearby actions. &
+      DDPG's overestimation and brittleness. \emph{Twin critics are Double Q-learning again --
+      third appearance.} \\[6pt]
+    \textbf{Soft Actor-Critic}\newline (\textbf{SAC}, 2018) &
+      Maximise reward \textbf{plus entropy}: $\E[\sum_t r_t + \alpha \mathcal{H}(\pi(\cdot|s_t))]$,
+      with $\alpha$ tuned automatically. &
+      Exploration and brittleness at once. Being deliberately uncertain is written into the
+      objective rather than bolted on. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{SAC is the default for robotics}, PPO the default for everything else -- and the
+    reason is sample efficiency. SAC is off-policy and reuses a replay buffer; PPO throws its
+    data away after a few epochs. When each sample costs a real robot movement, that gap decides
+    the project.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Which one should you reach for?}
+  \begin{center}
+  \small
+  \begin{tabular}{p{5.4cm} p{3.2cm} p{4.0cm}}
+    \toprule
+    \textbf{Situation} & \textbf{Reach for} & \textbf{Why} \\
+    \midrule
+    Discrete actions, cheap simulator & DQN + Rainbow & replay makes it sample-efficient \\[3pt]
+    Continuous actions, expensive samples & SAC & off-policy, entropy-regularised \\[3pt]
+    Anything where stability matters more than efficiency & PPO & hard to break, few surprises \\[3pt]
+    Huge discrete action space (tokens) & PPO / GRPO & no $\argmax$, no critic over
+      the vocabulary \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{An honest note on the last row.} PPO became the standard for language models partly
+    on merit and partly because it was what worked in 2017 when OpenAI wired up RLHF. Lecture 7
+    is largely the story of the field discovering which parts of PPO were load-bearing for text
+    and which were inherited baggage.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Recap}
+  \footnotesize
+  \begin{itemize}\itemsep4pt
+    \item You cannot differentiate the reward, so differentiate the \textbf{log-probability of
+          the action} instead and weight it by the return. That is the policy gradient theorem,
+          and the environment dynamics cancel out of it.
+    \item Raw REINFORCE points the wrong way \textbf{33.9\%} of the time on a two-action toy
+          problem. Every method after it is variance reduction or step-size control.
+    \item Subtracting a \textbf{baseline} that does not depend on the action is provably free.
+          Learning that baseline gives you the \textbf{actor-critic}; \textbf{GAE} is the dial
+          controlling how much you trust it.
+    \item In RL a ruined policy collects the next batch, so a step that is too large cannot be
+          undone. \textbf{TRPO} fences this with a KL constraint; \textbf{PPO} gets the same
+          effect by clipping the importance ratio, first-order and cheap.
+    \item The PPO objective is \textbf{clip $+$ value $+$ entropy}. Watch KL, clip fraction and
+          entropy while training -- a collapsing entropy means a dying run.
+    \item \textbf{SAC} for robots, \textbf{PPO} for stability and for tokens.
+  \end{itemize}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Next:} everything so far has been reactive -- one forward pass, one action. What
+    happens if the agent is allowed to \emph{think} before it moves? Tree search, AlphaZero, and
+    what RL looks like when you cannot simulate anything at all.
+  \end{tcolorbox}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Deck 4 of the 7-deck RL chapter (RL_EXPANSION_PLAN.md, approved 2026-08-11).
+% - Reused from L32_reinforcement_learning.tex: "Two ways to be an agent" (extended with the
+%   three concrete failures), "REINFORCE has a variance problem", "Advantage and the
+%   actor-critic", and the ppo_clip figure.
+% - NEW: the policy-gradient family tree, the obstacle frame, the log-derivative derivation
+%   (#2 of the approved six), the baseline theorem (#4), GAE, the whole trust-region section
+%   (why a bad step is unrecoverable, the surrogate objective, TRPO, the clip read properly with
+%   its asymmetry, the full three-term objective, the practical knobs), and the continuous
+%   control section.
+% - Figures: pg_family.pdf is new (py_src/policy_gradient_family.py, a teaching diagram).
+%   reinforce_variance.pdf and ppo_clip.pdf are reused from the original L32 build and ARE
+%   measured.
+% - Pedagogical decisions: (a) PPO gets five frames instead of one, and the clip's ASYMMETRY is
+%   given its own frame because that is the part everyone misreads; (b) the baseline theorem is
+%   derived here specifically so GRPO's group mean needs no justification in lecture 7; (c) the
+%   family tree is introduced early and referenced again in lecture 7, so GRPO arrives as one
+%   edit rather than a new algorithm; (d) the entropy/KL/clip-fraction diagnostic is flagged as
+%   the same one used for reasoning models.
+% - Forward pointer: deck 5 (L32e_planning_practice).

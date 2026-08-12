@@ -1,0 +1,550 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Reinforcement Learning}
+\subtitle{Part 3: when the table will not fit}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Part 3 of 7. Function approximation, DQN, and the three ingredients that make it diverge.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{The gridworld had 16 squares}
+  \small
+  Tabular Q-learning stored one number per $(s,a)$ pair. For the gridworld that was
+  $16 \times 4 = 64$ numbers. Fine.
+
+  \vskip 8pt
+  \begin{center}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.8pt, arc=2pt, width=0.82\textwidth,
+                    title={\textbf{Now play Atari from the screen}}]
+    \small
+    One frame is $210 \times 160$ pixels with $128$ possible colours each:
+    \[ |\mathcal{S}| \approx 128^{33{,}600} \]
+    \vskip 2pt
+    For scale, there are roughly $10^{80}$ atoms in the observable universe. This number has
+    more than seventy thousand digits.
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 10pt
+  \begin{center}
+    \small
+    There is no table. There will never be a table. And yet almost every state you will ever
+    see \emph{looks like} one you have seen before -- which is the opening every other chapter
+    of this course has used.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{Generalise instead of memorise}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Replace the table with a function}
+
+    \vskip 0.6cm
+    {\large The move you have made in every chapter since regression.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{From a table to a network}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Tabular}}]
+        \small
+        $Q(s,a)$ is a cell you look up.
+
+        \vskip 4pt
+        Updating one cell teaches you \textbf{nothing} about any other cell -- even one that
+        differs by a single pixel.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Approximate}}]
+        \small
+        $Q_\theta(s,a)$ is a network with a few million weights.
+
+        \vskip 4pt
+        Updating it for one state \textbf{moves every similar state with it}. That is the point,
+        not a side effect.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \small
+  The loss is the squared TD error from lecture 2 -- the surprise, squared:
+  \[ \mathcal{L}(\theta) = \E\Big[\big(\underbrace{r + \gamma \max_{a'} Q_{\theta^-}(s',a')}_{\text{target } y} - Q_\theta(s,a)\big)^2\Big] \]
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    It looks exactly like the regression loss from chapter 1. It is not, and the next two
+    frames are about why.
+  \end{center}
+\end{frame}
+
+\begin{frame}{This is not regression, however much it looks like it}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Supervised learning}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Targets $y$ are fixed, given, correct.
+          \item The dataset does not change while you fit it.
+          \item Samples are i.i.d.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Fitting $Q_\theta$}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Targets contain $Q_{\theta}$ itself. They \textbf{move when you learn}.
+          \item Better policy $\Rightarrow$ different states visited $\Rightarrow$ different data.
+          \item Consecutive frames are nearly identical.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{The semi-gradient}}]
+    \small
+    Honesty about the maths: when we differentiate that loss, we treat the target $y$ as a
+    constant even though it depends on $\theta$. So the update is \textbf{not} the gradient of
+    any loss function. Sutton calls it a \emph{semi-gradient} method.
+
+    \vskip 4pt
+    It works, it is what everyone does, and it is the reason none of the convergence guarantees
+    from lecture 2 survive.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Why it breaks}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Three ingredients, one explosion}
+
+    \vskip 0.6cm
+    {\large Each is harmless. Together they have no guarantee at all.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The deadly triad}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \vskip -2pt
+      \includegraphics[width=\linewidth]{deadly_triad.pdf}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \vskip 16pt
+      \small
+      Drop any \textbf{one} and you are safe:
+
+      \vskip 6pt
+      \begin{itemize}\itemsep4pt
+        \item No bootstrapping $\Rightarrow$ Monte Carlo with a network. Converges, but slow
+              and high variance.
+        \item No approximation $\Rightarrow$ tabular. Converges, but does not scale.
+        \item No off-policy $\Rightarrow$ on-policy methods like SARSA. Converges, but you
+              cannot reuse old data.
+      \end{itemize}
+
+      \vskip 8pt
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \small
+        DQN wants all three -- and values can grow without bound.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 2pt
+  \scriptsize
+  \textbf{Why the combination is unstable:} an over-estimate at $s'$ raises the target for $s$;
+  the network generalises, so that also raises $Q(s',\cdot)$ -- which raises the target again.
+  Nothing pulls it back down.
+\end{frame}
+
+% ==================================================================================
+\section{DQN}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Two hacks that made it work}
+
+    \vskip 0.6cm
+    {\large Neither is deep. Both are load-bearing.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{DQN}
+  \vskip -2pt
+  \begin{center}
+    \small The \textbf{Deep Q-Network} (\textbf{DQN}), Mnih et al., 2015.
+  \end{center}
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.93\linewidth]{dqn_loop.pdf}
+  \end{center}
+
+  \vskip -6pt
+  \footnotesize
+  Input is four stacked frames (so velocity is visible -- one frame cannot tell you which way
+  the ball is moving), through a small convolutional network, out to one $Q$ value per action.
+  \textbf{One forward pass scores every action at once.}
+\end{frame}
+
+\begin{frame}{Why each hack exists}
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Experience replay}}]
+    \small
+    Store transitions $(s,a,r,s')$ in a buffer of millions and train on \emph{random} batches
+    from it.
+
+    \vskip 3pt
+    \textbf{Why:} consecutive frames are almost identical, so training on them in order violates
+    i.i.d.\ badly -- you would take a hundred gradient steps on essentially the same picture,
+    then a hundred on the next one, and forget the first. Shuffling restores something like an
+    ordinary dataset. \emph{Bonus: each transition gets used many times instead of once.}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Target network}}]
+    \small
+    Compute the target with a \emph{frozen} copy $Q_{\theta^-}$, refreshed every $C$ steps.
+
+    \vskip 3pt
+    \textbf{Why:} otherwise every gradient step changes the target you are regressing towards --
+    a dog chasing its own tail. Freezing it turns each interval into an ordinary supervised
+    problem with fixed labels, which is the only reason the deadly triad does not blow up.
+  \end{tcolorbox}
+
+  \vskip 4pt
+  \begin{center}
+    \scriptsize
+    Replay is what makes DQN \textbf{off-policy} -- the batch came from older policies.
+    Q-learning's $\max$ is what makes that legal.
+  \end{center}
+\end{frame}
+
+\begin{frame}{What it achieved}
+  \small
+  One architecture, one set of hyperparameters, learned \textbf{49 Atari games from raw pixels},
+  reaching at least $75\%$ of a professional human tester's score on \textbf{29} of them
+  (Mnih et al., \emph{Nature} 2015).
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Why this was the shock, and it was not the scores}}]
+    \small
+    Before this, game-playing agents were hand-engineered per game -- someone wrote features for
+    ``ball position'' and ``paddle position''. DQN was given the pixels and the score and
+    nothing else, and the \emph{same} program learned Breakout, Pong and Space Invaders.
+
+    \vskip 4pt
+    That is the bitter lesson in miniature, and it is why the field pivoted.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{And the honest part.} It failed completely on games needing long-horizon planning.
+    On Montezuma's Revenge -- where you must fetch a key, cross a room and open a door before
+    any reward appears -- DQN scored \textbf{zero}. Sparse reward defeats it entirely.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Everything that fixed DQN}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Six patches and a rainbow}
+
+    \vskip 0.6cm
+    {\large Each one names a specific thing that was wrong.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Double DQN: the bias you already met}
+  \small
+  Lecture 2 measured it on the gridworld: \textbf{13 of 13 states overestimated}, because
+  $\max_{a'} Q(s',a')$ takes a maximum over noisy estimates and the noise gets selected for.
+
+  \vskip 6pt
+  With a network the problem is worse, not better -- there is more noise and it is correlated
+  across states.
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{DQN}}]
+        \small
+        \[ y = r + \gamma \max_{a'} Q_{\theta^-}(s',a') \]
+        \vskip 2pt
+        One network both \emph{picks} the action and \emph{says how good it is}. If it is
+        wrong, it is wrong twice in the same direction.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Double DQN}}]
+        \small
+        \[ y = r + \gamma\, Q_{\theta^-}\!\big(s', \argmax_{a'} Q_{\theta}(s',a')\big) \]
+        \vskip 2pt
+        The online net \emph{chooses}, the frozen net \emph{scores}. The noise cannot select and
+        reward itself.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    van Hasselt (2010) for tabular, van Hasselt, Guez \& Silver (2016) for the DQN version.
+    \textbf{Two networks were already lying around}, which is what makes the fix nearly free.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Four more, each fixing something specific}
+  \footnotesize
+  \begin{center}
+  \begin{tabular}{p{2.6cm} p{4.6cm} p{5.4cm}}
+    \toprule
+    \textbf{Extension} & \textbf{The problem} & \textbf{The fix} \\
+    \midrule
+    \textbf{Dueling}\newline (Wang et al., 2016) &
+      In most states the action barely matters, but you must still learn $|\mathcal{A}|$
+      separate values. &
+      Split the head into $V(s)$ and advantage $A(s,a)$, recombine as
+      $Q = V + (A - \bar{A})$. Learns $V$ from every action. \\[6pt]
+    \textbf{Prioritised replay}\newline (Schaul et al., 2016) &
+      Uniform sampling wastes most batches on transitions the network already predicts
+      perfectly. &
+      Sample in proportion to $|\delta|$, the TD error. \emph{And correct the resulting bias with
+      importance sampling} -- lecture 2's ratio, third appearance. \\[6pt]
+    \textbf{Distributional}\newline (Bellemare et al., 2017) &
+      A mean return hides everything: ``$0$ on average'' could be certain, or $\pm 100$. &
+      Predict the whole \emph{distribution} of returns instead of its mean (C51). \\[6pt]
+    \textbf{Noisy nets}\newline (Fortunato et al., 2018) &
+      $\epsilon$-greedy explores by twitching randomly, identically in every state. &
+      Put learnable noise in the weights, so exploration is state-dependent and anneals itself. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Rainbow: all of them at once}
+  \small
+  Hessel et al.\ (2018) combined \textbf{six} extensions -- double, dueling, prioritised replay,
+  distributional, noisy nets, and multi-step returns (the $n$-step dial from lecture 2) -- into a
+  single agent that beat every individual variant.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{The part worth remembering is the ablation}}]
+    \small
+    They removed each component in turn. \textbf{Prioritised replay} and \textbf{multi-step
+    returns} hurt the most when taken away; \textbf{noisy nets} and \textbf{dueling} mattered
+    least, and on some games removing them helped.
+
+    \vskip 4pt
+    So it is not six equally good ideas -- it is two that carry the result and four that pay
+    their way on some games and not others.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{The habit to copy:} when a paper stacks $N$ improvements, look for the ablation
+    before you believe in any of them. If there is no ablation, assume one or two components
+    are doing the work.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Reality check}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}What the papers do not put on the slide}
+
+    \vskip 0.6cm
+    {\large Sample cost, and the seed problem.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The price nobody puts on the slide}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                        title={\textbf{DQN's budget, per game}}]
+        \small
+        \begin{itemize}\itemsep3pt
+          \item $50$ million frames
+          \item $\approx 38$ days of continuous play
+          \item and that is for \emph{one} of the 49 games
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \vskip 6pt
+      \small
+      A human is competent at Breakout in about \textbf{five minutes}.
+
+      \vskip 6pt
+      This gap is the single biggest practical objection to deep RL, and it decides where you
+      can use it at all.
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Which is why the simulator matters more than the algorithm}}]
+    \small
+    In a simulator, 38 days of play is a few hours on a cluster and a mistake costs nothing. On
+    a physical robot it is 38 days of wear, supervision and broken hardware. On a live
+    recommender it is 38 days of showing users things you know are bad.
+
+    \vskip 4pt
+    \textbf{Ask ``how do I get millions of cheap, safe mistakes?'' before asking which algorithm
+    to use.} If there is no good answer, the honest move is to not use RL -- lecture 5 comes
+    back to this.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The seed problem}
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Deep RL that Matters} (Henderson et al., 2018)}]
+    \small
+    They took single algorithms and ran them with different random seeds. Splitting the runs
+    into two groups and comparing them, \textbf{the same algorithm can look significantly better
+    than itself}.
+
+    \vskip 4pt
+    Results also moved with the codebase, the reward scaling, the network size and the activation
+    function -- none of which are usually reported as choices.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  Why RL is worse than the rest of ML here: the policy generates its own data, so a lucky early
+  episode changes what the agent sees next, which changes what it learns, which changes what it
+  sees. Small differences compound instead of averaging out.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{Practically:} report multiple seeds with a spread, never a single curve. Treat any
+    single-seed comparison -- yours or a paper's -- as an anecdote.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{If you want to run this yourself}
+  \small
+  You should not implement DQN from scratch for real work, and you should implement it once for
+  understanding. The ecosystem:
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l}
+    \toprule
+    \textbf{Gymnasium} & the environment interface -- \texttt{env.step(a)}, the maintained
+      successor to OpenAI Gym \\[3pt]
+    \textbf{Stable-Baselines3} & solid reference implementations. Use this to get a baseline
+      before writing anything \\[3pt]
+    \textbf{CleanRL} & single-file implementations, a few hundred lines each. Best for
+      \emph{reading} \\[3pt]
+    \textbf{Hugging Face Deep RL Course} & free, hands-on, Colab notebooks for exactly the
+      algorithms in this lecture \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    A working DQN on CartPole is about 150 lines. A working DQN on Atari is the same 150 lines
+    plus two weeks of finding out which hyperparameter you got wrong -- which is the real
+    lesson of this lecture.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Recap}
+  \footnotesize
+  \begin{itemize}\itemsep4pt
+    \item A table cannot hold a real state space. Replace it with $Q_\theta$ and updates
+          \textbf{generalise} to similar states -- which is the whole point.
+    \item Fitting $Q_\theta$ is not regression: the targets move as you learn, the data
+          distribution moves as the policy improves, and the update is a \textbf{semi-gradient}
+          rather than the gradient of anything.
+    \item The \textbf{deadly triad} -- bootstrapping, function approximation, off-policy -- has
+          no convergence guarantee. Any two of the three do.
+    \item \textbf{DQN} survives it with two hacks: \textbf{experience replay} (breaks
+          correlation, reuses data) and a \textbf{target network} (stops the target moving).
+    \item Double, dueling, prioritised replay, distributional and noisy nets each fix one named
+          defect; \textbf{Rainbow} stacks them, and its ablation says prioritised replay and
+          multi-step returns do most of the work.
+    \item The costs that decide real projects: \textbf{50M frames per game}, and results that
+          move between random seeds.
+  \end{itemize}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Next:} everything so far learned \emph{values} and acted greedily. What if you skip
+    the values and optimise the behaviour itself? That path leads to PPO -- and to every method
+    used on language models.
+  \end{tcolorbox}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Deck 3 of the 7-deck RL chapter (RL_EXPANSION_PLAN.md, approved 2026-08-11).
+% - Reused from L32_reinforcement_learning.tex: "The wall" (expanded into the cold open and the
+%   table-to-network frame), "DQN and the two tricks", and the 50M-frames price frame.
+% - NEW: the semi-gradient / not-regression frame, the deadly triad (figure + why the loop
+%   diverges), the DQN wiring diagram, Montezuma's Revenge as the honest limit, Double DQN
+%   derived from lecture 2's measured maximisation bias, the four-extension table, Rainbow's
+%   ablation and the "look for the ablation" habit, the seed-problem frame, and the tooling frame.
+% - Figures: py_src/deep_value_illustrations.py generates deadly_triad.pdf and dqn_loop.pdf.
+%   Both are teaching diagrams, not experiments (instructor direction 2026-08-11).
+% - Pedagogical decisions: (a) Double DQN is introduced as the fix to a bias the students already
+%   watched happen on the gridworld in lecture 2, not as a new idea; (b) prioritised replay is
+%   used to bring importance sampling back a third time; (c) the Rainbow frame is really about
+%   reading ablations, which generalises beyond RL; (d) the sample-cost frame is framed as a
+%   project-selection question rather than a curiosity.
+% - Forward pointer: deck 4 (L32d_policy_gradients).

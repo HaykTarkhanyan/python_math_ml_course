@@ -1,0 +1,824 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Reinforcement Learning}
+\subtitle{Part 2: learning from experience}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Part 2 of 7. The map is taken away, and something finally learns.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{Last time we cheated}
+  \small
+  Every number in the previous lecture came out of the Bellman equation:
+  \[ V^*(s) = \max_a \Big[ R(s,a) + \gamma \sum_{s'} \textcolor{armred}{P(s'|s,a)}\, V^*(s') \Big] \]
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Look at the red term}}]
+    \small
+    To compute $V^*$ you had to sum over \emph{every} state you might land in, weighted by
+    \textbf{how likely} it was. That is the rulebook of the universe, and you were handed it.
+
+    \vskip 4pt
+    A robot has no table of how its wheels slip on this carpet. A chatbot has no model of how a
+    human will react to a sentence. \textbf{Nobody gets $P$.}
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    So: can you still find $\pi^*$ if the only thing you are allowed to do is
+    \textbf{act, and see what happens}?
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{What you actually get}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Four numbers at a time}
+
+    \vskip 0.6cm
+    {\large No model, no labels. Just what happened when you tried.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The whole interface}
+  \small
+  From here to the end of the chapter, the agent's only access to the world is a function you
+  can call:
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.72\textwidth]
+    \begin{center}
+      \texttt{s\_next, r, done = env.step(a)}
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{What you can see}}]
+        \small
+        One transition $(s, a, r, s')$ at a time. Do it repeatedly and you get trajectories.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{What you cannot see}}]
+        \small
+        $P(s'|s,a)$ -- the \emph{distribution}. You get one sample from it, never the shape.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    That difference is the whole subject of this lecture. Everywhere the previous lecture wrote
+    $\sum_{s'} P(s'|s,a)\,[\cdots]$ -- an exact average -- we now have to write ``and we saw
+    $s'$ once''. Replacing an expectation with samples is the entire trick.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Monte Carlo: wait and see}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Just play it out}
+
+    \vskip 0.6cm
+    {\large The most honest estimator there is, and the most patient.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Monte Carlo: average what actually happened}
+  \small
+  $V^\pi(s)$ is defined as an expected return. You cannot compute the expectation, but you can
+  \textbf{sample} it: play episodes, and average the returns you actually collected from $s$.
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.82\textwidth]
+    \small
+    \begin{enumerate}\itemsep2pt
+      \item Run an episode to the end with $\pi$.
+      \item For each state visited, compute the actual return $G_t$ that followed it.
+      \item $V(s) \leftarrow V(s) + \alpha\,[\,G_t - V(s)\,]$, or just keep a running average.
+    \end{enumerate}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{First-visit}}]
+        \small
+        Only count the \emph{first} time $s$ appears in an episode. Each return is then an
+        independent sample -- easier to prove things about.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Every-visit}}]
+        \small
+        Count every occurrence. Samples are correlated, the proof is harder, and in practice it
+        works just as well.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What Monte Carlo buys and what it costs}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Unbiased}}]
+        \small
+        $G_t$ \emph{is} a sample of the thing you want. No approximation, no assumption. Average
+        enough of them and you converge to the truth.
+
+        \vskip 4pt
+        It does not even need the Markov property.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{High variance, and slow}}]
+        \small
+        $G_t$ sums the randomness of \emph{every} step that followed. One unlucky slip 40 steps
+        later changes the number you learn from.
+
+        \vskip 4pt
+        And you must wait for the episode to end. In a continuing task, it never does.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{The practical objection.} A chess agent plays 80 moves and loses. Monte Carlo tells
+    all 80 positions they were bad. Most of them were fine. You have to average over an enormous
+    number of games before that noise cancels out.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Temporal difference: do not wait}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Learn from a guess}
+
+    \vskip 0.6cm
+    {\large The idea Sutton called the central one in reinforcement learning.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Bootstrapping}
+  \small
+  Monte Carlo waits for $G_t$ because it wants the true return. But the Bellman equation already
+  told us what the return looks like:
+  \[ G_t = r_t + \gamma G_{t+1} \qquad\text{and}\qquad V(s_{t+1}) \approx \E[G_{t+1}] \]
+
+  \vskip 4pt
+  So after \textbf{one step} you already have an estimate of the whole future. Use it:
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.84\textwidth]
+    \[ V(s_t) \leftarrow V(s_t) + \alpha \big[\, \underbrace{r_t + \gamma V(s_{t+1})}_{\text{TD target}} - V(s_t) \,\big] \]
+    \vskip -4pt
+    \begin{center}
+      \small the bracket is the \textbf{TD error} $\delta_t$
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{Notice what just happened.} We updated a guess towards another guess. That should
+    feel illegitimate -- and it is the single most useful idea in the subject. The one real
+    number in the target, $r_t$, is enough to slowly drag the whole system towards the truth.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The same episode, two schedules}
+  \begin{center}
+    \includegraphics[width=0.93\linewidth]{mc_vs_td.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \small
+  TD learns \textbf{online}, from incomplete episodes, in continuing tasks, and from every
+  single step. Monte Carlo learns once, at the end, from the real thing.
+\end{frame}
+
+\begin{frame}{The trade is bias against variance}
+  \begin{center}
+  \small
+  \begin{tabular}{l l l}
+    \toprule
+     & \textbf{Monte Carlo} & \textbf{TD(0)} \\
+    \midrule
+    Target & $G_t$, the actual return & $r_t + \gamma V(s_{t+1})$ \\[3pt]
+    Bias & none & biased, because $V(s_{t+1})$ is wrong at first \\[3pt]
+    Variance & high -- sums every future step & low -- one step of randomness \\[3pt]
+    Needs & episodes that terminate & nothing; works online forever \\[3pt]
+    Markov & does not assume it & exploits it (and suffers if it is false) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    You have met this axis before -- it is the bias-variance trade-off from chapter 2, in a new
+    costume. And as usual the extremes are rarely best: in practice TD converges faster, and the
+    bias washes out as the estimates improve.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Everything in between: $n$-step and TD($\lambda$)}
+  \small
+  MC and TD(0) are the two ends of one dial. Look one step ahead, or two, or all of them:
+
+  \vskip 6pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Target} & \textbf{Name} & \\
+    \midrule
+    $r_t + \gamma V(s_{t+1})$ & TD(0) & maximum bias, minimum variance \\
+    $r_t + \gamma r_{t+1} + \gamma^2 V(s_{t+2})$ & 2-step & \\
+    $r_t + \cdots + \gamma^{n-1} r_{t+n-1} + \gamma^n V(s_{t+n})$ & $n$-step & \\
+    $r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots$ & Monte Carlo & minimum bias, maximum variance \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{TD($\lambda$)}}]
+    \small
+    Rather than pick one $n$, take a weighted average of \emph{all} of them, with weight
+    $(1-\lambda)\lambda^{n-1}$. $\lambda = 0$ gives TD(0); $\lambda = 1$ gives Monte Carlo.
+    \textbf{Eligibility traces} make this computable in one pass instead of storing the future.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    Remember this dial. It comes back in lecture 4 as \textbf{GAE}, which is exactly this idea
+    applied to advantages, and is a knob you will actually tune when training PPO.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{From values to behaviour}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Control, not just prediction}
+
+    \vskip 0.6cm
+    {\large Estimating $V^\pi$ is useless if you cannot act on it.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why control forces you to learn $Q$}
+  \small
+  In the last lecture, going from values to a policy was one line:
+  \[ \pi(s) = \argmax_a \Big[ R(s,a) + \gamma \sum_{s'} \textcolor{armred}{P(s'|s,a)}\, V(s') \Big] \]
+
+  \vskip 4pt
+  There is $P$ again. Without it, knowing $V$ does \textbf{not} tell you how to act -- you cannot
+  work out where an action leads.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{So learn $Q(s,a)$ instead}}]
+    \small
+    $Q$ already has the action baked in, so acting greedily is just
+    $\pi(s) = \argmax_a Q(s,a)$ -- a comparison between numbers you have already stored. No
+    model required.
+
+    \vskip 4pt
+    \textbf{This is why every model-free algorithm in this chapter estimates $Q$ or a policy
+    directly, and almost never $V$ alone.}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \small
+  The cost: the table is now $|\mathcal{S}| \times |\mathcal{A}|$ instead of $|\mathcal{S}|$.
+  Hold that thought until lecture 3.
+\end{frame}
+
+\begin{frame}{Generalised policy iteration, with samples}
+  \small
+  The skeleton from last lecture survives intact. Only the two boxes change:
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+     & \textbf{With a model (lecture 1)} & \textbf{From samples (now)} \\
+    \midrule
+    Evaluation & sweep the Bellman equation & average returns (MC) or bootstrap (TD) \\[3pt]
+    Improvement & $\argmax_a$ using $P$ & $\argmax_a Q(s,a)$, no $P$ needed \\[3pt]
+    Coverage & every state, every sweep & \textbf{only states you actually visit} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{The new problem, and it is a serious one}}]
+    \small
+    Dynamic programming visited every state because it was allowed to. A sampling agent only
+    learns about states it \emph{reaches}, and it reaches them by following its own policy.
+
+    \vskip 4pt
+    A greedy policy will therefore keep confirming its first impression and never look anywhere
+    else. \textbf{Improvement now depends on exploration}, which was never true before.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The dilemma nobody escapes}
+  To learn which action is best you must try actions that might not be. To score well you must
+  take the action you already believe is best. You cannot do both at once.
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \includegraphics[width=\linewidth]{epsilon_cost.pdf}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vskip 8pt
+      \small
+      \textbf{$\epsilon$-greedy:} act randomly with probability $\epsilon$, greedily otherwise.
+
+      \vskip 4pt
+      Priced exactly on our gridworld, with the optimal policy already known:
+      \begin{itemize}\itemsep1pt
+        \item $\epsilon = 0$: value $0.208$
+        \item $\epsilon = 0.1$: value $0.152$
+        \item $\epsilon = 1$: value $-0.418$
+      \end{itemize}
+
+      \vskip 4pt
+      Even $10\%$ random acting costs about a quarter of the achievable value.
+    \end{column}
+  \end{columns}
+
+  \vskip 2pt
+  \footnotesize
+  \textbf{But that is only one side.} The figure assumes you \emph{already know} the best
+  policy. At the start you do not, and $\epsilon = 0$ means never finding it. Hence the usual
+  compromise: start high, decay over time.
+\end{frame}
+
+\begin{frame}{Two updates that differ by one symbol}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt,
+                    width=0.9\textwidth, title={\textbf{SARSA} -- on-policy}]
+    \[ Q(s,a) \leftarrow Q(s,a) + \alpha\big[\, r + \gamma\, Q(s', \textcolor{armblue}{a'}) - Q(s,a) \,\big] \]
+    \vskip -4pt
+    \begin{center}\small
+      $a'$ is \textbf{the action you actually took next}. The name is literally the tuple it
+      needs: \textbf{s}tate, \textbf{a}ction, \textbf{r}eward, \textbf{s}tate, \textbf{a}ction.
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    width=0.9\textwidth, title={\textbf{Q-learning} -- off-policy}]
+    \[ Q(s,a) \leftarrow Q(s,a) + \alpha\big[\, r + \gamma\, \textcolor{paramgreen}{\max_{a'}}\, Q(s', a') - Q(s,a) \,\big] \]
+    \vskip -4pt
+    \begin{center}\small
+      The \emph{best} action available there, whether or not you take it.
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    One symbol. It changes what the algorithm is learning about.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why that one symbol matters}
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{cliff_walking.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \footnotesize
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Q-learning} learns the value of the greedy policy, which never falls off. So it
+      walks the edge -- and, while it is still exploring with $\epsilon$, falls in regularly.
+      \emph{It scores worse online while learning the better policy.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{SARSA} bootstraps off the action it will actually take, which is sometimes random.
+      Squares next to the cliff therefore inherit some of the $-100$. It learns the best policy
+      \emph{for an agent that explores}.
+    \end{column}
+  \end{columns}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    If exploration can do real damage -- a physical robot, a live recommender, a production
+    system -- the on-policy answer is usually the one you want, because it prices in the fact
+    that your agent \emph{will} sometimes do something random.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Expected SARSA, and the family so far}
+  \small
+  SARSA's target uses one sampled $a'$, which adds noise for no good reason -- you know
+  $\pi(\cdot|s')$, so you can average over it exactly:
+  \[ Q(s,a) \leftarrow Q(s,a) + \alpha\Big[\, r + \gamma \sum_{a'} \pi(a'|s')\,Q(s',a') - Q(s,a) \,\Big] \]
+
+  \vskip 6pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Algorithm} & \textbf{Target uses} & \textbf{Learns the value of} \\
+    \midrule
+    SARSA & the sampled $a'$ & the policy it is running \\
+    Expected SARSA & the average over $\pi(\cdot|s')$ & the policy it is running, less noisily \\
+    Q-learning & $\max_{a'}$ & the greedy policy \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    Expected SARSA with a greedy target policy \emph{is} Q-learning. These are not three
+    algorithms; they are three choices of what distribution to average the target over. That
+    framing is what makes the next section necessary.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Learning from someone else's data}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Importance sampling}
+
+    \vskip 0.6cm
+    {\large The most reused equation in this chapter.\\
+     \textbf{Proximal Policy Optimization} (\textbf{PPO}) is built on it.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The problem}
+  \small
+  You want to know how good policy $\pi$ is. But your data was collected by a \emph{different}
+  policy $b$ -- and this situation is the rule, not the exception:
+
+  \vskip 6pt
+  \begin{itemize}\itemsep3pt
+    \item You explore with $\epsilon$-greedy but want the value of the greedy policy.
+    \item You have last month's logs from the recommender that was deployed then.
+    \item You want to reuse old experience instead of throwing it away after one gradient step.
+    \item You collected a batch of responses from the model, then updated it, and want a second
+          update from the same batch. \emph{(This one is PPO.)}
+  \end{itemize}
+
+  \vskip 8pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.8\textwidth]
+    \begin{center}
+      \small
+      Naively averaging $b$'s returns estimates $V^b$, not $V^\pi$.\\
+      \textbf{The samples are drawn from the wrong distribution.}
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Importance sampling, derived}
+  \small
+  The fix is one line of algebra: multiply and divide by $q$.
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt]
+    \footnotesize
+    \begin{align*}
+      \E_{x \sim p}[f(x)] &= \sum_x p(x) f(x)
+        && \text{\scriptsize definition} \\[2pt]
+      &= \sum_x q(x)\, \frac{p(x)}{q(x)}\, f(x)
+        && \text{\scriptsize multiply by $q/q$} \\[2pt]
+      &= \E_{x \sim q}\!\left[\, \frac{p(x)}{q(x)}\, f(x) \right]
+        && \text{\scriptsize \textbf{now sampled from $q$}}
+    \end{align*}
+  \end{tcolorbox}
+
+  \vskip 4pt
+  Applied to whole trajectories, something remarkable cancels:
+
+  \vskip 2pt
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt, width=0.94\textwidth]
+    \footnotesize
+    \[ \rho = \frac{\Pr(\tau \mid \pi)}{\Pr(\tau \mid b)}
+       = \frac{\cancel{p(s_0)} \prod_t \pi(a_t|s_t)\, \cancel{P(s_{t+1}|s_t,a_t)}}
+              {\cancel{p(s_0)} \prod_t b(a_t|s_t)\, \cancel{P(s_{t+1}|s_t,a_t)}}
+       = \prod_t \frac{\pi(a_t|s_t)}{b(a_t|s_t)} \]
+    \vskip -2pt
+    \begin{center}
+      \textbf{The dynamics cancel.} The correction needs only the two policies -- which you
+      know exactly, because you wrote them.
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The catch, and where you will see it again}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{That product is a time bomb}}]
+    \small
+    $\rho$ multiplies $T$ ratios together. If each is a little above 1, the product explodes;
+    if a few are near 0, it collapses. Over a long trajectory the variance of the estimate
+    becomes astronomical, and a single sample can dominate the entire batch.
+
+    \vskip 4pt
+    Worse, $\rho$ is undefined if $b$ never takes an action $\pi$ would -- you cannot correct
+    for data you do not have. (This requirement is called \emph{coverage}.)
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  Every practical off-policy method is a way of managing that ratio:
+
+  \vskip 4pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l}
+    \toprule
+    \textbf{Method} & \textbf{What it does to $\rho$} \\
+    \midrule
+    Q-learning & avoids it entirely -- bootstraps off $\max_{a'} Q$, one step, no product \\
+    Lecture 4's policy methods & keep one \emph{single-step} ratio, and \textbf{clip} it \\
+    Lecture 7's language-model methods & the same ratio, per token, with a group-based baseline \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    When you meet $\frac{\pi_\theta(a|s)}{\pi_{\text{old}}(a|s)}$ in the PPO objective, it is
+    \textbf{this}, with the product cut down to one term.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{Does any of it work?}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Put it in the gridworld}
+
+    \vskip 0.6cm
+    {\large Same world as lecture 1 -- but this time nobody hands over $P$.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Q-learning: learn the values from experience alone}
+  \begin{center}
+    {\large $Q(s,a) \leftarrow Q(s,a) + \alpha \Big[\underbrace{r + \gamma \max_{a'} Q(s',a')}_{\text{what I now think it is worth}} - \underbrace{Q(s,a)}_{\text{what I thought before}}\Big]$}
+  \end{center}
+
+  \vskip 10pt
+  \small
+  The bracket is a \textbf{surprise}: the gap between the estimate you had and the better
+  estimate you can make now that you have seen $r$ and $s'$. Nudge towards it by $\alpha$.
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.31\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+        \scriptsize\textbf{Model-free}\\ Never needs $P$. Just $(s,a,r,s')$.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+        \scriptsize\textbf{Off-policy}\\ Learns $Q^*$ even while behaving badly.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \scriptsize\textbf{Tabular}\\ One cell per $(s,a)$. Does not scale.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \scriptsize\color{gray}
+  Watkins \& Dayan (1992). Converges to $Q^*$ given decaying $\alpha$ and infinitely many
+  visits to every pair -- conditions no real system satisfies, and it usually works anyway.
+\end{frame}
+
+\begin{frame}{One update, by hand}
+  Suppose $\alpha = 0.5$, $\gamma = 0.9$. The agent is on a square where it currently believes
+  $Q(s, \text{right}) = 0.30$. It moves right, receives the usual $-0.04$, and lands on a
+  square whose best action it currently values at $0.60$.
+
+  \vskip 10pt
+  \begin{center}
+  \small
+  $\begin{aligned}
+    \text{target} \;&=\; r + \gamma \max_{a'} Q(s',a') \;=\; -0.04 + 0.9 \times 0.60 \;=\; \mathbf{0.50} \\[4pt]
+    \text{surprise} \;&=\; 0.50 - 0.30 \;=\; +0.20 \\[4pt]
+    Q(s,\text{right}) \;&\leftarrow\; 0.30 + 0.5 \times 0.20 \;=\; \mathbf{0.40}
+  \end{aligned}$
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    That is the whole algorithm. Everything else in tabular RL is bookkeeping around this line
+    -- and notice it never once asked where the agent was likely to end up. It only used where
+    it \emph{did} end up.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Does it actually work?}
+  Lecture 1 was \emph{planning}: value iteration used $P(s'|s,a)$. So put an agent in the same
+  gridworld, give it \textbf{only} the ability to take a step and see what happens, and let it
+  run.
+
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.90\linewidth]{qlearning_convergence.pdf}
+  \end{center}
+
+  \vskip 1pt
+  \footnotesize
+  From zero knowledge, its policy matches the exact answer everywhere by episode
+  \textbf{135}, and ends up right in \textbf{12 of 13} squares. The one it misses (red) is a
+  near-tie: the two actions differ in true value by $0.018$, and -- the part that matters --
+  it still does \textbf{not} walk past the pit.
+\end{frame}
+
+\begin{frame}{But look where the error stops}
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    The curve flattens at about $0.12$ and stays there. More experience does not fix it. Why
+    would a method that provably converges get stuck above zero?
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \footnotesize
+  Because the error is not random. Measured across all $13$ squares at the end of training:
+
+  \vskip 3pt
+  \begin{center}
+    \textbf{$13$ of $13$ states are \emph{over}estimated.} Mean $+0.079$, worst $+0.128$.
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Maximisation bias}}]
+    \footnotesize
+    Look at the update rule again: the target contains $\max_{a'} Q(s',a')$. Taking a
+    \emph{maximum} over estimates that each carry noise does not give the maximum of the true
+    values -- it gives something systematically too high, because the max picks whichever
+    action happened to get lucky. Every state then inherits the optimism of the states after
+    it, so the bias compounds backwards.
+  \end{tcolorbox}
+
+  \vskip 5pt
+  \footnotesize
+  The standard fix, \textbf{Double Q-learning} (van Hasselt, 2010), keeps two independent
+  estimates and uses one to \emph{choose} the action and the other to \emph{value} it -- so the
+  noise cannot select and reward itself. It returns in lecture 3 as Double DQN.
+\end{frame}
+
+\begin{frame}{When is it allowed to work?}
+  \small
+  Q-learning converges to $Q^*$ under three conditions. They are worth knowing because every
+  one of them is violated in practice:
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{p{4.3cm} p{4.0cm} p{4.3cm}}
+    \toprule
+    \textbf{Condition} & \textbf{Why} & \textbf{Reality} \\
+    \midrule
+    Every $(s,a)$ visited infinitely often & you cannot learn about what you never try &
+      you visit a vanishing fraction of a real state space \\[4pt]
+    $\sum_t \alpha_t = \infty$, $\sum_t \alpha_t^2 < \infty$ &
+      big enough to reach anywhere, small enough to settle &
+      people use a constant $\alpha$, which fails the second \\[4pt]
+    Tabular representation & each cell updates independently &
+      lecture 3 replaces the table with a network \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{This is not pedantry.} A first attempt at the gridworld demo with constant
+    $\alpha = 0.2$ matched $\pi^*$ at episode 491 and then \emph{drifted back} to 6 of 13
+    squares wrong. The decaying schedule is what fixed it.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Recap}
+  \footnotesize
+  \begin{itemize}\itemsep4pt
+    \item Without $P$, every expectation becomes an average over samples. That single
+          substitution is what separates this lecture from the last one.
+    \item \textbf{Monte Carlo} averages actual returns: unbiased, high variance, needs the
+          episode to end. \textbf{TD} bootstraps off its own estimate: biased, low variance,
+          learns online.
+    \item $n$-step and TD($\lambda$) are the dial between them. The same dial reappears as
+          \textbf{GAE} in lecture 4.
+    \item Control forces you to learn $\mathbf{Q}$, because acting from $V$ needs the model you
+          do not have.
+    \item \textbf{SARSA} learns the value of the policy it is running; \textbf{Q-learning}
+          learns the value of the greedy one. On the cliff, that is the difference between the
+          safe path and the edge.
+    \item \textbf{Importance sampling} corrects for data collected by another policy, and the
+          dynamics cancel out of the ratio. \textbf{Proximal Policy Optimization -- and every
+          language-model method in lectures 6 and 7 -- is built on the one-step version of it.}
+    \item Tabular Q-learning really does recover $\pi^*$ from experience alone -- and it
+          overestimates every state, because $\max$ over noisy estimates is biased upward.
+  \end{itemize}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Next:} the table has one cell per state. Atari has more states than the universe has
+    atoms. Function approximation, and the three ingredients that make it diverge.
+  \end{tcolorbox}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Deck 2 of the 7-deck RL chapter (RL_EXPANSION_PLAN.md, approved 2026-08-11).
+% - Reused from L32_reinforcement_learning.tex: "The dilemma nobody escapes" (epsilon_cost),
+%   "Q-learning: learn the values from experience alone", "One update, by hand", "Does it
+%   actually work?", "But look where the error stops".
+% - NEW: the env.step interface frame, the whole Monte Carlo section, the whole TD section
+%   (bootstrapping, mc_vs_td figure, the bias-variance table, n-step/TD-lambda), "why control
+%   forces you to learn Q", GPI-with-samples, SARSA vs Q-learning as one symbol, cliff walking,
+%   expected SARSA, the entire importance-sampling section (derivation #3 of the approved six),
+%   and the convergence-conditions frame.
+% - Figures: py_src/td_illustrations.py generates mc_vs_td.pdf and cliff_walking.pdf. Both are
+%   teaching diagrams, not experiments (instructor direction 2026-08-11: fewer measured figures,
+%   more good illustrations). epsilon_cost.pdf and qlearning_convergence.pdf are reused from the
+%   original L32 build and ARE measured.
+% - Pedagogical decisions: (a) importance sampling gets its own section four lectures before
+%   PPO needs it, because the dynamics-cancel derivation is three lines here and impossible to
+%   motivate later; (b) SARSA vs Q-learning is framed as one symbol changing what is being
+%   learned, with cliff walking as the picture; (c) expected SARSA is included mainly to make
+%   the point that all three are the same algorithm under different target distributions.
+% - Forward pointer: deck 3 (L32c_deep_value) breaks the table.

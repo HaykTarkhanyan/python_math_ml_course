@@ -1,0 +1,869 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Reinforcement Learning}
+\subtitle{Part 5: planning, self-play, and the real world}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Part 5 of 7. Search, AlphaZero, offline RL, imitation, and reward design.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{We never explained move 37}
+  \small
+  Lecture 1 opened with AlphaGo playing a move humans rated at 1 in 10{,}000. Four lectures
+  later we still could not build that system, because everything so far has been
+  \textbf{reactive}:
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.78\textwidth]
+    \begin{center}
+      \small state $\longrightarrow$ one forward pass $\longrightarrow$ action
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    \small
+    A strong Go player does not glance at the board and react. They \textbf{read ahead} -- if I
+    play here, they answer there, then I have this -- and they spend more time on hard positions
+    than easy ones.
+
+    \vskip 4pt
+    Nothing in lectures 2 to 4 can do that. The network's answer costs the same whether the
+    position is trivial or decisive.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    This lecture adds \textbf{thinking time}. Then it turns to the awkward half of the
+    subject: what you do when you cannot simulate anything at all.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{Thinking before acting}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Spend compute at decision time}
+
+    \vskip 0.6cm
+    {\large A model of the world lets you try things without doing them.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Model-based RL}
+  \small
+  Lecture 1 had a model $P$ and planned with it. Lecture 2 threw it away and learned from
+  samples. There is an obvious third option: \textbf{learn the model, then plan with it}.
+
+  \vskip 8pt
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Why it is attractive}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Wildly more sample-efficient -- one real transition can generate hundreds of
+                imagined ones.
+          \item The model is reusable when the reward changes.
+          \item You can plan for situations you have never actually been in.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Why it is hard}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Model error \textbf{compounds}: predict 50 steps ahead and you are in a
+                hallucinated world.
+          \item The planner will find and exploit the model's mistakes -- they look like free
+                reward.
+          \item Learning an accurate model can be harder than learning the policy.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Dyna} (Sutton, 1991) -- the simplest version}]
+    \small
+    After each real step, do $k$ extra updates using transitions \emph{imagined} by the learned
+    model. Model-free learning with the data budget stretched.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Monte Carlo tree search}
+  \begin{center}
+    \includegraphics[width=0.99\linewidth]{mcts_phases.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \footnotesize
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    The tree grows \textbf{asymmetrically}: promising branches get explored deeply, hopeless
+    ones get abandoned. That is the difference from brute-force search, and it is what makes Go
+    tractable when the branching factor is around 250.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The selection rule is a bandit}
+  \small
+  Which child do you walk into? You want the one with the best value, but you must not ignore a
+  child you have barely tried. \textbf{That is exactly lecture 1.}
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt, width=0.86\textwidth,
+                    title={\textbf{UCT} -- Upper Confidence bounds applied to Trees}]
+    \[ \text{pick } \argmax_{\text{child } c}\;
+       \underbrace{\frac{W_c}{N_c}}_{\text{average result}} \;+\;
+       C\underbrace{\sqrt{\frac{\ln N_{\text{parent}}}{N_c}}}_{\text{how little you have tried it}} \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    Compare this with the UCB formula from lecture 1. It is the same expression. Every node of
+    the tree is treated as its own little bandit problem, and the whole search is thousands of
+    bandits stacked on top of each other.
+
+    \vskip 3pt
+    This is why the bandit section was not a warm-up.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{AlphaGo, AlphaZero, MuZero}
+  \footnotesize
+  \begin{center}
+  \begin{tabular}{p{1.9cm} p{4.6cm} p{6.0cm}}
+    \toprule
+    & \textbf{What it needed} & \textbf{What it removed} \\
+    \midrule
+    \textbf{AlphaGo}\newline (2016) &
+      A database of human games, a policy net, a value net, MCTS, and the rules of Go. &
+      -- \\[5pt]
+    \textbf{AlphaGo Zero}\newline (2017) &
+      Rules of Go, one network, MCTS, self-play. &
+      \textbf{The human games.} And it became stronger, which is Sutton's own example of the
+      bitter lesson. \\[5pt]
+    \textbf{AlphaZero}\newline (2018) &
+      Rules of the game, one network, MCTS, self-play. &
+      \textbf{Go-specific engineering.} The same program learned chess and shogi. \\[5pt]
+    \textbf{MuZero}\newline (2020) &
+      One network, MCTS, self-play. &
+      \textbf{The rules.} It learns a latent dynamics model good enough to plan in -- so it also
+      plays Atari, where nobody can write the rules down. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Read the right-hand column downwards.} The story of this family is four rounds of
+    deleting a human-supplied ingredient and getting a better system. MuZero's model does not
+    predict the next \emph{screen} -- only what is needed for planning: reward, value, policy.
+    It is allowed to be wrong about everything else.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Search is test-time compute}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{The network alone}}]
+        \small
+        A fixed amount of computation per move. Strong, fast, and it cannot try harder on a
+        difficult position.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{The network plus search}}]
+        \small
+        Spend more simulations and play better. \textbf{A dial between compute and skill,
+        available after training is finished.}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.8pt, arc=2pt,
+                    title={\textbf{Hold on to this idea for lecture 7}}]
+    \small
+    A reasoning model that writes a long chain of thought before answering is doing the same
+    thing: \textbf{spending more computation at decision time to get a better answer}, using a
+    dial that did not exist during training.
+
+    \vskip 4pt
+    Sampling $N$ answers and picking the best with a verifier is even closer -- it is a
+    one-level-deep tree search where the verifier plays the role of the value network.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    ``Thinking longer helps'' is not a new discovery from 2024. It is what beat Lee Sedol.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{Playing against yourself}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}The opponent that improves with you}
+
+    \vskip 0.6cm
+    {\large Where the curriculum comes from when nobody writes one.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Self-play}
+  \small
+  Sparse reward is the hardest problem in RL: if you never win, you never learn. Against a
+  strong opponent a beginner loses every game and gets no gradient. Against a weak one it learns
+  nothing worth knowing.
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Self-play solves this for free}}]
+    \small
+    Play against a copy of yourself. Your opponent is, by construction, exactly at your level --
+    so roughly half the games are wins and the signal never dries up. As you improve, the
+    opposition improves with you.
+
+    \vskip 4pt
+    \textbf{An automatic curriculum, with no curriculum designer.}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{And the ways it goes wrong}}]
+    \small
+    \begin{itemize}\itemsep2pt
+      \item \textbf{Non-stationarity.} Your opponent changes while you learn. The ``environment''
+            is no longer an MDP, and convergence guarantees do not apply.
+      \item \textbf{Strategy cycles.} A beats B, B beats C, C beats A -- and training goes round
+            forever. The usual fix is to keep a \emph{league} of past versions rather than only
+            the newest.
+      \item \textbf{Collusion.} Two copies can find a cosy equilibrium that scores well and
+            plays badly.
+    \end{itemize}
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Measured on our own practical}
+  \small
+  The tic-tac-toe project for this chapter is exactly this experiment. Two agents, identical
+  except for who they trained against, both evaluated against \textbf{perfect} minimax play:
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l c c}
+    \toprule
+    \textbf{Trained against} & \textbf{Win rate vs random} & \textbf{Result vs perfect play} \\
+    \midrule
+    a random opponent & $95.4\%$ (X), $88.0\%$ (O) & \textbf{loses $16.6\%$ as O} \\
+    itself (self-play) & similar & \textbf{$100\%$ draws, never loses} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    \small
+    \textbf{The evaluation lesson matters more than the training one.} Win rate against a weak
+    opponent could not tell these two agents apart. Only playing the perfect opponent exposed
+    the gap.
+
+    \vskip 4pt
+    And look at \emph{where} the weaker agent's mistakes are: it is worst in the \textbf{opening},
+    because a random opponent never punishes an early error. It was never taught that those
+    positions mattered.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{When there is nothing to win at all}
+  \small
+  Self-play needs an opponent. Montezuma's Revenge has none, and DQN scored \textbf{zero} on it
+  -- you must fetch a key, cross a room and open a door before any reward exists. Random
+  exploration will not stumble into that in any amount of time.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Intrinsic motivation: invent your own reward}}]
+    \small
+    Add a bonus for \emph{surprise}, so the agent is paid to reach states it does not understand
+    yet:
+
+    \vskip 4pt
+    \begin{itemize}\itemsep2pt
+      \item \textbf{Count-based.} Bonus proportional to $1/\sqrt{N(s)}$ -- go where you have
+            rarely been. This is the UCB bonus again, now over states.
+      \item \textbf{Curiosity.} Bonus for states where a learned forward model predicts badly.
+      \item \textbf{Random Network Distillation} (\textbf{RND}). Bonus for states where a small
+            network cannot predict the output of a fixed random network. Cheap, and it does not
+            chase noise the way prediction error does.
+    \end{itemize}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{The noisy-TV problem:} an agent paid for surprise will sit in front of a television
+    showing static forever. It is unpredictable, so it is infinitely interesting. Any
+    curiosity bonus needs an answer to this.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{When you cannot explore}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}No simulator, only logs}
+
+    \vskip 0.6cm
+    {\large The setting most real problems are actually in.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The situation you will actually be handed}
+  \small
+  Every method so far assumed you can \emph{try things}. Now suppose you cannot:
+
+  \vskip 6pt
+  \begin{itemize}\itemsep2pt
+    \item A hospital has ten years of treatment records. You may not randomise patients.
+    \item A bank has a decade of lending decisions. Exploring means giving loans you believe
+          are bad.
+    \item A recommender has last month's logs. Exploring means showing users things you know
+          are worse.
+  \end{itemize}
+
+  \vskip 8pt
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt, width=0.86\textwidth,
+                    title={\textbf{Offline (batch) RL}}]
+    \small
+    You get a fixed dataset of transitions collected by some unknown behaviour policy $b$. You
+    must output a better policy. \textbf{You never interact.}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    This sounds like supervised learning, and that is the trap.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why offline RL is hard}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.8pt, arc=2pt,
+                    title={\textbf{Extrapolation error}}]
+    \small
+    The target contains $\max_{a'} Q(s',a')$. That max ranges over \emph{all} actions --
+    including ones the logged policy never took, where $Q$ is a wild extrapolation.
+
+    \vskip 4pt
+    Whatever the network hallucinates as high-value gets selected by the max, propagated
+    backwards by bootstrapping, and \textbf{never corrected}, because you cannot go and check.
+  \end{tcolorbox}
+
+  \vskip 5pt
+  \footnotesize
+  Online, this self-corrects: the agent tries its fantasy, gets punished, updates. Offline, the
+  feedback loop is cut. \textbf{More gradient steps make it worse, not better.}
+
+  \vskip 5pt
+  \begin{center}
+  \scriptsize
+  \begin{tabular}{p{4.6cm} p{7.6cm}}
+    \toprule
+    \textbf{Method} & \textbf{The shape of the fix} \\
+    \midrule
+    Batch-Constrained Q-learning \newline (BCQ, 2019) & only consider actions the behaviour
+      policy plausibly would have taken \\
+    Conservative Q-Learning \newline (CQL, 2020) & train $Q$ to be \emph{pessimistic} about
+      unseen actions -- push their values down \\
+    Implicit Q-Learning \newline (IQL, 2021) & never evaluate an unseen action at all; learn
+      from the data's own returns \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+    \footnotesize
+    All three share one instinct: \textbf{stay where the data is}. Optimism is a virtue online
+    and a defect offline.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Off-policy evaluation: the question your boss asks}
+  \small
+  Before you deploy the new policy, someone will ask how good it is. You cannot run it. So you
+  must estimate its value from data collected by the \emph{old} one -- and lecture 2 already
+  gave you the tool:
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.74\textwidth]
+    \[ \hat{V}^\pi = \frac{1}{n}\sum_{i=1}^{n} \Big(\prod_t \frac{\pi(a_t|s_t)}{b(a_t|s_t)}\Big) G^{(i)} \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+    \small
+    Importance sampling, \textbf{fourth appearance} -- and here it is the product form, with all
+    of its variance.
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    In practice people use \textbf{doubly robust} estimators, which combine importance sampling
+    with a learned model so that the estimate is right if \emph{either} the ratio or the model
+    is right.
+
+    \vskip 4pt
+    \textbf{And you need $b$.} If nobody logged the probabilities the old system assigned, the
+    ratio is not computable and you are reduced to guessing. \emph{Log your propensities} -- it
+    is a one-line decision that determines whether the data is usable later.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Copying instead of exploring}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Just watch an expert}
+
+    \vskip 0.6cm
+    {\large The shortcut that turns RL back into supervised learning.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Behaviour cloning, and why it drifts}
+  \small
+  If you have recordings of an expert, forget rewards entirely: fit
+  $\pi_\theta(a|s)$ to the expert's actions with cross-entropy. \textbf{That is ordinary
+  supervised learning}, and it is the strongest baseline in the chapter.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Compounding error}}]
+    \small
+    The expert never crashed, so the data contains no examples of recovering from a near-crash.
+    Your policy makes one small mistake, arrives somewhere slightly off-distribution, has no
+    idea what to do, makes a bigger mistake, and so on.
+
+    \vskip 4pt
+    Errors grow with the horizon rather than staying constant, because the policy's own mistakes
+    choose the next input.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{DAgger} (Ross et al., 2011)}]
+    \small
+    Run \emph{your} policy, and have the expert label the states it actually visits. Add to the
+    dataset, retrain, repeat. The training distribution converges to the one you deploy in.
+
+    \vskip 3pt
+    Requires an expert you can query on demand, which is the expensive part.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Where you have already seen this}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=2pt, width=0.9\textwidth,
+                    title={\textbf{Behaviour cloning is supervised fine-tuning}}]
+    \small
+    Fitting a policy to expert demonstrations with cross-entropy \emph{is} what
+    \textbf{supervised fine-tuning} (\textbf{SFT}) does to a language model: the ``expert'' is
+    the human who wrote the answer, the ``state'' is the prompt plus tokens so far, the
+    ``action'' is the next token.
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 8pt
+  \small
+  Which means SFT inherits behaviour cloning's disease. A model trained only on perfect
+  human-written answers has never seen its own half-finished, slightly-wrong output, and has no
+  training signal for recovering from it.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{This is a real argument for RL on language models}, and it is not the usual one. RL
+    trains on the model's \emph{own} outputs, so it is the DAgger fix applied to text: the
+    training distribution becomes the deployment distribution.
+
+    \vskip 3pt
+    Lectures 6 and 7 are that idea, worked out properly.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Two more ways to use demonstrations}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Inverse RL}}]
+        \small
+        Do not copy the behaviour -- \textbf{infer the reward function} that would explain it,
+        then optimise that.
+
+        \vskip 4pt
+        Better generalisation, because a reward transfers to new situations where a cloned
+        policy would flounder.
+
+        \vskip 4pt
+        \emph{Ill-posed:} many reward functions explain the same behaviour, including the
+        trivial ``all zero''.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=violet1!12, colframe=violet1, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Decision Transformer}}]
+        \small
+        Drop RL entirely. Treat trajectories as a \textbf{sequence} of
+        (return, state, action) and train a transformer to predict the next action.
+
+        \vskip 4pt
+        At test time, \emph{condition on the return you want} -- ``achieve 100'' -- and let it
+        generate the actions.
+
+        \vskip 4pt
+        Offline RL as a sequence-modelling problem, using chapter 9's machinery unchanged.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    Note what the Decision Transformer implies: with enough data, ``predict the next token'' may
+    absorb the control problem too. Still open -- strong on some offline benchmarks, weak where
+    sub-trajectories must be stitched together.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Reward design}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}The part that actually breaks projects}
+
+    \vskip 0.6cm
+    {\large Not the algorithm. The number you told it to maximise.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Shaping, and the one safe way to do it}
+  \small
+  Sparse reward is painful, so everyone's first instinct is to add hints: a little bonus for
+  moving towards the goal, for blocking, for staying alive.
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \small
+    Every one of those bonuses is a \textbf{new objective}. The agent will optimise what you
+    wrote, not what you meant -- a cyclist rewarded for progress will ride in circles round
+    the start line.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Potential-based shaping} (Ng, Harada \& Russell, 1999)}]
+    \small
+    If the extra reward has the form
+    \[ F(s, s') = \gamma\, \Phi(s') - \Phi(s) \]
+    for \emph{any} function $\Phi$ over states, then the optimal policy is \textbf{provably
+    unchanged}. You may make learning faster; you cannot change the answer. (Around any loop the
+    terms telescope to zero, so no cycle can be farmed for reward.)
+  \end{tcolorbox}
+
+  \vskip 3pt
+  \begin{center}
+    \footnotesize
+    \textbf{Any other bonus changes the problem.} Sometimes that is fine -- know that you did it.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Measured, again on the tic-tac-toe practical}
+  \small
+  The project adds a hand-written hint: a bonus for blocking the opponent's winning line. Only
+  the \emph{size} of the bonus changes between runs.
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l}
+    \toprule
+    \textbf{Bonus} & \textbf{Result against perfect play} \\
+    \midrule
+    $0.3$ & essentially no change \\
+    $3.0$ & \textbf{loses $50.7\%$ as X and $62.4\%$ as O} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt]
+    \small
+    Same heuristic, same code, same everything -- one constant. At $3.0$, \textbf{blocking pays
+    better than winning}, so the agent blocks instead of taking the win in front of it.
+
+    \vskip 4pt
+    Nobody wrote ``prefer blocking to winning''. It followed from a number that looked
+    reasonable.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    Shaping rewards are not hints. They are terms in the objective, and they compete with it.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Reward hacking: the agent does what you measured}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.8pt, arc=2pt,
+                    title={\textbf{Goodhart's law}}]
+    When a measure becomes a target, it ceases to be a good measure.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \footnotesize
+  Documented cases, all real:
+  \begin{itemize}\itemsep2pt
+    \item A boat-racing agent rewarded for checkpoints found a lagoon where it could spin in
+          circles hitting the same three forever, scoring higher than finishing the race.
+    \item A robot hand rewarded by human approval learned to \emph{position itself} between the
+          camera and the object so it looked like it was grasping.
+    \item Simulated creatures rewarded for height learned to be tall and fall over, rather than
+          to jump.
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    None of these are bugs in the algorithm. The optimiser did its job perfectly. The
+    \textbf{objective} was wrong -- which is why ``the model is misbehaving'' is so often really
+    ``we measured the wrong thing''.
+
+    \vskip 3pt
+    In lecture 6 the reward is a \emph{learned model of human preference}, which makes this
+    problem worse rather than better.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Before you reach for any of this}
+  Every other chapter in this course ends with when the method fails. This one has to end with
+  something blunter: \textbf{reinforcement learning is a last resort.}
+
+  \vskip 8pt
+  \begin{center}
+  \small
+  \begin{tabular}{p{5.6cm} p{6.4cm}}
+    \toprule
+    \textbf{Ask first} & \textbf{If yes} \\
+    \midrule
+    Can you obtain labelled examples of the right answer? & Do supervised learning. It is
+      cheaper, more stable, and easier to debug. \\[4pt]
+    Is there a single decision, not a sequence? & It is not an RL problem. Use a classifier
+      or a bandit. \\[4pt]
+    Do you know the dynamics and is the space small? & Plan directly -- value iteration,
+      search, or plain optimisation. No learning needed. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    RL earns its cost only when \textbf{all} of these hold: the decisions are
+    \emph{sequential}, the consequences are \emph{delayed}, nobody can tell you the right
+    action -- but you \emph{can} score the outcome.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{The bitter lesson}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}One more thing, and it stings}
+
+    \vskip 0.6cm
+    {\large Written by Rich Sutton -- who also wrote the RL textbook.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The bitter lesson (Sutton, 2019)}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=2pt]
+    \small
+    ``The biggest lesson that can be read from 70 years of AI research is that \textbf{general
+    methods that leverage computation are ultimately the most effective}, and by a large
+    margin.''
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \footnotesize
+  The pattern he documents, over and over: researchers encode human knowledge about the
+  problem; it helps at first; then it is beaten by a simpler method that just \emph{searches}
+  or \emph{learns} more, once the hardware allows.
+
+  \vskip 6pt
+  \begin{center}
+  \scriptsize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Domain} & \textbf{The knowledge-engineered approach} & \textbf{What beat it} \\
+    \midrule
+    Chess & hand-crafted positional heuristics & massive search (Deep Blue) \\
+    Go & shape and pattern libraries & search + self-play RL (AlphaGo) \\
+    Speech & phonetic models, linguistic rules & statistical, then deep, learning \\
+    Vision & hand-designed feature detectors & learned features (CNNs) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    It is \emph{bitter} because it says the satisfying part -- our insight into the problem --
+    is usually not what wins. Sutton's point is that we keep re-learning this and keep
+    resisting it.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Where this chapter is Exhibit A -- and where it is not}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Evidence for}}]
+        \scriptsize
+        \begin{itemize}\itemsep2pt
+          \item \textbf{AlphaGo $\to$ AlphaGo Zero.} Deleting the human game database made it
+                \emph{stronger}. Sutton's own example.
+          \item \textbf{MuZero.} Deleting the rules did not stop it planning.
+          \item \textbf{DQN.} One architecture, one set of hyperparameters, 49 Atari games.
+          \item \textbf{DeepSeek-R1-Zero} (lecture 7). Nobody taught it to reason; the behaviour
+                emerged from pure RL against a checkable reward.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Read it carefully, though}}]
+        \scriptsize
+        \begin{itemize}\itemsep2pt
+          \item It is \emph{not} ``structure never helps''. Convolution and attention are
+                human-designed inductive biases, and both were decisive.
+          \item Every method here is scaffolding: replay, target networks, clipping, KL
+                penalties. Someone designed those.
+          \item Compute is not free. ``Wait for better hardware'' is a strategy open to a few
+                labs and nobody else.
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    \scriptsize
+    The honest reading: prefer methods that \textbf{improve when given more compute and data},
+    and be suspicious of cleverness that does not. A claim about what to bet on -- not a licence
+    to stop thinking.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Recap}
+  \footnotesize
+  \begin{itemize}\itemsep4pt
+    \item \textbf{Planning} spends compute at decision time. MCTS grows an asymmetric tree, and
+          its selection rule \textbf{is} the UCB formula from lecture 1.
+    \item AlphaGo $\to$ AlphaGo Zero $\to$ AlphaZero $\to$ MuZero is four rounds of deleting a
+          human-supplied ingredient: the games, the domain engineering, then the rules.
+    \item \textbf{Search is a dial between compute and skill available after training} -- which
+          is exactly what a reasoning model's chain of thought buys.
+    \item \textbf{Self-play} manufactures a curriculum at your own level. Our practical measures
+          it: self-play draws $100\%$ against perfect play, training against a random opponent
+          loses $16.6\%$.
+    \item \textbf{Offline RL} is the common real setting, and optimism becomes a defect -- the
+          max over unseen actions cannot be corrected. Stay where the data is.
+    \item \textbf{Behaviour cloning is SFT}, and it inherits compounding error. Training on the
+          model's own outputs is the fix -- which is an argument for lectures 6 and 7.
+    \item \textbf{Reward design breaks more projects than algorithms do.} Only potential-based
+          shaping is provably safe; our own practical loses $50.7\%$ of games from one badly
+          sized bonus.
+  \end{itemize}
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Next:} a language model is a policy, a response is an episode, and a human's
+    preference is the reward. RLHF, reward models, and DPO.
+  \end{tcolorbox}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Deck 5 of the 7-deck RL chapter. This deck is the MERGE of planned decks 5 and 6
+%   (instructor decision 2026-08-11: seven decks, not eight).
+% - Reused from L32_reinforcement_learning.tex: "Reward hacking" (examples replaced with the
+%   documented boat-race / robot-hand / tall-creature cases), "Before you reach for any of this",
+%   both bitter-lesson frames.
+% - NEW: model-based RL and Dyna, the MCTS four-phase figure, UCT as UCB-in-a-tree, the
+%   AlphaGo->MuZero deletion table, "search is test-time compute", self-play and its failure
+%   modes, the tic-tac-toe self-play measurement, intrinsic motivation and the noisy-TV problem,
+%   the whole offline-RL section, off-policy evaluation, behaviour cloning / DAgger, "BC is SFT",
+%   inverse RL and Decision Transformers, potential-based shaping, and the measured shaping
+%   collapse.
+% - Numbers quoted from the existing tic-tac-toe project (ml/ch11_rl/rl.qmd and the solution
+%   notebook), not re-derived: 95.4/88.0 win rates, 16.6% losses as O, 100% draws for self-play,
+%   bonus 3.0 -> 50.7% (X) / 62.4% (O) losses.
+% - Figures: py_src/mcts_illustration.py generates mcts_phases.pdf (teaching diagram).
+% - Pedagogical decisions: (a) MCTS is introduced through the bandit rule so lecture 1 pays off
+%   a second time; (b) "search = test-time compute" is placed here deliberately so that lecture
+%   7's reasoning models are not a surprise; (c) the practical's own measured numbers carry both
+%   the self-play and the reward-shaping frames, since the students will have run that code;
+%   (d) "behaviour cloning is SFT" is the hinge between the control half and the LLM half.
+% - Forward pointer: deck 6 (L32f_llm_alignment).

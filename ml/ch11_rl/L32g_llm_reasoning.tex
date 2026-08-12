@@ -1,0 +1,813 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Reinforcement Learning}
+\subtitle{Part 7: reasoning models, and how they are actually trained}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Part 7 of 7. RLVR, GRPO, DeepSeek-R1, and everything the field broke and fixed in 2025.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{Nobody told it to think for longer}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \vskip 4pt
+      \includegraphics[width=\linewidth]{response_length.pdf}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vskip 10pt
+      \small
+      DeepSeek-R1-Zero was trained with one rule: \textbf{is the final answer correct?}
+
+      \vskip 6pt
+      No examples of good reasoning. No reward for length, for structure, for checking your
+      work. One number at the end of each attempt.
+
+      \vskip 6pt
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+        \small
+        Over training, its answers got \textbf{longer on their own} -- and inside them appeared
+        backtracking, re-checking, and trying a second approach.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    This is lecture 1's move 37, in a different domain. Nobody demonstrated the behaviour;
+    it was \textbf{discovered}, because it was the thing that made the score go up.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{Rewards you can check}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Fire the annotators}
+
+    \vskip 0.6cm
+    {\large For some questions, a program can grade the answer.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{RLVR: the verifier replaces the human}
+  \small
+  Lecture 6 spent its whole length on a problem: nobody can write $R$ for ``a good answer'', so
+  you must learn it from human comparisons -- and then guard against your policy hacking that
+  learned model.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.8pt, arc=2pt,
+                    title={\textbf{But for some questions, correctness is checkable}}]
+    \small
+    \begin{center}
+    \begin{tabular}{l l}
+      Maths & does the final answer match the reference? \\
+      Code & do the unit tests pass? \\
+      Proofs & does the formal checker accept it? \\
+      Format & is the reasoning inside the tags you asked for? \\
+    \end{tabular}
+    \end{center}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    \textbf{Reinforcement Learning with Verifiable Rewards (RLVR).} The reward is a function you
+    wrote, not a model you fitted.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why this changed the field}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Learned reward model}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Costs human annotation to build
+          \item Wrong in unknown places
+          \item \textbf{Can be hacked} -- and will be
+          \item Needs a KL leash to stay usable
+          \item Ceiling: human judgement
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Verifier}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Free, once written
+          \item Right by construction
+          \item \textbf{Cannot be flattered}
+          \item Scales to millions of problems
+          \item Ceiling: whatever is checkable
+        \end{itemize}
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt]
+    \small
+    Notice what this restores: \textbf{a cheap, fast, resettable environment}. Lecture 3 said
+    every published RL success had one, and that language models did not. A verifier \emph{is}
+    that environment -- unlimited attempts, instant scoring, no cost per mistake.
+
+    \vskip 4pt
+    That is why reasoning models arrived when they did.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{And where it does not reach}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{The catch is in the name}}]
+    \small
+    Only \emph{verifiable} tasks get this treatment. There is no unit test for ``write a moving
+    eulogy'', ``summarise this fairly'', or ``give good advice about my career''.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  So the modern stack is not RLVR \emph{instead of} RLHF -- it is both, aimed at different
+  things:
+
+  \vskip 4pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Stage} & \textbf{Teaches} & \textbf{Signal} \\
+    \midrule
+    SFT & the format, the register & human demonstrations \\
+    Preference optimisation (DPO/RLHF) & tone, helpfulness, safety & human comparisons \\
+    \textbf{RLVR} & \textbf{reasoning, code, maths} & \textbf{a checker} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    There is also a subtler failure: a verifier checks the \textbf{answer}, not the
+    \emph{reasoning}. A model can reach the right number through nonsense and be paid in full.
+    That is what process supervision, later in this lecture, is about.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Group Relative Policy Optimization}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Delete the critic}
+
+    \vskip 0.6cm
+    {\large PPO, minus one network, plus a very old idea.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The expensive thing in the room}
+  \small
+  Lecture 6 ended with the bill: RLHF holds \textbf{four models}, two of them being trained. The
+  critic $V_\psi$ is the awkward one -- it is roughly policy-sized, it must be trained, and it
+  exists for one purpose: to produce a \textbf{baseline} so the advantage has low variance.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Now recall the baseline theorem from lecture 4}}]
+    \small
+    You may subtract \emph{anything that does not depend on the action} without biasing the
+    gradient. We proved it in four lines.
+
+    \vskip 4pt
+    A learned $V_\psi(s)$ is one legal choice. It is not the only one.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt]
+    \small
+    \textbf{Group Relative Policy Optimization} (\textbf{GRPO}), in one sentence: for a given prompt, sample $G$ answers, and use
+    \textbf{the average reward of those answers} as the baseline.
+
+    \vskip 4pt
+    It depends on the prompt, not on any individual answer -- so the theorem applies, and the
+    critic is unnecessary.
+  \end{tcolorbox}
+
+  \vskip 4pt
+  \begin{center}
+    \footnotesize
+    Shao et al., DeepSeekMath, 2024. Made famous by DeepSeek-R1 a year later.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Group-relative advantage}
+  \begin{center}
+    \includegraphics[width=0.88\linewidth]{group_advantage.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.62\textwidth]
+    \[ \hat{A}_i = \frac{R_i - \mathrm{mean}(R_1,\dots,R_G)}{\mathrm{std}(R_1,\dots,R_G)} \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 2pt
+  \footnotesize
+  Sample $G$ answers to the same question (typically 8--64), score them all, and \textbf{z-score
+  within the group}. Every token of answer $i$ gets the same $\hat{A}_i$.
+
+  \vskip 3pt
+  \emph{``Was this answer better or worse than my other attempts at this question?''} -- which is
+  the question the critic was being paid to estimate.
+\end{frame}
+
+\begin{frame}{Four models become three}
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{ppo_vs_grpo.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \footnotesize
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    The trade is explicit: you stop training a value network, and you start paying for $G$
+    generations per prompt instead of one. \textbf{Memory for compute} -- and generation
+    parallelises across a cluster far more happily than a second training loop does.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The GRPO objective}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.8pt, arc=2pt, width=0.97\textwidth]
+    \[ J(\theta) = \E\bigg[ \frac{1}{G}\sum_{i=1}^{G} \frac{1}{|o_i|} \sum_{t=1}^{|o_i|}
+       \min\Big( r_{i,t}(\theta)\hat{A}_i,\;
+       \mathrm{clip}\big(r_{i,t}(\theta), 1-\epsilon, 1+\epsilon\big)\hat{A}_i \Big)
+       \;-\; \beta\, \mathrm{KL}\big(\pi_\theta \,\|\, \pi_{\text{ref}}\big) \bigg] \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \small
+  Compare it with PPO from lecture 4, term by term:
+
+  \vskip 4pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Piece} & \textbf{PPO} & \textbf{GRPO} \\
+    \midrule
+    ratio $r_{i,t}(\theta)$ & $\pi_\theta / \pi_{\text{old}}$, per token & \textbf{identical} \\
+    clip & $[1-\epsilon, 1+\epsilon]$ & \textbf{identical} \\
+    advantage $\hat{A}$ & GAE from a learned critic & \textbf{group z-score, same for every token} \\
+    value loss & yes & \textbf{gone} \\
+    KL & often inside the reward & an explicit term in the objective \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    \textbf{Two rows differ.} That is the whole algorithm -- exactly what the family tree in
+    lecture 4 promised.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{DeepSeek-R1}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}What it looked like in practice}
+
+    \vskip 0.6cm
+    {\large The run that made everyone else rewrite their pipeline.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{R1-Zero: no SFT at all}
+  \small
+  The experiment was deliberately extreme: take the \textbf{base} model -- no instruction
+  tuning, no demonstrations -- and run GRPO against a verifier.
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.86\textwidth]
+    \small
+    Reward $=$ \textbf{accuracy} (is the answer right?) $+$ \textbf{format} (is the reasoning
+    between the tags?). Nothing else.
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{What emerged without being asked for}}]
+    \small
+    \begin{itemize}\itemsep2pt
+      \item Answers grew from hundreds to thousands of tokens.
+      \item The model began \textbf{re-checking} its own steps and \textbf{backtracking} when a
+            line of attack failed.
+      \item The famous ``aha moment'': mid-solution, it stops and reconsiders an earlier step.
+    \end{itemize}
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    Longer thinking was not the objective. It was the \emph{strategy the optimiser found} for
+    getting more answers right -- lecture 5's test-time compute, discovered rather than designed.
+  \end{center}
+\end{frame}
+
+\begin{frame}{And why R1-Zero was not what shipped}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{R1-Zero's problems}}]
+        \small
+        \begin{itemize}\itemsep2pt
+          \item Poor readability -- the reasoning was for itself, not for you
+          \item Language mixing mid-answer
+          \item Strong at maths and code, unpolished everywhere else
+        \end{itemize}
+      \end{tcolorbox}
+
+      \vskip 6pt
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+        \small
+        None of these are reasoning failures. They are the predictable result of optimising a
+        reward that never mentioned them.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \vskip 2pt
+      \includegraphics[width=\linewidth]{r1_pipeline.pdf}
+    \end{column}
+  \end{columns}
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    The shipped R1 wraps the same RL in a pipeline: a small \textbf{cold-start SFT} for
+    readability, then reasoning RL, then \textbf{rejection sampling} to build a large SFT set
+    from the model's own best outputs, then a final RL pass covering helpfulness and harmlessness.
+
+    \vskip 3pt
+    \textbf{The same shape as AlphaGo vs AlphaGo Zero:} the pure version proves the point, the
+    practical version adds human scaffolding back at the edges.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Everything that broke}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Then everyone tried it}
+
+    \vskip 0.6cm
+    {\large Four failure modes, four fixes, one year.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Failure 1: length bias}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{The symptom}}]
+    \small
+    Answers get longer and longer, and the growth is concentrated in the \textbf{wrong} answers.
+    Models ramble, and token bills grow with no accuracy to show for it.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \small
+  \textbf{The cause is in the objective on the last slide.} GRPO divides each answer's loss by
+  its own length $|o_i|$. For an answer with negative advantage, dividing by a larger $|o_i|$
+  makes the penalty per token \emph{smaller} -- so a bad answer is punished less for being long.
+  The optimiser notices.
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Dr. GRPO} (Liu et al., Sea AI Lab, 2025)}]
+    \small
+    Remove the length normalisation and the standard-deviation normalisation -- both are
+    biases introduced by GRPO rather than properties of the policy gradient. Normalise by a
+    \emph{fixed} constant instead.
+
+    \vskip 3pt
+    Result: much better token efficiency at the same reasoning performance, and
+    \textbf{43.3\%} on AIME 2024 with a 7B base model.
+  \end{tcolorbox}
+
+  \vskip 4pt
+  \begin{center}
+    \footnotesize
+    The paper's title is worth the read on its own: \emph{Understanding R1-Zero-Like Training:
+    A Critical Perspective}.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Failures 2 and 3: the group stops teaching}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Entropy collapse}}]
+    \small
+    The policy sharpens onto one way of answering, exploration dies, and improvement stops. Same
+    disease as lecture 4 -- and once entropy reaches zero no gradient revives it.
+
+    \vskip 3pt
+    \textbf{DAPO's fix -- ``Clip-Higher'':} decouple the clip bounds. Keep the lower bound tight,
+    but \emph{raise} the upper one, so low-probability tokens still have room to grow. The
+    symmetric clip was quietly suppressing exactly the rare tokens that carry new strategies.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Groups with zero gradient}}]
+    \small
+    If all $G$ answers are correct, every reward is equal, so the mean equals each reward and
+    \textbf{every advantage is zero}. Same if all are wrong. That prompt contributes
+    \emph{nothing} to the update -- and as the model improves, more and more prompts become
+    all-correct.
+
+    \vskip 3pt
+    \textbf{DAPO's fix -- ``Dynamic Sampling'':} filter out prompts whose group accuracy is 0 or
+    1, and keep sampling until the batch is full of prompts that actually carry signal.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Failure 4, and what DAPO adds up to}
+  \small
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{Long chains dilute the signal}}]
+    \small
+    Averaging the loss per \emph{sample} means a 4{,}000-token answer's tokens each count for a
+    quarter as much as a 1{,}000-token answer's. \textbf{Token-level policy gradient loss} fixes
+    the weighting. And answers truncated at the length limit get scored as failures they did not
+    commit -- \textbf{overlong reward shaping} stops punishing them for it.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.8pt, arc=2pt,
+                    width=0.94\textwidth,
+                    title={\textbf{DAPO} -- Decoupled Clip and Dynamic Sampling Policy Optimization (ByteDance Seed \& Tsinghua, 2025)}]
+    \small
+    Clip-Higher $\;\cdot\;$ Dynamic Sampling $\;\cdot\;$ Token-level loss $\;\cdot\;$ Overlong
+    reward shaping
+
+    \vskip 4pt
+    \textbf{50 points on AIME 2024} with Qwen2.5-32B, beating DeepSeek-R1-Zero-Qwen-32B with
+    \textbf{half the training steps} -- and the whole system was open-sourced, which mattered as
+    much as the score.
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    Note that none of the four is a new algorithm. They are four bookkeeping bugs in how the
+    loss was averaged.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Failure 5: the ratio is at the wrong level}
+  \small
+  GRPO computes the importance ratio \textbf{per token}, but the reward it is weighting was
+  earned by the \textbf{whole sequence}. Every token of a good answer gets the same advantage --
+  so why correct each token's probability separately?
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \small
+    On \textbf{mixture-of-experts} models this becomes fatal. After an update, roughly $10\%$ of
+    the experts activated for a given token differ from before -- so the per-token ratios swing
+    wildly for reasons that have nothing to do with the policy being better. Training would not
+    converge without a hack (``routing replay'') to force the same experts.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Group Sequence Policy Optimization} (\textbf{GSPO}, Zheng et al., Qwen team, 2025)}]
+    \small
+    Define the importance ratio on the \textbf{sequence likelihood} (length-normalised), and clip
+    at the sequence level. Match the unit of the ratio to the unit of the reward.
+
+    \vskip 3pt
+    MoE training converges without routing replay, and it contributed to \textbf{Qwen3}.
+  \end{tcolorbox}
+
+  \vskip 4pt
+  \begin{center}
+    \footnotesize
+    A theme worth naming: \textbf{most of 2025's progress was fixing mismatches between what was
+    rewarded and what was optimised}, not inventing new objectives.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{Better rewards}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Grading the working,\\ not just the answer}
+
+    \vskip 0.6cm
+    {\large And letting the model generate its own problems.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outcome or process?}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Outcome reward model (ORM)}}]
+        \footnotesize
+        One score for the final answer. Cheap and objective -- but it pays in full for a right
+        answer reached by luck, and gives no hint about \emph{where} a wrong answer went wrong.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{Process reward model (PRM)}}]
+        \footnotesize
+        A score for \textbf{every step}. Dense signal, and credit assignment becomes tractable --
+        but it needs step-level labels, which is expensive human work.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 2pt
+  \begin{center}
+    \includegraphics[width=0.46\linewidth]{orm_prm_bestofn.pdf}
+
+    \vskip -1pt
+    {\scriptsize \emph{Let's Verify Step by Step} (Lightman et al., 2023) -- and the gap
+     \textbf{widens} with more candidates.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Best-of-$N$ is search, wearing a hat}
+  \small
+  Give the model a verifier or a reward model at \emph{inference} time: sample $N$ answers, score
+  them, return the best.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    \small
+    Look at what that is. A \textbf{policy} proposes candidates, a \textbf{value estimate} ranks
+    them, and you spend more compute to play better.
+
+    \vskip 4pt
+    That is AlphaGo's architecture from lecture 5, flattened to a tree of depth one.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \small
+  Which suggests the obvious extension, and it is an active area: keep the tree. Score partial
+  reasoning with a PRM, expand the promising branches, prune the rest -- MCTS over chains of
+  thought.
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{Self-consistency} is the cheap version everyone uses: sample $N$ chains, take the
+    majority answer. No verifier needed, and it works because wrong reasoning disagrees with
+    itself while correct reasoning converges.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Where the next problems come from}
+  \small
+  RLVR needs problems with checkable answers. Human-written ones run out. So the model makes its
+  own -- lecture 5's self-play, applied to questions instead of games:
+
+  \vskip 8pt
+  \begin{itemize}\itemsep4pt
+    \item \textbf{SPIN.} The model learns to tell its own outputs from human-written ones, and
+          improves by trying to become indistinguishable. No new annotation.
+    \item \textbf{SPICE.} A \emph{Challenger} mines documents to invent problems; a
+          \emph{Reasoner} solves them. Grounding the questions in real documents is what stops
+          the pair drifting into hallucinated nonsense -- reported $+8.9\%$ on maths and
+          $+9.8\%$ on general reasoning.
+    \item \textbf{Automatic curricula.} Generate problems calibrated to what the model currently
+          gets wrong, verify with RLVR, repeat. A closed loop with no human in it.
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+    \small
+    The obvious worry is the one from lecture 5: ungrounded self-play amplifies the model's own
+    errors. SPICE's answer -- anchor to external documents -- is the same instinct as offline
+    RL's ``stay where the data is''.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Agents}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}More than one turn}
+
+    \vskip 0.6cm
+    {\large Where this is all going, and where chapter 18 picks up.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Agentic RL}
+  \small
+  Everything so far treated one response as one episode. An agent that searches the web, runs
+  code, reads the output and tries again is a \textbf{sequence of decisions with real
+  consequences} -- which is what this whole chapter was actually about.
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    & \textbf{Single response} & \textbf{Agent} \\
+    \midrule
+    Episode & one answer & many turns of act, observe, act \\
+    State & prompt $+$ tokens so far & $+$ everything the tools returned \\
+    Formally & an MDP & a \textbf{partially observable MDP} (\textbf{POMDP}) \\
+    Credit & one reward over one answer & one reward over dozens of tool calls \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{Credit assignment comes back with full force.} The task failed -- was it the third
+    search query, the misread result, or the final summary? This is lecture 1's opening problem,
+    and it is unsolved at this scale.
+
+    \vskip 3pt
+    The other hard part is unglamorous: rollouts now involve real network calls, so the
+    bottleneck is infrastructure. \textbf{verl} (ByteDance) and \textbf{NeMo Gym} (NVIDIA) exist
+    because of this.
+
+    \vskip 3pt
+    \textbf{Chapter 18 builds the agent. This lecture explains how one gets \emph{trained}.}
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Honesty}
+% ==================================================================================
+\begin{frame}{Reward hacking, LLM edition}
+  \small
+  Lecture 5 promised this would get worse when the reward is learned. It did:
+
+  \vskip 6pt
+  \begin{itemize}\itemsep2pt
+    \item \textbf{Sycophancy.} Agreeing with the user scores well with human raters. The model
+          learns to agree.
+    \item \textbf{Length and formatting.} Longer, bulleted, hedged answers won comparisons, so
+          models produce them regardless of whether they help.
+    \item \textbf{Verifier gaming.} With a unit-test reward, code that special-cases the tests.
+          With an answer-matching reward, guessing a plausible number and asserting it.
+    \item \textbf{Unfaithful reasoning.} The chain of thought is optimised for reaching a
+          rewarded answer, not for describing what the model actually did -- so it is not
+          automatically an explanation.
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    The defences are the ones this chapter has been building: a \textbf{KL leash} to the
+    reference policy, \textbf{verifiable} rewards where possible, \textbf{process} supervision
+    where affordable, and held-out evaluation that the optimiser has never seen.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The open question}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=2pt,
+                    title={\textbf{Does RL add ability, or reveal it?}}]
+    \small
+    Two readings of the same results, both held by serious people:
+
+    \vskip 5pt
+    \textbf{Sharpening.} RL reweights behaviours the base model could already produce. Evidence:
+    with enough samples, base models often solve problems their RL-tuned versions solve --
+    pass@$k$ at large $k$ narrows the gap sharply. On this reading, RL buys reliability, not
+    capability.
+
+    \vskip 5pt
+    \textbf{Discovery.} R1-Zero developed backtracking and self-verification that were never
+    demonstrated, and pure-RL runs beat distillation on some tasks. On this reading, RL finds
+    genuinely new strategies.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    It is probably both, in different proportions per task. \textbf{The honest position is that
+    this is unresolved} -- and it is the most important open question in the area, because it
+    decides whether scaling RL keeps paying.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Recap -- the chapter, not the lecture}
+  \footnotesize
+  \begin{itemize}\itemsep3pt
+    \item \textbf{RLVR} replaces the human rater with a checker. It restores the cheap, fast,
+          resettable environment that lecture 3 said language models did not have.
+    \item \textbf{GRPO is PPO with the critic deleted}, its baseline replaced by the mean reward
+          of $G$ sampled answers -- legal because of the baseline theorem you proved in
+          lecture 4.
+    \item \textbf{R1-Zero} shows reasoning behaviour emerging from a correctness reward alone;
+          shipped \textbf{R1} adds human scaffolding back at the edges, exactly as AlphaGo Zero
+          did.
+    \item 2025 was spent fixing mismatches, not inventing objectives: \textbf{Dr. GRPO} (length
+          bias), \textbf{DAPO} (entropy collapse, dead groups, long-chain weighting),
+          \textbf{GSPO} (sequence-level ratios, MoE).
+    \item \textbf{Process supervision} beats outcome supervision, and best-of-$N$ is AlphaGo's
+          architecture at depth one.
+    \item \textbf{Agentic RL} is the chapter's opening problem -- delayed reward, credit
+          assignment -- returning at full scale.
+  \end{itemize}
+
+  \vskip 5pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Where to go next:} \texttt{ml/llm\_training/} reads the primary sources -- GRPO
+    (DeepSeekMath), DPO, InstructGPT, DeepSeek-R1, chain-of-thought. You now have the
+    foundations those papers assume.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Seven lectures in one picture}
+  \begin{center}
+    \includegraphics[width=0.99\linewidth]{pg_family.pdf}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.7pt, arc=2pt, width=0.94\textwidth]
+    \small
+    \begin{center}
+      Bandits gave you exploration. MDPs gave you consequences. Bellman gave you the recursion.\\
+      Sampling gave you Q-learning. Networks gave you DQN. The log-derivative trick gave you
+      policy gradients.\\
+      \textbf{Everything after that is variance reduction and step-size control.}
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Deck 7 of the 7-deck RL chapter (RL_EXPANSION_PLAN.md, approved 2026-08-11).
+% - Teaching deck, not a paper seminar. ml/llm_training/slides/01_grpo and .../11_deepseek_r1
+%   cover these papers as "what the paper found"; this deck derives the method. Figures borrowed
+%   from those decks (group_advantage, ppo_vs_grpo from 01_grpo; r1_pipeline, response_length
+%   from 11_deepseek_r1; orm_prm_bestofn from 14_chain_of_thought), copied into ch11_rl/fig/.
+% - Facts web-verified 2026-08-11/12:
+%     GRPO - Shao et al., DeepSeekMath, 2024 (arXiv 2402.03300)
+%     DeepSeek-R1 - 2025 (arXiv 2501.12948)
+%     Dr. GRPO - Liu et al., "Understanding R1-Zero-Like Training: A Critical Perspective",
+%       Sea AI Lab / NUS / SMU, arXiv 2503.20783. Length bias inflates response length,
+%       especially for WRONG answers; 43.3% AIME 2024 with a 7B base model.
+%     DAPO - ByteDance Seed & Tsinghua, arXiv 2503.14476. Four techniques as listed.
+%       50 points AIME 2024 on Qwen2.5-32B, 50% fewer steps than DeepSeek-R1-Zero-Qwen-32B.
+%     GSPO - Zheng et al., Qwen team, arXiv 2507.18071. Sequence-level ratio; ~10% of activated
+%       experts change per update under GRPO; removes the need for Routing Replay; used for Qwen3.
+%     Lightman et al., 2023 for process supervision. SPICE +8.9% / +9.8%.
+%     NeMo Gym / Nemotron 3 Super: 21 environment configs, 1.2M rollouts.
+% - Pedagogical decisions: (a) GRPO is derived from the lecture-4 baseline theorem rather than
+%   presented, so the group mean needs no separate justification; (b) the four 2025 failure modes
+%   are taught as failure/fix PAIRS, which is the structure that survives the next round of
+%   papers - a list of acronyms would not; (c) best-of-N is explicitly identified as AlphaGo at
+%   depth one, closing the loop with lecture 5; (d) the sharpening-vs-discovery debate is left
+%   unresolved on purpose, since it is genuinely unresolved; (e) the deck closes on the lecture-4
+%   family tree so the chapter ends where its spine started.

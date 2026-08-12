@@ -1,0 +1,711 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\title{Reinforcement Learning}
+\subtitle{Part 6: a language model is an agent}
+\author{}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{center}\scriptsize\color{gray}
+    Part 6 of 7. Text as an MDP, reward models, RLHF, and DPO.
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+% COLD OPEN
+% ==================================================================================
+\begin{frame}{You have been training a policy this whole time}
+  \small
+  A language model produces a distribution over the next token given everything so far, and you
+  sample from it:
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.66\textwidth]
+    \begin{center}
+      \large $a \sim \pi_\theta(\cdot \mid s)$
+    \end{center}
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    That is not an analogy. That is the definition of a stochastic policy from lecture 1,
+    and a transformer satisfies it exactly.
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.7pt, arc=2pt]
+    \small
+    So every tool from the last four lectures applies. The only genuinely new question is:
+    \textbf{what is the reward?}
+
+    \vskip 4pt
+    For chess it is winning. For Atari it is the score. For ``write a helpful, honest answer''
+    nobody can write the function down -- and that single missing piece is what this lecture is
+    about.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ==================================================================================
+\section{Text generation as an MDP}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}The same five symbols}
+
+    \vskip 0.6cm
+    {\large $(\mathcal{S}, \mathcal{A}, P, R, \gamma)$, read for text.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The translation}
+  \begin{center}
+  \small
+  \begin{tabular}{c l l}
+    \toprule
+    \textbf{Symbol} & \textbf{In the gridworld} & \textbf{In a language model} \\
+    \midrule
+    $\mathcal{S}$ & which square you are on & the prompt plus every token generated so far \\
+    $\mathcal{A}$ & up, down, left, right & every token in the vocabulary ($\sim$50k--150k) \\
+    $P(s'|s,a)$ & you might slip & \textbf{deterministic}: append the token, that is the new state \\
+    $R(s,a)$ & $-0.04$ per move & \textbf{zero}, until the response ends \\
+    $\gamma$ & $0.9$ & usually $1$ -- a token now is worth a token later \\
+    $\pi(a|s)$ & an arrow per square & the softmax over the vocabulary \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 10pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{One episode = one response.} It starts at the prompt, each action appends a token,
+    and it ends at the end-of-sequence token -- at which point a single number arrives saying
+    how good the whole thing was.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{What is strange about this MDP}
+  \footnotesize
+  \begin{center}
+  \begin{tabular}{p{4.2cm} p{8.4cm}}
+    \toprule
+    \textbf{Property} & \textbf{Consequence} \\
+    \midrule
+    \textbf{Deterministic transitions} &
+      No environment stochasticity at all. Every bit of randomness comes from the policy's own
+      sampling. Half the machinery for handling $P$ is unnecessary. \\[4pt]
+    \textbf{Enormous action space} &
+      $\argmax_a Q(s,a)$ over 100k actions at every step, with a $Q$ value to learn for each.
+      \textbf{Value-based methods are out} -- this is why the LLM world is policy-based. \\[4pt]
+    \textbf{Reward only at the end} &
+      Maximal credit-assignment difficulty. A 2{,}000-token answer gets one number, and every
+      token must somehow be assigned blame. \\[4pt]
+    \textbf{The policy already works} &
+      Unlike a robot flailing at random, a pretrained model starts out fluent. You are
+      \emph{adjusting} a good policy, not discovering one -- so tiny, careful steps. \\[4pt]
+    \textbf{No simulator to reset} &
+      You cannot re-run the same conversation with a different action and compare. Every rollout
+      is a fresh sample. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    Row four is the one that shapes everything. A pretrained model is an enormously valuable
+    starting policy, and RL here is fine-tuning it without wrecking it. \textbf{Everything in
+    this lecture is a mechanism for not moving too far.}
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Where the reward comes from}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Nobody can write $R$}
+
+    \vskip 0.6cm
+    {\large So learn it from the only people who can judge.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Ask for comparisons, not scores}
+  \small
+  You cannot write ``helpfulness'' as a function. You could ask humans to \emph{rate} answers
+  1--10, and it goes badly: one rater's 7 is another's 4, and everyone drifts over a long
+  session.
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                    title={\textbf{Comparisons are much easier}}]
+    \small
+    ``Which of these two answers is better?'' is a question people answer consistently, quickly,
+    and with far better inter-rater agreement than any absolute scale.
+
+    \vskip 4pt
+    InstructGPT collected rankings of \textbf{4--9 outputs} per prompt and turned each ranking
+    into all its pairwise comparisons.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    So the data is a set of triples $(x,\; y_w,\; y_l)$: a prompt, a preferred answer, and a
+    rejected one.
+
+    \vskip 4pt
+    \textbf{Now turn preferences into a number.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Bradley-Terry: from comparisons to a reward}
+  \small
+  Assume every answer has a hidden quality $r(x,y)$, and that the chance a human prefers $y_w$
+  grows with the gap. The Bradley-Terry model (1952) says:
+
+  \vskip 3pt
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt]
+    \footnotesize
+    \begin{align*}
+      P(y_w \succ y_l \mid x) &= \frac{\exp r(x,y_w)}{\exp r(x,y_w) + \exp r(x,y_l)}
+        && \text{\scriptsize a softmax over two options} \\[2pt]
+      &= \sigma\big( r(x,y_w) - r(x,y_l) \big)
+        && \text{\scriptsize divide through by $\exp r(x,y_w)$}
+    \end{align*}
+  \end{tcolorbox}
+
+  \vskip 4pt
+  Fit $r_\phi$ by maximum likelihood on the observed preferences, and the loss is just logistic
+  regression on the \emph{difference} of two scores:
+
+  \vskip 2pt
+  \begin{center}
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt, width=0.78\textwidth]
+    \[ \mathcal{L}(\phi) = -\,\E_{(x,y_w,y_l)}\Big[ \log \sigma\big( r_\phi(x,y_w) - r_\phi(x,y_l) \big) \Big] \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+    \footnotesize
+    Note $r_\phi$ is only ever \textbf{pinned down up to a constant} -- adding $c$ to every score
+    changes no difference. Remember that; DPO uses it.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The reward model is a model, with all that implies}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \vskip 2pt
+      \includegraphics[width=\linewidth]{rm_vs_human.pdf}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vskip 8pt
+      \small
+      It is usually the pretrained model with the language head swapped for a single scalar
+      output. InstructGPT used a \textbf{6B} reward model to train a 175B policy.
+
+      \vskip 6pt
+      \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+        \small
+        \textbf{And it is fitted on finite data.} It agrees with humans on held-out comparisons
+        somewhat better than humans agree with each other -- which is a low bar, and it is
+        wrong in ways nobody has catalogued.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{You are about to optimise hard against this thing.} Lecture 5's reward-hacking
+    section was preparation for exactly this moment: the policy will search for the places where
+    the reward model is wrong, because those are where the reward is highest.
+  \end{tcolorbox}
+\end{frame}
+
+% ==================================================================================
+\section{Reinforcement learning from human feedback}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Reinforcement learning\ from human feedback}
+
+    \vskip 0.6cm
+    {\large \textbf{RLHF}: demonstrate, then compare, then optimise.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The pipeline}
+  \begin{center}
+    \includegraphics[width=0.86\linewidth]{rlhf_pipeline.pdf}
+  \end{center}
+
+  \vskip -2pt
+  \footnotesize
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Step 1 is behaviour cloning} -- lecture 5's imitation learning, on text. Step 2
+    learns the reward nobody could write. Step 3 is the only part that is reinforcement learning,
+    and it is PPO from lecture 4 with one extra term.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The objective, and the term that is not in lecture 4}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.8pt, arc=2pt, width=0.94\textwidth]
+    \[ \max_{\pi_\theta}\;\; \E_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot|x)}
+       \Big[\, \underbrace{r_\phi(x,y)}_{\text{learned reward}} \Big]
+       \;-\; \beta\, \underbrace{\mathrm{KL}\big(\pi_\theta(\cdot|x) \,\|\, \pi_{\text{ref}}(\cdot|x)\big)}_{\text{stay near the SFT model}} \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 8pt
+  \small
+  The KL term is not a regulariser in the chapter-2 sense. It is a \textbf{leash}, and it is
+  doing three jobs at once:
+
+  \vskip 4pt
+  \begin{itemize}\itemsep3pt
+    \item \textbf{Keeps the reward model in-distribution.} $r_\phi$ was trained on samples from
+          roughly $\pi_{\text{ref}}$. Wander far and its scores become meaningless.
+    \item \textbf{Preserves what pretraining bought.} Fluency, knowledge and grammar are not in
+          the reward signal, so nothing else protects them.
+    \item \textbf{Is the trust region.} Lecture 4's whole point, appearing here in explicit form
+          rather than as a clip.
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    In practice PPO's clip \emph{and} this KL penalty are both used. Belt and braces.
+  \end{center}
+\end{frame}
+
+\begin{frame}{What happens without the leash}
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.8pt, arc=2pt,
+                    title={\textbf{Set $\beta = 0$ and the model finds the exploit}}]
+    \small
+    With no KL term the policy is free to go anywhere that scores well under $r_\phi$. What it
+    reliably finds is not better answers but \textbf{adversarial input to the reward model}:
+    degenerate, repetitive text that happens to sit in a corner where $r_\phi$ is high.
+
+    \vskip 4pt
+    Reward goes up. Quality collapses. The two curves separate, and only one of them is on your
+    dashboard.
+  \end{tcolorbox}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{So $\beta$ is the most important number in RLHF.} Too small and the model hacks the
+    reward. Too large and nothing changes -- you have paid for an RL pipeline to reproduce the
+    SFT model.
+
+    \vskip 4pt
+    Practitioners watch the KL, not the reward. \emph{Reward going up while KL runs away is the
+    signature of a failed run}, which is the same lesson as lecture 4's entropy diagnostic.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Did it work?}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt,
+                        title={\textbf{The InstructGPT headline}}]
+        \small
+        Labelers preferred the \textbf{1.3B} InstructGPT model's outputs to those of the
+        \textbf{175B} GPT-3.
+
+        \vskip 4pt
+        A $100\times$ smaller model, preferred -- because the bigger one was never trained to
+        do what was asked, only to continue text.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \vskip 4pt
+      \includegraphics[width=\linewidth]{alignment_tax.pdf}
+    \end{column}
+  \end{columns}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt,
+                    title={\textbf{The alignment tax}}]
+    \small
+    Aligned models got \emph{worse} on some standard NLP benchmarks. The fix InstructGPT used
+    was to mix pretraining gradients back into the RL updates (PPO-ptx).
+
+    \vskip 3pt
+    Worth naming plainly: \textbf{optimising for what users want costs you something on what
+    benchmarks measure.} That trade-off has not gone away.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The bill}
+  \small
+  Look at what has to be in memory during step 3:
+
+  \vskip 8pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Model} & \textbf{Role} & \textbf{Trained?} \\
+    \midrule
+    $\pi_\theta$ & the policy being improved & yes \\
+    $\pi_{\text{ref}}$ & frozen SFT model, for the KL term & no \\
+    $r_\phi$ & the reward model & no \\
+    $V_\psi$ & the critic, for advantages (lecture 4) & yes \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt]
+    \small
+    \textbf{Four models}, two of them being trained. The critic is typically the same size as
+    the policy, so a 70B RLHF run holds something like 70B $\times$ 4 parameters plus optimiser
+    state.
+
+    \vskip 4pt
+    And then generation: every update needs fresh samples from the current policy, so training
+    is interleaved with inference. RLHF is an infrastructure problem as much as a learning one.
+  \end{tcolorbox}
+
+  \vskip 6pt
+  \begin{center}
+    \small
+    Two obvious questions follow. \emph{Do we need the RL loop?} (this lecture) and
+    \emph{do we need the critic?} (next lecture)
+  \end{center}
+\end{frame}
+
+% ==================================================================================
+\section{Direct preference optimisation}
+% ==================================================================================
+\begin{frame}[plain]
+  \begin{center}
+    \vskip 1.6cm
+    {\Huge\bfseries\color{popblue}Delete the reward model\\ and the RL loop}
+
+    \vskip 0.6cm
+    {\large One of the neater derivations in modern machine learning.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Step 1: the objective has a closed-form solution}
+  \small
+  Forget algorithms for a moment and just \emph{solve} the RLHF objective. For a fixed prompt
+  $x$, maximising reward minus $\beta\,\mathrm{KL}$ over all possible distributions has a known
+  answer:
+
+  \vskip 4pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.8pt, arc=2pt, width=0.8\textwidth]
+    \[ \pi^*(y|x) \;=\; \frac{1}{Z(x)}\, \pi_{\text{ref}}(y|x)\, \exp\!\Big(\tfrac{1}{\beta} r(x,y)\Big) \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \begin{itemize}\itemsep3pt
+    \item Take the reference model and \textbf{re-weight} it: answers the reward likes get
+          multiplied up, answers it dislikes get multiplied down.
+    \item $\beta$ controls the sharpness. Large $\beta$: barely move. Small $\beta$: pile all the
+          mass on the highest-reward answer.
+    \item $Z(x) = \sum_y \pi_{\text{ref}}(y|x)\exp(r(x,y)/\beta)$ normalises it -- and it is
+          \textbf{hopeless to compute}, being a sum over every possible response.
+  \end{itemize}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    So we know exactly what we want, and cannot build it. That $Z(x)$ is the only obstacle --
+    and the next slide makes it disappear.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Step 2: run the equation backwards}
+  \small
+  Take logs and solve for the reward instead of the policy:
+
+  \vskip 3pt
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.7pt, arc=2pt, width=0.84\textwidth]
+    \[ r(x,y) \;=\; \beta \log \frac{\pi^*(y|x)}{\pi_{\text{ref}}(y|x)} \;+\; \beta \log Z(x) \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+    \small
+    \textbf{Any} policy implicitly defines a reward. So make the policy the reward model, and
+    substitute this into Bradley-Terry:
+  \end{center}
+
+  \vskip 3pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.7pt, arc=2pt]
+    \scriptsize
+    \begin{align*}
+      P(y_w \succ y_l) &= \sigma\big( r(x,y_w) - r(x,y_l) \big) \\[2pt]
+      &= \sigma\Big( \beta \log \tfrac{\pi(y_w|x)}{\pi_{\text{ref}}(y_w|x)} + \cancel{\beta \log Z(x)}
+                   - \beta \log \tfrac{\pi(y_l|x)}{\pi_{\text{ref}}(y_l|x)} - \cancel{\beta \log Z(x)} \Big)
+    \end{align*}
+  \end{tcolorbox}
+
+  \vskip 3pt
+  \begin{center}
+    \footnotesize
+    \textbf{$Z(x)$ cancels} -- it depends only on the prompt, and Bradley-Terry only ever sees
+    \emph{differences}. Same trick as the dynamics cancelling in lecture 2.
+  \end{center}
+\end{frame}
+
+\begin{frame}{The DPO loss}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.9pt, arc=2pt, width=0.97\textwidth]
+    \[ \mathcal{L}_{\text{DPO}} = -\,\E_{(x,y_w,y_l)}\left[ \log \sigma\!\left(
+       \beta \log \frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)}
+       - \beta \log \frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)} \right)\right] \]
+  \end{tcolorbox}
+  \end{center}
+
+  \vskip 6pt
+  \small
+  Read what is \emph{not} there:
+
+  \vskip 4pt
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{l l}
+    \toprule
+    \textbf{RLHF needs} & \textbf{DPO needs} \\
+    \midrule
+    a trained reward model & nothing -- the policy is its own implicit reward \\
+    sampling from the policy during training & no generation at all \\
+    a critic network & none \\
+    PPO, clipping, advantages, GAE & a single cross-entropy-shaped loss \\
+    four models in memory & two, one of them frozen \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{center}
+    \small
+    It trains like supervised fine-tuning. That is the entire appeal, and it is why
+    \textbf{Direct Preference Optimization} (\textbf{DPO}) took over open-source
+    alignment almost immediately (Rafailov et al., 2023).
+  \end{center}
+\end{frame}
+
+\begin{frame}{What the loss actually does}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \vskip 2pt
+      \includegraphics[width=\linewidth]{dpo_loss_shape.pdf}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \vskip 10pt
+      \small
+      The gradient weight is largest exactly where the model has the ordering \textbf{wrong},
+      and vanishes once a pair is comfortably correct.
+
+      \vskip 6pt
+      It is logistic regression on the implicit-reward margin -- so it inherits the behaviour you
+      already know from chapter 3.
+
+      \vskip 6pt
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+        \small
+        $\beta$ plays the same role as in RLHF: how far the policy may drift from
+        $\pi_{\text{ref}}$.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 6pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{A subtlety worth knowing:} nothing forces $\pi_\theta(y_w|x)$ to go \emph{up}. The
+    loss only cares about the \emph{margin}, so it can be reduced by pushing the rejected answer
+    down hard while the preferred one also drifts down. In practice both probabilities often
+    fall -- which is not what anyone intends.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{What you give up}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{DPO}}]
+        \small
+        Simple, stable, cheap. No generation, no critic, no reward model.
+
+        \vskip 4pt
+        \textbf{But it is offline.} It only ever sees the fixed pairs in your dataset -- answers
+        produced by \emph{some other} model.
+      \end{tcolorbox}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt,
+                        title={\textbf{PPO / online RL}}]
+        \small
+        Expensive and fiddly.
+
+        \vskip 4pt
+        \textbf{But it is online.} It generates fresh answers from the current policy and scores
+        those, so it can discover behaviours that appear nowhere in the preference data.
+      \end{tcolorbox}
+    \end{column}
+  \end{columns}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.7pt, arc=2pt]
+    \small
+    \textbf{This is lecture 5's offline-vs-online distinction, exactly.} DPO is offline RL on
+    text, and it inherits the ceiling: \emph{a policy trained on a fixed dataset is bounded by
+    what that dataset contains.}
+
+    \vskip 4pt
+    You cannot DPO your way to a reasoning ability that is not already present in some answer
+    somebody preferred. That limitation is why the next lecture exists.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{The family that followed}
+  \footnotesize
+  \textbf{Identity Preference Optimisation} (\textbf{IPO}), \textbf{Kahneman-Tversky
+  Optimisation} (\textbf{KTO}), \textbf{Odds Ratio Preference Optimisation} (\textbf{ORPO})
+  and \textbf{Simple Preference Optimisation} (\textbf{SimPO}). Each removes a different
+  requirement from DPO:
+
+  \vskip 6pt
+  \begin{center}
+  \begin{tabular}{p{1.7cm} p{4.4cm} p{6.2cm}}
+    \toprule
+    \textbf{Method} & \textbf{The complaint} & \textbf{The change} \\
+    \midrule
+    \textbf{IPO}\newline (Azar et al., 2024) &
+      With clean preferences, DPO's objective can be driven to overfit -- it keeps pushing the
+      margin forever. &
+      Replaces the logistic loss with a bounded one, so there is a finite optimum. \\[5pt]
+    \textbf{KTO}\newline (Ethayarajh et al., 2024) &
+      Paired comparisons are expensive to collect. &
+      Learns from \textbf{unpaired} thumbs-up / thumbs-down signals, using a loss shaped by
+      prospect theory. Production systems have this data for free. \\[5pt]
+    \textbf{ORPO}\newline (Hong et al., 2024) &
+      Why two training stages? &
+      Merges SFT and alignment into \textbf{one} objective with an odds-ratio penalty. No
+      reference model, no separate SFT run. \\[5pt]
+    \textbf{SimPO}\newline (Meng et al., 2024) &
+      Keeping a frozen reference model in memory is pure overhead. &
+      Uses the \emph{length-normalised average log-probability} as the implicit reward. No
+      reference model at all; reported $+6.4$ on AlpacaEval 2 over DPO. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 4pt
+  \begin{center}
+    \scriptsize
+    One requirement removed per paper: reward model, RL loop, paired data, reference model,
+    separate SFT stage.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Which one, in practice}
+  \small
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{p{5.6cm} p{6.6cm}}
+    \toprule
+    \textbf{Situation} & \textbf{Reach for} \\
+    \midrule
+    You have preference pairs and limited compute & \textbf{DPO}. It is the default for a reason. \\[3pt]
+    You have thumbs-up/down from a product & \textbf{KTO}. The data you already have is the
+      data it wants. \\[3pt]
+    You want one stage instead of two & \textbf{ORPO}. \\[3pt]
+    You need behaviour that is not in any dataset (reasoning, tool use, code that must run) &
+      \textbf{Online RL} -- and that is the next lecture. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vskip 8pt
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+    \small
+    \textbf{Do not over-read the leaderboard deltas.} These methods are close enough that the
+    result usually depends more on the preference data than on which loss you picked. The
+    honest summary is that \emph{data quality dominates the choice of objective} -- which is the
+    LIMA lesson from the seminar track.
+  \end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Recap}
+  \footnotesize
+  \begin{itemize}\itemsep4pt
+    \item A language model \textbf{is} a stochastic policy. State = tokens so far, action = next
+          token, episode = one response, reward = one number at the end.
+    \item The action space rules out value-based methods, and the fact that the policy already
+          works means every method here is a mechanism for \textbf{not moving too far}.
+    \item Humans compare better than they score. \textbf{Bradley-Terry} turns comparisons into a
+          reward model -- and that model is only defined up to a constant.
+    \item \textbf{RLHF} = SFT, then a reward model, then PPO with a \textbf{KL leash} to the
+          reference policy. Without the leash the policy hacks the reward model instead of
+          improving. Watch KL, not reward.
+    \item It costs \textbf{four models} in memory and interleaves training with generation.
+    \item \textbf{DPO} solves the RLHF objective in closed form, inverts it so the policy is its
+          own reward model, and the intractable $Z(x)$ cancels inside Bradley-Terry. What is
+          left trains like supervised learning.
+    \item DPO is \textbf{offline}, so it is bounded by its dataset. IPO, KTO, ORPO and SimPO
+          each remove one more requirement.
+  \end{itemize}
+
+  \vskip 4pt
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+    \footnotesize
+    \textbf{Next:} what if the reward needs no human at all -- just a checker that says whether
+    the answer is right? RLVR, GRPO, DeepSeek-R1, and the failure modes the field spent 2025
+    fixing.
+  \end{tcolorbox}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Deck 6 of the 7-deck RL chapter (RL_EXPANSION_PLAN.md, approved 2026-08-11).
+% - Teaching deck, NOT a paper seminar. ml/llm_training/slides/10_instructgpt and .../02_dpo
+%   cover the same papers as "what this paper found"; this deck covers "how the method works".
+%   Figures are borrowed from those decks (rlhf_pipeline, rm_vs_human, alignment_tax from
+%   10_instructgpt; loss_shape -> dpo_loss_shape from 02_dpo), copied into ch11_rl/fig/.
+% - NEW: the MDP translation table, the five peculiarities of the text MDP, why comparisons beat
+%   ratings, the Bradley-Terry derivation, the KL-leash frame and what happens without it, the
+%   four-models bill, and the full two-step DPO derivation (#5 of the approved six), plus the
+%   DPO-family table and the selection table.
+% - Facts web-verified 2026-08-11: IPO (Azar et al., 2024), KTO (Ethayarajh et al., 2024),
+%   ORPO (Hong et al., 2024), SimPO (Meng et al., 2024, +6.4 AlpacaEval 2 over DPO).
+%   InstructGPT 1.3B-preferred-over-175B is from the paper and already used in 10_instructgpt.
+% - Pedagogical decisions: (a) the DPO derivation is split across two frames because the
+%   invert-and-substitute step is the whole idea and gets lost if compressed; (b) the Z(x)
+%   cancellation is explicitly tied back to the dynamics cancelling in lecture 2, which is the
+%   third time that pattern appears; (c) DPO's offline ceiling is framed with lecture 5's
+%   offline-RL vocabulary, which is what motivates lecture 7; (d) the "four models" bill sets up
+%   GRPO's selling point one lecture early.
+% - Forward pointer: deck 7 (L32g_llm_reasoning).
