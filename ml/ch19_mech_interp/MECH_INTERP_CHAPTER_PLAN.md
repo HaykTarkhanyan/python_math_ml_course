@@ -5,9 +5,30 @@ page is written and registered in `_quarto.yml`.
 
 | Deck | Frames / pages | Checks |
 |---|---|---|
-| `L45_opening_the_box` | 48 / 50 | 0 errors, 0 overfull, 0 clipped, acronyms pass |
-| `L46_does_it_actually_do_that` | 47 / 48 | 0 errors, 0 overfull, 0 clipped, acronyms pass |
-| `L47_features` | 46 / 46 | 0 errors, 0 overfull, 0 clipped, acronyms pass |
+| `L45_opening_the_box` | 48 / 50 | 0 errors, 0 overfull, 0 clipped, **0 footer collisions**, acronyms pass |
+| `L46_does_it_actually_do_that` | 48 / 49 | same |
+| `L47_features` | 49 / 49 | same |
+
+**A pedagogy pass was run on all three (2026-08-13) and changed them substantially.** Findings
+and fixes, in case the same mistakes recur in a future chapter:
+
+- **Figures and their interpretation were on separate slides** in five places. In a lecture the
+  student cannot flip back, so the reading arrived while the figure was gone. All five merged
+  (side-by-side layout, or the reading annotated onto the figure frame). This was diagnosed and
+  fixed in L45 first, then **reintroduced** in L46 and L47, which were written afterwards - the
+  lesson did not carry forward on its own.
+- **The linearity chain in L45** was one slide asserting five steps; it is now six frames ending
+  in a measured reconstruction that is exact to five decimal places.
+- **L47 section 3 discussed attribution graphs without showing one.** It now opens with a
+  schematic, and a new frame states what kind of evidence the findings rest on (intervention, not
+  observation) - the chapter closes by demanding exactly that, so it must not fail its own test
+  one section earlier.
+- **Predict-first frames and worked numbers thinned out toward the end.** L47 had two and none;
+  it now has a rhyme-planning predict-first and a worked dictionary-width calculation.
+- **13 frames had content colliding with the page-number footer**, none of which
+  `detect_clipped_slides.py` could see. Drove `non_essential/detect_footer_collisions.py`, now
+  required by `WORKFLOWS.md`. See
+  `_learnings/2026-08-13-1930_a-passing-check-is-only-as-good-as-its-coverage.md`.
 
 **Still to build:** `HW_mech_interp.ipynb` (spec below), the cross-links to
 `ml/05_interpretability` and `ml/ch18_agents/L44` (open questions 5 and 6), and the `🎲 Random`

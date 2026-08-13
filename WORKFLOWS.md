@@ -31,6 +31,15 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 1. **Fact-check** - web-verify every cited number, date, attribution, and formula against the source paper; fix errors. (Facts before layout.)
 2. **Self-driven overflow / polish pass** - compile, render each page to PNG (`pdftoppm -png -r 120`), read the images, fix silent Beamer overflow (boxes drawn over each other, clipped text, title clips), re-render the changed pages to confirm. This catches *layout* faults.
+
+   **Run BOTH detectors - they catch different failures and neither catches the other's:**
+
+   ```bash
+   ./ma/Scripts/python.exe non_essential/detect_clipped_slides.py DECK.pdf      # clipped at the frame edge
+   ./ma/Scripts/python.exe non_essential/detect_footer_collisions.py DECK.pdf   # grown into the page-number band
+   ```
+
+   `detect_clipped_slides.py` looks for content clipped at the frame boundary. It is **blind** to a `tcolorbox` or paragraph that simply grows downward until it sits on the page number - the text is still drawn, so nothing is "clipped", but the last line is unreadable. (Found 2026-08-13: it reported 0 flagged for all three `ml/ch19_mech_interp` decks while **13 frames** had content in the footer band, two of which lost a sentence outright. Both decks had also passed 2x `pdflatex` with 0 overfull-vbox warnings, because Beamer does not warn about this at all.) See `_learnings/2026-08-13-1930_a-passing-check-is-only-as-good-as-its-coverage.md`.
 2b. **Acronym check** (mechanical, 10 seconds - the style rule alone has not been enough):
 
    ```bash
@@ -65,7 +74,7 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 | Artifact | Done means |
 |---|---|
-| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, **`non_essential/detect_clipped_slides.py` run and every flag checked against the rendered page**, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
+| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, **`non_essential/detect_clipped_slides.py` AND `non_essential/detect_footer_collisions.py` both run, every flag checked against the rendered page**, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
 | Figure script | runs end-to-end under the `ma` venv, PDFs in sibling `fig/`, log in `logs/`, figures actually embedded in the deck and the deck recompiled |
 | Homework `.qmd` | registered in `_quarto.yml` with exact-case path, blank line before every list / blockquote / fence, difficulty markers set |
 | Commit | no `.aux`/`.log`/`.nav` staged, message explains the change, push only when asked |
