@@ -9,6 +9,67 @@ this file holds the choice and a pointer.
 
 ---
 
+## #14 - Superposition and SAEs stay in ch8; ch19 gets them as a callback only
+
+**Date:** 2026-08-13 · **Status:** active
+
+**Decision.** The new mechanistic-interpretability chapter (`ml/ch19_mech_interp`) **does not
+re-teach** superposition, polysemanticity, dictionary learning, L0, feature splitting, dead
+features, or the SAE objective. All of it stays where it already is - `ml/ch8_autoencoders/L22`,
+section *"Sparse autoencoders and interpretability"*, plus the `HW1_sae_rnn.ipynb` lab where the
+students implement one. ch19's L47 opens by naming the callback (*"you built one of these"*) and
+spends its frames only on what is new: **using** a pretrained SAE at LLM scale, transcoders,
+attribution graphs, and steering. Working rule written into the chapter plan: **if an L47 frame
+duplicates an L22 frame, cut the L47 one.**
+
+**Why.** The overlap was discovered while outlining, not after building. `L22` already covers
+superposition, the decoder-columns dictionary picture, L0, ablation-as-evidence, Golden Gate
+Claude, the *"SAEs Do Not Find Canonical Units of Analysis"* caveat, **and** a closing frame that
+forward-points to attribution graphs. A chapter arriving ~2 months later and re-deriving that
+material would spend roughly a third of a session telling students something they already
+implemented in homework. Framing L47 as the delivery of a promise L22 already made is both
+cheaper and a better story.
+
+**Alternatives rejected.** *Move the SAE material out of ch8 and into ch19* - it belongs in the
+autoencoder chapter pedagogically (an SAE **is** an autoencoder, and that is the cleanest moment
+to teach it), and ch8 is already delivered, so moving it would strand the existing homework.
+*Re-teach it briefly in ch19 for students who missed ch8* - this is what produces the duplicate
+half-explanations the acronym rule already fights; signpost instead.
+
+**What would change this.** ch8 being cut or restructured, or the SAE section moving out of L22.
+Either would leave ch19's L47 standing on a callback to nothing, and section 1 would have to grow
+from three recap frames into a real treatment.
+
+---
+
+## #13 - ch19 deck numbers are L45-L47, build order, not delivery order
+
+**Date:** 2026-08-13 · **Status:** active
+
+**Decision.** The mech-interp decks are numbered **L45, L46, L47** - continuing from L44 (agents)
+- even though the chapter is scheduled for delivery in mid-October, directly after **L26**
+(transformers). The L-number is a **build-order identifier**. It does not encode when a deck is
+taught.
+
+**Why.** The correspondence between L-number and delivery order was already broken before this
+chapter existed: L37 (tabular FM) and L38 (VLA) are swapped relative to the schedule, and the
+whole L41-L44 range (RAG, agents) does not appear in `ml/00_plan.md`'s schedule table at all.
+Numbering this chapter by delivery order would fix the ordering for one chapter while making the
+global inconsistency harder to reason about, because two conflicting conventions would then be in
+use simultaneously.
+
+**Alternatives rejected.** *`L26b/c/d`* - preserves delivery order locally, but wedges three decks
+into a gap and implies they are sub-parts of the transformer chapter, which they are not.
+*Renumber the whole DL half by delivery order* - correct in principle, but it would rewrite
+filenames, `_quarto.yml` paths, and YouTube playlist numbers across ~20 delivered decks, and the
+YouTube numbers are already published.
+
+**What would change this.** A general renumbering of the deep-learning half, which
+`DEFERRED_TODO.md` already carries as a housekeeping item. If that happens, this chapter is
+renumbered with everything else, not before.
+
+---
+
 ## #12 - L13's agglomerative animation uses Ward, not centroid linkage
 
 **Date:** 2026-08-09 · **Status:** active

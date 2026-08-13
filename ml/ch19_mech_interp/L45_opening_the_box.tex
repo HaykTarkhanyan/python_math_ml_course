@@ -1,0 +1,975 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Opening the Box}
+\subtitle{Reading a language model's internals}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+\newcommand{\codebox}[1]{%
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt,
+                    width=0.94\textwidth, left=4pt, right=4pt, top=3pt, bottom=3pt]
+    \ttfamily\scriptsize #1
+  \end{tcolorbox}
+  \end{center}}
+
+\newcommand{\promptbox}[1]{%
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.88\textwidth]
+    \centering\textit{#1}
+  \end{tcolorbox}
+  \end{center}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Twenty lectures of black boxes}
+  \vspace{0.5em}
+  In chapter 5 we learned to explain a model without ever looking inside it.
+
+  \vspace{0.8em}
+  \begin{itemize}
+    \item SHAP splits the prediction between the input features.
+    \item Permutation importance shuffles a column and watches the score fall.
+    \item Partial dependence sweeps one feature and plots the response.
+  \end{itemize}
+
+  \vspace{0.9em}
+  \keybox{Every one of those methods treats the model as a \textbf{function you can only query}.
+  Feed it inputs, read the outputs, infer what mattered. None of them ever reads a weight.}
+
+  \vspace{0.7em}
+  That was not a limitation of the methods. It was a decision - and for a gradient-boosted tree
+  it is still the right one.
+
+  \vspace{0.5em}
+  Today we make the other decision.
+\end{frame}
+
+\begin{frame}{A sentence a small model gets right}
+  \promptbox{``Then, Alex and William went to the restaurant. Alex gave a book to \_\_\_''}
+
+  \vspace{0.3em}
+  GPT-2 small - 124 million parameters, released in 2019 - answers \textbf{`` William''}.
+
+  \vspace{0.9em}
+  You do it instantly, and if asked how, you would say something like: \emph{two names are
+  introduced, one of them comes back as the giver, so the other one is the receiver.}
+
+  \vspace{0.9em}
+  \keybox{That is an \textbf{algorithm}. The question for this chapter is whether the model
+  runs anything like it - and how we could possibly find out.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{0.6em}
+  We have complete access to this model. Every one of its 124 million numbers is sitting on
+  the disk in front of us, and we can read all of them.
+
+  \vspace{1.1em}
+  \begin{center}
+    {\large Is knowing every weight the same as understanding the model?}
+  \end{center}
+
+  \vspace{1.1em}
+  \pause
+  No - and the reason is worth stating precisely.
+
+  \vspace{0.5em}
+  \trapbox{We have the weights the way you have a wiring diagram of a city's power grid: complete,
+  correct, and no help at all in answering \emph{``why did that street go dark?''}
+  \textbf{Access is not understanding.} The gap between them is the entire field.}
+\end{frame}
+
+\begin{frame}{What mechanistic interpretability is}
+  \vspace{1.0em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=3pt, width=0.9\textwidth]
+    \centering\large
+    Using a model's \textbf{internals} - its weights and activations -\\ to understand what it
+    is doing.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{1.0em}
+  Note what that definition does \textbf{not} say. It does not promise a complete
+  reverse-engineering of the network, and the field has become deliberately pragmatic about
+  this: the goal is useful understanding, not a full circuit diagram of a trillion-parameter
+  model.
+
+  \vspace{0.9em}
+  \takebox{\textbf{The through-line of these three lectures:} it is easy to form a story about
+  what is happening inside a network, and hard to show that the story is true. Most of what we
+  teach is how to tell those two apart.}
+\end{frame}
+
+\begin{frame}{What this does not replace}
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.15\textwidth}p{0.36\textwidth}p{0.36\textwidth}@{}}
+    \toprule
+    & \textbf{Black box} (chapter 5) & \textbf{White box} (this chapter)\\
+    \midrule
+    Works on & \textbf{any} model - boosted trees, a support vector machine, an API you can
+      only call & neural networks whose \textbf{weights you have}\\[0.5em]
+    Needs & predictions & weights, activations, and a framework to hook them\\[0.5em]
+    Answers & which \textbf{input} moved the output & what the \textbf{model did}\\[0.5em]
+    Cost & seconds & the circuit in lecture 2 took a research team months\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.8em}
+  \watchbox{Most of you will deploy gradient boosting. For that model SHAP is not the weaker
+  tool - it is the \textbf{only} tool. This chapter is not an upgrade over chapter 5. It is a
+  different instrument, for a different object.}
+\end{frame}
+
+\begin{frame}{Why a small, old model}
+  \vspace{0.4em}
+  We will spend three lectures on GPT-2 small: \textbf{12 layers}, \textbf{12 heads per layer},
+  \textbf{144 heads} in total, and a residual stream of width \textbf{768}. It is seven years old.
+
+  \vspace{0.8em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Why it is the right choice}
+      \begin{itemize}\small
+        \item every interpretability tool targets it;
+        \item it is the only model where one task has been reverse-engineered completely;
+        \item it runs on a laptop, so \textbf{every figure in these lectures is one you can
+              reproduce}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{What transfers, and what does not}
+      \begin{itemize}\small
+        \item[\textcolor{paramgreen}{\ding{51}}] the residual-stream picture;
+        \item[\textcolor{paramgreen}{\ding{51}}] the causal methods, all of them;
+        \item[\textcolor{paramgreen}{\ding{51}}] the standards of evidence;
+        \item[\textcolor{armred}{\ding{55}}] the \textbf{specific circuits}. What we find is a
+              fact about GPT-2, not about every model.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.7em}
+  \watchbox{Say this now so it does not ambush you later: the field has largely \textbf{retired}
+  toy-model interpretability as a research direction, for exactly the reason in the right-hand
+  column. It is still the only sane place to \emph{learn} it. Training ground, not frontier.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{The residual stream}
+\sectiontransition{The residual stream}{Before any technique: what is the thing we are reading?}
+
+\begin{frame}{You have already been told the key fact}
+  \vspace{0.5em}
+  In lecture 25 one frame was titled \emph{``the residual stream is the real object''}. It is
+  time to collect on it.
+
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \draw[line width=8pt, color=armblue!25] (0,0) -- (10.6,0);
+    \node[align=center] at (5.3,0.62) {\footnotesize\textbf{the residual stream} - one vector per
+      token position, width 768};
+    \foreach \x/\lab in {1.4/attn, 3.2/MLP, 5.0/attn, 6.8/MLP, 8.6/attn} {
+      \draw[-{Latex[length=2mm]}, armred, thick] (\x,-0.95) -- (\x,-0.14);
+      \draw[-{Latex[length=2mm]}, paramgreen, thick] (\x-0.42,-0.14) -- (\x-0.42,-0.95);
+      \node[draw, fill=white, rounded corners=1pt, inner sep=2pt, font=\scriptsize]
+        at (\x-0.2,-1.25) {\lab};
+    }
+    \node[font=\scriptsize, armred, anchor=west] at (0.05,-1.75) {red: writes into the stream};
+    \node[font=\scriptsize, paramgreen, anchor=west] at (5.1,-1.75) {green: reads from the stream};
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.5em}
+  \keybox{Every attention head and every multi-layer perceptron (MLP) block \textbf{reads} from
+  the stream and \textbf{adds} its output back. No component talks to any other directly. The
+  stream is the only channel in the building.}
+\end{frame}
+
+\begin{frame}{Everything is a sum}
+  \vspace{1.4em}
+  Nothing overwrites the stream. Each component \textbf{adds}. So the vector that arrives at the
+  output is nothing more than:
+
+  \vspace{1.2em}
+  \[
+    \underbrace{\text{final residual}}_{\text{768 numbers}} \;=\;
+    \underbrace{\text{embedding}}_{\text{the tokens}} \;+\;
+    \underbrace{\sum_{\text{144 heads}} h_i}_{\text{what each head wrote}} \;+\;
+    \underbrace{\sum_{\text{12 MLPs}} m_j}_{\text{what each MLP wrote}}
+  \]
+
+  \vspace{1.2em}
+  That is the entire architecture, from the point of view of this chapter. One long sum, with
+  \textbf{157 terms}.
+
+  \vspace{0.9em}
+  Hold that thought for two slides. First we need something to measure.
+\end{frame}
+
+\begin{frame}{The metric: logit difference}
+  \vspace{0.7em}
+  Our sentence has exactly two plausible answers and only one is right. So compare them
+  directly:
+
+  \vspace{0.7em}
+  \[
+    \text{logit difference} \;=\;
+      \underbrace{\text{logit}(\text{`` William''})}_{\text{correct}} \;-\;
+      \underbrace{\text{logit}(\text{`` Alex''})}_{\text{the other name}}
+  \]
+
+  \vspace{1.0em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Why not accuracy?}\\[0.3em]
+      \small A step function. It cannot tell you a change made the model \emph{slightly} less
+      sure - and most changes do exactly that.
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Why not loss?}\\[0.3em]
+      \small Loss mixes in all 50{,}257 tokens. We want the one comparison the task is about,
+      and nothing else.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One sentence, by hand}
+  \vspace{0.5em}
+  \promptbox{``Then, Alex and William went to the restaurant. Alex gave a book to \ldots''}
+
+  \vspace{0.2em}
+  The model's top five predictions for the next token, with their logits:
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    \textbf{token} & \textbf{logit}\\
+    \midrule
+    \textcolor{paramgreen}{\textbf{`` William''}} & \textcolor{paramgreen}{\textbf{17.96}}\\
+    `` the'' & 15.50\\
+    `` his'' & 14.79\\
+    `` them'' & 13.96\\
+    `` a'' & 13.69\\
+    \midrule
+    \textcolor{armred}{`` Alex''} & \textcolor{armred}{12.62}\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  \[
+    \text{logit difference} \;=\; 17.96 \;-\; 12.62 \;=\; \mathbf{5.34}
+  \]
+
+  \vspace{0.2em}
+  {\footnotesize Across 64 sentences of this shape the average is \textbf{+3.60}. Individual
+  sentences vary; we will always quote the average.}
+\end{frame}
+
+\begin{frame}{So the logit difference is a sum too}
+  \vspace{0.8em}
+  The step from the residual stream to a logit is a \textbf{matrix multiply} - the unembedding.
+  Matrix multiplication is linear, and linear means it distributes over a sum:
+
+  \vspace{0.6em}
+  \[
+    W_U \big( a + b + c \big) \;=\; W_U a \;+\; W_U b \;+\; W_U c
+  \]
+
+  \vspace{0.8em}
+  Apply that to the 157-term sum from two slides ago, and the logit difference splits the same
+  way:
+
+  \vspace{0.4em}
+  \[
+    \text{logit difference} \;=\;
+      \underbrace{c_{\text{embed}} + c_{\text{head 0.0}} + \cdots + c_{\text{head 11.11}}
+      + \cdots}_{\text{one number per component}}
+  \]
+
+  \vspace{0.9em}
+  \keybox{Each component gets a \textbf{single number}: how much it pushed toward `` William''
+  over `` Alex''. That number is called the component's
+  \textbf{direct logit attribution}.}
+\end{frame}
+
+\begin{frame}{Do not take my word for it}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.79\textwidth]{fig/logit_decomposition.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\footnotesize Six largest contributors, then everything else lumped together, then GPT-2's
+  unembedding bias - a fixed offset the model does not compute. Orange is the logit difference
+  from an ordinary forward pass.}
+\end{frame}
+
+\begin{frame}{The sum is exact}
+  \vspace{0.8em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    159 component contributions, added up & $+3.3439$\\
+    unembedding bias (a constant, not computed by the model) & $+0.2520$\\
+    \midrule
+    \textbf{total} & $\mathbf{+3.5960}$\\
+    logit difference from an ordinary forward pass & $+3.5960$\\
+    \midrule
+    \textbf{difference} & $\mathbf{0.00000}$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1.0em}
+  \takebox{\textbf{This is why per-component attribution exists at all.} ``How much did head
+  9.9 contribute?'' has an exact answer, because the architecture really is a sum. Remove the
+  residual connections and most of this chapter stops working.}
+
+  \vspace{0.6em}
+  {\footnotesize One honest caveat: LayerNorm sits between the stream and the unembedding and
+  is \emph{not} linear. We hold its scaling factor fixed at the value the real forward pass
+  produced - which is what makes the table above come out exact.}
+\end{frame}
+
+\begin{frame}{The one piece of code in this lecture}
+  \vspace{0.6em}
+  \codebox{%
+    logits, cache = model.run\_with\_cache("Then, Alex and William went to the\ldots")\\[0.4em]
+    cache["resid\_post", 9]\hspace{2.6em}\# the stream after layer 9\\
+    cache["pattern", 9]\hspace{3.9em}\# attention weights, all 12 heads\\
+    cache["z", 9]\hspace{5.5em}\# what each head wrote
+  }
+
+  \vspace{0.5em}
+  One forward pass, and every intermediate value is kept instead of thrown away. That is the
+  whole trick, and it is why libraries like TransformerLens exist: not new mathematics, just
+  refusing to discard the activations.
+
+  \vspace{0.8em}
+  \watchbox{Most of the practical difficulty in this field is \textbf{careful indexing} - which
+  layer, which position, which head. Not the concepts. Budget your frustration accordingly.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{The logit lens}
+\sectiontransition{The logit lens}{If the answer is built gradually, can we watch it happen?}
+
+\begin{frame}{One idea, one sentence}
+  \vspace{0.9em}
+  \keybox{Take the residual stream \textbf{halfway through} the model, apply the unembedding
+  that is normally used only at the end, and read off what the model \textbf{would have said}
+  if it had stopped there.}
+
+  \vspace{0.9em}
+  Nothing about this is principled - we are applying the final layer's decoder to a vector it
+  was never trained to decode. It works well enough on GPT-2 to be useful, which is a sentence
+  that should already make you slightly suspicious. We will return to that.
+
+  \vspace{0.7em}
+  {\footnotesize Introduced by nostalgebraist (2020), as a blog post rather than a paper - which
+  is common in this field.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  We are about to run the logit lens at every layer of GPT-2 small and plot the logit difference
+  as it develops.
+
+  \vspace{1.4em}
+  \begin{center}
+    {\large Sketch the shape of that curve before you see it.}\\[0.7em]
+    {\normalsize Does the answer build up \textbf{steadily} across the twelve layers,\\
+     or does it arrive \textbf{somewhere in particular}?}
+  \end{center}
+
+  \vspace{1.4em}
+  \begin{center}
+    {\footnotesize Most people draw a diagonal line. Very few draw what actually happens.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Watching the answer arrive}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.75\textwidth]{fig/logit_lens.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      {\footnotesize
+      \begin{itemize}\itemsep2pt
+        \item \textbf{Eight layers} of essentially nothing.
+        \item Entering \textbf{layer 9}, it jumps.
+        \item Then a slow drift to the final value.
+      \end{itemize}}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      {\footnotesize Logit difference read off the stream after each layer, averaged over 64
+      sentences.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One number to carry into next week}
+  \vspace{1.0em}
+  \keybox{The decision is \textbf{not} spread evenly through the network. Something specific
+  happens at \textbf{layer 9}, and whatever it is, it is responsible for most of the answer.}
+
+  \vspace{1.0em}
+  That is our first real hypothesis, and it is narrow enough to test: \textbf{look at layer 9}.
+
+  \vspace{1.2em}
+  \takebox{Remember the number. Next lecture we go looking for the components that do this work,
+  using a completely different method that knows nothing about this graph.\\[0.4em]
+  They will be in \textbf{layer 9}.}
+\end{frame}
+
+\begin{frame}{Before you trust it}
+  \vspace{0.6em}
+  \trapbox{The logit lens is \textbf{not} a window into ``what the model is thinking''. It is a
+  decoder being used out of distribution.}
+
+  \vspace{0.8em}
+  \begin{itemize}
+    \item It works reasonably on GPT-2 and \textbf{poorly on many other models} - representations
+      drift between layers, and the final unembedding does not match them.
+    \item The fix people use - training a small decoder per layer, the ``tuned lens'' - exists
+      precisely because the plain version is unreliable.
+    \item It shows what is \textbf{linearly readable}, which is not the same as what is
+      \textbf{there}, which is not the same as what is \textbf{used}.
+  \end{itemize}
+
+  \vspace{0.7em}
+  That last distinction is important enough that the next section is about nothing else.
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Probes}
+\sectiontransition{Probes}{Asking the model a yes/no question about its own activations}
+
+\begin{frame}{A probe is logistic regression}
+  \vspace{0.6em}
+  You already know how to build one. From lecture 11:
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    \textbf{Lecture 11} & \textbf{Here}\\
+    \midrule
+    design matrix of features & the residual stream, 768 numbers per token\\
+    label: did the customer subscribe? & label: is one of these names repeated?\\
+    fit logistic regression & fit logistic regression\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.8em}
+  \keybox{Train a classifier on activations. If it succeeds, that information is present in the
+  stream in a \textbf{linearly readable} form. That is the whole method.}
+
+  \vspace{0.6em}
+  We train one probe per layer, cross-validated, on 128 sentences balanced 50/50 between
+  ``a name repeats'' and ``three different names''.
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  We train one probe per layer, asking only: \emph{is one of these names repeated?}
+
+  \vspace{1.3em}
+  \begin{center}
+    {\large At which layer do you think the probe first hits 100\%?}
+  \end{center}
+
+  \vspace{1.3em}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \centering Late, near layer 9, where we just saw the answer appear?
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \centering Or somewhere else entirely?
+    \end{column}
+  \end{columns}
+
+  \vspace{1.2em}
+  \begin{center}
+    {\footnotesize Commit to a layer number before the next slide.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The information shows up early}
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{fig/probe_by_layer.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\footnotesize Five-fold cross-validated accuracy, one probe per layer, reading the final token
+  position. \textbf{100\% from layer 3} - six layers before the model does anything with it.}
+\end{frame}
+
+\begin{frame}{The two graphs, together}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{fig/probe_vs_lens.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\footnotesize Same $x$ axis. Top: what is \textbf{readable}. Bottom: what is \textbf{used}.}
+\end{frame}
+
+\begin{frame}{Six layers of knowing and not acting}
+  \vspace{1.0em}
+  \trapbox{\textbf{The information sat in the residual stream, perfectly readable, from layer 3
+  to layer 9 - and the model's answer did not move.}}
+
+  \vspace{1.0em}
+  \keybox{A probe tells you a fact is \textbf{present}. It does not tell you the model
+  \textbf{uses} it.}
+
+  \vspace{1.0em}
+  You can read every ingredient off a label without knowing which ones the recipe calls for. The
+  probe reads the label. It has nothing to say about the cooking.
+
+  \vspace{0.9em}
+  {\footnotesize This gap is the single most useful thing in the lecture, because it is the
+  mistake people actually make: finding information with a probe and reporting it as what the
+  model is \emph{doing}.}
+\end{frame}
+
+\begin{frame}{How a probe can fool you}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item \textbf{Presence is not use} - the six-layer gap above, measured on our own data.
+    \item \textbf{The probe may be doing the work.} A powerful enough probe can find structure
+      the model never exploits. Keep probes linear, and report the chance baseline.
+    \item \textbf{Correlated features.} The probe may be reading something that merely travels
+      with what you asked about.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \watchbox{Our probe hitting \textbf{100\%} by layer 3 should make you ask whether the task was
+  too easy, not congratulate the model. An easy task is fine here, because the point of the
+  figure is the \textbf{contrast} with the logit lens - not the accuracy.}
+\end{frame}
+
+\begin{frame}{Where probes actually earn their keep}
+  \vspace{0.6em}
+  \textbf{Othello-GPT.} Train a transformer only on sequences of legal Othello moves - it never
+  sees a board. Then probe its activations for the state of each square.
+
+  \vspace{0.5em}
+  The probes work. The model built an internal \textbf{board} it was never given.
+
+  \vspace{0.9em}
+  \keybox{This is the strongest thing probes have shown: models can construct genuine internal
+  \textbf{world models} from data that only implies them.}
+
+  \vspace{0.8em}
+  And the practical version: linear probes on activations are \textbf{deployed today} for
+  content monitoring in real systems. Of everything in these three lectures, this is the
+  technique most likely to be useful in your job - it is cheap to train, cheap to run, and it
+  works.
+
+  \vspace{0.5em}
+  {\footnotesize Li et al.\ (2022); the linear-probe follow-up is Nanda et al.\ (2023).}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Reading attention heads}
+\sectiontransition{Reading attention heads}{144 of them. Which ones are doing the work?}
+
+\begin{frame}{What a head does, restated}
+  \vspace{0.7em}
+  From lecture 24: a head computes queries, keys and values, and produces a weighted sum of
+  values.
+
+  \vspace{0.6em}
+  For our purposes, one sentence is enough:
+
+  \vspace{0.6em}
+  \keybox{An attention head \textbf{moves information from one position to another}. The
+  attention pattern says \emph{where from}; what it writes is a separate question entirely.}
+
+  \vspace{0.9em}
+  That split is the whole content of this section. The pattern is easy to look at, easy to
+  screenshot, and easy to over-read.
+\end{frame}
+
+\begin{frame}{Where it looks is not what it writes}
+  \vspace{0.5em}
+  A head does two separable things, and we can only see one of them:
+
+  \vspace{0.7em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.30\textwidth}p{0.30\textwidth}p{0.30\textwidth}@{}}
+    \toprule
+    & \textbf{Where it looks} & \textbf{What it writes}\\
+    \midrule
+    Set by & queries and keys & values, and the output matrix\\[0.5em]
+    Shown by & the attention pattern & \textcolor{armred}{nothing you can look at}\\[0.5em]
+    Easy to plot? & yes - it is a heatmap & no - it is a 768-dimensional vector\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.9em}
+  \trapbox{Every attention picture you have ever seen - including the four on the last slide -
+  shows only the \textbf{left} column. A head can stare straight at the right answer and write a
+  vector that no later component reads.}
+
+  \vspace{0.6em}
+  We have no way to check that yet. That is what the next lecture is for.
+\end{frame}
+
+\begin{frame}{Four real heads on our sentence}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.99\textwidth]{fig/attention_heads.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\footnotesize Rows are query positions (``from''), columns are key positions (``to'').
+  The dark first column is every head parking attention on the first token - an
+  \textbf{attention sink}, and mostly not about the sentence.}
+\end{frame}
+
+\begin{frame}{Induction heads}
+  \vspace{0.5em}
+  The most famous named circuit in the field, and it is easy to state:
+
+  \vspace{0.6em}
+  \promptbox{\ldots\ \textbf{A} \textbf{B} \ldots\ \textbf{A} $\rightarrow$ predict \textbf{B}}
+
+  \vspace{0.3em}
+  \emph{``This pattern appeared before. What came next last time?''}
+
+  \vspace{0.7em}
+  Test it with a sequence of \textbf{random} tokens repeated twice. There is nothing to learn
+  from the language - the only way to predict the second half is to look back at the first.
+
+  \vspace{0.7em}
+  \keybox{This is a large part of how in-context learning works. It is also why a model can
+  pick up a pattern you invent inside a single prompt.}
+
+  \vspace{0.4em}
+  {\footnotesize Olsson et al.\ (2022).}
+\end{frame}
+
+\begin{frame}{Walk through it, one position at a time}
+  \vspace{0.4em}
+  A concrete sequence. The model has seen the first four tokens and must predict the fifth:
+
+  \vspace{0.6em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \foreach \i/\t in {0/\texttt{cat}, 1/\texttt{sat}, 2/\texttt{dog}, 3/\texttt{cat}} {
+      \node[draw, rounded corners=2pt, minimum width=1.5cm, minimum height=0.75cm,
+            fill=lightbg] (t\i) at (\i*1.85, 0) {\t};
+      \node[font=\scriptsize, gray] at (\i*1.85, -0.62) {position \i};
+    }
+    \node[draw, rounded corners=2pt, minimum width=1.5cm, minimum height=0.75cm,
+          fill=armorange!15, dashed] (q) at (4*1.85, 0) {\texttt{?}};
+    \node[font=\scriptsize, gray] at (4*1.85, -0.62) {position 4};
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.9em}
+  The answer a human gives instantly: \textbf{\texttt{sat}}. The pattern \texttt{cat} appeared
+  before, and \texttt{sat} followed it.
+
+  \vspace{0.9em}
+  The model has no rule for this. What it has is two heads, in two different layers, and neither
+  of them can do it alone.
+\end{frame}
+
+\begin{frame}{Step 1 - the previous-token head}
+  \vspace{0.6em}
+  In an \textbf{early} layer, one head does something that looks pointless: at every position, it
+  attends to the position \emph{before} it, and copies that token's identity into the stream.
+
+  \vspace{0.7em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \foreach \i/\t in {0/\texttt{cat}, 1/\texttt{sat}, 2/\texttt{dog}, 3/\texttt{cat}} {
+      \node[draw, rounded corners=2pt, minimum width=1.45cm, minimum height=0.72cm,
+            fill=lightbg] (t\i) at (\i*2.2, 0) {\t};
+    }
+    \draw[-{Latex[length=2mm]}, armblue, thick] (t1.north) to[bend right=32] (t0.north);
+    \draw[-{Latex[length=2mm]}, armblue, thick] (t2.north) to[bend right=32] (t1.north);
+    \draw[-{Latex[length=2mm]}, armblue, thick] (t3.north) to[bend right=32] (t2.north);
+    \node[font=\scriptsize, armblue, align=center] at (1.1, 1.15) {``the token before me\\was
+      \texttt{cat}''};
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.6em}
+  So position 1 now carries a \textbf{mark}: \emph{I am preceded by} \texttt{cat}.
+
+  \vspace{0.5em}
+  {\footnotesize On its own this is useless. It is bookkeeping done in advance, by a head that
+  has no idea what it will be used for.}
+\end{frame}
+
+\begin{frame}{Step 2 - the induction head}
+  \vspace{0.5em}
+  In a \textbf{later} layer, a second head sits at the final position, whose token is
+  \texttt{cat}, and asks the stream a question:
+
+  \vspace{0.6em}
+  \begin{center}
+    \emph{``Which earlier position is marked as being preceded by \texttt{cat}?''}
+  \end{center}
+
+  \vspace{0.6em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \foreach \i/\t in {0/\texttt{cat}, 1/\texttt{sat}, 2/\texttt{dog}, 3/\texttt{cat}} {
+      \node[draw, rounded corners=2pt, minimum width=1.45cm, minimum height=0.72cm,
+            fill=lightbg] (t\i) at (\i*2.2, 0) {\t};
+    }
+    \node[draw, rounded corners=2pt, minimum width=1.45cm, minimum height=0.72cm,
+          fill=armorange!15, dashed] (q) at (4*2.2, 0) {\texttt{?}};
+    \draw[-{Latex[length=2mm]}, paramgreen, very thick] (q.south) to[bend left=25] (t1.south);
+    \node[font=\scriptsize, paramgreen] at (4.4, -1.45) {position 1 is the match - copy its
+      token};
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.9em}
+  Position 1 is marked. Its token is \texttt{sat}. The head copies \texttt{sat} to the output.
+
+  \vspace{0.5em}
+  \keybox{The mark was written by a head that did not know why. It was read by a head that never
+  saw the original \texttt{cat}. \textbf{Neither one contains the algorithm.}}
+\end{frame}
+
+\begin{frame}{That is what ``circuit'' means}
+  \vspace{0.7em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \node[draw, rounded corners, fill=armblue!10, minimum width=4.0cm, minimum height=1.25cm,
+          align=center] (prev) at (0,0) {\textbf{previous-token head}\\[0.2em]
+          \scriptsize early layer\\[-0.05em]\scriptsize writes the mark};
+    \node[draw, rounded corners, fill=paramgreen!10, minimum width=4.0cm, minimum height=1.25cm,
+          align=center] (ind) at (7.4,0) {\textbf{induction head}\\[0.2em]
+          \scriptsize later layer\\[-0.05em]\scriptsize reads it, copies what followed};
+    \draw[-{Latex[length=2.5mm]}, thick] (prev) -- (ind);
+    \node[font=\scriptsize, align=center] at (3.7, 0.42) {via the};
+    \node[font=\scriptsize, align=center] at (3.7, -0.42) {residual stream};
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{1.0em}
+  \takebox{A \textbf{circuit} is a behaviour that lives in the \emph{composition} of components,
+  not in any one of them. Delete either head and the behaviour disappears - but you will never
+  find it by examining either head alone.}
+
+  \vspace{0.8em}
+  This is why ``which neuron represents X'' is so often the wrong question, and it is the shape
+  of every result in the next lecture.
+\end{frame}
+
+\begin{frame}{Finding them, in one pass}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{fig/induction_scores.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\footnotesize Stars mark the top three: \textbf{L5H5} (0.89), \textbf{L6H9} (0.89),
+  \textbf{L5H1} (0.89). Layers 5 and 6 - the middle of the model.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{0.9em}
+  We have found a head whose attention pattern is exactly what an induction head should look
+  like.
+
+  \vspace{1.1em}
+  \begin{center}
+    {\large Does that prove the head is \textbf{doing} induction?}
+  \end{center}
+
+  \vspace{1.1em}
+  \pause
+  No.
+
+  \vspace{0.5em}
+  \trapbox{A head can attend somewhere and write \textbf{nothing useful} when it gets there.
+  Attention says where a head \emph{looked}. It says nothing about what it \emph{did}, or
+  whether anything downstream \textbf{read} the result.}
+
+  \vspace{0.6em}
+  Next lecture opens with three heads in the same layer, all looking at the right answer. One of
+  them contributes exactly nothing, and the pictures will not tell you which.
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{Naming what you find}
+\sectiontransition{Naming what you find}{The most natural thing to do, and the easiest way to be wrong}
+
+\begin{frame}{Max-activating examples}
+  \vspace{0.6em}
+  The standard way to name a neuron or a head: run a lot of text through, keep the inputs that
+  make it fire hardest, and look at them.
+
+  \vspace{0.7em}
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.9\textwidth]
+    \small
+    Top activations for a neuron:\\[0.3em]
+    \ttfamily\scriptsize
+    ``\ldots the \textbf{Golden Gate} Bridge \ldots''\\
+    ``\ldots crossing the \textbf{bridge} at dawn \ldots''\\
+    ``\ldots San Francisco's famous \textbf{span} \ldots''
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{0.5em}
+  It is genuinely useful, it is how most features get named, and it has a failure mode serious
+  enough to have its own name.
+\end{frame}
+
+\begin{frame}{Most neurons are not about one thing}
+  \vspace{0.6em}
+  Look at enough GPT-2 neurons and the pattern is unmistakable: a single neuron fires on
+  several \textbf{unrelated} concepts.
+
+  \vspace{0.8em}
+  \keybox{\textbf{Polysemanticity.} One neuron, many meanings. It is the normal case, not the
+  exception - which means ``find the neuron for X'' is usually the wrong question.}
+
+  \vspace{0.9em}
+  You have met the reason already: in the autoencoder chapter, a network tracking 40 concepts in
+  32 dimensions has no choice but to share directions. We return to it properly in lecture 3,
+  where it stops being a nuisance and becomes the organising idea.
+\end{frame}
+
+\begin{frame}{The interpretability illusion}
+  \vspace{0.6em}
+  Bolukbasi et al.\ took a neuron in BERT, collected its top-activating examples on one dataset,
+  and got a clean, convincing story.
+
+  \vspace{0.5em}
+  Then they ran a \textbf{different} dataset through the same neuron and got a different clean,
+  convincing story.
+
+  \vspace{0.9em}
+  \trapbox{Both stories were supported by the evidence. At most one of them was right.
+  \textbf{Cherry-picking is not a mistake you might make here - it is the default behaviour of
+  the method.}}
+
+  \vspace{0.8em}
+  The defence is dull and non-negotiable: report \textbf{randomly selected} examples alongside
+  the top ones, and check across datasets.
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.34\textwidth}p{0.34\textwidth}@{}}
+    \toprule
+    \textbf{Technique} & \textbf{What it told us} & \textbf{What it cannot tell us}\\
+    \midrule
+    Residual stream & everything is a sum, so attribution is possible & --\\[0.4em]
+    Logit lens & the answer appears at layer 9 & whether layer 9 \emph{causes} it\\[0.4em]
+    Probes & duplication is readable from layer 3 & whether the model uses it\\[0.4em]
+    Attention patterns & heads look at the right names & whether looking mattered\\[0.4em]
+    Max-activating examples & a name for a component & whether the name is correct\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \trapbox{Read the right-hand column again. \textbf{Every technique in this lecture is
+  correlational.} We have four ways to form a hypothesis and not one way to test one.}
+\end{frame}
+
+\begin{frame}{Next}
+  \vspace{1.2em}
+  \takebox{\textbf{Next: intervention.}\\[0.6em]
+  Instead of watching the model run, we \textbf{break} it on purpose - delete a head, swap an
+  activation, and measure what changes. That is the difference between noticing that something
+  looks important and showing that it \textbf{is}.\\[0.8em]
+  We open with three heads that all look right. One of them does nothing.}
+
+  \vspace{1.2em}
+  \begin{center}
+    {\footnotesize Optional viewing before next time: the Welch Labs video on grokking, linked on
+    the chapter page - a complete circuit, in a model small enough to understand entirely.}
+  \end{center}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Source material: Neel Nanda, "How To Become A Mechanistic Interpretability Researcher"
+%   (minimum-viable-basics list: patching, probes, SAEs, max-activating examples); ARENA
+%   chapter 1.2; Elhage et al. (2021) "A Mathematical Framework for Transformer Circuits"
+%   (residual stream as shared channel); nostalgebraist (2020) logit lens; Olsson et al. (2022)
+%   induction heads; Li et al. (2022) + Nanda et al. (2023) Othello-GPT; Bolukbasi et al.
+%   interpretability illusion for BERT.
+% - Figures: all four generated by py_src/l45_figs.py on GPT-2 small, CPU, from the dataset in
+%   data/ioi_dataset.json. Raw numbers in results/l45_figs.json. No figure is illustrative;
+%   every number on a slide is measured.
+% - Key pedagogical decisions:
+%   (1) The deck deliberately ENDS IN FAILURE - every technique shown is correlational, and the
+%       recap says so. That cliffhanger is the motivation for L46 and must not be softened.
+%   (2) The probe/logit-lens contrast (readable at layer 3, used at layer 9) replaces the
+%       planned "ingredients on a label" analogy. It is the same lesson, measured instead of
+%       asserted, and it emerged from the data rather than being designed in.
+%   (3) The cold open argues AGAINST the chapter twice - the black-box comparison table, and the
+%       "why a small old model" frame that pre-empts the toy-model tension L46 raises. Added
+%       after review; the first draft argued only for the field.
+%   (4) Layer 9 is planted here by the logit lens and paid off in L46 by direct logit
+%       attribution - two independent methods, same answer, neither told about the other.
+% - Next deck: L46_does_it_actually_do_that.tex (ablation, patching, DLA, the IOI circuit,
+%   self-repair). Its cold open is the three-head figure promised on the last two frames here.
