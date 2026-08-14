@@ -1,13 +1,63 @@
 # Chapter 19 - Mechanistic interpretability
 
-**Status:** **built, 2026-08-13.** All three decks compile clean and are verified; the chapter
-page is written and registered in `_quarto.yml`.
+**Status:** **built 2026-08-13; illustration pass 2026-08-14.** All three decks compile clean and
+are verified; the chapter page is written and registered in `_quarto.yml`.
 
-| Deck | Frames / pages | Checks |
+| Deck | Frames / pages | Figures | Checks |
+|---|---|---|---|
+| `L45_opening_the_box` | 45 / 51 | 7 | 0 errors, 0 overfull, 0 clipped, **0 footer collisions**, acronyms pass |
+| `L46_does_it_actually_do_that` | 43 / 49 | 7 | same |
+| `L47_features` | 49 / 55 | 5 (was 2) | same |
+
+## Coverage audit against Neel Nanda's guide (2026-08-14)
+
+Checked against *How To Become A Mechanistic Interpretability Researcher* (the current version of
+the "getting started" guide; the old `neelnanda.io` URL 301s to it).
+
+All four of his **Essential** Stage-1 techniques are covered: activation patching (L46), linear
+probes (L45), sparse autoencoders *used rather than trained* (L47), max-activating examples
+(L45). His nice-to-haves - steering vectors, logit lens / direct logit attribution - are covered
+too, as are TransformerLens, nnsight, ARENA and Neuronpedia.
+
+Two of his judgements the chapter already matched by accident: grokking is demoted to a callback
+(he lists toy algorithmic tasks as fading), and SAEs are taught as "you do not have to train one"
+(his exact framing).
+
+**Gaps found and closed on 2026-08-14:**
+
+- **Token forcing / prefill attacks** - he lists these under black-box methods; the chapter had
+  nothing. New frame in L47's chain-of-thought section.
+- **Automated interpretability** - added to "What is genuinely unsolved".
+- ***A Mathematical Framework for Transformer Circuits*** existed only in a `%` comment in the
+  L45 provenance block, i.e. invisible to students. Now cited on the closing frame.
+
+**Tension worth keeping in view.** Nanda lists *"circuit analysis via causal interventions alone
+(IOI-style)"* among the **fading** research directions - and the IOI circuit is the spine of
+L45-L46. It is still the clearest worked example available, so it stays as a *teaching* vehicle,
+but L47's closing frame now warns students not to pick it as a *project*.
+
+## Illustration pass (2026-08-14)
+
+Trigger: the instructor asked whether the standard techniques are actually illustrated. They were
+not, unevenly. Figure counts before: **L45 6, L46 7, L47 2** - and both of L47's sat in its first
+section, so SAEs, transcoders, attribution graphs and steering (about 30 frames) had no figure at
+all. The most abstract material had the least visual support.
+
+Four figures added, three of them measured rather than drawn:
+
+| Figure | Script | What it shows |
 |---|---|---|
-| `L45_opening_the_box` | 48 / 50 | 0 errors, 0 overfull, 0 clipped, **0 footer collisions**, acronyms pass |
-| `L46_does_it_actually_do_that` | 48 / 49 | same |
-| `L47_features` | 49 / 49 | same |
+| `residual_stream.pdf` | `l45_residual_stream.py` | **Replaces a TikZ sketch.** Schematic of read/add, plus measured norm growth 4.5 -> 482 over 12 blocks on GPT-2. Rebuilds the final vector from the embedding plus all 24 writes: **max error 0.00e+00**. |
+| `sae_mechanism.pdf` | `l47_explainer_figs.py` | Dense -> wide sparse -> rebuilt, plus a **real SAE trained here** recovering 8 features planted in 4 dimensions (worst \|cos\| 0.84). |
+| `steering_geometry.pdf` | `l47_explainer_figs.py` | The vector addition, plus a **measured sweep**: P(" wedding") 0.048% -> 16.0% (336x), top token flips " first" -> " wedding". |
+| `attribution_graph.pdf` | `l47_explainer_figs.py` | **Replaces a TikZ sketch** (which also violated the Python-figures rule). |
+
+**A trap the steering figure walked into, now taught on its own frame.** The first version swept
+alpha from 0 to 8 against a residual stream of norm ~119 - a perturbation of under one percent.
+It measured nothing and looked like evidence that steering does not work. Steering strength is
+only meaningful **as a multiple of the activation's own norm**, which is how the axis is drawn
+now. The guard that caught it originally only checked the *direction* of change, so a rise from
+1e-6 to 2e-6 passed it; it now requires a visible effect (>=50x and >=0.2% absolute).
 
 **A pedagogy pass was run on all three (2026-08-13) and changed them substantially.** Findings
 and fixes, in case the same mistakes recur in a future chapter:
