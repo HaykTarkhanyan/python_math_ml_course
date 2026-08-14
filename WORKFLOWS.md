@@ -40,6 +40,15 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
    ```
 
    `detect_clipped_slides.py` looks for content clipped at the frame boundary. It is **blind** to a `tcolorbox` or paragraph that simply grows downward until it sits on the page number - the text is still drawn, so nothing is "clipped", but the last line is unreadable. (Found 2026-08-13: it reported 0 flagged for all three `ml/ch19_mech_interp` decks while **13 frames** had content in the footer band, two of which lost a sentence outright. Both decks had also passed 2x `pdflatex` with 0 overfull-vbox warnings, because Beamer does not warn about this at all.) See `_learnings/2026-08-13-1930_a-passing-check-is-only-as-good-as-its-coverage.md`.
+
+   **Full-bleed frames are detected and excluded automatically** (added 2026-08-14 while building `ml/ch20`, the first deck to use six of them). A full-bleed still fills the footer band by design, so it used to be flagged every time. The detector now measures whether the image reaches the page border and reports those separately without failing the build:
+
+   ```
+   L48_subliminal_learning.pdf: clean
+       (6 full-bleed image frame(s) not counted: 6, 8, 23, 27, 47, 59)
+   ```
+
+   If you change that heuristic, re-run it on `ml/ch19_mech_interp` (which has no full-bleed frames and must stay at 0) to prove it did not go blind. See `_learnings/2026-08-14-0315_the-footer-detector-cannot-see-a-full-bleed-frame.md`.
 2b. **Acronym check** (mechanical, 10 seconds - the style rule alone has not been enough):
 
    ```bash

@@ -52,6 +52,16 @@ INK_THRESHOLD = 200
 # occasional descender put a handful of dark pixels in the band on a clean slide.
 FLAG_FRACTION = 0.002
 
+# A full-bleed image frame (an approved default in ml/SLIDE_STYLE.md) covers the whole slide, so
+# its footer band is nearly all ink - correct, not a collision. Detect it by what "full-bleed"
+# literally means: the image reaches the page edge. A Beamer text frame always leaves white at
+# the extreme border, so the outer ring is ~0% covered; a still that bleeds to the edge is ~100%,
+# whether the image is dark or light. (An earlier attempt keyed on how dark the page body was,
+# which missed light stills - a photo of a white page read as "not a picture".)
+BORDER_RING_FRACTION = 0.015     # how far in from each edge counts as the ring
+BORDER_WHITE_LEVEL = 240         # >= this is effectively page white
+FULL_BLEED_BORDER_COVERAGE = 0.90
+
 RENDER_DPI = 105
 
 
@@ -91,22 +101,40 @@ def render_pages(pdf: Path, out_dir: Path, log: logging.Logger) -> list[Path]:
     return pages
 
 
-def check_page(png: Path) -> float:
-    """Fraction of the footer band (excluding the page-number corner) that is ink."""
+def check_page(png: Path) -> tuple[float, float]:
+    """Return (ink fraction of the footer band, coverage of the outer border ring).
+
+    The band excludes the right-hand corner where the page number legitimately lives.
+    Border coverage near 1.0 means the page is a full-bleed image rather than a text frame.
+    """
     image = np.asarray(Image.open(png).convert("L"))
     height, width = image.shape
-    band = image[int(height * (1 - BAND_FRACTION)):, : int(width * (1 - RIGHT_MARGIN_FRACTION))]
-    return float((band < INK_THRESHOLD).mean())
+    split = int(height * (1 - BAND_FRACTION))
+    band = image[split:, : int(width * (1 - RIGHT_MARGIN_FRACTION))]
+
+    dy = max(1, int(height * BORDER_RING_FRACTION))
+    dx = max(1, int(width * BORDER_RING_FRACTION))
+    ring = np.concatenate([
+        image[:dy, :].ravel(), image[-dy:, :].ravel(),
+        image[:, :dx].ravel(), image[:, -dx:].ravel(),
+    ])
+    return (float((band < INK_THRESHOLD).mean()),
+            float((ring < BORDER_WHITE_LEVEL).mean()))
 
 
 def check_pdf(pdf: Path, log: logging.Logger) -> list[tuple[int, float]]:
-    flagged = []
+    flagged: list[tuple[int, float]] = []
+    full_bleed: list[int] = []
     with tempfile.TemporaryDirectory() as tmp:
         for png in render_pages(pdf, Path(tmp), log):
             page = int(png.stem.rsplit("-", 1)[1])
-            ink = check_page(png)
-            if ink > FLAG_FRACTION:
-                flagged.append((page, ink))
+            band_ink, border = check_page(png)
+            if band_ink <= FLAG_FRACTION:
+                continue
+            if border > FULL_BLEED_BORDER_COVERAGE:
+                full_bleed.append(page)
+            else:
+                flagged.append((page, band_ink))
 
     if flagged:
         log.info(f"{pdf.name}: {len(flagged)} frame(s) with content in the footer band")
@@ -114,6 +142,9 @@ def check_pdf(pdf: Path, log: logging.Logger) -> list[tuple[int, float]]:
             log.info(f"    page {page:3d}   ink {ink * 100:5.2f}%")
     else:
         log.info(f"{pdf.name}: clean")
+    if full_bleed:
+        log.info(f"    ({len(full_bleed)} full-bleed image frame(s) not counted: "
+                 f"{', '.join(str(p) for p in full_bleed)})")
     return flagged
 
 
