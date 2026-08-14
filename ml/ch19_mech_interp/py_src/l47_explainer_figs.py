@@ -87,7 +87,7 @@ def fig_sae(log):
     best, active, n_true, d_model, d_sae = train_toy_sae(log)
 
     fig = plt.figure(figsize=(12.2, 4.3))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.20)
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 1.0], wspace=0.16)
 
     # -------- left: the mechanism
     ax = fig.add_subplot(gs[0, 0])
@@ -110,12 +110,14 @@ def fig_sae(log):
         sparse[i] = rng.uniform(0.55, 1.0)
     dense_out = dense_in + rng.normal(0, 0.05, 40)
 
+    # Labels are kept SHORT and stacked: at slide scale a long one-line label under the
+    # middle strip runs into its neighbours and the three read as a single jumbled line.
     strip(0.25, 3.6, 2.1, 1.15, dense_in, BLUE, BLUE)
-    ax.text(1.3, 3.25, "residual stream\n768 numbers, all busy",
+    ax.text(1.3, 3.25, "residual stream\n768 numbers,\nall busy",
             ha="center", va="top", fontsize=10, color=BLUE)
 
     strip(3.55, 3.6, 3.6, 1.15, sparse, ORANGE, ORANGE)
-    ax.text(5.35, 3.25, "24,576 latents - almost all exactly zero",
+    ax.text(5.35, 3.25, "24,576 latents\nalmost all exactly zero",
             ha="center", va="top", fontsize=10, color="#B37A00")
 
     strip(8.35, 3.6, 1.4, 1.15, dense_out, GREEN, GREEN)
@@ -129,10 +131,10 @@ def fig_sae(log):
 
     ax.text(5.0, 5.55, "Trade one busy vector for a very wide, very empty one",
             ha="center", fontsize=12.5)
-    ax.text(5.0, 1.95, "trained on two things at once:", ha="center", fontsize=10.5, color=GREY)
-    ax.text(5.0, 1.30, "rebuild the input   +   keep almost every latent at zero",
+    ax.text(5.0, 1.72, "trained on two things at once:", ha="center", fontsize=10.5, color=GREY)
+    ax.text(5.0, 1.12, "rebuild the input   +   keep almost every latent at zero",
             ha="center", fontsize=11.5)
-    ax.text(5.0, 0.45,
+    ax.text(5.0, 0.32,
             "Nothing supervises what the latents mean. Sparsity alone does the work.",
             ha="center", fontsize=10, color=GREY, style="italic")
 
