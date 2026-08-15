@@ -49,6 +49,10 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
    ```
 
    If you change that heuristic, re-run it on `ml/ch19_mech_interp` (which has no full-bleed frames and must stay at 0) to prove it did not go blind. See `_learnings/2026-08-14-0315_the-footer-detector-cannot-see-a-full-bleed-frame.md`.
+
+   **`detect_clipped_slides.py` needs the SOURCE, not just the PDF** - it compares the two. It accepts a directory, a `.tex`, or a `.pdf` (whose sibling `.tex` it finds), and **raises** on anything else. Before 2026-08-14 it silently reported "0 flagged" for any argument it could not parse, including a `.pdf` path and a path that did not exist, so several decks were recorded "clean" by a run that checked nothing. If it ever prints 0 without naming the `.tex` files it checked, do not believe it.
+
+   Baseline as of 2026-08-14: `ch13`-`ch20` run 0-2 flags; the older chapters (`01`-`08`, `ch11`) run 8-18 and have **not** been triaged. At least one is real: `ch11_rl/L32` page 12 loses "and the loss grows linearly forever." off the bottom of a `tcolorbox`.
 2b. **Acronym check** (mechanical, 10 seconds - the style rule alone has not been enough):
 
    ```bash
