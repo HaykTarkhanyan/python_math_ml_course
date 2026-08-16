@@ -1,16 +1,25 @@
-"""Figures for Lecture 1 -- Classical time series (30_classical_time_series).
+"""Figures for Lecture 1 -- Classical time series (29_classical_time_series).
 
 Generates PDFs into ml/08_time_series/fig/:
   ts_anatomy.pdf       -- one series annotated: trend + seasonality + noise.
+  season_vs_cycle.pdf  -- fixed-period season vs variable-period cycle, side by side.
   stl_decomposition.pdf-- STL: observed / trend / seasonal / residual.
   stationarity.pdf     -- stationary vs 3 kinds of non-stationary.
   differencing.pdf     -- non-stationary series -> differenced, ADF *and* KPSS p-values.
   over_differencing.pdf-- what differencing one time too many does to the variance.
+  rolling_mean.pdf     -- the ORDINARY moving average: sliding window, then smoothing.
   acf_pacf.pdf         -- ACF & PACF of an AR(2) process (how to read the orders).
+  lag_scatter.pdf      -- where autocorrelation comes from: y_t vs y_{t-k} scatters.
   acf_pacf_series.pdf  -- ACF & PACF of OUR OWN series, raw and after (1-B)(1-B^12).
   ar_vs_ma.pdf         -- AR(1) persistence vs MA(1) echo, sample paths.
   arima_forecast.pdf   -- SARIMA forecast on a held-out tail, with 95% interval.
   exp_smoothing.pdf    -- SES / Holt / Holt-Winters forecasts compared.
+  ses_weights.pdf      -- geometrically decaying weights for three values of alpha.
+  alpha_search.pdf     -- how alpha is actually chosen: SSE(alpha) curve with a minimum.
+  ma_invertibility.pdf -- recovering the MA shocks from a wrong seed, and why |theta|<1.
+
+NOTE (2026-08-14): over_differencing.pdf is still generated and still logs the std
+values the deck quotes in prose, but its frame was cut, so no slide embeds it now.
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
     ./ma/Scripts/python.exe ml/08_time_series/py_src/classical_figs.py
@@ -195,18 +204,37 @@ def fig_differencing(series: pd.Series, log: logging.Logger) -> None:
     log.info(f"ADF  p raw={p_raw:.3f}  differenced={p_diff:.3f}")
     log.info(f"KPSS p raw {k_raw}      differenced {k_diff}")
 
-    fig, axes = plt.subplots(2, 1, figsize=(8.5, 5.0), sharex=False)
-    axes[0].plot(series.index, series.values, color=ARM_RED, lw=1.4)
+    # sharex + point markers + one worked subtraction, so a student can trace how a
+    # value in the lower panel is built from two neighbouring values in the upper one
+    fig, axes = plt.subplots(2, 1, figsize=(8.5, 5.0), sharex=True)
+    axes[0].plot(series.index, series.values, color=ARM_RED, lw=1.4,
+                 marker="o", ms=2.6)
     axes[0].set_title(f"Original: trending.   ADF p = {p_raw:.2f} (cannot reject "
                       f"non-stationary)   KPSS p {k_raw} (rejects stationary)",
                       fontsize=10.5, loc="left", color=ARM_RED)
-    axes[1].plot(d1.index, d1.values, color=ARM_BLUE, lw=1.1)
+    axes[1].plot(d1.index, d1.values, color=ARM_BLUE, lw=1.1, marker="o", ms=2.6)
     axes[1].axhline(0, color="k", lw=0.6)
     axes[1].set_title(f"After 1st differencing $y_t - y_{{t-1}}$.   ADF p = {p_diff:.3f} "
                       f"(stationary)   KPSS p {k_diff} (agrees)",
                       fontsize=10.5, loc="left", color=ARM_BLUE)
+
+    j = 40                                   # the point we walk through explicitly
+    t_now, t_prev = series.index[j], series.index[j - 1]
+    y_now, y_prev = series.iloc[j], series.iloc[j - 1]
     for ax in axes:
+        ax.axvline(t_now, color=GREY, ls=":", lw=1.2)
+        ax.axvline(t_prev, color=GREY, ls=":", lw=1.2)
+        ax.grid(axis="x", alpha=0.35)
         ax.tick_params(labelsize=9.5)
+    axes[0].plot([t_prev, t_now], [y_prev, y_now], "o", color="k", ms=6, zorder=5)
+    axes[0].annotate(f"{y_prev:.0f} $\\to$ {y_now:.0f}", xy=(t_now, y_now),
+                     xytext=(6, -14), textcoords="offset points",
+                     fontsize=9.5, color="k")
+    axes[1].plot([t_now], [y_now - y_prev], "o", color="k", ms=6, zorder=5)
+    axes[1].annotate(f"{y_now:.0f} $-$ {y_prev:.0f} $=$ {y_now - y_prev:+.0f}",
+                     xy=(t_now, y_now - y_prev), xytext=(6, 6),
+                     textcoords="offset points", fontsize=9.5, color="k")
+    log.info(f"differencing walkthrough: {y_now:.1f} - {y_prev:.1f} = {y_now-y_prev:+.1f}")
     fig.text(0.5, -0.02, "Two tests, opposite nulls. Agreement is the evidence you want; "
              "disagreement means look again.", ha="center", fontsize=9.5, color=GREY)
     fig.tight_layout()
@@ -383,6 +411,314 @@ def fig_ar_vs_ma(log: logging.Logger) -> None:
     save(fig, "ar_vs_ma.pdf", log)
 
 
+def fig_season_vs_cycle(log: logging.Logger) -> None:
+    """Seasonality repeats on a FIXED period; a cycle does not.
+
+    Exists because the four-components frame names a cycle that ts_anatomy.pdf does
+    not contain (the running series has no cycle in it). Rather than fake one into
+    the running example, the distinction gets its own picture.
+    """
+    rng = np.random.default_rng(SEED)
+    n = 240
+    t = np.arange(n)
+
+    seasonal = 10 * np.sin(2 * np.pi * t / 12) + rng.normal(0, 1.0, n)
+    # incommensurate periods -> swings that never line up on a fixed grid
+    cyclic = (10 * np.sin(2 * np.pi * t / 47)
+              + 6 * np.sin(2 * np.pi * t / 83 + 1.1)
+              + rng.normal(0, 1.0, n))
+
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 3.4), sharey=True)
+
+    axes[0].plot(t, seasonal, color=ARM_ORANGE, lw=1.3)
+    for k in range(0, n, 12):
+        axes[0].axvline(k, color=GREY, ls=":", lw=0.9)
+    axes[0].set_title("Seasonality: period is FIXED (every 12 steps)",
+                      fontsize=11, loc="left", color=ARM_ORANGE)
+    axes[0].annotate("", xy=(12, -14.5), xytext=(24, -14.5),
+                     arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.2))
+    axes[0].text(18, -13.6, "12", ha="center", va="bottom", fontsize=9, color=GREY)
+
+    axes[1].plot(t, cyclic, color=ARM_RED, lw=1.3)
+    # mark the actual peaks and label the (unequal) gaps between them
+    peaks = []
+    for i in range(3, n - 3):
+        window = cyclic[i - 3:i + 4]
+        if cyclic[i] == window.max() and cyclic[i] > 6:
+            if not peaks or i - peaks[-1] > 15:
+                peaks.append(i)
+    for pk in peaks:
+        axes[1].axvline(pk, color=GREY, ls=":", lw=0.9)
+    for a, b in zip(peaks, peaks[1:]):
+        axes[1].annotate("", xy=(a, -14), xytext=(b, -14),
+                         arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.2))
+        axes[1].text((a + b) / 2, -14, f"{b - a}", ha="center", va="center",
+                     fontsize=9, color=GREY,
+                     bbox=dict(facecolor="white", edgecolor="none", pad=1.5))
+    axes[1].set_title("Cycle: swings with NO fixed period",
+                      fontsize=11, loc="left", color=ARM_RED)
+    log.info(f"season_vs_cycle: cycle peak gaps = "
+             f"{[b - a for a, b in zip(peaks, peaks[1:])]}")
+
+    for ax in axes:
+        ax.set_xlabel("month")
+        ax.tick_params(labelsize=9.5)
+    fig.text(0.5, -0.04, "You can put a season on a calendar. You cannot put a cycle on one - "
+             "which is why only the season gets modelled explicitly.",
+             ha="center", fontsize=9.5, color=GREY)
+    fig.tight_layout()
+    save(fig, "season_vs_cycle.pdf", log)
+
+
+def fig_rolling_mean(series: pd.Series, log: logging.Logger) -> None:
+    """The ORDINARY moving average, shown before ARIMA's MA(q) hijacks the name."""
+    roll3 = series.rolling(3).mean()
+    roll12 = series.rolling(12).mean()
+
+    fig, axes = plt.subplots(1, 2, figsize=(10.6, 3.6))
+
+    axes[0].plot(series.index, series.values, color=GREY, lw=1.0, alpha=0.6, label="raw $y_t$")
+    axes[0].plot(roll3.index, roll3.values, color=ARM_ORANGE, lw=1.6, label="rolling(3)")
+    axes[0].plot(roll12.index, roll12.values, color=ARM_RED, lw=2.2, label="rolling(12)")
+    axes[0].set_title("A wider window smooths harder", fontsize=11, loc="left")
+    axes[0].legend(fontsize=9.5, loc="upper left")
+    axes[0].tick_params(labelsize=9)
+    axes[0].xaxis.set_major_locator(plt.MaxNLocator(4))
+
+    # right panel: the arithmetic, on 3 consecutive windows of width 3.
+    # The windows are drawn as brackets BELOW the curve rather than full-height
+    # shading - three overlapping axvspans just made a muddy stripe.
+    lo = 24
+    seg = series.iloc[lo:lo + 8]
+    x = np.arange(len(seg))
+    axes[1].plot(x, seg.values, "o-", color=ARM_BLUE, lw=1.6, ms=6)
+    for i, v in enumerate(seg.values):
+        axes[1].annotate(f"{v:.0f}", (i, v), textcoords="offset points",
+                         xytext=(0, 8), ha="center", fontsize=8.5, color=ARM_BLUE)
+
+    base, drop = seg.values.min() - 3, 2.6
+    for j, c in zip((0, 1, 2), (ARM_ORANGE, ARM_RED, GREY)):
+        m = seg.values[j:j + 3].mean()
+        yb = base - j * drop
+        axes[1].plot([j, j + 2], [yb, yb], color=c, lw=3, solid_capstyle="butt")
+        axes[1].plot([j + 2], [yb], ">", color=c, ms=7)
+        axes[1].text(j + 2.25, yb, f"mean = {m:.1f}", va="center",
+                     fontsize=9, color=c)
+        log.info(f"rolling demo window {j}: mean of "
+                 f"{np.round(seg.values[j:j + 3], 1)} = {m:.2f}")
+    axes[1].set_ylim(base - 3 * drop - 1, seg.values.max() + 4)
+    axes[1].set_xlim(-0.6, 9.2)
+    axes[1].set_title("the window of 3 slides one step at a time",
+                      fontsize=11, loc="left")
+    axes[1].set_xlabel("step")
+    axes[1].tick_params(labelsize=9)
+
+    fig.suptitle("The moving (rolling) average: a sliding mean of the VALUES", fontsize=12.5)
+    fig.tight_layout()
+    save(fig, "rolling_mean.pdf", log)
+
+
+def fig_lag_scatter(series: pd.Series, log: logging.Logger) -> None:
+    """Where the ACF comes from: one scatter per lag, one correlation per scatter."""
+    lags = (1, 6, 12)
+    fig, axes = plt.subplots(1, 4, figsize=(12.6, 3.2))
+
+    for ax, k, c in zip(axes[:3], lags, (ARM_BLUE, ARM_ORANGE, ARM_RED)):
+        x, y = series.shift(k).values, series.values
+        ok = ~np.isnan(x)
+        r = np.corrcoef(x[ok], y[ok])[0, 1]
+        ax.plot(x[ok], y[ok], "o", color=c, ms=3.5, alpha=0.75)
+        ax.set_title(f"lag {k}:  r = {r:+.2f}", fontsize=11, loc="left", color=c)
+        ax.set_xlabel(f"$y_{{t-{k}}}$", fontsize=10)
+        ax.tick_params(labelsize=9)
+        log.info(f"lag_scatter: lag {k:2d} r = {r:+.3f}")
+    axes[0].set_ylabel("$y_t$", fontsize=10)
+
+    vals = acf(series, nlags=24)
+    ci = 1.96 / np.sqrt(len(series))
+    ax = axes[3]
+    ax.vlines(np.arange(len(vals)), 0, vals, color=GREY, lw=1.8)
+    ax.plot(np.arange(len(vals)), vals, "o", color=GREY, ms=3)
+    for k, c in zip(lags, (ARM_BLUE, ARM_ORANGE, ARM_RED)):
+        ax.vlines(k, 0, vals[k], color=c, lw=3.2)
+        ax.plot([k], [vals[k]], "o", color=c, ms=6)
+    ax.axhline(0, color="k", lw=0.6)
+    ax.axhspan(-ci, ci, color="grey", alpha=0.15)
+    ax.set_title("all lags at once = the ACF", fontsize=11, loc="left")
+    ax.set_xlabel("lag", fontsize=10)
+    ax.tick_params(labelsize=9)
+
+    fig.suptitle("One scatter per lag; collect the correlations and you have drawn the ACF",
+                 fontsize=12.5)
+    fig.tight_layout()
+    save(fig, "lag_scatter.pdf", log)
+
+
+def fig_ses_weights(log: logging.Logger) -> None:
+    """Why it is called EXPONENTIAL smoothing: the weights decay geometrically."""
+    k = np.arange(0, 16)
+    fig, ax = plt.subplots(figsize=(8.4, 3.4))
+    for alpha, c in [(0.2, ARM_BLUE), (0.5, ARM_ORANGE), (0.8, ARM_RED)]:
+        w = alpha * (1 - alpha) ** k
+        ax.plot(k, w, "o-", color=c, lw=1.8, ms=5,
+                label=rf"$\alpha={alpha}$  (weight on $y_{{t-1}}$ = {w[0]:.2f})")
+        log.info(f"ses weights alpha={alpha}: first four = {np.round(w[:4], 3)}, "
+                 f"sum over 16 lags = {w.sum():.3f}")
+    ax.set_xlabel("how many steps back ($k$)")
+    ax.set_ylabel(r"weight $\alpha(1-\alpha)^k$")
+    ax.set_title(r"Every past value counts, but geometrically less. Weights sum to 1.",
+                 fontsize=12, loc="left")
+    ax.legend(fontsize=10)
+    ax.tick_params(labelsize=10)
+    fig.tight_layout()
+    save(fig, "ses_weights.pdf", log)
+
+
+def _ses_sse(y: np.ndarray, alpha: float) -> float:
+    """One-step-ahead sum of squared errors for SES, level initialised at y[0]."""
+    level, sse = y[0], 0.0
+    for t in range(1, len(y)):
+        sse += (y[t] - level) ** 2
+        level = alpha * y[t] + (1 - alpha) * level
+    return sse
+
+
+TOY = np.array([10.0, 14.0, 12.0, 18.0, 16.0])
+
+
+def fig_alpha_search(log: logging.Logger) -> None:
+    """How alpha is ACTUALLY chosen: score every candidate, keep the best.
+
+    Uses the same 5-point toy series the deck works by hand, so the two numbers on
+    the slide are literally two points on this curve.
+    """
+    grid = np.linspace(0.01, 1.0, 400)
+    sse = np.array([_ses_sse(TOY, a) for a in grid])
+    best_a, best_sse = grid[sse.argmin()], sse.min()
+    log.info(f"alpha_search: optimum alpha = {best_a:.3f} (SSE {best_sse:.2f}); "
+             f"SSE(0.2) = {_ses_sse(TOY, 0.2):.2f}, SSE(0.8) = {_ses_sse(TOY, 0.8):.2f}, "
+             f"SSE(1.0) = {_ses_sse(TOY, 1.0):.2f}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(10.6, 3.6))
+
+    steps = np.arange(1, len(TOY) + 1)
+    axes[0].plot(steps, TOY, "o-", color="k", lw=2.0, ms=6, label="actual $y_t$")
+    for alpha, c in [(0.2, ARM_BLUE), (0.8, ARM_RED)]:
+        level, preds = TOY[0], [np.nan]
+        for t in range(1, len(TOY)):
+            preds.append(level)
+            level = alpha * TOY[t] + (1 - alpha) * level
+        axes[0].plot(steps, preds, "s--", color=c, lw=1.6, ms=5,
+                     label=rf"$\alpha={alpha}$: SSE {_ses_sse(TOY, alpha):.1f}")
+    axes[0].set_title("Two candidate $\\alpha$ on a 5-point series", fontsize=11, loc="left")
+    axes[0].set_xlabel("t")
+    axes[0].set_xticks(steps)
+    axes[0].legend(fontsize=9.5, loc="upper left")
+    axes[0].tick_params(labelsize=9.5)
+
+    axes[1].plot(grid, sse, color=ARM_ORANGE, lw=2.2)
+    for alpha, c in [(0.2, ARM_BLUE), (0.8, ARM_RED)]:
+        axes[1].plot([alpha], [_ses_sse(TOY, alpha)], "s", color=c, ms=9, zorder=5)
+    axes[1].plot([best_a], [best_sse], "*", color=ARM_BLUE, ms=18, zorder=6)
+    axes[1].annotate(rf"best $\alpha$ = {best_a:.2f}", xy=(best_a, best_sse),
+                     xytext=(best_a - 0.42, best_sse + 12), fontsize=10, color=ARM_BLUE,
+                     arrowprops=dict(arrowstyle="->", color=ARM_BLUE))
+    axes[1].set_xlabel(r"$\alpha$")
+    axes[1].set_ylabel("SSE of one-step errors")
+    axes[1].set_title(r"The optimiser just walks down this curve", fontsize=11, loc="left")
+    axes[1].tick_params(labelsize=9.5)
+
+    fig.suptitle("Fitting a smoothing parameter: no formula, a search", fontsize=12.5)
+    fig.tight_layout()
+    save(fig, "alpha_search.pdf", log)
+
+
+def fig_ma_invertibility(log: logging.Logger) -> None:
+    """Can the MA shocks actually be recovered, and what |theta| < 1 is really for.
+
+    Builds MA(1) data from a shock sequence we keep, then re-derives the shocks with
+    the recursion the deck teaches, deliberately seeded with the WRONG value eps_0=0.
+    The seed error is multiplied by theta at every step, so it dies out when
+    |theta| < 1 and explodes when it is not. That is the whole content of the
+    invertibility condition, and it is measured here rather than asserted.
+    """
+    rng = np.random.default_rng(SEED)
+    n = 60
+    c_true = 50.0
+    eps_true = rng.normal(0, 1.0, n + 1)          # eps_true[0] is the pre-sample shock
+
+    def build(theta: float) -> np.ndarray:
+        return np.array([c_true + eps_true[t + 1] + theta * eps_true[t]
+                         for t in range(n)])
+
+    def recover(y: np.ndarray, theta: float, eps0: float = 0.0) -> np.ndarray:
+        eps = np.empty(len(y))
+        prev = eps0
+        for t in range(len(y)):
+            eps[t] = y[t] - c_true - theta * prev
+            prev = eps[t]
+        return eps
+
+    FLOOR = 1e-17          # so exact zeros survive a log axis
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 3.5))
+
+    for theta, col in [(0.3, ARM_BLUE), (0.7, ARM_ORANGE), (0.9, ARM_RED)]:
+        err = np.abs(recover(build(theta), theta) - eps_true[1:])
+        axes[0].semilogy(np.arange(n), np.maximum(err, FLOOR), color=col, lw=1.9,
+                         label=rf"$\theta={theta}$")
+        log.info(f"invertible theta={theta}: recovery error t=0 {err[0]:.2e}, "
+                 f"t=20 {err[20]:.2e}, t=40 {err[40]:.2e}")
+    axes[0].set_title(r"$|\theta| < 1$: the wrong seed is forgotten",
+                      fontsize=11, loc="left", color=ARM_BLUE)
+    axes[0].set_xlabel("t")
+    axes[0].set_ylabel(r"$|\hat\varepsilon_t - \varepsilon_t|$")
+    axes[0].legend(fontsize=9.5)
+    axes[0].tick_params(labelsize=9)
+
+    theta_bad = 1.3
+    err_bad = np.abs(recover(build(theta_bad), theta_bad) - eps_true[1:])
+    axes[1].semilogy(np.arange(n), np.maximum(err_bad, FLOOR), color=ARM_RED, lw=2.2)
+    axes[1].set_title(r"$\theta = 1.3$, and the $\theta$ is CORRECT: it explodes",
+                      fontsize=11, loc="left", color=ARM_RED)
+    axes[1].set_xlabel("t")
+    axes[1].tick_params(labelsize=9)
+    log.info(f"non-invertible theta={theta_bad}: error t=20 {err_bad[20]:.2e}, "
+             f"t=40 {err_bad[40]:.2e}, t=59 {err_bad[59]:.2e}")
+
+    # No suptitle: the slide title already frames this, and the frame needs the room.
+    fig.tight_layout()
+    save(fig, "ma_invertibility.pdf", log)
+
+    # the recovered shocks ARE the one-step-ahead forecast errors - assert it
+    theta = 0.7
+    y = build(theta)
+    eps_hat = recover(y, theta)
+    yhat = c_true + theta * np.concatenate([[0.0], eps_hat[:-1]])
+    gap = float(np.abs((y - yhat) - eps_hat).max())
+    if gap > 1e-10:
+        raise AssertionError(f"recovered shocks are not the one-step errors: {gap}")
+    log.info(f"recovered eps == one-step forecast errors to {gap:.1e}")
+
+
+def log_ar_by_ols(series: pd.Series, log: logging.Logger) -> None:
+    """No figure - just the numbers the 'AR is only least squares' frame quotes.
+
+    Fitting AR(1) two ways: plain OLS on a lag column (what the slide claims you can
+    do) and statsmodels' exact maximum likelihood (what the library actually runs).
+    The slide quotes both, so both get measured here rather than asserted.
+    """
+    y = series.values
+    X = np.column_stack([np.ones(len(y) - 1), y[:-1]])
+    c_ols, phi_ols = np.linalg.lstsq(X, y[1:], rcond=None)[0]
+
+    from statsmodels.tsa.arima.model import ARIMA
+    phi_mle = ARIMA(series, order=(1, 0, 0)).fit().params["ar.L1"]
+
+    log.info(f"AR(1) by OLS on a lag column: c = {c_ols:.3f}, phi = {phi_ols:.4f}")
+    log.info(f"AR(1) by statsmodels exact MLE: phi = {phi_mle:.4f} "
+             f"(gap = {abs(phi_mle - phi_ols):.4f})")
+
+
 def main() -> None:
     log = setup_logging()
     np.random.seed(SEED)
@@ -390,15 +726,22 @@ def main() -> None:
     series = synthetic_monthly()
     series.to_csv(CH_DIR / "data" / "synthetic_monthly_sales.csv", header=True)
     fig_anatomy(series, log)
+    fig_season_vs_cycle(log)
     fig_stl(series, log)
     fig_stationarity(log)
     fig_differencing(series, log)
     fig_over_differencing(series, log)
+    fig_rolling_mean(series, log)
     fig_acf_pacf(log)
+    fig_lag_scatter(series, log)
     fig_acf_pacf_series(series, log)
     fig_ar_vs_ma(log)
     fig_arima_forecast(series, log)
     fig_exp_smoothing(series, log)
+    fig_ses_weights(log)
+    fig_alpha_search(log)
+    fig_ma_invertibility(log)
+    log_ar_by_ols(series, log)
     log.info("classical figures done")
 
 

@@ -1,6 +1,6 @@
-"""Assemble ml/08_time_series/32_electricity_forecast_solution.ipynb.
+"""Assemble ml/08_time_series/31_electricity_forecast_solution.ipynb.
 
-The chapter project for [30]+[31]: one real forecasting problem end to end, English prose
+The chapter project for [29]+[30]: one real forecasting problem end to end, English prose
 (instructor decision 2026-08-05), solution-only walkthrough. Plan: ../CHAPTER_PROJECT_PLAN.md
 
 Structure rule (house pattern, see ch8_autoencoders/py_src/build_sae_nb.py): MANY SMALL CELLS,
@@ -17,7 +17,7 @@ from pathlib import Path
 import nbformat as nbf
 
 CH = Path(__file__).resolve().parents[1]
-OUT = CH / "32_electricity_forecast_solution.ipynb"
+OUT = CH / "31_electricity_forecast_solution.ipynb"
 CELLS = []
 
 
@@ -35,7 +35,7 @@ def code(src):
 md(r"""
 # Chapter project - Forecasting Armenian electricity production
 
-**Lectures [30] and [31], one problem, start to finish.**
+**Lectures [29] and [30], one problem, start to finish.**
 
 Every model in this course so far assumed the rows were interchangeable. This one does not.
 
@@ -61,14 +61,14 @@ Re-fetch it any time with `py_src/fetch_armstat_electricity.py`.
 | Part | What we do | From |
 |---|---|---|
 | 1 | Audit the data before modelling anything | - |
-| 2 | Decompose: trend, seasonality, noise | [30] |
-| 2b | Is the seasonality additive or multiplicative? | [30] |
-| 3 | Stationarity, differencing, reading ACF/PACF | [30] |
-| 4 | **Baseline first**, MASE by hand | [30] |
-| 5 | SARIMA and Holt-Winters | [30] |
-| 6 | Forecasting as supervised learning | [31] |
-| 7 | The extrapolation trap | [31] |
-| 8 | Honest comparison at one horizon | [31] |
+| 2 | Decompose: trend, seasonality, noise | [29] |
+| 2b | Is the seasonality additive or multiplicative? | [29] |
+| 3 | Stationarity, differencing, reading ACF/PACF | [29] |
+| 4 | **Baseline first**, MASE by hand | [29] |
+| 5 | SARIMA and Holt-Winters | [29] |
+| 6 | Forecasting as supervised learning | [30] |
+| 7 | The extrapolation trap | [30] |
+| 8 | Honest comparison at one horizon | [30] |
 | 9 | Verdict | - |
 """)
 
@@ -218,7 +218,7 @@ print(f"dropped {len(series) - len(s)} months from 2010-2013")
 # ======================================================================================
 md(r"""
 ---
-# Part 2 - Anatomy of the series ([30])
+# Part 2 - Anatomy of the series ([29])
 
 Four components: **trend, seasonality, noise** (and cycles, which we will not separate here).
 STL splits the first three apart. `period=12` because the data is monthly.
@@ -342,7 +342,7 @@ this correlation alone.
 # ======================================================================================
 md(r"""
 ---
-# Part 3 - Stationarity and differencing ([30])
+# Part 3 - Stationarity and differencing ([29])
 
 ARIMA needs a stationary series. Test it - do not eyeball it.
 
@@ -486,7 +486,7 @@ So do not argue about it. **Fit both and let the held-out year decide.**
 # ======================================================================================
 md(r"""
 ---
-# Part 4 - The baseline comes first ([30])
+# Part 4 - The baseline comes first ([29])
 
 Before any model: **split, then set a naive baseline.** A forecast without a baseline is not a
 result, it is a number.
@@ -656,7 +656,7 @@ This is the number every model from here on has to beat.
 # ======================================================================================
 md(r"""
 ---
-# Part 5 - Classical models ([30])
+# Part 5 - Classical models ([29])
 
 All fitted on `train` only, all forecasting the same 12 months.
 
@@ -860,7 +860,7 @@ two cases, the worst model in the notebook.
 # ======================================================================================
 md(r"""
 ---
-# Part 6 - Forecasting as supervised learning ([31])
+# Part 6 - Forecasting as supervised learning ([30])
 
 The reframe: build a table where each row is one month, the target is that month's value, and
 the features are things **knowable 12 months earlier**. Then it is an ordinary regression
@@ -1083,7 +1083,7 @@ is often the strongest and it costs 12x the fitting.
 # ======================================================================================
 md(r"""
 ---
-# Part 7 - The extrapolation trap ([31])
+# Part 7 - The extrapolation trap ([30])
 
 ### Predict first
 
@@ -1158,11 +1158,149 @@ the same two features**. The fix was the target, not the model.
 """)
 
 # ======================================================================================
+# Part 7b - Prophet
+# ======================================================================================
+md(r"""
+---
+# Part 7b - Prophet, the industry default ([30])
+
+Prophet is the model you are most likely to meet in a business setting, so it belongs in the
+comparison. It also works on a **completely different principle** from everything above.
+
+SARIMA and Holt-Winters model the *process*: how this month relates to last month. Prophet
+regresses on **time itself**:
+
+$$y_t = g(t) + s(t) + h(t) + \varepsilon_t$$
+
+a piecewise-linear trend `g`, a Fourier seasonality `s`, and holiday dummies `h`. **There is not
+a single lag in it.** Row *t* never looks at row *t-1*, which is why Prophet tolerates gaps and
+irregular spacing that would stop ARIMA dead.
+
+It wants its input in a fixed shape: a frame with columns `ds` (dates) and `y` (values).
+""")
+
+code(r"""
+import warnings, logging
+warnings.filterwarnings("ignore")
+for _n in ("cmdstanpy", "prophet"):        # Prophet's Stan backend is very chatty
+    logging.getLogger(_n).setLevel(logging.CRITICAL)
+from prophet import Prophet
+
+prophet_df = pd.DataFrame({"ds": train.index, "y": train.values})
+prophet_df.head(3)
+""")
+
+md(r"""
+### Do not assume the seasonality mode - check it, again
+
+Part 2b measured this series as **multiplicative**: the swings grow with the level. Prophet has
+exactly that switch, `seasonality_mode`. Part 5 taught us not to trust a diagnostic without
+checking it, and checking costs one extra fit - so fit both.
+
+`weekly` and `daily` seasonality are switched off: this is monthly data, and asking for a weekly
+cycle in it is meaningless.
+
+One reproducibility note that matters more than it looks. Prophet is the only model here that is
+**not deterministic**, and it is random in *two* separate places:
+
+1. It fits through Stan, whose optimiser starts from a **random initial point**. `seed=SEED`
+   in `.fit()` pins that, and with it the point forecast.
+2. Its prediction intervals are not a formula - they are **Monte-Carlo simulated** at predict
+   time, drawing from numpy's generator. `seed=` does *not* reach that, so
+   `np.random.seed(SEED)` is needed as well.
+
+Pin only the first and the MASE stops moving while the interval coverage still flips between
+runs - which is exactly the sort of thing that quietly makes a "reproducible" notebook
+irreproducible.
+""")
+
+code(r"""
+prophet_fits, prophet_fc = {}, {}
+for mode in ["additive", "multiplicative"]:
+    m = Prophet(yearly_seasonality=True, weekly_seasonality=False,
+                daily_seasonality=False, seasonality_mode=mode)
+    m.fit(prophet_df, seed=SEED)   # Stan's optimiser starts from a random point
+    np.random.seed(SEED)           # and the INTERVALS are Monte-Carlo sampled
+    future = m.make_future_dataframe(periods=12, freq="MS")
+    fcst = m.predict(future).tail(12)
+    prophet_fits[mode], prophet_fc[mode] = m, fcst
+    results.append(score(fcst["yhat"].values, f"Prophet ({mode[:3]})"))
+
+pd.DataFrame(results).set_index("model").sort_values("MASE").round(3)
+""")
+
+md(r"""
+**Multiplicative wins again, and decisively** - the same verdict Part 2b's diagnostic gave and
+Part 5's Holt-Winters confirmed. Three independent routes to one conclusion about this series is
+about as much evidence as a 12-point test can offer.
+
+Prophet lands **third overall**: it beats both SARIMA readings and every gradient-boosting model,
+and loses only to the two Holt-Winters fits. That is a fair summary of Prophet's reputation - a
+very strong default that is rarely the outright winner.
+
+### What you get that the other models do not: readable components
+""")
+
+code(r"""
+fig = prophet_fits["multiplicative"].plot_components(prophet_fc["multiplicative"])
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+That figure is Prophet's real selling point. The trend panel and the yearly panel are the model's
+own `g(t)` and `s(t)`, plotted separately - you can put this in front of someone who has never
+heard of a correlogram and they will follow it.
+
+The trend is **piecewise linear**, with the bends placed automatically. Prophet lays down 25
+candidate changepoints across the first 80% of the history and applies a sparse prior that pushes
+most of them to zero. Count how many actually survived.
+""")
+
+code(r"""
+delta = np.abs(prophet_fits["multiplicative"].params["delta"].mean(axis=0))
+active = (delta > 0.01).sum()
+print(f"{active} of {len(prophet_fits['multiplicative'].changepoints)} candidate "
+      f"changepoints are actually doing work")
+""")
+
+md(r"""
+### The catch the textbook warns about, measured on our own data
+
+Hyndman & Athanasopoulos (*fpp3* section 12.2) criticise Prophet for leaving autocorrelation in
+its residuals, which makes its prediction intervals **too narrow**. That is a checkable claim,
+not an opinion: Prophet's default interval is 80%, so roughly 10 of our 12 test months should
+fall inside it.
+""")
+
+code(r"""
+for mode in ["additive", "multiplicative"]:
+    f = prophet_fc[mode]
+    inside = ((test.values >= f["yhat_lower"].values) &
+              (test.values <= f["yhat_upper"].values))
+    print(f"{mode:16s} {inside.sum():2d}/12 months inside the 80% interval "
+          f"({inside.mean()*100:.0f}%, should be 80%)")
+""")
+
+md(r"""
+**Both under-cover**, exactly as the textbook predicts. The interval is advertised as 80% and
+delivers less, so a decision made on Prophet's uncertainty band would be more confident than the
+data justifies.
+
+This is the honest reading of Prophet, and it matches deck [30]: fast, automatic, multi-seasonal,
+genuinely useful, interpretable to a non-specialist - **and not the accuracy champion**. It earns
+its place as a default, not as a conclusion.
+
+*(A caveat on this whole comparison: Prophet was designed for daily business data with strong
+weekly and yearly cycles and years of history. We are giving it 132 monthly points, which is
+towards the thin end of its comfortable range.)*
+""")
+
+# ======================================================================================
 # Part 8 - comparison
 # ======================================================================================
 md(r"""
 ---
-# Part 8 - Honest comparison ([31])
+# Part 8 - Honest comparison ([30])
 
 Every model, one horizon (12 months), one test window (2025), one baseline.
 """)
@@ -1283,16 +1421,20 @@ they, not the prose, are the result.
 
 ### Why the winner won
 
-Holt-Winters is the simplest model in the comparison and it beat everything, including gradient
-boosting. That is not luck, and the explanation is sitting in its own fitted parameters.
+Holt-Winters is the simplest model in the comparison and it beat everything - gradient boosting
+and Prophet included. That is not luck, and the explanation is sitting in its own fitted
+parameters.
 
-Four separate pieces of evidence, gathered independently, all said the same thing about this series:
+Five separate pieces of evidence, gathered independently, all said the same thing about this
+series:
 
 1. Part 2: the seasonal shape is **extremely stable** - peak in December or January, all 16 years.
 2. Part 2b: the swing is a stable **percentage** of the level, i.e. multiplicative.
 3. Part 3: after the seasonal difference the series was **already stationary** - no trend left.
 4. Part 5: both Holt-Winters variants estimated **`beta` = 0.000**, and the multiplicative one set
    **`gamma` = 0.000** as well. Offered trend and seasonal adaptation, it took neither.
+5. Part 7b: Prophet, a model built on completely different principles, also scored far better
+   multiplicative than additive - a third independent vote for the same reading.
 
 Put those together and the series is: *a level that drifts slowly, times a fixed seasonal profile,
 plus noise.* The winning model is precisely that and nothing more - one active parameter.

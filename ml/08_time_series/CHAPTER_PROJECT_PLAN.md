@@ -1,9 +1,51 @@
 # Chapter project plan — Forecasting Armenian electricity production
 
-**Status:** BUILT 2026-08-05, then expanded the same day after a pedagogical review.
-`32_electricity_forecast_solution.ipynb`, **104 cells (46 code, 58 markdown), 13 figures**,
-executes end to end in ~45 s on CPU with 0 errors and 0 empty cells. Assembled by
-`py_src/build_forecast_nb.py`, so it can be regenerated rather than hand-patched.
+**Status:** BUILT 2026-08-05, expanded the same day after a pedagogical review, and
+**Prophet added 2026-08-16**. `31_electricity_forecast_solution.ipynb`,
+**116 cells (51 code, 65 markdown), 14 figures**, executes end to end in ~45 s on CPU
+with 0 errors and 0 empty cells. Assembled by `py_src/build_forecast_nb.py`, so it can
+be regenerated rather than hand-patched.
+
+**Run it with `py_src/execute_forecast_nb.py`, not `jupyter nbconvert`.** On this machine
+the `jupyter` entry point resolves to the system Python 3.10, whose
+`jupyter_contrib_nbextensions` is broken (`No module named 'notebook.services'`), so
+nbconvert dies at import — and when piped, the shell reports **exit 0** while leaving
+every cell unexecuted (`execution_count: None`). The nbclient runner executes in-process
+and fails loud if any cell never ran.
+
+## Prophet (Part 7b, added 2026-08-16)
+
+Added on instructor request so the notebook covers deck [30]'s industry-standards section.
+`prophet==1.4.0` was installed into the `ma` venv (pulls `cmdstanpy`, `stanio`, `holidays`);
+it fits this series in under 2 s.
+
+Both seasonality modes are fitted, following the notebook's own rule that a diagnostic is a
+hypothesis. **Multiplicative wins decisively (MASE 0.624 vs 0.942)** — a third independent
+confirmation of the multiplicative reading, after Part 2b's correlation check and
+Holt-Winters' own `mul` win. Prophet lands **third overall**: ahead of both SARIMA readings
+and every boosting model, behind both Holt-Winters fits. That is exactly the deck's verdict
+("a strong, cheap default, not a winner") arrived at by measurement rather than assertion.
+
+**The best moment is the interval check.** *fpp3* §12.2 criticises Prophet for residual
+autocorrelation that leaves its prediction intervals too narrow. The notebook tests it: the
+nominal 80% interval covers **9/12 (75%)** multiplicative and **7/12 (58%)** additive. Both
+under-cover, reproducing the textbook's criticism on the instructor's own data.
+
+**Prophet is the one non-deterministic model here, and it is random in two separate places.**
+Caught because two runs of identical code returned different coverage counts (7/12 vs 8/12).
+
+1. Stan's optimiser starts from a **random initial point** → `m.fit(df, seed=SEED)`. This pins
+   the point forecast (MASE goes to 0.9416 / 0.6243, stable to 4 dp).
+2. The prediction intervals are **Monte-Carlo simulated at predict time** from numpy's RNG, and
+   `seed=` does not reach them → `np.random.seed(SEED)` before `.predict()`.
+
+Fixing only (1) is the trap: MASE stops moving, so it *looks* pinned, while the interval
+coverage still flips between runs. Both together give 7/12 and 9/12 stable over three runs.
+Everything else in the notebook was already deterministic, so this was the single place a rerun
+could contradict the prose.
+
+Caveat stated on the slide and in the notebook: Prophet targets daily data with years of
+history; 132 monthly points is towards the thin end of its range.
 
 ## Expansion pass (instructor asked for more steps and more explanation)
 
@@ -20,7 +62,7 @@ Ten weaknesses found and fixed; the notebook went 62 -> 104 cells.
 - No residual diagnostics after ARIMA. Added Ljung-Box (p = 0.19 / 0.12 / 0.33, all pass) plus a
   residual time-plot, ACF and histogram.
 - SARIMA coefficients were printed and never read. Now each term is explained in words.
-- Recursive vs direct multi-step (a deck [31] topic) was one clause. Now a table and a rationale.
+- Recursive vs direct multi-step (a deck [30] topic) was one clause. Now a table and a rationale.
 - No per-month error breakdown. Added signed-error table, grouped bar chart, and bias reading.
 - Why Holt-Winters won was never explained. Now derived from four independent pieces of evidence.
 - Only one predict-first moment. Added one before the baseline.
@@ -61,8 +103,10 @@ So the notebook fits **both** and lets the held-out year decide. It does, decisi
 |---|---|---|
 | Holt-Winters (mul) | **0.578** | -50.1% |
 | Holt-Winters (add) | 0.609 | -47.4% |
+| **Prophet (mul)** | **0.624** | -46.2% |
 | GBM on differences | 0.806 | -30.4% |
 | SARIMA(0,1,1)(0,1,1)12 | 0.889 | -23.3% |
+| **Prophet (add)** | **0.942** | -18.7% |
 | LightGBM (lag>=12) | 1.059 | -8.6% |
 | seasonal naive | 1.159 | 0.0% |
 | GBM on (t, month) - TRAP | 1.227 | +5.9% |
@@ -90,7 +134,7 @@ Other build notes:
 **Shape:** one solution-only walkthrough notebook (instructor's choice), following the
 `05_interpretability/25_startup_success_solution.ipynb` precedent — a single real project in
 sequential parts, not a list of exercises.
-**Covers:** deck [30] (classical) and deck [31] (ML), in that order.
+**Covers:** deck [29] (classical) and deck [30] (ML), in that order.
 
 ---
 
@@ -108,7 +152,7 @@ sequential parts, not a list of exercises.
 The instructor first chose monthly tourism arrivals. **Armenia does not publish tourism monthly.**
 Verified three ways: armstat's tourism page is quarterly and PDF-only; ArmStatBank's entire Tourism
 folder is one *annual* table (hotels by marz); air passenger transport is also annual. Quarterly
-would give ~40 points — unusable for deck [31]'s lag/rolling/`TimeSeriesSplit` material.
+would give ~40 points — unusable for deck [30]'s lag/rolling/`TimeSeriesSplit` material.
 
 Electricity was selected from a ranking of all 36 sectors in the same table by seasonal amplitude
 and 2020-vs-2019 change. It is the largest and cleanest strongly-seasonal monthly series available.
@@ -143,37 +187,37 @@ step is the one before any modelling.
 ## Notebook outline
 
 **Part 0 — The question and the data.** Forecast monthly electricity production 12 months ahead.
-Load, plot, state the horizon out loud (deck [31] frame "Say your horizon out loud").
+Load, plot, state the horizon out loud (deck [30] frame "Say your horizon out loud").
 
 **Part 1 — Data-quality audit.** Plot yearly totals and YoY growth; find the 2011-2013 ramp; decide
 to cut to 2014+ and *justify it*. Name the nominal-price issue: "trend" here mixes volume and price,
 so any trend claim is about drams, not kilowatt-hours.
 
-**Part 2 — Anatomy ([30]).** STL decomposition into trend / seasonal / residual. Confirm the
+**Part 2 — Anatomy ([29]).** STL decomposition into trend / seasonal / residual. Confirm the
 Dec-Jan peak and that the seasonal shape is stable across years.
 
-**Part 3 — Stationarity ([30]).** ADF **and** KPSS (the deck insists on both), then
+**Part 3 — Stationarity ([29]).** ADF **and** KPSS (the deck insists on both), then
 `(1-B)(1-B^12)` differencing. ACF/PACF on the differenced series to *read* the orders rather than
 grid-searching them. Include the deck's over-differencing warning.
 
-**Part 4 — Baseline first ([30]).** Seasonal naive, then **MASE computed by hand** before using any
+**Part 4 — Baseline first ([29]).** Seasonal naive, then **MASE computed by hand** before using any
 library. Establishes 1.159 as the number every later model must beat. Deck rule: never report a
 model without its naive baseline.
 
-**Part 5 — Classical models ([30]).** SARIMA with the orders read in Part 3; Holt-Winters. Evaluate
+**Part 5 — Classical models ([29]).** SARIMA with the orders read in Part 3; Holt-Winters. Evaluate
 on the *same* held-out 2025, never a random split.
 
-**Part 6 — The ML reframe ([31]).** Forecasting as supervised learning: lag, rolling, and calendar
+**Part 6 — The ML reframe ([30]).** Forecasting as supervised learning: lag, rolling, and calendar
 features. Forward split, and `TimeSeriesSplit` with `gap` — showing why a random split leaks.
 
-**Part 7 — The extrapolation trap ([31]).** Point gradient boosting at the raw trending series and
+**Part 7 — The extrapolation trap ([30]).** Point gradient boosting at the raw trending series and
 watch it flat-line beyond the training range. Then difference first and re-run. This is a
 predict-first moment: ask before showing.
 
-**Part 8 — Honest comparison ([31]).** All models on one table, same horizon, same test window,
+**Part 8 — Honest comparison ([30]).** All models on one table, same horizon, same test window,
 all against the baseline. Report MASE, not just MAPE.
 
-**Part 9 — Intervals ([31]).** A conformal prediction interval for the best ML model, since the
+**Part 9 — Intervals ([30]).** A conformal prediction interval for the best ML model, since the
 deck explicitly says "we still owe you an interval".
 
 **Part 10 — Verdict.** Which won, by how much, and whether a 12-point test is enough to call it.
@@ -198,6 +242,6 @@ naive baseline is to beat* — which is the chapter's real lesson.
    throughout. The chapter page stays Armenian.
 2. **Split confirmed:** train 2014-01..2024-12 (132 months), test 2025 (12 months). 2026 H1 is left
    out of both — it is the most current data but only 6 points.
-3. **Part 9 (conformal intervals) is CUT.** Deck [31] gives it a single frame and it was the
+3. **Part 9 (conformal intervals) is CUT.** Deck [30] gives it a single frame and it was the
    thinnest-taught piece. The notebook ends at the honest comparison plus verdict, renumbered:
    Parts 0-8, with the verdict as Part 9.

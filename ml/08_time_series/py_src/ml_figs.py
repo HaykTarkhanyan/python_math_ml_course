@@ -1,4 +1,4 @@
-"""Figures for Lecture 2 -- ML for time series (31_ml_time_series).
+"""Figures for Lecture 2 -- ML for time series (30_ml_time_series).
 
 Generates PDFs into ml/08_time_series/fig/:
   time_aware_split.pdf   -- random split (leakage) vs forward-chaining split.
@@ -7,7 +7,18 @@ Generates PDFs into ml/08_time_series/fig/:
   gbm_forecast.pdf       -- gradient boosting on lag+calendar features vs actual.
   feature_importance.pdf -- permutation importance on TEST of the engineered features.
   model_comparison.pdf   -- seasonal-naive vs SARIMA vs GBM, all at h=18 (MAE + MASE).
+  prophet_components.pdf -- Prophet's y = g(t) + s(t) + h(t) + noise, one panel each.
+  prophet_changepoints.pdf -- the piecewise-linear trend, and the extrapolation risk.
+  fourier_seasonality.pdf  -- Fourier order vs seasonal shape; two seasons summed.
   deep_ts_timeline.pdf   -- landscape of deep and foundation TS models.
+
+NOTE (2026-08-14): feature_importance.pdf and model_comparison.pdf are still
+generated but no longer embedded -- their frames were cut from the deck.
+
+The three prophet_*/fourier_* figures are drawn from Prophet's published model form
+(piecewise-linear trend with changepoints, Fourier seasonality, holiday dummies).
+They do NOT call Prophet: it is not a repo dependency (it needs a Stan backend), and
+what the slides teach is the model's shape, not one particular fitted output.
 
 Review pass 2026-07-31 fixed three methodology defects that contradicted the slides:
 the seasonal-naive baseline read 6 of its 18 values out of the test window; permutation
@@ -369,7 +380,7 @@ def fig_model_comparison(series: pd.Series, model, feats, gbm_1step, gbm_actual,
     train_series = series.iloc[:-h]
 
     snaive = seasonal_naive_from_origin(series, h)
-    # airline model -- orders read off the correlogram in lecture 30, not guessed.
+    # airline model -- orders read off the correlogram in lecture 29, not guessed.
     # Keep in sync with classical_figs.ORDER / SEASONAL_ORDER.
     sar = SARIMAX(train_series, order=(0, 1, 1), seasonal_order=(0, 1, 1, 12),
                   enforce_stationarity=False, enforce_invertibility=False).fit(disp=False)
@@ -453,6 +464,163 @@ def fig_deep_timeline(log: logging.Logger) -> None:
     save(fig, "deep_ts_timeline.pdf", log)
 
 
+def _piecewise_trend(t: np.ndarray, k: float, m: float,
+                     changepoints: list, deltas: list) -> np.ndarray:
+    """Prophet's g(t): a base slope plus a slope adjustment at each changepoint.
+
+    g(t) = k*t + m + sum_j delta_j * max(0, t - s_j)
+    This is literally Prophet's trend form, so the figure illustrates the real model
+    rather than a lookalike. Nothing here calls Prophet - the package is not a repo
+    dependency (needs a Stan backend), and the model form is what the slide teaches.
+    """
+    if len(changepoints) != len(deltas):
+        raise ValueError(f"{len(changepoints)} changepoints but {len(deltas)} deltas")
+    g = k * t + m
+    for s_j, d_j in zip(changepoints, deltas):
+        g = g + d_j * np.maximum(0.0, t - s_j)
+    return g
+
+
+def _fourier_design(t: np.ndarray, period: float, order: int) -> np.ndarray:
+    """The 2*order sin/cos columns Prophet uses for one seasonality."""
+    cols = []
+    for k in range(1, order + 1):
+        cols.append(np.sin(2 * np.pi * k * t / period))
+        cols.append(np.cos(2 * np.pi * k * t / period))
+    return np.column_stack(cols)
+
+
+def fig_prophet_components(log: logging.Logger) -> None:
+    """Prophet's decomposition: y = g(t) + s(t) + h(t) + noise, one panel each."""
+    rng = np.random.default_rng(SEED)
+    n = 365 * 3
+    t = np.arange(n)
+    idx = pd.date_range("2021-01-01", periods=n, freq="D")
+
+    cps = [380, 700]
+    deltas = [-0.085, 0.055]
+    g = _piecewise_trend(t, k=0.05, m=100.0, changepoints=cps, deltas=deltas)
+    s = 12 * np.sin(2 * np.pi * t / 365.25) + 4 * np.cos(4 * np.pi * t / 365.25)
+
+    h = np.zeros(n)
+    holidays = [d for d in range(n) if idx[d].month == 12 and idx[d].day in (24, 25, 31)]
+    for d in holidays:
+        h[d] += 22.0
+    noise = rng.normal(0, 2.0, n)
+    y = g + s + h + noise
+
+    fig, axes = plt.subplots(4, 1, figsize=(9.0, 6.4), sharex=True)
+    axes[0].plot(idx, y, color=ARM_BLUE, lw=0.8)
+    axes[0].set_ylabel("$y_t$")
+    # No suptitle: the slide states the equation right beside this figure, and
+    # repeating it here just shrinks the panels.
+
+    axes[1].plot(idx, g, color=ARM_RED, lw=2.2)
+    for c in cps:
+        axes[1].axvline(idx[c], color=GREY, ls=":", lw=1.4)
+        # label above the panel, not next to the line - at the 2nd changepoint the
+        # trend passes straight through where an inline label would sit
+        axes[1].text(idx[c], 1.04, "changepoint", transform=
+                     axes[1].get_xaxis_transform(), ha="center", va="bottom",
+                     fontsize=8.5, color=GREY)
+    axes[1].set_ylabel("$g(t)$\ntrend")
+
+    axes[2].plot(idx, s, color=ARM_ORANGE, lw=1.2)
+    axes[2].set_ylabel("$s(t)$\nseason")
+
+    axes[3].plot(idx, h, color=GREEN, lw=1.2)
+    axes[3].set_ylabel("$h(t)$\nholidays")
+    axes[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+
+    fig.align_ylabels(axes)
+    log.info(f"prophet_components: {len(cps)} changepoints at "
+             f"{[str(idx[c].date()) for c in cps]}, {len(holidays)} holiday days")
+    fig.tight_layout()
+    save(fig, "prophet_components.pdf", log)
+
+
+def fig_prophet_changepoints(log: logging.Logger) -> None:
+    """The sharp edge: Prophet extrapolates the LAST trend segment, whatever it is."""
+    n_hist, h = 700, 240
+    t = np.arange(n_hist + h)
+    idx = pd.date_range("2021-01-01", periods=n_hist + h, freq="D")
+
+    # a long rise, then a recent dip that is really temporary
+    cps, deltas = [420, 600], [-0.06, -0.10]
+    g_true = _piecewise_trend(t, k=0.09, m=100.0, changepoints=cps, deltas=deltas)
+    # what actually happens: the dip reverses just after the forecast origin
+    g_actual = g_true.copy()
+    g_actual[n_hist:] = g_true[n_hist] + 0.085 * (t[n_hist:] - n_hist)
+
+    # what Prophet does: continue the final segment's slope
+    slope_last = 0.09 + sum(deltas)
+    g_fc = g_true[n_hist - 1] + slope_last * (t[n_hist:] - (n_hist - 1))
+
+    fig, ax = plt.subplots(figsize=(9.2, 3.8))
+    ax.plot(idx[:n_hist], g_true[:n_hist], color=ARM_BLUE, lw=2.0, label="history")
+    ax.plot(idx[n_hist:], g_actual[n_hist:], color="k", lw=2.2, label="what happens")
+    ax.plot(idx[n_hist:], g_fc, color=ARM_RED, lw=2.4, ls="--",
+            label="Prophet: last segment continued")
+    for c in cps:
+        ax.axvline(idx[c], color=GREY, ls=":", lw=1.2)
+    ax.axvline(idx[n_hist - 1], color=GREY, ls="--", lw=1.4)
+    ax.annotate("forecast origin", xy=(idx[n_hist - 1], ax.get_ylim()[0]),
+                xytext=(-4, 6), textcoords="offset points", fontsize=9,
+                color=GREY, ha="right")
+    ax.set_title("The trend is piecewise linear, and the forecast is the last piece",
+                 fontsize=12.5, loc="left")
+    ax.legend(fontsize=10, loc="upper left")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax.tick_params(labelsize=9.5)
+    gap = g_fc[-1] - g_actual[-1]
+    log.info(f"prophet_changepoints: final-segment slope {slope_last:+.3f}/day, "
+             f"forecast ends {gap:+.1f} below what happens")
+    fig.tight_layout()
+    save(fig, "prophet_changepoints.pdf", log)
+
+
+def fig_fourier_seasonality(log: logging.Logger) -> None:
+    """Why Fourier terms: any repeating shape, and as many periods as you like."""
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 3.5))
+
+    # -- left: raising the Fourier order fits a sharper seasonal shape
+    P = 365.25
+    t = np.arange(int(P))
+    # a deliberately non-sinusoidal season: flat, then a sharp December peak
+    target = np.where(t > 330, 18.0, 0.0) + 4 * np.sin(2 * np.pi * t / P)
+    target = target - target.mean()
+    axes[0].plot(t, target, color="k", lw=2.2, label="true seasonal shape")
+    for order, c in [(1, ARM_BLUE), (3, ARM_ORANGE), (10, ARM_RED)]:
+        X = _fourier_design(t.astype(float), P, order)
+        beta, *_ = np.linalg.lstsq(X, target, rcond=None)
+        fit = X @ beta
+        rmse = float(np.sqrt(np.mean((fit - target) ** 2)))
+        axes[0].plot(t, fit, color=c, lw=1.6, label=f"order {order} (RMSE {rmse:.1f})")
+        log.info(f"fourier order {order:2d}: {2*order} terms, RMSE {rmse:.2f}")
+    axes[0].set_title("One season: more Fourier terms, sharper shape",
+                      fontsize=11, loc="left")
+    axes[0].set_xlabel("day of year")
+    axes[0].legend(fontsize=8.5, loc="upper left")
+    axes[0].tick_params(labelsize=9)
+
+    # -- right: two seasonalities added together, which SARIMA cannot do
+    n = 120
+    d = np.arange(n)
+    weekly = 6 * np.sin(2 * np.pi * d / 7)
+    yearly = 10 * np.sin(2 * np.pi * d / 365.25)
+    axes[1].plot(d, weekly, color=ARM_ORANGE, lw=1.3, label="weekly ($m=7$)")
+    axes[1].plot(d, yearly, color=ARM_BLUE, lw=1.8, label="yearly ($m=365$)")
+    axes[1].plot(d, weekly + yearly, color=ARM_RED, lw=2.0, label="both, added")
+    axes[1].set_title("Many seasons at once -- SARIMA gets exactly one",
+                      fontsize=11, loc="left")
+    axes[1].set_xlabel("day")
+    axes[1].legend(fontsize=9, loc="upper left", ncol=3)
+    axes[1].tick_params(labelsize=9)
+
+    fig.tight_layout()
+    save(fig, "fourier_seasonality.pdf", log)
+
+
 def main() -> None:
     log = setup_logging()
     np.random.seed(SEED)
@@ -462,8 +630,14 @@ def main() -> None:
     fig_supervised_reframe(series, log)
     fig_ts_cv(log)
     dff, d_tr, d_te, m_diff, f_diff, gbm_pred, gbm_actual = fig_gbm_pitfall(series, log)
+    # NOTE (2026-08-14): the frames embedding these two were cut from the deck, so
+    # nothing references their output now. Kept because they still run and still log
+    # the numbers the removed frames quoted, in case the material comes back.
     fig_feature_importance(d_te, m_diff, f_diff, log)
     fig_model_comparison(series, m_diff, f_diff, gbm_pred, gbm_actual, log)
+    fig_prophet_components(log)
+    fig_prophet_changepoints(log)
+    fig_fourier_seasonality(log)
     fig_deep_timeline(log)
     log.info("ml figures done")
 
