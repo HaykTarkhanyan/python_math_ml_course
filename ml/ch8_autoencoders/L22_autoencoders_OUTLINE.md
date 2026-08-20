@@ -42,12 +42,12 @@ attribution line; illustrative schematics are labeled illustrative.
 
 - `[plain]` transition: "Nonlinear PCA" + "You already compressed digits once - this bends the axes."
 - **The bridge, stated.** A linear AE (identity activations) trained with MSE recovers the SAME
-  subspace PCA found in ch4b - max-variance directions. `[callback: ch4b PCA]` `[armblue key box]`
+  subspace PCA found in ch10 dim reduction - max-variance directions. `[callback: ch10 dim reduction PCA]` `[armblue key box]`
 - **Add nonlinearity and it bends.** Nonlinear activations let the AE follow curved manifolds PCA
   cannot. `[predict-first: "PCA on this S-curve - how many components to unroll it?" -> it can't;
   an AE can]` `[fig: S-curve / swiss-roll, PCA projection vs AE projection, matplotlib illustrative]`
 - **Payoff on MNIST.** AE 2D latent scatter colored by class, side by side with the PCA-on-MNIST
-  scatter (both real). Same digit data as ch4b, now full MNIST. `[fig: pca_vs_ae_mnist - PCA side
+  scatter (both real). Same digit data as ch10 dim reduction, now full MNIST. `[fig: pca_vs_ae_mnist - PCA side
   real (cheap), AE side REAL from practical, labeled]`
 - **Honest caveat.** AE latent axes are not orthogonal, not variance-ordered, not unique (another
   run -> a different latent), no explained-variance ranking. PCA gives you those for free; the AE
