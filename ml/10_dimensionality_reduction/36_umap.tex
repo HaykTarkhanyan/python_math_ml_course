@@ -1,0 +1,576 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true,
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[0.9em]
+      \begin{minipage}{0.82\textwidth}\centering\small #2 \end{minipage}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{UMAP, opened up}
+\subtitle{The fuzzy graph $\cdot$ local scales $\cdot$ cross-entropy}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{You have all seen this plot}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    Two-dimensional maps of high-dimensional data are everywhere --- single-cell biology,
+    embedding atlases, every ``here is our latent space'' figure in a paper.
+    \vskip 6pt
+    Most of them are UMAP or t-SNE.
+    \vskip 6pt
+    \textbf{Today:} what is it actually doing, and \emph{which parts of the picture are you
+    allowed to believe?}
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=0.94\textwidth]{fig/borrowed/pair/umap_elephant.png}\\[2pt]
+      {\scriptsize A 3-D elephant and its 2-D UMAP projection. The trunk, legs and ears
+      survive --- from the neighbor graph alone.\\
+      {\tiny Source: \emph{Understanding UMAP}, Coenen \& Pearce (Google PAIR).}}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Where we left off}
+  From L13b: \textbf{Uniform Manifold Approximation and Projection} (\textbf{UMAP}) builds a
+  \textbf{fuzzy nearest-neighbor graph}, then finds a 2-D layout whose graph matches. Faster than
+  t-SNE, keeps more global structure. That was \emph{what it gives you}.
+  \vfill
+  One thing we did not say, and it is the reason UMAP exists:
+  \vskip 4pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    t-SNE minimizes $\mathrm{KL}(P\|Q) = \sum p_{ij}\log\frac{p_{ij}}{q_{ij}}$. Look at what
+    that punishes. If $p_{ij}$ is \textbf{large} and $q_{ij}$ small --- true neighbors torn
+    apart --- the term blows up. But if $p_{ij}$ is \textbf{near zero}, the whole term is near
+    zero \emph{whatever $q_{ij}$ does}. Collapsing two distant points on top of each other is
+    \textbf{free}.}}
+  \vskip 6pt
+  So t-SNE guards local structure and leaves global structure unprotected. UMAP's loss pays for
+  both. Everything else today is machinery in service of that.
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{The manifold assumption}
+\sectiontransition{The manifold assumption}{What UMAP believes about your data before it looks
+at any of it.}
+
+\begin{frame}{What is a manifold?}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    A \textbf{manifold} is a space that \emph{locally} looks like ordinary flat space, even when
+    its \emph{global} shape is curved.
+    \vskip 5pt
+    \textbf{Earth's surface.} Globally a sphere. But the room you are in is flat, and a street map
+    of Yerevan needs no curvature correction.
+    \vskip 5pt
+    \textbf{Face photos.} A $64\times64$ photo is 4096 numbers, but real faces vary along a few
+    knobs --- pose, lighting, expression. The photos live on a thin, curved sheet inside that
+    4096-dimensional space.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{The assumption:} the data is sampled \emph{uniformly} from a manifold --- with
+      respect to a \textbf{locally varying} metric.}}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.82]
+        \draw[armblue!70, very thick, fill=armblue!12]
+          plot[smooth cycle, tension=0.75] coordinates {
+            (0,0.8) (0.8,0) (2.2,0.1) (3.2,0.6) (3.4,1.6) (2.8,2.6) (1.5,2.8) (0.3,2.2)};
+        \draw[armblue!25, thick]
+          plot[smooth, tension=0.9] coordinates {(0.4,0.5) (1.2,0.3) (2.0,0.4) (2.8,0.7)};
+        \draw[armblue!20, thick]
+          plot[smooth, tension=0.9] coordinates {(0.3,1.5) (1.0,1.2) (1.8,1.3) (2.6,1.6)};
+        \draw[armred, very thick, fill=armred!30, fill opacity=0.7]
+          (2.2,0.6) -- (3.0,0.7) -- (2.95,1.2) -- (2.15,1.1) -- cycle;
+        \draw[armred, thick, ->] (3.9,1.7) -- (3.05,1.15);
+        \node[armred, font=\scriptsize, right] at (3.7,1.9) {locally flat};
+        \foreach \p in {(0.6,0.7), (1.3,0.4), (2.5,0.85), (1.0,1.5),
+                        (1.8,1.8), (2.6,2.0), (0.7,2.0), (1.5,2.4)}
+          \fill[black] \p circle (1.8pt);
+        \node[gray, font=\scriptsize, align=center] at (1.7,-0.45)
+          {a 2-D sheet living in\\a high-dimensional space};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why ``locally varying'' is the whole trick}
+  \textbf{Predict-first:} your data is dense in one region and sparse in another. If you insist
+  the sampling is \emph{uniform} everywhere, what must you conclude about distance?
+  \pause
+  \vskip 6pt
+  That your ruler is wrong --- and wrong \textbf{differently in different places}.
+  \vskip 6pt
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    In a \textbf{sparse} region, points are far apart in raw distance. If the sampling is really
+    uniform, those gaps must be \emph{shrunk}: the neighbors are closer than they look.
+    \column{0.48\textwidth}
+    In a \textbf{dense} region, points are packed together. Those gaps must be \emph{stretched}:
+    the neighbors are farther than they look.
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    So each point gets its \textbf{own} distance scale. That is not a hack bolted on for
+    robustness --- it falls straight out of the uniformity assumption, and it is exactly what
+    $\rho_i$ and $\sigma_i$ compute in the next section. It is also why UMAP copes with varying
+    density where a fixed-radius neighborhood does not.}}
+\end{frame}
+
+% ================================================================
+\section{Step 1: building the fuzzy graph}
+\sectiontransition{Step 1 of 2}{Turn the data into a weighted graph, using a different ruler at
+every point.}
+
+\begin{frame}{The running toy}
+  Six points, two clusters, $k=3$ neighbors. Every number on the next five frames is computed
+  from these coordinates.
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/umap_toy_points.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize Within a cluster, distances are around $0.83$ to $1.00$. Between clusters, at
+  least $4.0$. The apexes (C, F) sit slightly off-centre on purpose --- a perfectly symmetric
+  triangle ties two neighbors at the same distance and breaks the $\sigma$ search on the next
+  frames.
+\end{frame}
+
+\begin{frame}{$\rho_i$: nobody is left alone}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \[ \rho_i = \min_{j \in \mathcal{N}_i} d(x_i, x_j) \]
+    the distance to your \textbf{nearest} neighbor.
+    \vskip 5pt
+    Every distance is then measured \emph{from $\rho_i$ outward}: your closest neighbor sits at
+    shifted distance $0$, and so gets weight exactly $\mathbf{1}$.
+    \vskip 5pt
+    \textbf{Why do this at all?} It guarantees every point is connected to something with full
+    strength --- even a point stranded in an empty region. Without it, isolated points would
+    detach from the graph entirely and the layout would have nothing to hold them.
+    \vskip 5pt
+    \footnotesize This is the ``shrink the sparse regions'' half of the previous frame.
+    \column{0.48\textwidth}
+    \begin{center}\small
+      \renewcommand{\arraystretch}{1.25}
+      \begin{tabular}{c l c}
+        \toprule
+        \textbf{point} & \textbf{3 nearest} & $\bm{\rho_i}$ \\
+        \midrule
+        A & C, B, D & 0.918 \\
+        B & C, A, D & 0.971 \\
+        C & A, B, D & 0.918 \\
+        D & F, E, B & 0.832 \\
+        E & F, D, B & 0.890 \\
+        F & D, E, B & 0.832 \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+    \vskip 6pt
+    {\footnotesize Note every point's third neighbor is \emph{across} the gap --- with $k=3$ in a
+    3-point cluster it has to be. Watch what the weights do to it.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{$\sigma_i$: how fast the weight falls off}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \[ p_{j|i} = \exp\!\left(-\frac{\max(d(x_i,x_j)-\rho_i,\,0)}{\sigma_i}\right) \]
+    $\sigma_i$ is the \textbf{local scale}: large $\sigma$ means the weight decays slowly (a wide
+    neighborhood), small $\sigma$ means it drops off a cliff.
+    \vskip 5pt
+    It is not a hyperparameter. It is solved for, per point, by \textbf{binary search} on
+    \[ \sum_{j \in \mathcal{N}_i} p_{j|i} = \log_2 k. \]
+    \vskip 2pt
+    \footnotesize Every point ends up with the same ``amount of neighborhood''
+    ($\log_2 3 = 1.585$), whatever the local density --- the \textbf{stretch the dense regions}
+    half.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/umap_rho_sigma.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{By hand: point A's three weights}
+  With $\rho_A = 0.9179$ and the search returning $\sigma_A = 0.1532$:
+  \vskip 4pt
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{c c c c l}
+      \toprule
+      \textbf{neighbor} & $d(A,j)$ & $d - \rho_A$ & $\bm{p_{j|A}}$ & \\
+      \midrule
+      C & 0.9179 & 0 & $e^{0} = \mathbf{1.000}$ & nearest, by construction \\
+      B & 1.0000 & 0.0821 & $e^{-0.0821/0.1532} = \mathbf{0.585}$ & clearly a neighbor \\
+      D & 5.0000 & 4.0821 & $e^{-4.0821/0.1532} = \mathbf{2.6\!\times\!10^{-12}}$ & a neighbor
+        on paper only \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 6pt
+  Check the constraint: $1.000 + 0.585 + 0.000 = \mathbf{1.585} = \log_2 3$. \checkmark
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    This is how the two clusters separate \emph{without anyone telling UMAP there are two}. D is
+    on A's neighbor list, because with $k=3$ it has to be. But the exponential gives it a weight
+    of $10^{-12}$, so the edge exists on paper and carries nothing.}}
+\end{frame}
+
+\begin{frame}{Symmetrization: whose opinion counts?}
+  $p_{j|i}$ is \textbf{directional}. A can think B is a close neighbor while B, sitting in a
+  denser patch, does not return the compliment. UMAP resolves it with a \textbf{fuzzy union}
+  (a probabilistic OR):
+  \[ p_{ij} = p_{j|i} + p_{i|j} - p_{j|i}\,p_{i|j} \]
+  \begin{center}
+    \begin{tikzpicture}[scale=0.72, every node/.style={font=\small}]
+      \node[circle, draw, fill=armblue!20, minimum size=7mm] (i) at (0,0) {$i$};
+      \node[circle, draw, fill=armblue!20, minimum size=7mm] (j) at (2.6,0) {$j$};
+      \draw[->, very thick, armblue] (i) to[bend left=20]
+        node[above, font=\scriptsize] {$p_{j\mid i}$} (j);
+      \draw[->, very thick, armred] (j) to[bend left=20]
+        node[below, font=\scriptsize] {$p_{i\mid j}$} (i);
+      \node[font=\scriptsize, gray] at (1.3,-1.35) {two directed weights};
+      \draw[->, thick, gray] (3.6,0) -- (5.0,0);
+      \node[circle, draw, fill=armblue!20, minimum size=7mm] (i2) at (6.0,0) {$i$};
+      \node[circle, draw, fill=armblue!20, minimum size=7mm] (j2) at (8.6,0) {$j$};
+      \draw[very thick, violet1] (i2) -- node[above, font=\scriptsize] {$p_{ij}$} (j2);
+      \node[font=\scriptsize, gray] at (7.3,-1.35) {one undirected weight};
+    \end{tikzpicture}
+  \end{center}
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \small \textbf{Read it as:} the edge is strong if \emph{either} endpoint considers the other
+    a neighbor.
+    \column{0.50\textwidth}
+    \small On the toy $p_{B|A} = p_{A|B} = 0.585$, so
+    \[ p_{AB} = 0.585 + 0.585 - 0.585^2 = \mathbf{0.828}, \]
+    stronger than either direction alone. And $p_{AD} = \mathbf{0.0000}$.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The finished graph}
+  \begin{center}
+    \includegraphics[width=\textwidth]{fig/umap_toy_graph.pdf}
+  \end{center}
+  \vskip -6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{This weighted graph is the entire high-dimensional input from here on.} UMAP never
+    looks at the original coordinates again. Whatever the graph failed to capture is gone --- so
+    if $k$ was badly chosen, no amount of optimizing can recover it.}}
+\end{frame}
+
+% ================================================================
+\section{Step 2: finding the layout}
+\sectiontransition{Step 2 of 2}{Lay the graph out in 2-D, and let attraction and repulsion fight
+to a draw.}
+
+\begin{frame}{The low-dimensional kernel}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    Put the points at positions $y_i \in \R^2$ and define the low-dimensional similarity
+    \[ q_{ij} = \frac{1}{1 + a\,\|y_i - y_j\|^{2b}} \]
+    \vskip 3pt
+    $a$ and $b$ are \textbf{not} yours to set. UMAP fits them so the curve matches the shape you
+    asked for with \texttt{min\_dist}:
+    \vskip 3pt
+    {\footnotesize
+    \begin{tabular}{l c c}
+      \toprule
+      \texttt{min\_dist} & $a$ & $b$ \\
+      \midrule
+      0.0 & 1.933 & 0.791 \\
+      0.8 & 0.232 & 1.681 \\
+      \bottomrule
+    \end{tabular}}
+    \vskip 5pt
+    \footnotesize A heavy tail, like t-SNE's Student-$t$: distant pairs are allowed to be
+    genuinely distant without the loss exploding.
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/umap_lowdim_kernel.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The loss: cross-entropy, and its two halves}
+  \[
+    \mathcal{L} = -\sum_{i<j}\Big[\underbrace{p_{ij}\log q_{ij}}_{\text{attraction}}
+    + \underbrace{(1-p_{ij})\log(1-q_{ij})}_{\text{repulsion}}\Big]
+  \]
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \vskip -4pt
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/umap_attract_repel.pdf}
+    \end{center}
+    \column{0.52\textwidth}
+    \textbf{Attraction} bites when $p_{ij}$ is large and $q_{ij}$ small: true neighbors placed
+    far apart. Pulls them together.
+    \vskip 4pt
+    \textbf{Repulsion} bites when $p_{ij}$ is small and $q_{ij}$ large: strangers placed on top
+    of each other. Pushes them apart.
+    \vskip 6pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
+      \textbf{This is the payoff from frame 2.} t-SNE's KL has only the first term. Its second
+      term is missing, so nothing in t-SNE's objective objects to two unrelated clusters landing
+      next to each other. UMAP's does, and that is where the extra global structure comes from.}}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Intuition: springs and magnets}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    \textbf{Springs.} Every strong edge is a spring pulling its two points together. Strength
+    $\propto p_{ij}$.
+    \vskip 4pt
+    \textbf{Magnets.} Every pair repels, gently. Without this the whole layout collapses to a
+    point, which would make the loss's first term perfectly happy.
+    \vskip 6pt
+    \textbf{Solved by SGD}, and here is the trick that makes it fast:
+    \begin{itemize}\small
+      \item sample \textbf{positive} edges in proportion to $p_{ij}$ --- so weak edges are
+        mostly skipped;
+      \item for repulsion, do not sum over all pairs. Sample a handful of \textbf{random}
+        pairs and push those apart (\textbf{negative sampling}).
+    \end{itemize}
+    \vskip 4pt
+    \footnotesize That is what buys UMAP its scaling. The exact loss is $O(n^2)$ in pairs;
+    negative sampling estimates it in roughly $O(n)$ work per epoch.
+    \column{0.44\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.82]
+        \node[circle, draw=armblue, fill=armblue!30, minimum size=8mm] (A) at (0,0) {A};
+        \node[circle, draw=armblue, fill=armblue!30, minimum size=8mm] (B) at (1.7,0) {B};
+        \node[circle, draw=armblue, fill=armblue!30, minimum size=8mm] (C) at (0.85,1.5) {C};
+        \node[circle, draw=armred, fill=armred!30, minimum size=8mm] (D) at (4.3,0.6) {D};
+        \draw[armblue, very thick, decorate,
+              decoration={zigzag, segment length=3mm, amplitude=1mm}] (A) -- (B);
+        \draw[armblue, very thick, decorate,
+              decoration={zigzag, segment length=3mm, amplitude=1mm}] (A) -- (C);
+        \draw[armblue, very thick, decorate,
+              decoration={zigzag, segment length=3mm, amplitude=1mm}] (B) -- (C);
+        \draw[armred, thick, dashed, <->] (C) -- (D)
+          node[midway, above, font=\scriptsize] {repel};
+        \node[below, armblue, font=\scriptsize] at (0.85,-0.6) {springs (attract)};
+      \end{tikzpicture}
+    \end{center}
+    \vskip 8pt
+    {\footnotesize Forces balance, and the layout stops moving. That equilibrium \emph{is} the
+    embedding.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Watching it settle}
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/umap_epochs.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize Fashion-MNIST, same data and settings, stopped at increasing epoch counts. The
+  structure appears early and then mostly \emph{sharpens} --- which is why UMAP gets away with far
+  fewer epochs than you would expect, and why the default (200 for large data, 500 for small) is
+  rarely worth raising.
+\end{frame}
+
+% ================================================================
+\section{Using it, and reading it}
+\sectiontransition{Using it}{Two knobs that matter, and a short list of what the picture is not
+telling you.}
+
+\begin{frame}{\texttt{n\_neighbors}: how far you look}
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/umap_n_neighbors.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize It sets $k$ --- and therefore how much of the data each point's ruler is
+  calibrated against. \textbf{Small} ($\sim$5): fine local detail, many small islands, and a
+  real risk of fragmenting one true cluster into several. \textbf{Large} ($\sim$50): each point
+  sees more context, so the layout preserves more of the global arrangement and smooths detail
+  away. Default 15.
+\end{frame}
+
+\begin{frame}{\texttt{min\_dist}: how tightly points may pack}
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/umap_min_dist.pdf}
+  \end{center}
+  \vskip -2pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Watch out:} \texttt{min\_dist} is \emph{purely cosmetic in the topological sense}. It
+    changes $a$ and $b$, so it changes how tightly a cluster is allowed to compress --- but it
+    does not change the graph, so it does not change who is whose neighbor. Small values look
+    more ``clustered'' without the data being any more clustered. Do not read the tightness of a
+    blob as evidence.}}
+\end{frame}
+
+\begin{frame}{Predict-first: same data, same settings, new seed}
+  Nothing changes except \texttt{random\_state}. How much of the picture survives?
+  \pause
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/umap_seeds.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize The \textbf{groups} survive. Their \textbf{positions, orientation and mirroring}
+  do not. If you describe your result as ``cluster 3 sits between cluster 1 and cluster 5'', you
+  have described this seed and nothing more.
+\end{frame}
+
+\begin{frame}{How to read a UMAP plot}
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \textbf{You can trust:}
+    \begin{itemize}\small
+      \item \textcolor{paramgreen}{\textbf{Local neighborhoods}} --- points near each other in
+        high-D usually stay near each other.
+      \item \textcolor{paramgreen}{\textbf{Cluster membership}} --- which points group with which.
+      \item \textcolor{paramgreen}{\textbf{Connected components}} --- genuinely separated groups
+        stay separated.
+    \end{itemize}
+    \column{0.49\textwidth}
+    \textbf{You cannot trust:}
+    \begin{itemize}\small
+      \item \textcolor{armred}{\textbf{The axes}} --- they mean nothing; rotation and reflection
+        are arbitrary.
+      \item \textcolor{armred}{\textbf{Cluster sizes}} --- visual area is not sample count, and
+        \texttt{min\_dist} sets it anyway.
+      \item \textcolor{armred}{\textbf{Between-cluster distances}} --- ``far apart'' is not ``very
+        different''.
+      \item \textcolor{armred}{\textbf{Small clusters at low \texttt{n\_neighbors}}} --- often
+        fragments, not findings.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The test that costs you nothing:} rerun with a few seeds and a few
+    \texttt{n\_neighbors}. If the pattern you are about to write down survives, it is real. If it
+    does not, you were reading the optimizer.}}
+\end{frame}
+
+% [fragile] is mandatory: the lstlisting below contains "#" comments, and without it
+% Beamer's frame scanning reads them as macro parameters ("Illegal parameter number
+% in definition of \iterate").
+\begin{frame}[fragile]{In practice}
+\begin{lstlisting}
+import umap
+
+reducer = umap.UMAP(
+    n_neighbors=15,      # local <-> global
+    min_dist=0.1,        # packing only
+    metric="cosine",     # cosine for embeddings
+    random_state=509,    # fixes the seed (and disables parallelism)
+)
+Z = reducer.fit_transform(X)
+\end{lstlisting}
+  \vskip 2pt
+  \begin{itemize}\small
+    \item \textbf{Standardize first} if your features have different units --- UMAP inherits
+      PCA's scale sensitivity through the distance metric.
+    \item \textbf{Pick the metric deliberately.} \texttt{cosine} for text or CLIP embeddings,
+      \texttt{euclidean} for physical measurements, \texttt{hamming} for binary. This matters more
+      than either knob above.
+    \item On wide data, \textbf{PCA to $\sim$50 first} --- faster, and it strips noise the graph
+      would otherwise take seriously.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The four mistakes people actually make}
+  \begin{enumerate}
+    \item \textbf{Wrong metric} --- Euclidean on text embeddings. The graph is then built from
+      distances that do not mean what you think, and everything downstream inherits it.
+    \item \textbf{Unstandardized features} --- one large-range column dominates every distance,
+      exactly as it hijacks PC1.
+    \item \textbf{Trusting a single run} --- see the previous frames.
+    \item \textbf{Feeding the 2-D embedding to a model.} This is the worst one. The embedding
+      threw away almost everything to make a picture. Cluster or classify on the
+      \emph{high-dimensional} data (or on PCA components); use UMAP for your eyes.
+  \end{enumerate}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{The assumption:} data is uniformly sampled from a manifold under a
+      \emph{locally varying} metric. Everything else follows from it.
+    \item \textbf{$\rho_i$} connects every point to its nearest neighbor at full strength;
+      \textbf{$\sigma_i$} is solved per point so all neighborhoods carry the same fuzzy mass
+      $\log_2 k$. Together they give each point its own ruler.
+    \item \textbf{Fuzzy union} turns two directed opinions into one undirected edge. The result
+      is a weighted graph, and from there UMAP never sees your data again.
+    \item \textbf{Cross-entropy} has an attraction term \emph{and} a repulsion term. t-SNE's KL
+      has only the first, which is why UMAP keeps more global structure.
+    \item \textbf{Read it carefully:} neighborhoods and membership are real; axes, sizes and
+      between-cluster distances are not.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{That closes unsupervised learning} (clustering $+$ dimensionality reduction). Next
+    chapter: a new family of models.}}
+\end{frame}
+
+\begin{frame}{References}
+  \begin{itemize}\small
+    \item McInnes, Healy \& Melville (2018). \emph{UMAP: Uniform Manifold Approximation and
+      Projection for Dimension Reduction.} arXiv:1802.03426.
+    \item Coenen \& Pearce, \emph{Understanding UMAP} (Google PAIR) ---
+      \texttt{pair-code.github.io/understanding-umap/}
+    \item Wattenberg, Viegas \& Johnson (2016). \emph{How to Use t-SNE Effectively.}
+      distill.pub --- the same lesson for t-SNE.
+    \item van der Maaten \& Hinton (2008). \emph{Visualizing Data using t-SNE.} JMLR.
+  \end{itemize}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - L13c, the second lecture of ch4b. L13b answers "what does DR give me and when do I
+%     reach for each method"; this one answers "how does UMAP actually work".
+%   - Ported 2026-08-16 from the instructor's own LMU student-assistant deck,
+%     _reference_umap_lmu/umap_revised_iter_2.tex (17 slides, Beamer Madrid).
+%   - Outline: 36_umap_OUTLINE.md. Port decisions recorded in DECISIONS.md:
+%     * The LMU deck's motivation/curse, PCA-recap, t-SNE-recap and comparison-table frames
+%       are all covered in more depth by L13b, which is delivered immediately before this.
+%       Collapsed into the single "Where we left off" bridge frame, keeping only the one
+%       genuinely new claim (KL has no repulsion term), which then pays off on the loss frame.
+%     * The toy example runs at k=3, not the LMU deck's k=2. At k=2 the nearest neighbour
+%       alone contributes exactly log2(2) = 1, so the binary search has no solution and the
+%       LMU deck's stated sigma ~ 0.4 is illustrative rather than computed. At k=3 the target
+%       1.585 gives a genuine sigma_A = 0.1532.
+%     * The triangle apexes are off-centre (0.45 / 5.45, not 0.50 / 5.50). A centred apex
+%       ties two neighbours at exactly rho, pinning the sum at >= 2 against a target of
+%       1.585 - again unsolvable. Found by the figure script raising, not by inspection.
+%     * The LMU deck's hand-drawn TikZ hyperparameter grid became real UMAP runs on
+%       Fashion-MNIST (py_src/umap_demos.py), per ml/SLIDE_STYLE.md. TikZ kept only for the
+%       manifold sketch, the directed-edge pair and springs-and-magnets - throwaway visuals.
+%   - Figures: py_src/umap_demos.py -> fig/umap_*.pdf. Every toy number on the slides is
+%     printed by that script to logs/umap_demos.log; do not hand-edit them.
+%   - Borrowed: fig/borrowed/pair/umap_elephant.png (Google PAIR), attributed on both the
+%     hook frame and in the references.
+% =============================================================

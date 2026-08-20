@@ -31,6 +31,12 @@ Last updated: 2026-08-07
 
 - Under `ml/`. Number prefix gives global course order.
 - Example: `ml/01_regression_intro/`, `ml/02_main_concepts/`.
+- **Legacy `chNN_` folders are being phased out.** As of 2026-08-16, `ml/01_*` through `ml/10_*`
+  are converted (the classic ML track); the deep-learning chapters still carry `chNN_` prefixes
+  and get renumbered as they are delivered.
+- **Watch the transitional ambiguity:** `ml/10_dimensionality_reduction/` (converted) and
+  `ml/ch10_diffusion/` (legacy) both read as "10". Until the legacy set is converted, refer to a
+  chapter by topic in any student-visible text, not by bare number.
 
 ### Chapter QMD — `NN_chapter_topic.qmd`
 

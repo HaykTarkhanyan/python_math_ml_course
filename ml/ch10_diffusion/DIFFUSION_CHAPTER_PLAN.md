@@ -266,7 +266,7 @@ does not mention cosine similarity at all.
 4. The batch matrix: diagonal = matching pairs, everything off-diagonal = negatives `[wl f08-f09]`
 5. Cosine similarity as the metric `[wl f10]` `[callback: L24 dot-product-as-similarity, verified at
    L24_attention.tex:534-552 - this is the real bridge; L13 names cosine in one bullet
-   (L13_clustering.tex:101), which is a mention, not a foundation]`
+   (32_clustering.tex:101), which is a mention, not a foundation]`
 6. The space does **arithmetic**: (me with a hat) - (me without) ~ "hat", similarity 0.165 `[wl f11-f12]`
 7. Zero-shot classification falls out for free `[wl f13]`
 8. But CLIP only maps *into* the space. It cannot draw.

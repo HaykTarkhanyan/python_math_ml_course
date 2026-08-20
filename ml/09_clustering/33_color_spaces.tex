@@ -1,0 +1,646 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\graphicspath{{fig/}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[0.9em]
+      \begin{minipage}{0.82\textwidth}\centering\small #2 \end{minipage}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{Colour Spaces}
+\subtitle{Three numbers, and which three you pick}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ================================================================
+% COLD OPEN
+\begin{frame}{You have already been clustering these}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    Last lecture ended by running k-means on the pixels of a painting and repainting each
+    one with its centroid colour. It works. But it quietly assumed two things:
+    \vskip 5pt
+    \begin{enumerate}\small
+      \item a pixel is a \textbf{point in a 3D space};
+      \item \textbf{straight-line distance} in that space means ``these colours are
+        similar''.
+    \end{enumerate}
+    \vskip 6pt
+    Neither is obvious, and one of them is often wrong.
+    \vskip 8pt
+    \textbf{Predict:} pixel value $255$ is the brightest a channel gets. Is $128$ about
+    \emph{half} as bright?
+    \pause
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      No. Pixel $128$ emits \textbf{21.6\%} of the light of $255$. Half the light is
+      pixel \textbf{188}.}}
+    \column{0.44\textwidth}
+    \begin{center}
+      \includegraphics[width=\linewidth]{color_histogram.pdf}
+    \end{center}
+    \vskip -6pt
+    \begin{center}\scriptsize\color{gray}
+      Two images. One colour histogram.
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{What a pixel actually stores}
+\sectiontransition{A pixel is not a colour}{It is three numbers, and the reason there are
+exactly three has nothing to do with computers.}
+
+\begin{frame}{How your eye sees colour}
+  \begin{columns}[T]
+    \column{0.44\textwidth}\small
+    Your retina has three kinds of \textbf{cone} cell, tuned to short, medium and long
+    wavelengths - roughly \textbf{blue}, \textbf{green} and \textbf{red}.
+    \vskip 5pt
+    Light arrives as a whole \emph{spectrum}; your eye collapses it to \textbf{three
+    numbers}. Everything else is thrown away.
+    \vskip 5pt
+    Two spectra that fire the cones equally look identical to you - \textbf{metamerism}.
+    A screen exploits exactly that: three primaries fake any spectrum you can see.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      Images use \textbf{red, green, blue} (\textbf{RGB}) because \emph{you} do. Three is
+      a fact about eyes, not about file formats.}}
+    \column{0.56\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{eye_cones.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A pixel is three numbers}
+  \begin{columns}[T]
+    \column{0.34\textwidth}\small
+    A colour image stores an \textbf{(R, G, B)} triple at every pixel, each $0$ to $255$.
+    \vskip 5pt
+    Red and green high $=$ yellow; all three high $=$ white; all three equal $=$ grey.
+    \vskip 5pt
+    So an image is \textbf{three stacked grids}. Flatten them and you get the matrix you
+    handed to k-means: one row per pixel, three columns.
+    \vskip 5pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      To a computer there is no image, only a grid of numbers.}}
+    \column{0.66\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{rgb_channels.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The number is not the brightness}
+  \small
+  Stored pixel values are \textbf{gamma-encoded}: the standard sRGB (standard RGB) curve
+  spends more of the $0$--$255$ budget on dark tones, where your eye can tell shades
+  apart, and fewer on bright ones, where it cannot.
+  \begin{center}\includegraphics[width=0.93\linewidth]{gamma_curve.pdf}\end{center}
+  \vskip -3pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.965\linewidth}{\small
+    Average black ($0$) and white ($255$) as \emph{stored numbers} and you get $128$ -
+    which emits $21\%$ of the light, not $50\%$. The honest answer is $188$. Every naive
+    image resize makes this mistake.}}
+\end{frame}
+
+\begin{frame}{Linearize, compute, re-encode}
+  \small
+  The sRGB curve is a formula, not a mood. For a stored value $s$ scaled to $[0,1]$:
+  \vskip 4pt
+  \begin{center}\footnotesize
+    $\text{linear}(s) = \begin{cases}
+      s/12.92 & s \le 0.04045\\[3pt]
+      \left(\dfrac{s + 0.055}{1.055}\right)^{2.4} & \text{otherwise}
+    \end{cases}$
+    \qquad
+    $\text{encode}(u) = 1.055\, u^{1/2.4} - 0.055$
+  \end{center}
+  \vskip 6pt
+  So the claim from two slides ago, all the way through. Average black and white
+  \emph{as light}:
+  \vskip 3pt
+  \begin{center}\footnotesize
+    $\text{linear}(0) = 0$, \quad $\text{linear}(1) = 1$
+    \quad$\Rightarrow$\quad mean $= 0.5$
+    \quad$\Rightarrow$\quad
+    $255 \cdot \left(1.055 \cdot 0.5^{1/2.4} - 0.055\right) = \mathbf{187.5}$
+  \end{center}
+  \vskip 4pt
+  And in the other direction, pixel $128$:
+  $\left(\frac{0.502 + 0.055}{1.055}\right)^{2.4} = \mathbf{0.216}$ - the $21.6\%$ from the
+  hook.
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.965\linewidth}{\small
+    That is the whole of ``linearize'' and ``re-encode'' - one \texttt{np.where} each. The
+    dark branch is a straight line because a pure power law has infinite slope at zero,
+    which would make the darkest few values impossible to encode.}}
+\end{frame}
+
+\begin{frame}{Where this bites you}
+  \small
+  Gamma is invisible until you do arithmetic on pixels. Then it is everywhere:
+  \vskip 6pt
+  \begin{itemize}\small
+    \item \textbf{Resizing and blurring.} Both average neighbouring pixels. Done on stored
+      values, fine detail loses light and gradients go muddy.
+    \item \textbf{Brightness augmentation.} Multiplying stored values is not the same as
+      changing the exposure of a photograph.
+    \item \textbf{Averaging a dataset.} A mean image computed on stored values is darker
+      than the mean of the light those images carried.
+    \item \textbf{Any distance.} Two pixels $30$ apart near black differ far more in light
+      than two pixels $30$ apart near white.
+  \end{itemize}
+  \vskip 6pt
+  The fix is always the same three steps: \textbf{linearize} $\to$ do the arithmetic
+  $\to$ \textbf{re-encode}.
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.965\linewidth}{\small
+    Almost no code does this, including most of what you will write. That is usually
+    survivable - but know that you are making the approximation, rather than discovering
+    it later in a result you cannot explain.}}
+\end{frame}
+
+% ================================================================
+\section{Same pixel, different axes}
+\sectiontransition{RGB says how to \emph{make} a colour}{It does not say what the colour
+\emph{is}. Nothing in the three numbers means ``how bright'' or ``which colour''.
+\vskip 10pt
+{\footnotesize Play with it while I talk: \textcolor{armblue}{\texttt{math.hws.edu/graphicsbook/demos/c2/rgb-hsv.html}}\\[2pt]
+Six sliders, three RGB and three HSV, wired to the same colour. Move one, watch the others move.}}
+
+\begin{frame}{Hue, saturation, value}
+  \small
+  \textbf{Hue, saturation, value} (\textbf{HSV}) keeps the same pixel and changes the
+  axes: \textbf{hue} is an angle - which colour; \textbf{saturation} is a radius - how
+  pure; \textbf{value} is a height - how bright.
+  \begin{center}\includegraphics[width=0.72\linewidth]{hsv_space.pdf}\end{center}
+  \vskip -4pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.965\linewidth}{\small
+    In RGB, ``darker'' is ambiguous: subtracting a constant drags the hue $25^\circ$ and
+    crushes $14\%$ of pixels to black, while multiplying leaves hue alone. In HSV,
+    brightness \emph{is} an axis - moving $V$ cannot do anything else.}}
+\end{frame}
+
+\begin{frame}{The trap: hue is a circle, distance is not}
+  \small
+  Hue wraps: $H = 0.99$ and $H = 0.01$ are both red. Hand those to any algorithm that
+  measures straight-line distance and they are as far apart as two colours can be.
+  \begin{center}\includegraphics[width=0.93\linewidth]{hue_seam.pdf}\end{center}
+  \vskip -3pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.965\linewidth}{\small
+    Feed k-means raw $(H, S, V)$ and the reds either side of the seam land in the same
+    cluster \textbf{0\%} of the time. Encode the angle first -
+    $(S\cos 2\pi H,\; S\sin 2\pi H,\; V)$ - and it is \textbf{99\%}. Plain RGB, which has
+    no angles in it, never had the problem.}}
+\end{frame}
+
+\begin{frame}{When hue earns its keep}
+  \begin{columns}[T]
+    \column{0.38\textwidth}
+    \small
+    Pick out one coloured region, then change the lighting - every pixel loses $45\%$ of
+    its value, and nothing else moves.
+    \vskip 5pt
+    The RGB threshold was tuned on the bright image and still collapses. The hue window
+    barely notices: dimming moves $V$, not $H$.
+    \vskip 5pt
+    Overlap before versus after, as Intersection over Union (IoU) - pixels both
+    selections agree on, over pixels either one picked:
+    \vskip 3pt
+    \begin{center}\small
+      RGB \textbf{\color{armred}20\%} \qquad hue \textbf{\color{armblue}99\%}
+    \end{center}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Colour masks and thresholds: use hue. It is the one job HSV is clearly best at.}}
+    \column{0.62\textwidth}
+    \begin{center}\includegraphics[width=0.94\linewidth]{hsv_threshold.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Where does depth live?}
+  \small
+  You read 3D shape from \textbf{shading}. So which of the three numbers carries it?
+  \pause
+  \vskip 2pt
+  On a matte surface, changing the light \textbf{multiplies R, G and B by the same
+  factor} - a move along $V$, with $H$ and $S$ untouched.
+  \begin{center}\includegraphics[width=0.64\linewidth]{depth_shading.pdf}\end{center}
+  \vskip -4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.93\linewidth}{\small
+    Across each lit sphere $H$ and $S$ hold to $10^{-9}$; $V$ tracks the true shading at
+    $\mathbf{1.000000}$. Gloss is the exception - a highlight adds white, so it shows in
+    $S$.}}
+\end{frame}
+
+\begin{frame}{So: depth, edges and texture are luminance problems}
+  \small
+  That one fact settles a lot of practical questions at once:
+  \vskip 5pt
+  \begin{itemize}\small
+    \item \textbf{Edge detection, corners, texture, optical flow} run on \textbf{one}
+      channel, not three. Converting to grayscale first is not laziness, it is the right
+      move - the structure was never in the colour.
+    \item \textbf{Shape-from-shading and relighting} want a space where brightness is an
+      axis. $V$, or better $L^*$, which is scaled to how you actually perceive brightness.
+    \item \textbf{Chroma subsampling works for the same reason} - the slide two sections
+      from now throws away three quarters of the colour and you will barely see it.
+    \item \textbf{Colour is for \emph{what}, luminance is for \emph{where}.} Hue tells you
+      which object; brightness tells you its shape and where its edges are.
+  \end{itemize}
+  \vskip 5pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.965\linewidth}{\small
+    The trap: dropping to grayscale also destroys any boundary that is a pure
+    \emph{colour} change at equal brightness - a red shape on an equally bright green
+    background vanishes completely. Rare in photographs, common in charts, maps and
+    synthetic images.}}
+\end{frame}
+
+% ================================================================
+\section{Throwing colour away}
+\sectiontransition{One number instead of three}{Grayscale is the most common preprocessing
+step in vision, and the recipe is less obvious than it looks.}
+
+\begin{frame}{What should grey be?}
+  \small
+  \textbf{Predict:} to turn (R, G, B) into one number, is the average $(R+G+B)/3$ the
+  right answer?
+  \pause
+  \vskip 4pt
+  No - and the reason is the cone curves from the first section. The M and L cones both
+  peak in the green-yellow region, so green carries most of the perceived brightness and
+  blue very little.
+  \begin{center}\includegraphics[width=0.86\linewidth]{gray_weights.pdf}\end{center}
+  \vskip -3pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.965\linewidth}{\small
+    Grayscale is a \emph{weighted} sum, and the weights come from the eye: green about
+    $60$--$72\%$, red about $21$--$30\%$, blue only $7$--$11\%$.}}
+\end{frame}
+
+\begin{frame}{Two standards, and your libraries disagree}
+  \small
+  There are two weight sets in common use. Rec.\,601 came from standard-definition
+  television; Rec.\,709 matches the primaries actually used by modern displays and sRGB.
+  \vskip 5pt
+  \begin{center}\footnotesize
+  \begin{tabular}{lccc}
+    \toprule
+    & \textbf{R} & \textbf{G} & \textbf{B} \\
+    \midrule
+    naive mean & $0.333$ & $0.333$ & $0.333$ \\
+    Rec.\,601 & $0.299$ & $0.587$ & $0.114$ \\
+    Rec.\,709 & $0.2126$ & $0.7152$ & $0.0722$ \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 6pt
+  By hand, on the pixel $(R, G, B) = (200, 100, 50)$:
+  \vskip 3pt
+  \begin{center}\footnotesize
+    Rec.\,601: $0.299(200) + 0.587(100) + 0.114(50) = 59.8 + 58.7 + 5.7 = \mathbf{124.2}$\\[2pt]
+    Rec.\,709: $0.2126(200) + 0.7152(100) + 0.0722(50) = 42.5 + 71.5 + 3.6 = \mathbf{117.6}$
+  \end{center}
+  \vskip 6pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.965\linewidth}{\small
+    \texttt{PIL.Image.convert("L")} implements Rec.\,601.
+    \texttt{skimage.color.rgb2gray} implements Rec.\,709. On the Saryan painting they
+    differ by \textbf{4.3} grey levels on average and up to \textbf{24}. Same input, two
+    different grayscale images, and no error message.}}
+\end{frame}
+
+\begin{frame}{Luma is not luminance}
+  \small
+  Both formulas above get applied to the \textbf{stored, gamma-encoded} numbers. That
+  makes them \emph{luma} ($Y'$) - a cheap stand-in. Real \emph{luminance} ($Y$) needs the
+  light, not the code:
+  \vskip 6pt
+  \begin{center}\footnotesize
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{luma} $Y'$ (what everyone computes) & weight the stored values directly \\
+    \textbf{luminance} $Y$ (what it should be) & linearize $\to$ weight $\to$ re-encode \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 8pt
+  On the same painting the two disagree by \textbf{4.1} levels on average and by as much
+  as \textbf{48} in the worst pixel - a bigger error than the gap between the two
+  standards.
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.965\linewidth}{\small
+    Video engineering has kept the distinction (and the prime on $Y'$) for decades;
+    image-processing code has mostly dropped it. If a grayscale result looks wrong in the
+    shadows, this is the first thing to check.}}
+\end{frame}
+
+% ================================================================
+\section{Distance should mean difference}
+\sectiontransition{The space you choose is the distance you get}{k-means has no idea what
+your features mean. It measures Euclidean distance in whatever you hand it.}
+
+\begin{frame}{Lab: built so that distance matches perception}
+  \small
+  \textbf{CIELAB} (from the Commission Internationale de l'\'Eclairage, the international
+  colour standards body) splits colour into lightness $L^*$ and two opponent axes
+  $a^*$ (green to red) and $b^*$ (blue to yellow), scaled so that \emph{equal distance
+  means equal perceived difference}. That distance has a name: $\Delta E$.
+  \begin{center}\includegraphics[width=0.90\linewidth]{lab_deltae.pdf}\end{center}
+  \vskip -3pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.965\linewidth}{\small
+    Every pair above sits the \emph{same} RGB distance apart, yet perceived difference
+    runs from $\Delta E\,4.4$ to $16.0$ - a $3.7\times$ spread, where about $2.3$ is the
+    threshold of noticing at all. RGB distance is a proxy, and a loose one.}}
+\end{frame}
+
+\begin{frame}{YCbCr: keep the brightness, skimp on the colour}
+  \begin{columns}[T]
+    \column{0.38\textwidth}
+    \small
+    Split a pixel into brightness $Y$ and two colour-difference channels, $C_b$
+    (blue-yellow) and $C_r$ (red-green).
+    \vskip 5pt
+    Store the colour channels at \emph{half resolution} in each direction. That is
+    \textbf{4{:}2{:}0} - what JPEG and every video codec do.
+    \vskip 5pt
+    Halve the \emph{brightness} detail instead and it visibly falls apart: error $5.8$
+    versus $11.1$, with blocky edges.
+    \vskip 5pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      Your eye resolves \emph{brightness} detail far better than \emph{colour} detail.
+      Compression has exploited that for thirty years.}}
+    \column{0.62\textwidth}
+    \begin{center}\includegraphics[width=0.92\linewidth]{chroma_subsample.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Colour histograms: a feature that cannot see}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+    \small
+    A \textbf{colour histogram} counts how many pixels fall in each range of each channel.
+    It turns any image, at any size, into a fixed-length vector - here $96$ numbers
+    instead of $307{,}200$.
+    \vskip 5pt
+    Useful, with one fatal blind spot: it discards \textbf{where} every pixel was.
+    \vskip 5pt
+    Shuffle the painting's pixels and the histogram does not move by a single count. Both
+    images hand k-means the \emph{identical} vector.
+    \vskip 5pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      Cluster colour histograms and you group by \textbf{palette}, never by subject. A
+      sunset and a tomato are neighbours.}}
+    \column{0.60\textwidth}
+    \begin{center}\includegraphics[width=0.94\linewidth]{color_histogram.pdf}\end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The wider zoo}
+  \vskip -2pt
+  \begin{center}\footnotesize
+  \begin{tabular}{p{2.1cm}p{9.7cm}}
+    \toprule
+    \textbf{CIE XYZ} & The root (1931), straight from colour-matching experiments on human
+      observers. Lab and everything else perceptual is \emph{defined} as a transform of it. \\[2pt]
+    \textbf{HSL} & HSV's sibling: lightness instead of value, so pure colours sit at
+      $L = 0.5$ and white tops the axis. Nicer for pickers, same circular hue, same trap. \\[2pt]
+    \textbf{LCh} & Lab in polar form - lightness, chroma, hue \emph{angle}. Perceptual
+      \emph{and} intuitive, but the angle brings the seam back with it. \\[2pt]
+    \textbf{Oklab / Oklch} & Bj\"orn Ottosson, 2020. Lab is non-uniform in the blues; Oklab
+      refits it to fix that. In the CSS standard since 2021. The modern default. \\[2pt]
+    \textbf{CMYK} & Subtractive - ink absorbs rather than emits, so the primaries are cyan,
+      magenta, yellow and black. For print, not for models. \\[2pt]
+    \textbf{Linear RGB} & Not a different colour, a different \emph{encoding}: sRGB with the
+      gamma undone. Where physics happens, and where you land whenever you linearize. \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.965\linewidth}{\small
+    All the same three cone responses in different coordinates. Choosing one picks which
+    questions become easy; it does not change what colour is.}}
+\end{frame}
+
+\begin{frame}{Start from the task, not the space}
+  \vskip -2pt
+  \begin{center}\footnotesize
+  \begin{tabular}{p{5.0cm}p{2.9cm}p{4.3cm}}
+    \toprule
+    \textbf{What you are doing} & \textbf{Work in} & \textbf{Because} \\
+    \midrule
+    Edges, texture, depth, shading & grayscale / $V$ / $L^*$ & the structure is in
+      luminance; colour adds nothing \\[2pt]
+    Masking an object by its colour & HSV, hue window & survives lighting changes \\[2pt]
+    Feeding a model; reconstructing & RGB & it is what the error is measured in, and what
+      the data already is \\[2pt]
+    Quantizing to get the image back & RGB & squared error lives here \\[2pt]
+    Quantizing for a coherent palette & cone-encoded HSV & groups by hue across light and
+      shade \\[2pt]
+    ``Do these two look different?'' & Lab / Oklab, $\Delta E$ & distance is calibrated to
+      perception \\[2pt]
+    Compressing & YCbCr & spends bits where the eye looks \\[2pt]
+    Any arithmetic on pixel values & linear RGB & sums are only meaningful on light \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.965\linewidth}{\small
+    One question answers most of it: \textbf{is this about \emph{which colour}, or about
+    \emph{how much light}?} The first wants hue, the second wants a luminance axis.}}
+\end{frame}
+
+\begin{frame}{Four ways to get it wrong}
+  \small
+  Each space has one failure that catches people, and you have now seen all four:
+  \vskip 6pt
+  \begin{itemize}\small
+    \item \textbf{RGB} - distance only loosely matches perception, and every value is
+      gamma-encoded, so arithmetic on it is arithmetic on the wrong quantity.
+    \item \textbf{HSV} - hue is circular. Hand raw $(H, S, V)$ to anything that measures
+      distance and the reds tear in half.
+    \item \textbf{Lab} - costs a conversion, and $\Delta E$ is calibrated for flat patches
+      viewed side by side, not for textures or thin lines.
+    \item \textbf{Grayscale} - two libraries will hand you two different images, and any
+      boundary that is pure colour at constant brightness disappears entirely.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.965\linewidth}{\small
+    And three numbers is a convention, not a law. The Sentinel-2 satellite scene in the
+    next practical gives you \textbf{six} per pixel, two of them infrared - light your
+    eyes cannot see at all, which is exactly why it is worth recording. Same idea, more
+    cones.}}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item A pixel is \textbf{three numbers} because you have \textbf{three cone types}.
+      Different spectra that fire them equally are the same colour to you.
+    \item Stored values are \textbf{gamma-encoded}: $128$ is $21\%$ of the light, not
+      $50\%$. Arithmetic on pixels needs linearize $\to$ compute $\to$ re-encode.
+    \item \textbf{HSV} makes brightness an axis, which is why hue thresholds survive
+      lighting changes ($99\%$ versus $20\%$). But hue is \textbf{circular} - encode the
+      angle or the seam destroys your clustering.
+    \item \textbf{Grayscale} is a weighted sum with the weights taken from the eye. Two
+      standards are in circulation and your libraries pick different ones.
+    \item \textbf{Depth, edges and texture are luminance problems.} Shading is exactly a
+      move along $V$, so grayscale keeps the shape and flattening $V$ destroys it.
+    \item \textbf{Lab} makes distance mean perceived difference; \textbf{YCbCr} lets
+      compression throw colour away cheaply; \textbf{colour histograms} throw away
+      position entirely.
+    \item To pick a space, ask: \textbf{which colour, or how much light?}
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next:} the practicals. Quantize a painting with k-means and choose the space
+    deliberately; cluster a six-band satellite scene where the ``colours'' are land cover;
+    and watch colour histograms fail to group photographs by what is in them.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - New deck, 2026-08-20. Slots between 32_clustering (which ends on colour quantization
+%     in RGB space) and the 34_* image practicals, which previously assumed all of this
+%     material without any lecture behind it. Requested by the instructor because the only
+%     colour-space content in the repo sat in ml/ch6_cnn/L16_cnn_foundations.tex Section 1,
+%     roughly three weeks too late in the schedule.
+%
+%   - Copied, not moved: L16 keeps its own Section 1 and its own py_src/ copies of
+%     eye_cones.py, rgb_channels.py and hsv_space.py. Trimming L16 to a recap frame is
+%     parked in DEFERRED_TODO.md.
+%
+%   - Figures. All Python-generated into fig/ from py_src/, run with the ma venv, seed 509.
+%     Shared helpers (Saryan loader, logging, sRGB transfer functions) in py_src/color_common.py.
+%       eye_cones.pdf         (copied + extended)  py_src/eye_cones.py
+%       rgb_channels.pdf      (copied)             py_src/rgb_channels.py
+%       hsv_space.pdf         (copied)             py_src/hsv_space.py
+%       gamma_curve.pdf       (new)                py_src/color_gamma.py
+%       hue_seam.pdf          (new)                py_src/color_hue_seam.py
+%       hsv_threshold.pdf     (new)                py_src/color_hsv_threshold.py
+%       gray_weights.pdf      (new)                py_src/color_grayscale.py
+%       lab_deltae.pdf        (new)                py_src/color_lab.py
+%       chroma_subsample.pdf  (new)                py_src/color_ycbcr.py
+%       color_histogram.pdf   (new)                py_src/color_histogram.py
+%     All three copied scripts were re-pointed from skimage's astronaut to the Saryan
+%     landscape (instructor's call), so the deck shows the same pixels the image-compression
+%     practical clusters.
+%
+%   - Every number on a slide is computed by the figure script that draws it, and the
+%     scripts assert the claims rather than trusting them:
+%       * pixel 128 -> 21.6% of the light; half the light is pixel 187.5 (color_gamma.py,
+%         asserted against the ICC sRGB spec constants, round-trip error 1.1e-16).
+%       * naive black+white average = code 127.5 = 21.4% light, i.e. 57% too dark.
+%       * subtracting 110 in RGB moves hue 24.8 deg mean and crushes 13.8% of pixels to
+%         black; scaling V is EXACTLY a uniform RGB multiply (max gap 3.2e-16, asserted).
+%       * seam test, k=8: RGB 93.1%, naive HSV 0.0%, cone-encoded HSV 98.8% (color_hue_seam.py,
+%         same metric the image-compression practical computes, so lecture and notebook agree).
+%       * lighting change to 55%: RGB threshold IoU 19.5%, hue threshold IoU 99.3%.
+%       * PIL convert("L") matches Rec.601 to 0.5 (rounding); skimage rgb2gray matches
+%         Rec.709 to 0.036. They differ by 4.28 levels mean / 23.8 max on this image.
+%       * luma vs true luminance: 4.1 mean / 48.1 max levels (color_grayscale.py).
+%       * Delta-E at fixed RGB distance 20, 17,671 pairs, seed 509: p05 4.37, median 9.38,
+%         p95 15.96 -> 3.7x spread against a JND of ~2.3 (color_lab.py).
+%       * 4:2:0 on chroma RMSE 5.84 vs the same halving on luma RMSE 11.10 (color_ycbcr.py).
+%       * shuffling pixels leaves the colour histogram bit-identical (asserted to 0.0).
+%
+%   - Pedagogical decisions:
+%     * The Lab frame quotes the MEASURED spread (3.7x) rather than the usual
+%       "equal RGB steps look unequal" story. That story is weaker than it sounds: a
+%       single equal step near black vs near white only moves Delta-E from 10.6 to 13.4,
+%       because Lab's cube-root L* partly cancels sRGB's gamma. The honest claim is about
+%       the spread across the whole cube, not about one pair.
+%     * The chroma-subsampling frame shows a ZOOM on the highest-chroma-detail 96x96 window
+%       (chosen from the data by summed-area table, not hardcoded). At full-page scale the
+%       two damaged images look identical and the frame proves nothing.
+%     * eye_cones.pdf gained a metamerism panel solving for three primary weights that
+%       reproduce a broad spectrum's cone responses exactly. The first attempt used two
+%       spikes, which cannot match three responses - it failed its own assertion, and the
+%       three-primary version is both correct and a better slide ("this is why a screen has
+%       three primaries").
+%     * The colour-histogram frame uses pixel-shuffling rather than two similar photographs.
+%       An identical feature vector is a stronger argument than a close one, and it costs
+%       nothing to verify.
+%     * No neural-network references anywhere: this deck runs before the NN chapter.
+%
+%   - Depth, task-first guidance and the wider zoo (instructor, 2026-08-20). Three frames
+%     added, one replaced. Deck 23 -> 24 frames, 30 pages.
+%       * "Where does depth live?" + depth_shading.pdf. The answer is exact, not a
+%         heuristic: for a Lambertian surface, changing the illumination multiplies R, G and
+%         B by the SAME factor, which is precisely a move along V with H and S fixed. That
+%         is the same identity hsv_space.py already asserts from the other direction
+%         (V-scaling == uniform RGB multiply, max gap 3e-16), so the two frames are two
+%         views of one fact. color_depth.py renders three Lambertian spheres and asserts
+%         H circular-std 2.4e-9, S std 2.3e-16, corr(V, true shading) = 1.000000 on each.
+%       * "So: depth, edges and texture are luminance problems" - the practical fallout,
+%         including why grayscale-first for edges/texture is correct rather than lazy, and
+%         the trap (an isoluminant colour boundary vanishes in grayscale).
+%       * "The wider zoo" - CIE XYZ (1931), HSL, LCh, Oklab/Oklch (Ottosson 2020, fixes
+%         Lab's blue non-uniformity, in CSS since 2021 - web-verified), CMYK, linear RGB.
+%       * "Which space, when" (the by-space table) was REPLACED by "Start from the task,
+%         not the space" plus "Four ways to get it wrong". Three reference tables in a row
+%         was too many, and the instructor asked for task-first guidance specifically; the
+%         old table's watch-out column survives as the four-failures frame, and its
+%         Sentinel-2 six-band callback moved there too.
+%     Two bugs the assertions caught while building color_depth.py, both of which would have
+%     produced a figure that LOOKED right: (a) the spheres overlapped (centres 0.28 apart,
+%     diameter 0.35), so a later sphere painted over an earlier one's mask and the
+%     per-sphere statistics measured the wrong pixels - there is now an explicit layout
+%     guard; (b) hue spread was first measured with a plain std(), which reports 0.095 for
+%     the red sphere at H=0.02 purely because its pixels straddle the 0/1 seam. Replaced
+%     with a circular statistic. The script demonstrating the seam trap fell into it.
+%
+%   - Interactive demo (instructor, 2026-08-20): the six-slider RGB/HSV widget from David J.
+%     Eck's "Introduction to Computer Graphics" (HWS, v1.4, 2023),
+%     math.hws.edu/graphicsbook/demos/c2/rgb-hsv.html. Linked twice: on the Section 2
+%     transition slide (a sparse [plain] frame, so it costs no space and sits exactly where
+%     HSV is introduced - students can open it while the lecturer talks) and in the chapter
+%     qmd's References with a suggested first experiment. It is the fastest way to feel the
+%     section's actual thesis - that RGB and HSV are two coordinate systems on one colour,
+%     not two different things - because the sliders are wired together and move each other.
+%
+%   - Student review (Sonnet, pedagogy pass on the rendered PNGs only, 2026-08-20).
+%     Deck went 22 -> 23 frames as a result. What was verified and applied:
+%       * CONFIRMED, and the biggest gap: the sRGB formula appeared NOWHERE on a slide.
+%         The deck asserted "128 = 21.6% of the light" and "the fix is linearize -> compute
+%         -> re-encode" without ever giving the function, so a student could recognise the
+%         problem but not fix it. The reviewer independently listed this as an exam question
+%         they could not answer, two self-efficacy failures, an office-hours question, and
+%         the reason the "everyone does it wrong" framing felt like a disclaimer rather than
+%         a tool. NEW FRAME "Linearize, compute, re-encode": both transfer functions, then
+%         the 187.5 and the 0.216 derived rather than asserted.
+%       * CONFIRMED: the Rec.601/709 weights were presented as standards handed down, with
+%         the cone-sensitivity curves sitting unused two sections earlier. The "What should
+%         grey be?" frame now names the M/L peak as the reason green dominates.
+%       * PARTLY WRONG: reviewer said IoU was "never defined on-slide". It was expanded
+%         (Intersection over Union) but not defined; added the one-line definition.
+%       * NOT APPLIED - reviewer's top cut was YCbCr/4:2:0, on the grounds that none of the
+%         three practicals touch JPEG or video. The argument is sound but the instructor had
+%         already been offered that exact cut during the interview and kept it.
+%       * The running example (one Saryan painting threaded through every frame) was called
+%         "the single strongest structural choice in the deck", with the p.3/p.21 shuffled-
+%         histogram bookend landing specifically because the image was already familiar.
+%     Adding the frame re-broke two others, exactly as WORKFLOWS.md predicts: the IoU
+%     definition pushed "When hue earns its keep" past the bottom edge, and the cone sentence
+%     pushed the grayscale callout into the page number. Both fixed, both detectors re-run.
+%
+%   - Forward: the 34_* practicals. 34_image_compression exercises the RGB vs HSV vs
+%     cone-encoding comparison directly (its section 10); 34_land_cover is the six-band
+%     callback promised on the "Which space, when" frame; 34_image_clusters opens with the
+%     colour-histogram failure this deck sets up.
+% =============================================================

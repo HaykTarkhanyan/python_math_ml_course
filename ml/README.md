@@ -42,8 +42,8 @@ done
 | L10 | ch3_trees          | Random Forests                     | skeleton | lecture_i2ml/forests                            | Bagging, OOB, Feature importance, Proximities                                |
 | L11 | ch3_trees          | Boosting                           | skeleton | lecture_sl/boosting                             | AdaBoost, Gradient boosting, GBM with trees, Regularization                  |
 | L12 | ch3_trees          | XGBoost / LightGBM                 | skeleton | lecture_sl/boosting                             | XGBoost, XGBoost deep dive, LightGBM, CatBoost                               |
-| L13 | ch4_clustering     | Clustering                         | skeleton | **original** (no upstream)                      | k-means, DBSCAN, Hierarchical, Cluster evaluation                            |
-| L13b| ch4_clustering     | Dimensionality Reduction           | skeleton | partial: lecture_i2dl/ae + original             | PCA, t-SNE, UMAP. Bulk original; PCA/manifold framing from AE chapter.       |
+| 32-33 | 09_clustering             | Clustering                      | built    | **original** (no upstream)                      | k-means, DBSCAN, Hierarchical, Cluster evaluation                            |
+| 34-35 | 10_dimensionality_reduction | Dimensionality Reduction + UMAP | built   | partial: lecture_i2dl/ae + original             | PCA, t-SNE, UMAP. Bulk original; PCA/manifold framing from AE chapter.       |
 | L14 | ch5_neural_networks| Neural Networks                    | skeleton | lecture_i2ml/neural-networks                    | Single neuron, Hidden layer, XOR, Multilayer FNN, Matrix notation            |
 | L15 | ch5_neural_networks| Backprop / Dropout / HPO           | skeleton | lecture_i2ml/NN + lecture_i2dl/opt1 + regu      | Softmax+CE, Univ approx, Backprop, Early stopping, Dropout                   |
 | L16 | ch5_neural_networks| Convolutional Neural Networks      | skeleton | lecture_i2dl/cnn1 + cnn2                        | Convolution, Pooling, LeNet/AlexNet/VGG, ResNet, Dilated/Separable conv      |

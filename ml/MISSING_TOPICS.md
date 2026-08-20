@@ -31,7 +31,7 @@
 > Everything in the old "Tier 1" and "Tier 2" lists, plus most of Tier 3:
 >
 > - **SVM (linear + kernel), k-NN, Naive Bayes, LDA/QDA** → `07_classic_methods/28_svm_and_classic_methods.tex`
-> - **PCA / dimensionality reduction** → `ch4b_dimensionality_reduction/L13b`
+> - **PCA / dimensionality reduction** → `10_dimensionality_reduction/35_dimensionality_reduction`
 > - **Nested resampling** → folded into `02_main_concepts/08_hyperparameter_tuning.tex`
 > - **CNNs** → `ch6_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
 > - **RNN / LSTM** → `ch7_rnn/` L20, L21
@@ -47,7 +47,7 @@
 > - **Feature selection** → `06_feature_engineering/27`; **time series** → `08_time_series/` 30, 31
 > - **Curse of dimensionality, information theory** → moved to the math track
 >   (`math/30`, `math/28`, `math/29`)
-> - **Anomaly detection** → sections in `ch4_clustering/L13` and `ch8_autoencoders/L22`
+> - **Anomaly detection** → sections in `09_clustering/32_clustering` and `ch8_autoencoders/L22`
 >
 > Closed since the 2026-08-04 refresh:
 >
@@ -162,7 +162,7 @@ If you only added a handful, do them in this order:
 ### Tier 1 — strongly recommended (intro ML staples)
 
 1. **SVM (linear + kernel)** — L08b + L08c, source from `lecture_sl/linear-svm` + `nonlinear-svm`. Big classic gap.
-2. **PCA / dimensionality reduction** — fold into Chapter 4 clustering as L13b, original content.
+2. **PCA / dimensionality reduction** — now delivered as ch10 `35_dimensionality_reduction`, original content.
 3. **k-NN** — short lecture, port from `lecture_i2ml/slides/knn`. Or as section in L06.
 4. **Naive Bayes + LDA/QDA** — short joint lecture, port from `lecture_i2ml/slides/supervised-classification`. Or sections in L06.
 5. **Nested resampling** — extend L05 from `lecture_i2ml/slides/nested-resampling`.
@@ -212,7 +212,7 @@ After this gap analysis, two more shallow clones were added and 3 new skeletons 
 **Tier 1 partial fill (2026-05-26, third pass):**
 
 - `ml_new/ch1_regression/L05b_nested_resampling.tex` — sourced from `lecture_i2ml/nested-resampling`.
-- `ml_new/ch4_clustering/L13b_pca_dim_reduction.tex` — mostly original; partial refs in `lecture_i2dl/ae`.
+- `ml/10_dimensionality_reduction/35_dimensionality_reduction.tex` — mostly original; partial refs in `lecture_i2dl/ae`.
 
 **Still pending** (from the addendum below):
 

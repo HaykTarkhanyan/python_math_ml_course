@@ -9,6 +9,441 @@ this file holds the choice and a pointer.
 
 ---
 
+## #24 - A colour-spaces interlude becomes deck 33, and everything after it shifts by one
+
+**Date:** 2026-08-20 · **Status:** active
+
+**Decision.** New deck `ml/09_clustering/33_color_spaces.tex` (22 frames), sitting between the
+clustering lecture and the image practicals. It covers what a pixel stores (cones, metamerism,
+RGB), gamma/sRGB encoding, HSV and the circular-hue trap, grayscale conversion and its two
+competing standards, and then Lab, YCbCr and colour histograms with a "which space when" table.
+The three clustering practicals moved `33_*` → `34_*`, and the dimensionality-reduction chapter
+moved `34`/`35`/`36` → `35`/`36`/`37`.
+
+**Why.** Three places in the course already assumed this material and none taught it:
+`32_clustering` ends by clustering pixels "in RGB space"; the image-compression practical has a
+whole section comparing RGB against naive and cone-encoded HSV; and the photo-grouping practical's
+first task asks students to cluster a colour histogram. The only colour-space content in the repo
+sat in `ml/ch6_cnn/L16_cnn_foundations.tex` Section 1 - roughly three weeks later in the schedule
+than the practicals that depend on it.
+
+**What was copied rather than rebuilt.** `eye_cones.py`, `rgb_channels.py` and `hsv_space.py` were
+copied from `ch6_cnn/py_src/` (instructor: copy, do not move - `L16` stays self-contained), then
+re-pointed from skimage's astronaut to the Saryan painting so the deck shows the same pixels the
+practical clusters. Trimming `L16`'s Section 1 to a recap frame is parked in `DEFERRED_TODO.md`.
+
+**Alternatives rejected.**
+- *Number it `32b` and leave the practicals at `33`.* Instructor's call: take `33` and renumber.
+  Cheap here because both chapter folders were still untracked in git.
+- *Its own chapter folder `09b_color_spaces/`.* Rejected: a 22-frame interlude does not justify a
+  new `_quarto.yml` entry and chapter page, and the deck exists to serve the practicals that sit
+  in the same folder. Promoting it later is a one-folder move.
+- *Cut YCbCr and Lab to hit the 15-20 frame interlude target.* Instructor kept all four extra
+  topics and accepted 22 frames.
+- *The usual "equal RGB steps look perceptually unequal" framing for Lab.* Rejected on
+  measurement: a single equal step near black vs near white only moves ΔE from 10.6 to 13.4,
+  because Lab's cube-root `L*` partly cancels sRGB's gamma. The deck instead quotes the measured
+  spread across the whole cube - ΔE 4.4 to 16.0 at a fixed RGB distance of 20, a 3.7× range
+  against a just-noticeable threshold of ~2.3.
+
+**What would change this.** If the CNN chapter is ever taught before clustering, this deck should
+move with it rather than being duplicated. If the interlude grows past ~30 frames or gets its own
+practical, promote it to a real chapter.
+
+---
+
+## #23 - The clustering deck gets a running example, and citations for every named method
+
+**Date:** 2026-08-20 · **Status:** active
+
+**Decision.** Six of eleven items from a pedagogical review of `32_clustering.tex` were applied
+(instructor picked the six). The two structural ones:
+
+1. **A running example.** A toy supermarket loyalty-card dataset (`customers()` in
+   `py_src/cluster_demos.py` - age, monthly spend in drams, visits, online share) now appears
+   **twice**: as the scaling-trap predict-first early in the k-means section, and as the
+   centroid-profiling frame near the end. Deck went 66 -> 72 pages, 47 -> 52 frames.
+2. **Originating citations** (author + year) on every named method, per `ml/SLIDE_STYLE.md`.
+   All ten years web-verified on the day rather than recalled.
+3. **A border-vs-noise frame** (added after an instructor question the same day). The deck defined
+   core/border/noise but never showed *why* two adjacent non-core points get different verdicts.
+   The frame zooms on the closest such pair: a border point needs a **core** point in its
+   eps-ball, and sitting beside another border point earns nothing, because reachability
+   propagates only through core points. Deck ends at 53 frames / 73 pages.
+
+**Why.** The deck taught six algorithms well but never showed what a practitioner does with the
+labels afterwards, and the hook promised "customer segments" that never arrived. Profiling
+centroids and naming segments is the step students will actually be paid for. Separately, the
+deck's most consequential practical warning (scale first) was a text box asserting a rule the
+students never saw bite; now it is a measured demonstration - ARI against the true segments is
+**0.42 raw vs 0.84 standardized**, with spend's standard deviation (63,790) against visits' (7.3)
+explaining exactly why.
+
+**Alternatives rejected.**
+- *A real public dataset instead of synthetic customers.* Rejected: the scaling trap needs
+  features whose units differ by four orders of magnitude AND a known ground truth to score
+  against. Synthetic gives both; no tidy public dataset does.
+- *Adding the segmentation content as a bullet on an existing frame.* Rejected - the point is
+  that reading clusters is a distinct step, and burying it would repeat the original defect.
+- *Leaving the scale-first box where it was.* It had to be **reworded to pose the question**
+  rather than answer it, otherwise the new predict-first frame two lines later is spoiled. This is
+  the same defect flagged (and left unfixed) on the DBSCAN predict-first frame - see below.
+
+**Also fixed, found while verifying:** the Lloyd animation frame had been **silently clipping its
+own footnote** ("converges, but only to a local optimum") on all six overlay pages since the deck
+was written - the figure at `0.6\textwidth` was too tall, confirmed by bisecting variants of the
+pristine original from git (title and wording changed nothing; width alone did it). Figure reduced
+to `0.49`. Beamer reports **zero** overfull-vbox warnings, but
+`non_essential/detect_clipped_slides.py` flags it by name in seconds - it had simply never been run
+on this deck, which is why the bug outlived two reviews. See
+`_learnings/2026-08-20-1745_the-clipped-slide-detector-works-nobody-ran-it.md`.
+
+**What would change this.** If the practical (`33_*`) grows its own segment-profiling section, the
+deck frame could shrink to a pointer. If the instructor prefers a real dataset for the scaling
+trap, the synthetic customers can be swapped out - but keep a known ground truth, or the raw-vs-
+standardized comparison becomes an assertion again.
+
+**Not applied** (the other five review items, still open): the DBSCAN predict-first still prints
+its answer above the question; the elbow figure shows an unrealistically clean elbow while the
+prose calls elbows "often fuzzy"; the curse-of-dimensionality plot is still a fabricated TikZ
+curve `3.2/sqrt(d)` dressed as measurement (also `REVIEW.md` #9); the hook's "how many groups?"
+never pays off; and the two closing frames overlap.
+
+---
+
+## #22 - Clustering and dim reduction join the global numbering; syllabus.csv is deleted
+
+**Date:** 2026-08-16 · **Status:** active
+
+**Decision.** The last two classic-ML chapters stop using the legacy `chN`/`LNN` scheme and
+continue the sequence the delivered chapters already use:
+
+| was | now |
+|---|---|
+| `ml/ch4_clustering/` | `ml/09_clustering/` |
+| `ml/ch4b_dimensionality_reduction/` | `ml/10_dimensionality_reduction/` |
+| `clustering.qmd` | `09_clustering.qmd` |
+| `dim_reduction.qmd` | `10_dimensionality_reduction.qmd` |
+| `L13_clustering.{tex,pdf}` | `32_clustering.{tex,pdf}` |
+| `solution_image_compression / land_cover / image_clusters.ipynb` | `33_*_solution.ipynb` |
+| `L13b_dimensionality_reduction.{tex,pdf}` | `34_dimensionality_reduction.{tex,pdf}` |
+| `L13c_umap.{tex,pdf}` | `35_umap.{tex,pdf}` |
+| `solution_eigenfaces.ipynb` | `36_eigenfaces_solution.ipynb` |
+
+Numbers 02-31 were already taken (28 = classic methods, 29-31 = time series and its practical),
+so the sequence resumes at 32 with no collision.
+
+**Why 33 is shared by three notebooks.** The three clustering practicals are one practical
+session, not three lectures, and the number tracks the video slot. This follows the existing
+`21_adult_lightgbm.ipynb` / `21_adult_lightgbm_solution.ipynb` / `21_trees_project.ipynb`
+precedent in ch04. If they are ever recorded as separate sessions, they need 33/34/35 and
+everything downstream shifts.
+
+**`ml/syllabus.csv` deleted** at the instructor's instruction ("i dont care about it, we just use
+the 00_plan"). It had drifted badly - it still carried `L13_clustering`, `L13b_pca_dim_reduction`
+and a week ordering that no longer matched delivery. Two competing schedules is worse than one.
+`ml/00_plan.md` is now the single registry, and its time-series numbers were corrected from
+30/31/32 to the 29/30/31 actually on disk.
+
+**Cross-references were swept, not just the filenames.** 32 files referenced the old paths.
+Student-visible callbacks in `ch8_autoencoders/L22_autoencoders.tex` said "(ch4b)"; they now say
+"the dimensionality-reduction chapter" rather than "ch10", because **`ml/ch10_diffusion/` still
+exists** and a bare "ch10" would be ambiguous until the remaining `chNN_` folders get the same
+treatment.
+
+**Alternatives rejected.** *Give each clustering practical its own number* - over-commits to a
+schedule that has not happened. *Renumber every remaining `chNN_` folder in the same pass* - far
+beyond what was asked, and the deep-learning chapters are still being written. *Keep syllabus.csv
+as a historical artifact* - it reads as current, which is exactly how it caused confusion.
+
+**What would change this.** When the deep-learning chapters are delivered, they need the same
+pass, and the `ch10_diffusion` / `10_dimensionality_reduction` ambiguity should be resolved then.
+
+---
+
+## #21 - Project 2 assigns a diagnosis, and the diagnosis was verified before it was set
+
+**Date:** 2026-08-16 · **Status:** active
+
+**Decision.** `10_dimensionality_reduction` gains a second, harder homework project: run the Project 1 eigenfaces pipeline
+on **LFW** instead of Olivetti, watch it collapse, find out why, and fix it. Chosen by the
+instructor over two alternatives (an intrinsic-dimension/embedding-distortion measurement project,
+and a CLIP semantic-image-atlas project).
+
+Before assigning it, the entire arc was **run** (`py_src/non_essential/validate_lfw_project.py`),
+because the project asks students to discover a specific causal story and it would be indefensible
+to assign that story unverified. It holds, and more cleanly than expected:
+
+| | accuracy |
+|---|---|
+| Olivetti, PCA(150) + 1-NN (Project 1) | 0.920 |
+| LFW, identical pipeline | 0.571 |
+| majority-class baseline (Bush, 530/1288) | 0.411 |
+| drop first 3 PCs | 0.655 |
+| standardize pixels first | 0.575 |
+| Fisherfaces (PCA -> LDA) | 0.820 |
+| drop 3 + LDA | 0.820 |
+
+**corr(PC1 score, image mean brightness) = +0.998**, and PC1 carries 20.4% of total variance.
+PC2-PC5 correlate at |r| < 0.05. The fattest direction in a face dataset is literally *how bright
+the photograph is*. That is the deck's "PCA is unsupervised, so the discriminative direction can
+sit in a low-variance component" slide, demonstrated rather than asserted.
+
+**Why this project over the other two.** It reuses Project 1 as its own control, so the collapse is
+measured against the student's own prior number rather than an abstract baseline. It also has a
+real intellectual payoff (supervised DR beats unsupervised DR when the nuisance variance dominates)
+instead of ending at a picture.
+
+**Two deliberate traps, both verified.** Standardizing pixels barely helps (0.575) because it
+equalizes each *pixel* across the dataset and does nothing about a per-*image* brightness offset -
+students who assume the two fixes are equivalent get contradicted by their own table. And
+`drop 3 + LDA` exactly equals plain LDA, because once labels are in play LDA already assigns the
+brightness axis no weight; task 10 asks students to explain that.
+
+**Alternatives rejected.** *Intrinsic dimension + embedding distortion* - quantitatively the
+richest, but it never fails at anything, and "measure a number" is a weaker arc than "your model
+broke, find out why". *CLIP semantic atlas* - heavy overlap with the image-clustering practical
+just built on the identical data (#17). *Extend Project 1 in place* - would leave the course with
+one project where the lesson deserves a contrast between a lab dataset and a real one.
+
+**What would change this.** If the ~200 MB LFW download proves a real barrier for students, swap to
+a smaller in-the-wild face set and re-run the answer key. If an sklearn change moves the numbers
+materially, update the key rather than the prose - the arc, not the digits, is the assignment.
+
+---
+
+## #20 - UMAP gets its own lecture (35_umap), ported from the instructor's LMU deck
+
+**Date:** 2026-08-16 · **Status:** active
+
+**Decision.** `10_dimensionality_reduction` becomes a two-lecture chapter. `34_dimensionality_reduction` keeps answering *what DR gives you and
+when to use which method*; the new **`35_umap.tex`** (29 pages) answers *how UMAP actually
+works*. It is a port of the instructor's own LMU student-assistant deck, copied to
+`_reference_umap_lmu/` and rebuilt in course style.
+
+**Why.** The course deck gave UMAP a single frame naming two hyperparameters, which is thin for the
+algorithm students will use most. The LMU deck already covered the mechanism properly. The
+instructor chose the full port over "figures only" and "grow to ~5 frames".
+
+**Port decisions.**
+
+- **Overlap compressed, not repeated.** Four LMU frames (motivation/curse, PCA recap, t-SNE recap,
+  the three-way comparison table) are covered in more depth by 34_dimensionality_reduction, delivered immediately before.
+  They collapse into one "Where we left off" bridge frame that keeps only the genuinely new claim:
+  `KL(P||Q)` punishes tearing neighbours apart but not collapsing distant points together, so
+  t-SNE's objective leaves global structure unprotected. That claim then pays off on the loss
+  frame, where UMAP's cross-entropy is split into its attraction and repulsion halves.
+- **The toy example runs at k=3, not k=2.** The LMU deck states `sigma_A ~ 0.4`. That is not what
+  the binary search returns: at `k=2` the nearest neighbour alone contributes exactly
+  `log2(2) = 1`, so the target is already met and `sigma -> 0` (verified: `sigma=0.01` gives a sum
+  of 1.0035). At `k=3` the target 1.585 gives a genuine `sigma_A = 0.1532`.
+- **The triangle apexes moved off-centre** (0.45/5.45, not 0.50/5.50). A centred apex puts two
+  neighbours at exactly `rho`, pinning the sum at >= 2 against a target of 1.585 - also unsolvable.
+  Found because the figure script *raises* on non-convergence instead of returning a fallback.
+- **Hand-drawn hyperparameter grids became real runs.** The LMU deck sketched `n_neighbors` and
+  `min_dist` effects as scattered TikZ dots; `py_src/umap_demos.py` now runs UMAP at those actual
+  settings on Fashion-MNIST. Per `ml/SLIDE_STYLE.md`, and it is also just more honest. TikZ is kept
+  only for the manifold sketch, the directed-edge pair and springs-and-magnets.
+- **Every toy number on the slides is printed by the figure script** to `logs/umap_demos.log`, so
+  the slides cannot drift from the math.
+
+**Alternatives rejected.** *Figures only* - cheapest, but leaves the mechanism untaught. *Grow to
+~5 frames* - the balanced option, rejected by the instructor in favour of depth. *Keep the LMU
+recap frames for standalone use* - costs ten minutes re-teaching material from the previous slot.
+
+**What would change this.** If the two lectures end up delivered weeks apart rather than back to
+back, restore the compressed recap frames so 35_umap stands alone.
+
+---
+
+## #19 - 10_dimensionality_reduction's running dataset moves from 8x8 digits to Fashion-MNIST
+
+**Date:** 2026-08-16 · **Status:** active
+
+**Decision.** The dimensionality-reduction deck's running dataset changes from sklearn's 8x8
+digits (64-D) to **Fashion-MNIST** (28x28, 784-D), cached as a committed 12,000-image stratified
+subsample (`data/fashion_mnist.npz`, 5.3 MB, built by `py_src/fetch_fashion_mnist.py`). A single
+extra frame uses the **CLIP embeddings already committed for 09_clustering** (#17) to show DR on a
+real 512-D embedding space, drawn with the actual photographs.
+
+**Why.** Instructor: "8x8 already looks quite terrible." It is not one bad figure - the digits were
+the spine of the whole deck (hook, scree, reconstruction, denoising, t-SNE, UMAP, comparison). The
+reconstruction frame was the worst case: at 8x8, `k=5` and `k=50` are both grey mush, so the
+compression lesson was a claim rather than a demonstration. At 28x28 an ankle boot is unmistakable
+at `k=50` and unrecognizable at `k=5`.
+
+The numbers also teach better. Regenerated and verified:
+
+- PC1 = **29.0%**, PC1+PC2 = **46.8%** (digits: 14.9% / 28.5%)
+- 95% variance needs **184 of 784** components - a far stronger predict-first than "29 of 64",
+  because students reliably guess "two or three"
+- reconstruction at k = 5 / 20 / 50 keeps 61.7% / 78.6% / 86.3% of variance
+
+**Also swept `REVIEW.md` (2026-07-07), which had never been applied.** All ten items addressed
+except #10. Notably its item 1 - the deck stated "first PC ~12%, first two ~22%" while its own
+scree figure showed 0.148 - was still live in the `.tex` thirteen months later. Item 10 (a 2x2
+characteristic-polynomial worked example) is deliberately not done: the by-hand PCA frame already
+carries real covariance and eigenvalue numbers, and a determinant derivation would push a
+37-page deck longer for mechanics the linear-algebra course covers.
+
+**Alternatives rejected.** *MNIST-784* - same resolution win, but retells the digits story and
+wastes the second domain. *Olivetti faces* - the most dramatic reconstruction, but it is the
+Project 1 dataset, and the review specifically praised deck and homework using different data.
+*CLIP embeddings as the main dataset* - the most modern framing, but embeddings cannot carry the
+compression/denoising half of the deck, since there is no image to rebuild. Hence: Fashion-MNIST
+throughout, CLIP for exactly one frame.
+
+**What would change this.** If the 5.3 MB committed npz becomes a problem, drop `PER_CLASS` in
+`fetch_fashion_mnist.py` - PCA's explained-variance numbers are stable well below 12,000 samples,
+but the slides quote them, so regenerate the figures and the `.tex` numbers together.
+
+---
+
+## #18 - ch20 is a deliberate retelling of one video, but its central experiment is re-run here
+
+**Date:** 2026-08-14 · **Status:** active
+
+**Decision.** `ml/ch20_subliminal_learning` (deck `L48`) follows Welch Labs' *These Numbers Can
+Make AI Dangerous* beat for beat, at the instructor's request ("basically retell the video, don't
+add too much"). The scope rule written into the chapter plan is: **if it is not in the video, it
+needs a reason to be here.** Exactly three things were added, all of them corrections or
+verifications rather than new material:
+
+1. The MNIST experiment is **measured on this machine**, not quoted. `py_src/subliminal_mnist.py`
+   writes `results/subliminal_mnist.json`; every figure derives from that file.
+2. A **different-initialisation control**, which the video only implies. It is the falsifiable half
+   of the argument and the thing that makes the GPT-4.1/GPT-4o anomaly land.
+3. The token-entanglement source is corrected: it is a **blog post**, not an arXiv paper, and its
+   mechanism (the softmax bottleneck) is named. The video says neither.
+
+**Why re-run it.** Same reason as ch19: a measured number the instructor can defend beats a quoted
+one, and it costs about a CPU-minute. It paid for itself immediately - the guard asserting the
+auxiliary head receives zero gradient returned **exactly `0.000e+00`**, which is the single claim
+the whole lecture rests on, and the theorem check returned **0/200 negative cosines with a shared
+init against 91/200 without one**.
+
+**The uncomfortable part, recorded rather than hidden.** The paper's headline (>50% MNIST accuracy)
+and its most striking variant (distilling on *pure noise*) **did not reproduce at this scale**. We
+get 10.0% -> 20.4% with a shared init against 11.6% -> 13.7% for the control, and only 14.4% on
+noise. The paper does not publish the learning rate or schedule. The deck carries a frame saying
+exactly this rather than quoting a number we did not obtain.
+
+**Alternatives rejected.** *Quote the paper's 50% and show no run of our own* - cheapest, and it is
+what the video does, but it gives up the one thing this repo can add. *Keep tuning until we hit
+50%* - unbounded search against unpublished hyperparameters, on a laptop, for a number that is not
+load-bearing; the qualitative effect and its dependence on shared initialisation are what the
+lecture actually needs. *Drop the MNIST section* - it is the bridge between the language-model
+result and the proof, and removing it would leave the algebra unmotivated.
+
+**What would change this.** If the paper's code or hyperparameters become available and a short run
+reproduces >50%, replace the measurements and delete the caveat frame. If a student review finds
+the "what did not reproduce" frame reads as a failure rather than as method, reframe it - but do
+not remove it.
+
+---
+
+## #17 - A third clustering practical uses CLIP as a black box, in ch4 rather than later
+
+**Date:** 2026-08-14 · **Status:** active
+
+**Decision.** `09_clustering` gains `33_image_clusters_solution.ipynb`: 2000 Imagenette photos encoded
+with **CLIP ViT-B/32**, clustered with k-means, displayed as a self-contained interactive HTML map
+with thumbnail-on-hover. The encoder is **explicitly a black box** at this point in the course, with
+a stated promise that chapters 6 and 9 explain it. Embeddings, thumbnails, labels and 40 text
+vectors are precomputed into `data/imagenette_clip.npz` (3.2 MB) by
+`py_src/embed_images_clip.py`; the student notebook needs numpy, sklearn and plotly only.
+
+**Why.** It supplies the result the chapter otherwise lacks. Image compression has no labels, and
+Sevan scored ARI 0.48 that collapsed to 0.16 once the lake was removed. Here the *same* k-means on
+the *same* photos scores **0.048 on raw pixels and 0.939 on CLIP embeddings** - a twentyfold
+difference from the representation alone. That measurement is the chapter's thesis, and nothing
+else in it states the case as sharply.
+
+CLIP specifically, over DINOv2 or a small CNN, because text shares the embedding space: each
+cluster **names itself** by finding the nearest of 40 candidate English words, and it got 10 out
+of 10 right with no labels involved. That turns the manual naming step from the Sevan practical
+into an automatic one, and the runner-up words (church/clock, golf ball/parachute) are the
+clearest available picture of what "distance" means in a learned space.
+
+**Alternatives rejected.** *Wait for ch6 or ch9, where the encoder could be explained* - it would
+strand the clustering chapter without this result for two months, and using a pretrained encoder
+as a component is exactly how it is done in practice. *DINOv2* - slightly better pure-vision
+features and a smaller download, but no text tower, so no self-naming. *No deep learning
+(histograms, HOG)* - that is the baseline the notebook uses to demonstrate failure, not a
+substitute for the payoff. *An unlabelled photo album* - loses ARI, and the chapter's evaluation
+thread is what ties the three practicals together.
+
+**What would change this.** If ch6 or ch9 later wants an image-embedding practical of its own,
+this one should be checked for overlap rather than duplicated. If the CLIP download becomes a
+problem for students, note that they never need it - only the instructor re-running the script does.
+
+---
+
+## #16 - The land-cover practical ships a committed 20 m npz, not a live data pull
+
+**Date:** 2026-08-13 · **Status:** active
+
+**Decision.** `ml/09_clustering/py_src/fetch_sevan_scene.py` is **instructor-side and run once**.
+It queries Earth Search for a cloud-free Sentinel-2 L2A scene, crops a 1000x1000 window at
+**20 m**, reprojects ESA WorldCover onto the same grid with nearest neighbour, and writes
+`data/sevan_s2_crop.npz` (9.2 MB, committed). The student notebook opens that file with plain
+`np.load` and needs **numpy, sklearn and matplotlib only**.
+
+**Why.** The `ma` venv had **no geospatial stack at all** - `rasterio`, `rioxarray`,
+`pystac-client` and `geopandas` were all missing, and installing them is a GDAL-shaped dependency
+chain on every student machine an hour before class. A practical that can fail at `import
+rasterio` has a failure mode unrelated to anything being taught. The npz also removes the network
+from the critical path: the session works with the wifi down.
+
+20 m rather than the native 10 m because at 10 m a 20 km square is 4M pixels and ~50 MB in git.
+At 20 m the scene covers the same ground for 9.2 MB, k-means on the full cube runs in ~10 s on
+the laptop, and **B11/B12 arrive at their native resolution** instead of being upsampled - and
+those two bands are what separate bare soil from built-up from dry grass, so the trade buys
+accuracy rather than costing it.
+
+**Alternatives rejected.** *Students query the STAC API themselves* - teaches real data
+acquisition and lets them pick their own region, but costs a geospatial install per machine,
+class time on setup, and a hard network dependency; kept as a homework bonus instead, since the
+fetch script is in the repo. *Copernicus Data Space* - needs an account; the AWS
+`sentinel-2-l2a-cogs` bucket is free, unauthenticated and not requester-pays. *10 m with a
+smaller footprint* - a 10 km square loses the steppe and most of the class variety.
+
+**What would change this.** A repo-wide geospatial stack arriving for some other chapter, which
+would make the live-fetch version nearly free. Or the crop needing to change often, which would
+make a committed binary the wrong place to keep it.
+
+---
+
+## #15 - Clustering gets a second practical: land cover, not a second image task
+
+**Date:** 2026-08-13 · **Status:** active
+
+**Decision.** `09_clustering` gains a second practical, **unsupervised land-cover mapping of
+Lake Sevan** (`33_land_cover_solution.ipynb`), alongside the existing k-means image-compression
+project. Design in `33_land_cover_OUTLINE.md`. Not yet scheduled - `00_plan.md` still
+shows Aug 21 as the image-compression slot, and which one takes it is an open call.
+
+**Why.** Image compression exercises roughly a quarter of a 47-frame deck: k-means, mini-batch,
+elbow, silhouette. The rest is unreachable *by construction*, not by omission - RGB pixels have no
+labels, so the deck's entire external-evaluation section (ARI, AMI, the label-permutation
+problem) cannot be practised, and quantization never asks what a cluster *is*, because the
+clusters are colours about to be thrown away. Land cover reaches all of it: naming clusters from
+mean spectra, GMM soft assignment with a physical meaning, DBSCAN failing for a stateable reason,
+and ARI/AMI against ESA WorldCover.
+
+**Alternatives rejected.** *Gaia star clusters with HDBSCAN* - the strongest fit for the deck
+(95 % of points are correctly noise, which k-means cannot express) and a genuinely current
+published method, but the instructor chose the locally-grounded option. *NBA hidden positions* -
+best story, weakest visual payoff. *A tabular customer-segmentation exercise* - covers the same
+concepts with none of the visual result. *Extending the image practical instead* - would not have
+produced labels, which is the whole point.
+
+**What would change this.** If the schedule can only fit one clustering practical, this one
+covers strictly more of the deck than image compression and should take the slot; the choice is
+then which to demote to homework-only.
+
+---
+
 ## #14 - Superposition and SAEs stay in ch8; ch19 gets them as a callback only
 
 **Date:** 2026-08-13 · **Status:** active
@@ -74,7 +509,7 @@ renumbered with everything else, not before.
 
 **Date:** 2026-08-09 · **Status:** active
 
-**Decision.** `fig_agglo_anim` in `ml/ch4_clustering/py_src/cluster_demos.py` builds its
+**Decision.** `fig_agglo_anim` in `ml/09_clustering/py_src/cluster_demos.py` builds its
 dendrogram with **Ward** linkage. The frame's story changes from "merge the two clusters whose
 midpoints are closest" to "merge the two clusters that cost the least extra spread."
 

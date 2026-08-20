@@ -53,14 +53,30 @@ Videos for [22]–[24] are recorded but not yet published. [26] and [27] are not
 |---|---|---|---|
 | ~~**Aug 12**~~ | Wed | ✅ Feature engineering + feature selection — **delivered**, notes exported. Classic methods was cut for time. | `26_feature_engineering` · `27_feature_selection` |
 | **next slot** | — | Classic methods — **slipped from Aug 12**, needs rescheduling | `28_svm_and_classic_methods` |
-| **Aug 14** | Fri | Time series lecture | `30_classical_time_series` · `31_ml_time_series` |
-| **Aug 16** | Sun | *Practical* — Armenia electricity / gas usage | `32_electricity_forecast_solution.ipynb` |
-| **Aug 19** | Wed | Clustering | `L13_clustering` |
-| **Aug 21** | Fri | *Practical* — compress a Saryan painting | `solution_image_compression.ipynb` |
-| **Aug 23** | Sun | Dimensionality reduction | `L13b_dimensionality_reduction` |
+| **Aug 14** | Fri | Time series lecture | `29_classical_time_series` · `30_ml_time_series` |
+| **Aug 16** | Sun | *Practical* — Armenia electricity / gas usage | `31_electricity_forecast_solution.ipynb` |
+| **Aug 19** | Wed | Clustering — **ch09** | `32_clustering` |
+| **Aug 21** | Fri | *Interlude* — color spaces, then the practical | `33_color_spaces` |
+| **Aug 21** | Fri | *Practical* — Saryan painting, Lake Sevan land cover, photo grouping | `34_image_compression_solution.ipynb` · `34_land_cover_solution.ipynb` · `34_image_clusters_solution.ipynb` |
+| **Aug 23** | Sun | Dimensionality reduction — **ch10** | `35_dimensionality_reduction` |
+| **Aug 26** | Tue | UMAP in depth — new second lecture of ch10 | `36_umap` |
 
-After Aug 23 the classic ML track (chapters 01–08 plus clustering and dim reduction) is fully
-delivered, and everything remaining is the deep-learning half.
+After the UMAP lecture the classic ML track (chapters 01–10) is fully delivered, and everything
+remaining is the deep-learning half.
+
+**Numbering note (2026-08-16).** Clustering and dimensionality reduction were renumbered to
+continue the global sequence: folders `ml/09_clustering/` and `ml/10_dimensionality_reduction/`,
+files `32`–`36`, replacing the legacy `ch4_clustering` / `ch4b_...` and `L13`/`L13b`/`L13c` names.
+The clustering practicals share one number because they are one practical session, matching the
+`21_*` precedent in ch04. Careful: `ml/10_dimensionality_reduction/` is **not** `ml/ch10_diffusion/`
+— the remaining `chNN_` folders are legacy and still need their own renumbering pass.
+
+**Numbering note (2026-08-20).** The new colour-spaces interlude took `33`, so everything after it
+shifted by one: the three clustering practicals `33_*` → `34_*`, `34_dimensionality_reduction` →
+`35_`, `35_umap` → `36_`, `36_eigenfaces_solution` → `37_`. Both chapter folders were still
+**untracked** in git at the time, so the rename cost no history — but it also means `git grep`
+could not see them. The reference sweep had to use ripgrep: `git grep` found 4 files, ripgrep
+found 13. See `_learnings/2026-08-20-1900_git-grep-cannot-see-untracked-work.md`.
 
 ---
 
@@ -71,8 +87,8 @@ every extra session pushes everything after it by 2–3 days.
 
 | Block | Sessions | Dates | Built material |
 |---|---|---|---|
-| Dim reduction practical | 1 | Aug 26 | `solution_eigenfaces.ipynb` |
-| Neural networks | 2–3 | Aug 28, 30 | `L14`, `L15` |
+| Dim reduction practical | 1 | Aug 28 | `37_eigenfaces_solution.ipynb` + the LFW recognition project |
+| Neural networks | 2–3 | Aug 30, Sep 1 | `L14`, `L15` |
 | NN practical | 1–2 | Sep 2 | `nn_practical_solution.ipynb` |
 | CNN | 3 | Sep 4, 6, 9 | `L16`–`L19` |
 | RNN | 2 | Sep 11, 13 | `L20`, `L21` |

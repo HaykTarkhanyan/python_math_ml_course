@@ -108,7 +108,7 @@ A **single worked example threaded across L01d / L01d2 / L01e / L01f / L01h** (r
 
 - **Migrate or delete the auto-memory folder.** As of 2026-06-19 we switched to "all persistence in repo files, never write memory." But ~13 pre-existing memory files still live at `~/.claude/projects/C--Users-hayk--OneDrive-Desktop-01-python-math-ml-course/memory/` (user role, feedback rules, pedagogy notes, course completion status, etc.). Decide per file: copy still-useful content into `CLAUDE.md` / `CONVENTIONS.md` / `LEARNINGS.md`, then delete the memory folder. Until done, future sessions may still load those memories as context.
 
-- **Decide the DL-track file naming, then make `CONVENTIONS.md` true.** (Found 2026-08-04.) The convention file says lecture slides are `NN_topic.tex` matching playlist position, and that "No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out." But **nine chapters** use `LNN_topic.tex` inside `chN_name/` folders: `ch4_clustering`, `ch4b_dimensionality_reduction`, `ch5_neural_networks`, `ch6_cnn`, `ch7_rnn`, `ch8_autoencoders`, `ch8b_gans`, `ch9_attention`, `ch10_diffusion`. (`07_classic_methods/L12b` was on this list until 2026-08-12, when it was renamed to `28_svm_and_classic_methods` — its playlist number became knowable once the feature-engineering lectures were fixed at 26/27.) Their chapter pages are also bare (`clustering.qmd`, `gans.qmd`) rather than the documented `NN_chapter_topic.qmd`. Two honest resolutions: (a) update `CONVENTIONS.md` to describe the real two-track scheme — playlist-numbered `NN_` for the delivered classic-ML track, `LNN_` for the not-yet-scheduled DL track — or (b) renumber the DL track once its playlist order is known. **(a) is cheap now; (b) gets more expensive with every deck.** Note the DL lecture numbers currently *collide* with the classic ones (`24_shap_lime` vs `L24_attention`).
+- **Decide the DL-track file naming, then make `CONVENTIONS.md` true.** (Found 2026-08-04.) The convention file says lecture slides are `NN_topic.tex` matching playlist position, and that "No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out." But **nine chapters** use `LNN_topic.tex` inside `chN_name/` folders: `09_clustering`, `10_dimensionality_reduction`, `ch5_neural_networks`, `ch6_cnn`, `ch7_rnn`, `ch8_autoencoders`, `ch8b_gans`, `ch9_attention`, `ch10_diffusion`. (`07_classic_methods/L12b` was on this list until 2026-08-12, when it was renamed to `28_svm_and_classic_methods` — its playlist number became knowable once the feature-engineering lectures were fixed at 26/27.) Their chapter pages are also bare (`09_clustering.qmd`, `gans.qmd`) rather than the documented `NN_chapter_topic.qmd`. Two honest resolutions: (a) update `CONVENTIONS.md` to describe the real two-track scheme — playlist-numbered `NN_` for the delivered classic-ML track, `LNN_` for the not-yet-scheduled DL track — or (b) renumber the DL track once its playlist order is known. **(a) is cheap now; (b) gets more expensive with every deck.** Note the DL lecture numbers currently *collide* with the classic ones (`24_shap_lime` vs `L24_attention`).
 
 - **Resolve the duplicate feature-engineering decks.** (Found 2026-08-04.) `ml/06_feature_engineering/` holds two compiled versions of the same two topics: `26_feature_engineering` + `27_feature_selection` (Jul 2026) and `L01g_feature_engineering` + `L01h_feature_selection` (Jun 2026). Pick the live pair, move the other to an archive folder per the repo-structure tiers. The chapter has no `.qmd`, so neither is on the site yet.
 
@@ -187,6 +187,27 @@ Both cut by instructor decision at plan time, not because they are weak. Plan:
    constraint: this needs a GPU, so it is a Colab job, not a laptop job.
 
    Project ideas stay recorded in `_knowledge/jepa/06_teaching_notes.md` as research.
+
+---
+
+## ch6 CNN — trim L16's colour section now that deck 33 exists
+
+**Deferred 2026-08-20.** `ml/09_clustering/33_color_spaces.tex` now teaches cones, RGB, HSV and
+grayscale roughly three weeks before `L16_cnn_foundations.tex` reaches them. `L16` Section 1 still
+carries its own four frames plus its own copies of `eye_cones.py`, `rgb_channels.py` and
+`hsv_space.py` — the instructor's call was **copy, not move**, so `L16` still compiles standalone.
+
+The open question is whether `L16`'s Section 1 should shrink to a single recap frame pointing back
+at deck 33. Arguments both ways:
+
+- **Trim it:** four duplicated frames is four frames of a three-lecture CNN block spent on material
+  already delivered, and the duplicate figure scripts can drift apart.
+- **Keep it:** `L16` is currently self-contained and can be lifted into another course; the CNN
+  chapter is not scheduled until ~Sep 4, and by then the colour material will be three weeks stale
+  for the students.
+
+Decide when the CNN chapter is next touched, not before. If it gets trimmed, the astronaut-based
+figures in `ch6_cnn/fig/` can go with it; deck 33's copies are Saryan-based and independent.
 
 ---
 

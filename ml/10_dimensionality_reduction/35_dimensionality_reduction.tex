@@ -1,0 +1,512 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true,
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Large\color{popblue}\textbf{#1}}\\[0.9em]
+      \begin{minipage}{0.82\textwidth}\centering\small #2 \end{minipage}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\title{Dimensionality Reduction}
+\subtitle{PCA $\cdot$ t-SNE $\cdot$ UMAP}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{How do you \emph{look} at 784-dimensional data?}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+    A photo of a shirt is $28\times28 = \mathbf{784}$ numbers; gene expression $\sim$20{,}000;
+    a text embedding $\sim$768. You cannot plot that.
+    \vskip 6pt
+    \textbf{Dimensionality reduction:} replace many features with a \emph{few} new ones that keep
+    most of the structure.
+    \vskip 6pt
+    Bridge from clustering --- both are \textbf{unsupervised} (no $y$): clustering groups the
+    \textbf{rows} (samples), DR compresses the \textbf{columns} (features).
+    \column{0.52\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_fashion_samples.pdf}\\[3pt]
+      {\scriptsize \textbf{Running dataset:} Fashion-MNIST, 12{,}000 garment photos
+      ($28\times28$ grayscale, 10 classes). Each image $=$ 784 pixel values; we will squeeze
+      those 784 down to 2 to \emph{see} the data.}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why reduce dimensions?}
+  \begin{itemize}
+    \item \textbf{Visualization} --- see high-dimensional data in 2-D.
+    \item \textbf{Preprocessing / compression} --- faster models, less storage, fewer features
+      before clustering or a classifier.
+    \item \textbf{Denoising} --- drop tiny-variance directions that are \emph{often} just noise.
+  \end{itemize}
+  \vfill
+  \footnotesize And a deeper reason, next: in high dimensions, distance itself stops working.
+\end{frame}
+
+\begin{frame}{The curse of dimensionality}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \textbf{Predict-first:} in 100 dimensions, how much closer is your \emph{nearest} point than
+    your \emph{farthest}?
+    \pause
+    \vskip 4pt
+    Almost the same. In 100 dimensions the farthest point is only about \textbf{40\% farther}
+    than the nearest; in 2 dimensions it is roughly \textbf{87 times} farther. Distances
+    \textbf{concentrate}, so distance-based methods (k-means, kNN, DBSCAN\dots) degrade.
+    \vskip 4pt
+    \footnotesize Reduce first, and distances mean something again.
+    \vskip 3pt
+    {\scriptsize Full treatment in our homework: \texttt{math/30\_curse\_of\_dimensionality.qmd}.}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_curse_distances.pdf}\\[-1pt]
+      {\scriptsize Relative contrast $(D_{max}-D_{min})/D_{min}$ from random query points
+      (Beyer et al.\ 1999).}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{PCA: the idea and the math}
+\sectiontransition{Principal Component Analysis}{The linear workhorse: new axes along the
+directions of greatest variance.}
+
+\begin{frame}{PCA: keep the directions of greatest spread}
+  Sweep a direction through the cloud and \textbf{project} the points onto it (red dots). The
+  \textbf{projected variance} $\bm{w}^\top\bm{\Sigma}\bm{w}$ --- how spread out those red dots are ---
+  rises and falls, peaking at the \textbf{principal axis}. Keep the \textbf{top-$k$} such axes
+  (here 2-D$\to$1-D; for the 784-D garments we will keep 2).
+  \begin{center}
+    \only<1>{\includegraphics[width=0.50\textwidth]{fig/dr_pca_anim_1.pdf}}%
+    \only<2>{\includegraphics[width=0.50\textwidth]{fig/dr_pca_anim_2.pdf}}%
+    \only<3>{\includegraphics[width=0.50\textwidth]{fig/dr_pca_anim_3.pdf}}%
+    \only<4>{\includegraphics[width=0.50\textwidth]{fig/dr_pca_anim_4.pdf}}%
+    \only<5>{\includegraphics[width=0.50\textwidth]{fig/dr_pca_anim_5.pdf}}%
+  \end{center}
+  \vskip -2pt
+  \footnotesize \textbf{PCA does not search or iterate} --- the eigenvectors (next frames) give
+  these axes directly; the sweep just shows what ``maximum variance'' means.
+\end{frame}
+
+\begin{frame}{Refresher: eigenvectors and eigenvalues}
+  \begin{columns}[T]
+    \column{0.54\textwidth}
+    An \textbf{eigenvector} $\bm{v}$ of a matrix $A$ keeps its \emph{direction} when $A$ acts on it;
+    it only gets scaled by the \textbf{eigenvalue} $\lambda$:
+    \[ A\bm{v} = \lambda \bm{v}. \]
+    \vskip 4pt
+    A \textbf{symmetric} matrix --- like a covariance --- has real eigenvalues and
+    \textbf{orthogonal} eigenvectors. \emph{That is why the principal axes come out perpendicular.}
+    \column{0.46\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[scale=0.95, >=stealth]
+        \draw[->, gray] (-0.3,0) -- (3.4,0);
+        \draw[->, gray] (0,-0.3) -- (0,2.6);
+        \draw[->, armblue, very thick] (0,0) -- (1.4,0.9) node[above left]{$\bm{v}$};
+        \draw[->, armred, very thick] (0,0) -- (2.8,1.8) node[right]{$A\bm{v}=\lambda\bm{v}$};
+        \node[armred, font=\scriptsize] at (2.0,0.7) {same direction, $\times\lambda$};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Derivation (1): maximize variance}
+  \textbf{Step 0 --- center the data} (subtract each feature's mean). Without it, $X^\top X$ measures
+  spread about the \emph{origin}, not about the data.
+  \vfill
+  Variance of the data projected onto a unit direction $\bm{w}$ is $\bm{w}^\top \bm{\Sigma}\bm{w}$
+  ($\bm{\Sigma}=$ covariance of the centered data). Maximize it subject to $\|\bm{w}\|=1$.
+  Form the \textbf{Lagrangian} and set its gradient to zero:
+  \[
+    \mathcal{L}(\bm{w},\lambda) = \bm{w}^\top\bm{\Sigma}\bm{w} - \lambda(\bm{w}^\top\bm{w}-1),
+    \qquad
+    \nabla_{\bm{w}}\mathcal{L} = 2\bm{\Sigma}\bm{w} - 2\lambda\bm{w} = 0
+  \]
+  \[
+    \;\;\Longrightarrow\;\; \bm{\Sigma}\bm{w} = \lambda\,\bm{w}.
+  \]
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The principal directions are the \textbf{eigenvectors of the covariance matrix}; each
+    eigenvalue $\lambda$ is the \textbf{variance captured} along that direction.}}
+\end{frame}
+
+\begin{frame}{Derivation (2): explained variance}
+  \begin{itemize}\small
+    \item Eigenvalues sorted \textbf{descending} $\Rightarrow$ principal components come out
+      \textbf{ordered by variance}; take the top $k$ eigenvectors.
+    \item \textbf{Explained-variance ratio} of component $i$ is $\lambda_i / \sum_j \lambda_j$
+      (first PC of the garments $\approx 29\%$; first two $\approx 47\%$).
+    \item The scores are \textbf{uncorrelated}: $\mathrm{Cov}(Z) = W^\top\bm{\Sigma}W =
+      \mathrm{diag}(\lambda_1,\dots,\lambda_k)$. This is the precise sense in which PCA
+      \emph{decorrelates} --- not that it ``removes correlated features''.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Two views, one answer.} Maximizing variance \textbf{is} minimizing
+    \textbf{reconstruction error}: projecting onto the top-$k$ axes and lifting back loses the least.
+    That is the basis for compression and denoising later.}}
+\end{frame}
+
+\begin{frame}{The SVD connection}
+  In practice PCA is computed by the \textbf{singular value decomposition} of the centered data:
+  \[ X_{\text{centered}} = U S V^\top, \qquad \text{columns of } V = \text{principal components}. \]
+  \begin{itemize}\small
+    \item More numerically stable than forming the covariance matrix explicitly.
+    \item \textbf{TruncatedSVD} (a.k.a.\ \emph{LSA} for text) skips centering, so it works on
+      \textbf{sparse} data --- centering would destroy the sparsity.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{PCA by hand (2-D)}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \footnotesize
+    \begin{enumerate}
+      \item Center the points (subtract the mean, the \textbf{X}).
+      \item Form the $2\times2$ \textbf{covariance} matrix.
+      \item Its \textbf{eigenvectors} are the principal axes; \textbf{eigenvalues} $\lambda$ are the
+        variances (arrow length $\propto\sqrt{\lambda}$).
+    \end{enumerate}
+    \vskip 4pt
+    PC1 captures most of the spread; PC2 is perpendicular and small.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_byhand_pca.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+% ================================================================
+\section{PCA in practice}
+\sectiontransition{PCA in practice}{Scaling, how many components to keep, what they mean, and where
+PCA bites.}
+
+\begin{frame}{Centering vs scaling}
+  \begin{itemize}\small
+    \item PCA \textbf{always centers} (scikit-learn does it for you) --- mandatory.
+    \item PCA does \textbf{not standardize} --- that is your choice.
+  \end{itemize}
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{fig/dr_scaling_trap.pdf}
+  \end{center}
+  \vskip -4pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Trap:} variance is scale-dependent. In dollars, PC1 is $(1.00,\,0.00)$ --- literally
+    the income axis, and age contributes nothing. Standardized, PC1 is $(0.71,\,0.71)$: the real
+    shared direction. \textbf{Standardize} unless your features already share units (like pixel
+    intensities, which is why we do not standardize the garments).}}
+\end{frame}
+
+\begin{frame}{How many components to keep?}
+  \textbf{Predict-first:} the garments are 784-D and the first PC alone is 29\%. How many
+  components do you need to reach \textbf{95\%}?
+  \pause
+  \begin{center}
+    \includegraphics[width=0.93\textwidth]{fig/dr_scree.pdf}
+  \end{center}
+  \vskip -4pt
+  \footnotesize \textbf{184} --- almost a quarter of them, not a handful. \textbf{Scree plot}
+  (left): variance per component, and it collapses almost immediately. \textbf{Cumulative}
+  (right): the tail is long and flat, and that long tail is where the detail lives.
+  \vskip 2pt
+  {\scriptsize \textbf{When PCA feeds a model}, do not pick $k$ by a variance threshold at all
+  --- tune it by cross-validation on the \emph{downstream} metric.}
+\end{frame}
+
+\begin{frame}{Reading a biplot}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    A \textbf{biplot} shows two things on the same PC1--PC2 axes:
+    \begin{itemize}\small
+      \item \textbf{dots} $=$ the samples projected onto PC1/PC2 (colored by species here);
+      \item \textbf{arrows} $=$ the original features (their \emph{loadings}).
+    \end{itemize}
+    How to read an arrow:
+    \begin{itemize}\small
+      \item \textbf{direction} $=$ the way that feature increases;
+      \item \textbf{length} $=$ how strongly it drives these two PCs;
+      \item arrows pointing the \textbf{same way} $=$ correlated features.
+    \end{itemize}
+    \footnotesize So petal length \& width point together (correlated) and separate the species along
+    PC1; sepal width points elsewhere. \emph{Components are combinations --- only partly interpretable.}
+    \column{0.5\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_biplot.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reconstruction: compression and denoising}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \footnotesize
+    \textbf{Project} to $k$ scores, then \textbf{lift back} to the original space:
+    \[ \bm{z} = W_k^\top(\xv-\bar{\xv}), \qquad \hat{\xv} = \bar{\xv} + W_k\,\bm{z}. \]
+    ``Lift back'' $=$ the \textbf{mean plus a weighted sum of the kept axes}:
+    \[ \hat{\xv} = \bar{\xv} + \textstyle\sum_{i=1}^{k} z_i\,\bm{v}_i \]
+    ($\bm{v}_i$ the principal directions, $z_i$ the scores). Fewer $k$ $=$ more compression (blurrier).
+    \vskip 3pt
+    784 numbers $\to$ \textbf{50} and the garment is still clearly itself.
+    \vskip 3pt
+    \textbf{Callback:} the blurriness at $k{=}5$ is exactly the variance the scree plot said we
+    threw away. The squared reconstruction error is $\sum_{i>k}\lambda_i$ (the dropped
+    eigenvalues); as a \emph{fraction} of the total, that is $1-$ cumulative EVR.
+    \vskip 3pt
+    Noise lives in the small-variance directions you dropped, so the rebuild is also \textbf{denoised}.
+    \column{0.54\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_reconstruction.pdf}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{PCA pitfalls}
+  \begin{itemize}\small
+    \item \textbf{Not feature selection} --- components are \emph{combinations} of all features, not a
+      chosen subset. DR is feature \textbf{extraction} (build new features); the other family,
+      feature \textbf{selection}, keeps a subset of the originals (drop low-variance or correlated
+      columns, L1, \dots). Extraction gives you better axes; selection gives you back your
+      original, readable ones.
+    \item \textbf{Linear only} --- it cannot unfold a curved manifold (next section).
+    \item \textbf{Sensitive} to outliers and to feature scale.
+    \item Components can be \textbf{hard to interpret}.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section{Nonlinear DR for visualization: t-SNE \& UMAP}
+\sectiontransition{Nonlinear methods}{When the structure is a curved manifold, linear PCA is not
+enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
+
+\begin{frame}{Why nonlinear?}
+  PCA is \textbf{linear}: it can rotate and project, but it cannot \emph{unfold} a curved
+  manifold. Nonlinear methods instead preserve \textbf{local neighborhoods} --- who is near whom.
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{fig/dr_swiss_roll.pdf}
+  \end{center}
+  \vskip -4pt
+  \scriptsize Color $=$ position along the roll. \textbf{PCA} gives you a \emph{shadow}: the roll
+  stays rolled, so points on \emph{adjacent turns} sit side by side even though they are far
+  apart along the sheet. \textbf{UMAP} sweeps the colors once, end to end. It did not lay the
+  sheet out straight --- it had no reason to. Topology preserved, geometry not.
+\end{frame}
+
+\begin{frame}{t-SNE}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Turn distances into \textbf{similarity probabilities}, high-D and low-D, then match them.
+    \begin{itemize}\small
+      \item High-D: $p_{ij}=\tfrac{1}{2n}(p_{j|i}+p_{i|j})$ (Gaussian neighborhoods).
+      \item Low-D: $q_{ij}$ from a \textbf{Student-$t$} kernel (heavy tail $=$ fixes the
+        ``crowding'' problem).
+      \item Minimize $\mathrm{KL}(P\,\|\,Q)$ by gradient descent (iterative, \emph{stochastic}).
+    \end{itemize}
+    \textbf{Perplexity} $\approx$ effective \#neighbors (typ.\ 5--50).
+    \vskip 4pt
+    {\scriptsize Sandal, sneaker and ankle boot are each other's two nearest classes here ---
+    and so are pullover, coat and shirt. \textbf{t-SNE recovered the semantics from raw pixels},
+    with no labels.}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_tsne_fashion.pdf}
+    \end{center}
+  \end{columns}
+  \vskip -4pt
+  \hfill {\scriptsize van der Maaten \& Hinton (2008).}
+\end{frame}
+
+\begin{frame}{UMAP}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    Build a \textbf{fuzzy nearest-neighbor graph}, then find a low-D layout whose graph matches it
+    (minimize a graph \textbf{cross-entropy}).
+    \begin{itemize}\small
+      \item \texttt{n\_neighbors}: small $=$ local detail, large $=$ global shape.
+      \item \texttt{min\_dist}: how tightly points may pack.
+      \item \textbf{Faster} than t-SNE, scales better, keeps \emph{more} global structure.
+    \end{itemize}
+    \vskip 2pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
+      This frame is \emph{what UMAP gives you}. \textbf{How it works} --- the fuzzy graph,
+      $\rho_i$ and $\sigma_i$, the cross-entropy --- is the whole of the next lecture (L13c).}}
+    \column{0.48\textwidth}
+    \begin{center}
+      \includegraphics[width=\textwidth]{fig/dr_umap_fashion.pdf}
+    \end{center}
+  \end{columns}
+  \vskip -2pt
+  \hfill {\scriptsize McInnes et al.\ (2018).}
+\end{frame}
+
+\begin{frame}{Caveats: t-SNE / UMAP can mislead}
+  \textbf{Predict-first:} same data, same algorithm, one hyperparameter moved. Will the
+  picture be the same?
+  \pause
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[width=0.90\textwidth]{fig/dr_tsne_perplexity.pdf}
+  \end{center}
+  \vskip -5pt
+  \fcolorbox{armred}{armred!8}{\parbox{0.985\linewidth}{\scriptsize
+    So: \textbf{cluster sizes and between-cluster distances are not meaningful}; results are
+    \textbf{stochastic}; \textbf{do not feed the 2-D embedding to a downstream model} --- it is
+    for the eyes. {\normalfont (Wattenberg et al., distill.pub 2016.)}}}
+\end{frame}
+
+% ================================================================
+\section{Choosing a method}
+\sectiontransition{Which one?}{PCA, t-SNE, UMAP --- side by side, then a decision table.}
+
+\begin{frame}{PCA vs t-SNE vs UMAP on the garments}
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/dr_compare_fashion.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize PCA (linear) piles the classes on top of each other; t-SNE and UMAP pull them
+  apart. PCA is for preprocessing; t-SNE / UMAP are for \emph{looking}.
+  \vskip 2pt
+  {\scriptsize \textbf{In practice} the nonlinear methods here were run on the top 50 PCs, not the
+  raw 784 pixels: PCA first as a denoiser and accelerator, then t-SNE / UMAP for the picture.
+  That stack is the normal recipe, not a shortcut.}
+\end{frame}
+
+\begin{frame}{Decision table}
+  \begin{center}\small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{l c c c l}
+      & \textbf{Linear?} & \textbf{Global?} & \textbf{Determin.?} & \textbf{Use it for} \\
+      \hline
+      \textbf{PCA} & yes & yes & yes & preprocessing, compression, denoising \\
+      \textbf{t-SNE} & no & no & no & visualizing local cluster structure \\
+      \textbf{UMAP} & no & some & no (seeded) & visualization, faster / larger data \\
+    \end{tabular}
+  \end{center}
+  \vfill
+  \footnotesize \textbf{Rule of thumb:} reach for \textbf{PCA} first (fast, cheap, reversible); use
+  \textbf{t-SNE / UMAP} when you specifically want a 2-D \emph{picture} of the structure.
+\end{frame}
+
+% ================================================================
+\section{Connections and wrap-up}
+\sectiontransition{Connections}{Where DR meets the rest of the course.}
+
+\begin{frame}{What this is actually used for}
+  \small The garments were a teaching dataset. The real job: 2000 photos through \textbf{CLIP}
+  into \textbf{512-D} vectors, then UMAP to 2-D, each point drawn as its own photo.
+  \vskip -2pt
+  \begin{center}
+    \includegraphics[height=0.63\textheight]{fig/dr_clip_atlas.pdf}
+  \end{center}
+  \vskip -5pt
+  {\scriptsize Nobody labelled this, and there is no legend because you do not need one. Similar
+  \emph{meanings} landed together --- the same picture you will build for retrieval in ch17 (RAG).}
+\end{frame}
+
+\begin{frame}{A wider view (one line each)}
+  \begin{itemize}
+    \item \textbf{Kernel PCA} --- PCA in a kernel feature space: nonlinear components without leaving
+      the PCA framework.
+    \item \textbf{Autoencoders} --- a neural network that learns a low-D ``bottleneck'': nonlinear,
+      learned DR. \emph{(Neural-networks chapter.)}
+    \item \textbf{DR as preprocessing} --- standardize $\to$ PCA $\to$ then cluster or train; this is
+      the cluster-after-PCA pipeline from the previous deck, and it denoises too.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{When NOT to reduce}
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    DR throws information away --- so do not reduce reflexively:}}
+  \begin{itemize}\small
+    \item PCA is \textbf{unsupervised}: it ranks directions by variance \emph{with no knowledge of
+      $y$}. The direction that separates your labels can sit in a \textbf{low-variance} component PCA
+      discards (a thin signal axis vs.\ a fat nuisance axis).
+    \item \textbf{Tree models} (forests, boosting) usually do not need it.
+    \item Always try the model \emph{without} DR first; add it only if it helps.
+  \end{itemize}
+\end{frame}
+
+% ================================================================
+\section*{Wrap-up}
+
+\begin{frame}{Recap}
+  \begin{itemize}\small
+    \item \textbf{Why:} visualize, compress, denoise --- and beat the curse of dimensionality
+      (in 100-D your farthest point is only $\sim$40\% farther than your nearest).
+    \item \textbf{PCA} --- center, then take the top eigenvectors of the covariance (via SVD);
+      the scores come out uncorrelated and ordered by variance; linear, fast, reversible.
+      Great for preprocessing. On the garments, 95\% of the variance needs \textbf{184 of 784}
+      components --- but 50 already rebuilds a recognizable shirt.
+    \item \textbf{t-SNE / UMAP} --- nonlinear, preserve local neighborhoods, excellent for 2-D
+      \emph{pictures} --- but sizes/distances are not meaningful and they are for the eyes only.
+    \item Reach for PCA first; don't reduce reflexively (it is unsupervised, and it loses information).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Next (L13c):} UMAP, opened up --- the fuzzy neighbor graph, why each point gets its
+    own distance scale, and what the cross-entropy is really doing. After that, unsupervised
+    learning is closed and we move to a new family of models.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Dimensionality reduction (PCA / t-SNE / UMAP), chapter 4b. Built via the slide-style skill
+%     workflow: interview (4 rounds) -> outline -> two independent reviews -> build.
+%   - Outline: 10_dimensionality_reduction/35_dimensionality_reduction_OUTLINE.md (v6).
+%   - Real figures: py_src/dimred_demos.py (run with ./ma/Scripts/python.exe; needs umap-learn).
+%     PCA sweep animation (dr_pca_anim_*), curse-of-dim, by-hand PCA, scree, iris biplot,
+%     garment reconstruction/denoise, swiss-roll (3-D / PCA / UMAP), t-SNE/UMAP Fashion-MNIST,
+%     t-SNE perplexity sensitivity, PCA-vs-t-SNE-vs-UMAP comparison, scaling trap, CLIP atlas.
+%   - Citations: van der Maaten & Hinton (2008); McInnes et al. (2018); Beyer et al. (1999);
+%     Wattenberg et al., distill.pub (2016).
+%   - Supersedes the old L13b_pca_dim_reduction stub.
+%
+%   2026-08-16 revision (see DECISIONS.md #N):
+%   - RUNNING DATASET: sklearn 8x8 digits -> Fashion-MNIST 28x28 (784-D), cached to
+%     data/fashion_mnist.npz by py_src/fetch_fashion_mnist.py. At 8x8 a k=5 and a k=50
+%     reconstruction were both grey mush, so the compression lesson never landed visually.
+%     All hard numbers on the slides were regenerated: PC1 = 29%, PC1+2 = 47%, 95% at k=184
+%     of 784, reconstruction cum-var 62/79/86% at k = 5/20/50.
+%   - Swept REVIEW.md (2026-07-07), which had never been applied: fixed the 12%/22%
+%     explained-variance error (item 1), the animation footnote colliding with the page
+%     number (2), the biplot label overlap (3), added the uncorrelated-scores property (4),
+%     made the scree and caveats frames predict-first (5), added the centering-vs-scaling
+%     figure (6), the 3-D swiss-roll panel (7), feature-selection-vs-extraction and
+%     choose-k-by-CV (8), and the reconstruction<->scree callback plus the Lagrange
+%     gradient line (9). Item 10 (2x2 eigen-by-hand) deliberately not done - see DECISIONS.
+%   - Also fixed the curse figure to Beyer's query-based relative contrast, which is what
+%     the frame's question actually asks about (REVIEW.md section 3).
+%   - NEW frame: CLIP atlas (dr_clip_atlas.pdf), reusing the embeddings the clustering
+%     chapter already commits, so the deck's "a text embedding ~768" claim finally has a
+%     picture behind it.
+%   - UMAP frame now forward-points to L13c, the deep UMAP lecture.
+% =============================================================
