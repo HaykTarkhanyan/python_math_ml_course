@@ -57,12 +57,24 @@ Videos for [22]–[24] are recorded but not yet published. [26] and [27] are not
 | **Aug 16** | Sun | *Practical* — Armenia electricity / gas usage | `31_electricity_forecast_solution.ipynb` |
 | **Aug 19** | Wed | Clustering — **ch09** | `32_clustering` |
 | **Aug 21** | Fri | *Interlude* — color spaces, then the practical | `33_color_spaces` |
-| **Aug 21** | Fri | *Practical* — Saryan painting, Lake Sevan land cover, photo grouping | `34_image_compression_solution.ipynb` · `34_land_cover_solution.ipynb` · `34_image_clusters_solution.ipynb` |
-| **Aug 23** | Sun | Dimensionality reduction — **ch10** | `35_dimensionality_reduction` |
-| **Aug 26** | Tue | UMAP in depth — new second lecture of ch10 | `36_umap` |
+| **Aug 21** | Fri | *Practical* — Lake Sevan land cover — **delivered** | `34_land_cover_solution.ipynb` |
+| **Sep 2** | Tue | *Practical* — Saryan painting, colour quantization — **delivered** | `35_image_compression_solution.ipynb` |
+| **unscheduled** | — | *Practical* — the Armenian word tree. Built and executing clean; carries an `xx_` prefix until a session number is known. | `xx_semantic_tree_solution.ipynb` |
+| ~~**Aug 23**~~ | Sun | ✅ Dimensionality reduction — **ch10** — **delivered**, notes exported, video [36] live, qmd linked | `35_dimensionality_reduction` |
+| ~~**Aug 26**~~ | Tue | ✅ UMAP in depth — **delivered**, notes exported, video [37] live, qmd linked | `36_umap` |
 
 After the UMAP lecture the classic ML track (chapters 01–10) is fully delivered, and everything
-remaining is the deep-learning half.
+remaining is the deep-learning half. **✅ Reached — as of 2026-09-03 both ch10 lectures are
+delivered, with notes and videos linked on the chapter page. Next up: the ch10 practical
+(eigenfaces + LFW + CLIP photo-grouping), then neural networks.**
+
+**Numbering note (2026-09-03).** The YouTube playlist numbers the two ch10 lectures **[36]** and
+**[37]** — the ch09 practicals were published as separate videos [34] (Sevan) and [35] (image
+compression) — while the ch10 files on disk are `35_*`/`36_*`/`37_*`. Disk numbering now trails
+the playlist by one from dimensionality reduction onward (and `35_image_compression` in ch09
+shares its number with `35_dimensionality_reduction` in ch10). The chapter qmd labels the
+bullets by the *video* numbers. Whether to renumber the ch10 files to 36/37/38 is an open
+decision — per DECISIONS #22 this was the anticipated "recorded as separate sessions" case.
 
 **Numbering note (2026-08-16).** Clustering and dimensionality reduction were renumbered to
 continue the global sequence: folders `ml/09_clustering/` and `ml/10_dimensionality_reduction/`,
@@ -87,7 +99,7 @@ every extra session pushes everything after it by 2–3 days.
 
 | Block | Sessions | Dates | Built material |
 |---|---|---|---|
-| Dim reduction practical | 1 | Aug 28 | `37_eigenfaces_solution.ipynb` + the LFW recognition project |
+| Dim reduction practical | 1 | Aug 28 | `xx_genes_geography_solution.ipynb` (instructor-led, 1000 Genomes; built 2026-09-03, DECISIONS #32) · `37_eigenfaces_solution.ipynb` + the LFW recognition project · homework = Project 3 (CLIP photo map) |
 | Neural networks | 2–3 | Aug 30, Sep 1 | `L14`, `L15` |
 | NN practical | 1–2 | Sep 2 | `nn_practical_solution.ipynb` |
 | CNN | 3 | Sep 4, 6, 9 | `L16`–`L19` |

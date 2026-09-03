@@ -9,6 +9,313 @@ this file holds the choice and a pointer.
 
 ---
 
+## #32 - The ch10 live practical is "genes mirror geography" on 1000 Genomes chr22
+
+**Date:** 2026-09-03 · **Status:** active
+
+**Decision.** The instructor-conducted ch10 practical (not homework - the assigned homework is
+Project 3, the CLIP photo map) reproduces the Novembre et al. (2008, Nature) "genes mirror
+geography" result on open data: PCA of raw genotype counts from 1000 Genomes phase 3,
+chromosome 22 only (2,504 people, 26 populations). Instructor chose it over two lower-prep
+alternatives (eigen-patches / "PCA invented JPEG" on the Saryan painting; LSA semantic search
+over Armenian Wikipedia) for wow factor and because every step exercises lecture 36's frames:
+curse of dimensionality, the scaling decision (Patterson allele-frequency scaling), variance =
+structure, out-of-sample projection. Armenian samples are explicitly optional ("its fine if no
+armenians in the data") - the Human Origins merge is parked, and the AJHG 2024 Armenian-PCA
+figure can close the session with attribution if wanted.
+
+**Honesty constraint baked in.** The exact Novembre figure cannot be reproduced from open data -
+POPRES (their dataset: 1,387 Europeans at country resolution, ~197k SNPs after QC from a 500k chip) is dbGaP controlled-access. The
+open-data version shows (a) continental structure worldwide and (b) the coarse European gradient
+across 1000G's five EUR populations (FIN/CEU/GBR/IBS/TSI). Per the write-after-measuring rule
+(_learnings 2026-08-13-2015) and the LFW precedent (#21), py_src/non_essential/
+validate_genes_geography.py measures the story (EVR, silhouette, k-means ARI, per-pop medians)
+BEFORE the practical notebook is written; the practical is built only on what the validation
+shows.
+
+**Data mechanics.** py_src/fetch_1000g_genotypes.py streams the ~205 MB chr22 VCF (URL
+HEAD-verified 2026-09-03; v5a does not exist, v5b does) plus the sample panel from the EBI FTP,
+keeps biallelic SNPs with 0.05 <= AF <= 0.95, every 6th passing variant, and commits
+data/genomes_1000g_chr22.npz (int8, numpy-only for students). Genotype parse fails loudly on
+any unexpected genotype string rather than imputing.
+
+**Alternatives rejected.** *Whole-genome or multi-chromosome* - chr22 alone carries the
+structure and keeps the download and the committed npz small. *scikit-allel / plink tooling* -
+a pure-python streaming parse keeps the fetch script dependency-free and readable as course
+material. *POPRES application* - controlled access, weeks of lead time, and the course does not
+need country-level Europe to make the point.
+
+**Validation outcome (2026-09-03, same day).** The pre-registered condition fired. Measured on
+the committed 16k npz vs a full-density 97k scratch matrix (EUR subset, Patterson scaling,
+monomorphic-in-subset SNPs dropped): silhouette over the five EUR populations on PC1-2 is 0.012
+vs 0.014, and the IBS-TSI median separation is 0.06 vs 0.15 within-pop-std units - the ratio
+grew by exactly sqrt(6), as signal-averaging predicts, and is still invisible on a projector.
+So: the worldwide panel leads (it is textbook - silhouette 0.588, k-means ARI 0.87), the
+within-Europe beat is FIN-vs-mainland only, the Novembre Figure 1 (free PMC copy, attributed)
+closes as "country-level sampling + ~197k QC'd chip SNPs buys THIS", and the committed npz
+stays at 16k / 6.0 MB - the 6x bigger matrix buys nothing visible, so no instructor-side large
+matrix either. The sqrt(m) scaling of separation is itself now a planned teaching beat.
+
+**What would change this.** If validation shows the EUR-only panel is too weak to read on a
+projector (five populations may just blob), the practical leads with the worldwide panel and
+the Novembre figure is shown as the borrowed "with ~197k QC'd chip SNPs and country-level
+sampling you get THIS" closer. If the committed npz exceeds ~20 MB, raise KEEP_EVERY and regenerate.
+
+---
+
+## #31 - Ch10 review round 2 applied; UMAP deck stops overselling the repulsion-term story
+
+**Date:** 2026-09-02 · **Status:** active
+
+**Decision.** A second content review of `35_dimensionality_reduction.tex` / `36_umap.tex` was
+applied in full, together with four instructor-requested pedagogy additions (why maximize
+variance; covariance-matrix refresher; what "linear" means; SVD factor anatomy). The one
+substantive content change: **36_umap no longer claims UMAP's extra global structure comes from
+the repulsion term alone.** A new "Where does the layout start?" frame teaches the spectral
+(Laplacian-eigenmaps) initialization and carries an honesty box: Kobak & Linderman (2021, Nature
+Biotechnology) showed much of UMAP's measured global-structure advantage over t-SNE disappears
+when both methods get an informative start, and sklearn's t-SNE has defaulted to PCA init since
+v1.2 (both facts web-verified 2026-09-02). The loss-frame payoff box and the recap were softened
+to "part of the story" accordingly.
+
+**Why.** The repulsion-term narrative is the UMAP paper's own framing and is pedagogically clean,
+but presenting it as settled would leave students with a claim the literature has specifically
+tested and largely overturned. The deck's own theme is "which parts of the picture are you
+allowed to believe" - it cannot itself oversell.
+
+**Also in this pass** (deck 35): three new frames (why-variance with a projected |A-B| = 12.6 vs
+0.7 demonstration; covariance refresher with the Var(Xw) = w'Sigma w identity; linearity via a
+grid that a matrix cannot bend), an annotated SVD block diagram, an eigen-garments frame (PC1
+29%, PC2 18%, sets up Project 1), a "New points?" column in the decision table (t-SNE has no
+out-of-sample map), the L13b/L13c stale references the 2026-08-16 renumber sweep missed, the
+SLIDE_STYLE.md acronym check finally run mechanically (t-SNE, UMAP, LSA, EVR, DR were all
+unexpanded), and one-liners: elbow callback, PCA-inside-the-pipeline leakage note, crowding
+problem explained, LDA/Fisherfaces pointer to Project 2.
+
+**Alternatives rejected.** *Footnote-only for the init caveat* - rejected: the initialization is
+part of the mechanism (the deck otherwise never says where SGD starts), so it earns a frame, not
+an apology. *Reopening the 2x2 characteristic-polynomial by-hand example* - stays closed per the
+2026-08-16 decision; the linear-algebra course covers it.
+
+**What would change this.** If delivery shows the honesty box confuses more than it clarifies,
+demote it to a spoken remark and keep only the spectral-init frame. Review details:
+`ml/10_dimensionality_reduction/REVIEW.md`, round-2 section.
+
+---
+
+## #30 - The photo-grouping project moves from clustering to dimensionality reduction
+
+**Date:** 2026-08-27 · **Status:** active · **Supersedes the placement in #17**
+
+**Decision.** `34_image_clusters_solution.ipynb` moves out of `ml/09_clustering/` and becomes
+`ml/10_dimensionality_reduction/37_image_clusters_solution.ipynb` (Project 3 of that chapter),
+taking `imagenette_clip.npz`, `embed_images_clip.py` and its five `out/` artifacts with it. The
+number changes from 34 to 37 because the prefix is the practical-session number and 37 is ch10's,
+shared with `37_eigenfaces_solution.ipynb`.
+
+**Why.** The project's actual subject is **representation**, not partitioning: its headline
+measurement is k-means scoring ARI 0.048 on raw pixels against 0.939 on CLIP embeddings, with the
+algorithm held fixed. That is a dimensionality-reduction argument. It also fits ch10's existing
+material - `py_src/dimred_demos.py` was already reaching across chapters into
+`ml/09_clustering/data/imagenette_clip.npz` for its 512-d demo, which the move removes - and its
+task 5 (project 512 dimensions to 2 for an interactive map) is a DR exercise sitting in a
+clustering chapter. Ch09 was also carrying four projects against ch10's two.
+
+**Alternatives rejected.** Leaving it and cross-linking from ch10 - rejected because the
+cross-chapter data reference was already awkward and the chapter balance was wrong. Duplicating it
+in both - rejected outright; two copies of a notebook diverge.
+
+**What would change this.** If ch10 runs long in delivery, this is the project to cut first: it is
+the only one of the three whose lesson is also made elsewhere (ch09's Sevan practical makes the
+representation argument too, on features rather than embeddings).
+
+**Follow-on edits.** Resource lists in both chapter qmds; `dimred_demos.py` CLIP path; the
+photo-grouping comment in `ml/09_clustering/py_src/color_histogram.py`; the Aug 21 row of
+`ml/00_plan.md`; and the ch10 page title, which still said "06 Dimensionality Reduction".
+
+---
+
+## #29 - The land-cover practical drops its GMM act; DBSCAN carries section 4 alone
+
+**Date:** 2026-08-26 · **Status:** active
+
+**Decision.** Cut the Gaussian-mixture half of `34_land_cover_solution.ipynb` at the instructor's
+request: the soft-assignment fit, the max-responsibility confidence map, the k-means-vs-GMM ARI
+comparison, and the closing "the mixture model knew" reveal. Section 4 is now DBSCAN alone,
+reframed as "an honest failure". The conclusion table lost its *soft assignment* row and its
+*k-means assumptions* row, the latter having had no remaining evidence once the GMM comparison
+went.
+
+**Why.** Instructor's call on session length. The notebook had grown past a 90-minute slot, and
+Act 0 gained substantial new material the same day (provenance, per-band physics, reflectance,
+and the ground-truth reveal), which had to come from somewhere.
+
+**Alternatives rejected.** Keeping GMM and cutting the DBSCAN act instead - rejected because
+DBSCAN is the only place in the practical where an algorithm from the deck is shown *failing* for
+a stateable reason, and that is the harder lesson to get elsewhere. Trimming both to half length -
+rejected as leaving two thin acts rather than one solid one.
+
+**What would change this.** If the session runs short in delivery, or if the clustering deck's
+GMM/EM section needs a practical anchor it currently lacks. The act was good and is recoverable
+verbatim from commit `684b4cf`; `34_land_cover_OUTLINE.md` records where it sat.
+
+---
+
+## #28 - Reflectance conversions are validated against physics, not taken from metadata
+
+**Date:** 2026-08-26 · **Status:** active
+
+**Decision.** `ml/09_clustering/py_src/fetch_sevan_scene.py` no longer trusts the `scale` and
+`offset` advertised in a scene's STAC `raster:bands` metadata. A new `verify_reflectance()` checks
+the advertised conversion against a physical invariant - **surface reflectance is a ratio of light
+out to light in and cannot be negative** - drops the offset with a loud `log.warning` if applying
+it drives more than 0.1 % of values below zero, and raises if neither variant is physical.
+
+**Why.** The committed cube had been converted with `DN * scale + offset` where the metadata
+advertised `offset = -0.1`. That is correct for a raw post-baseline-04.00 L2A product but wrong
+for Element84's `sentinel-2-l2a` COGs, which are already baseline-harmonised. The offset was
+applied twice. **60.04 % of the cube was negative**, open water sat at about -0.09 in all six
+bands, and the error had been shipped and taught. Measured on the real cube, the new guard reads
+60.04 % negative with the offset and 0.0000 % without - decisive either way.
+
+The cost was not cosmetic. NDVI is computed after `np.clip(refl, 0, None)`, so red clipped to zero
+over vegetation and NDVI saturated to **1.0** for tree cover and grassland alike, turning the
+vegetation index into a water mask. That artifact produced the notebook's headline finding
+("indices only, k=4, ARI 0.589, the best result in the notebook"). Corrected, the top three
+feature sets tie at 0.483 / 0.482 / 0.479, and the deck's "scale first" rule - which the buggy
+version had appeared to *refute* - comes out vindicated.
+
+**Alternatives rejected.** Hardcoding `offset = 0.0` for this collection - rejected because it is
+silently wrong for any genuinely unharmonised product a student might fetch with the same script,
+and the qmd's bonus task invites exactly that. Asserting hard and refusing to run - rejected
+because the correct action here is unambiguous and recoverable, so a warning plus the right answer
+beats a crash. Leaving it and documenting the quirk - rejected: the notebook already *had* a
+plausible-sounding explanation for the negative values, and that is precisely what stopped anyone
+looking.
+
+**What would change this.** If a future scene legitimately needs the offset, the guard applies it
+automatically - it only intervenes when the result would be unphysical. If ESA or Element84 change
+their harmonisation policy, the 0.1 % threshold is the knob. Revisit if the warning ever fires on
+a product known to be unharmonised.
+
+**See also.** `_learnings/2026-08-26-2145_reflectance-metadata-lied-and-honest-measurement-did-not-catch-it.md`
+and `ml/09_clustering/34_land_cover_OUTLINE.md`, "What the rebuild found (2026-08-26)".
+
+---
+
+## #27 - A fourth ch09 project: the semantic tree of Armenian words
+
+**Date:** 2026-08-21 · **Status:** active
+
+**Decision.** New project `xx_semantic_tree` (🧀🧀🧀) in `ml/09_clustering/`: 108 Armenian words
+and phrases across 12 semantic families, embedded with the instructor's own
+`Metric-AI/armenian-text-embeddings-2-large`, clustered hierarchically and read as a dendrogram.
+Dataset in `py_src/armenian_words.py`, embeddings pre-computed into `data/armenian_words.npz`
+(563 KB) so students download nothing.
+
+**Why a fourth project.** The existing three all ask *which representation wins* and all answer
+it with pixels. This one fixes the representation and asks what else decides the clusters -
+metric, linkage, and tokenizer. It is also the only project whose clusters can be **read**:
+you cannot eyeball a pixel cluster, but `մայր, հայր, քույր, եղբայր` checks itself.
+
+**The finding it is built around, measured not assumed.** `ձու` (egg) and `ձի` (horse) are the
+**closest pair in the entire space** (0.505), closer than every planted synonym except one.
+The cause is not spelling but a shared **subword token**: all of ձու/ձի/ձուկ/ձյուն tokenize as
+`▁ձ` + suffix, while `ձեռք` is a single token `▁ձեռք` and sits 2.8× further away despite the
+same first letter. Six such words - 6% of the vocabulary - cost **22% of the ARI**
+(0.287 → 0.350 when removed). Phrase forms recover about half of that.
+
+**Correction (2026-08-30).** Measured by true Euclidean distance rather than dendrogram merge
+height (which is where the numbers above came from): `ձու`/`ձի` is the *second* closest pair in
+the space at 0.505, behind the planted synonym `ուրախ`/`երջանիկ` at 0.490, and `ձեռք` sits
+1.6× further from `ձի` (0.793), not 2.8× (that was the cophenetic height, 1.399). The 22% is the
+ARI *lift* from removing the six words, 0.287 → 0.350. The notebook body already used the
+corrected numbers; its conclusion, the qmd tasks, and the outline were brought into line.
+
+**Related:** decision **#26** (Armenian glitch-token hunt) attacks the same phenomenon head-on
+across 8 tokenizers. This project is where a student meets it as a *consequence* rather than a
+subject; the two should cross-reference.
+
+**Alternatives rejected.**
+- *Bilingual hy+en "does meaning survive translation".* My original pitch; instructor chose
+  Armenian-only and a dendrogram-first, structure-discovery shape instead.
+- *Documents or sentences as leaves.* Unreadable on a tree; words plus short phrases keep the
+  figure legible and make the words-vs-phrases comparison intrinsic.
+- *The normalization trap as a bonus.* Does not exist by this route - the model returns
+  unit-norm vectors through `sentence-transformers` regardless of the flag (std 0.0000).
+  Replaced by an anisotropy/centering bonus.
+
+**What would change this.** ARI is only 0.287 with 12 families, partly because the probes are
+designed to damage it. If students read that as "embeddings do not work", merge `մարմին` and
+`բնություն` into the other families and re-baseline.
+
+---
+
+## #26 - Armenian glitch token hunt: 8 tokenizers, wiki corpus, Gradio playground, ungated mirrors
+
+**Date:** 2026-08-21 · **Status:** active
+
+**Decision.** New standalone mini-project `ml/claude_projects/armenian_glitch_token_hunt/`
+(intended for a later live-coding session): token-level analysis of Armenian across 8 tokenizers
+(XLM-R deep dive + mBERT, GPT-2/cl100k/o200k via tiktoken, Llama 3, Gemma 2, Qwen 2.5), corpus =
+`wikimedia/wikipedia` `20231101.hy` 20M-char sample with a 5M-char `en` baseline. Experiment
+notebook writes JSONs to `out/`; `build_report.py` derives the HTML report; `tokenizer_app.py` is
+a Gradio playground accepting any HF repo. All choices confirmed by the instructor in the kickoff
+Q&A.
+
+**Why.** Gradio: one file, HF tokenizers and tiktoken behind the same code path, colored spans
+built in. Wikipedia: clean one-line streaming download, reproducible sample. Llama 3 / Gemma 2 go
+through ungated mirrors (`Xenova/llama3-tokenizer`, `unsloth/gemma-2-9b`) because this machine has
+no local HF token and the official repos are gated (verified: `whoami` raises
+`LocalTokenNotFoundError`).
+
+**Alternatives rejected.** Streamlit (more boilerplate for colored token spans) and static
+HTML + transformers.js (no tiktoken support) for the app; OSCAR/CC-100 webtext as corpus
+(messier, some mirrors gated - wiki gives cleaner headline numbers); official gated repos
+(no local token).
+
+**What would change this.** A live session wanting messier glitch material -> add an OSCAR `hy`
+sample as a second corpus; local `hf auth login` -> swap mirrors for the official repos;
+tiktokenizer-style UI polish mattering -> revisit the static-HTML option.
+
+## #25 - The image-compression project grows to three cheeses and exercises both new decks
+
+**Date:** 2026-08-21 · **Status:** active
+
+**Decision.** `35_image_compression_solution.ipynb` gains four sections (11-14) and the qmd task
+grows from 6 items to 10, moving 🧀🧀 → 🧀🧀🧀. The additions, one per assumption the original
+task left unexamined:
+
+1. **Gamma** (task 7) - the original clustered gamma-encoded values. A centroid is an *average*,
+   and averaging encoded values does not average light, so every palette it produced was biased
+   dark. Measured: at `k=2` the image loses **10.76%** of its light; clustering in linear light
+   loses **0.00%**, and reconstruction error in linear light improves 9-36%.
+2. **k-medoids** (task 8) - **0 of 8** k-means centroids are a colour that occurs anywhere in the
+   image. Medoids are real pixels by construction, at a measured **+7.7%** reconstruction cost.
+3. **Hierarchical nesting** (task 9) - k-means `k=8` is *not* a coarsening of its `k=16`
+   (verified `False`); one Ward tree cut at 8/16/32 is (verified `True`, both levels).
+4. **Density** (task 10) - DBSCAN swings from 14 clusters (51% noise) to 1 as `eps` moves by 5x,
+   and noise pixels have no centroid, so the student must decide what colour to paint them.
+
+**Why.** Three of the four are the only places where the new colour-spaces deck and the clustering
+deck's non-k-means algorithms become *consequential* rather than decorative. The gamma one is the
+strongest teaching move available here because it does not add a variant - it shows the solution
+the students just wrote is measurably wrong, in a direction predicted by Jensen's inequality.
+
+**Alternatives rejected** (all offered to the instructor, all declined for this pass):
+- *Lab + ΔE as the error metric.* Strong on paper - the deck measured a 3.7x spread in perceived
+  difference at fixed RGB distance - but kept as a bonus to hold the task's size down.
+- *Floyd-Steinberg dithering.* Would close task 6's banding dead end. Bonus instead.
+- *Bit-budget duel against 4:2:0 chroma subsampling.* Bonus instead.
+- *GMM soft assignment.* Cut; overlaps dithering and adds a third palette variant.
+
+**What would change this.** If the task starts taking students more than a session, the density
+section (task 10) is the one to drop - it is the most interesting *negative* result but the least
+transferable skill. If ΔE ever moves from bonus to core, drop k-medoids rather than adding an
+eleventh task.
+
+---
+
 ## #24 - A colour-spaces interlude becomes deck 33, and everything after it shifts by one
 
 **Date:** 2026-08-20 · **Status:** active
@@ -344,7 +651,9 @@ not remove it.
 
 ## #17 - A third clustering practical uses CLIP as a black box, in ch4 rather than later
 
-**Date:** 2026-08-14 · **Status:** active
+**Date:** 2026-08-14 · **Status:** active, but **relocated by #30** - the notebook and its
+data now live in `ml/10_dimensionality_reduction/` as `37_image_clusters_solution.ipynb`.
+The reasoning below still holds; only the chapter changed.
 
 **Decision.** `09_clustering` gains `33_image_clusters_solution.ipynb`: 2000 Imagenette photos encoded
 with **CLIP ViT-B/32**, clustered with k-means, displayed as a self-contained interactive HTML map
