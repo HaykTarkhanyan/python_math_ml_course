@@ -10,7 +10,7 @@
 
 Դրա համար կոդ գրել պետք չէ — ահա պատրաստ սկրիպտը․
 
-- [embed_my_photos.py](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/10_dimensionality_reduction/py_src/embed_my_photos.py) — ցույց եք տալիս ձեր ֆոտոների պանակը, ստանում եք npz ֆայլ՝ embedding-ներով ու մանր thumbnail-ներով (`pip install torch transformers`, CPU-ն բավական է․ մի քանի հարյուր նկարը ~րոպեների հարց է, բայց մոդելը քաշելը կարա երկարոտ լինի վատ ինտերնետի դեպքում)։
+- [embed_my_photos.py](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/10_dimensionality_reduction/py_src/embed_my_photos.py) — ցույց եք տալիս ձեր ֆոտոների պանակը, ստանում եք npz ֆայլ՝ embedding-ներով ու մանր thumbnail-ներով (`pip install torch transformers`, CPU-ն բավական է․ մի քանի հարյուր նկարը ~րոպեների հարց է, բայց մոդելը քաշելը կարա երկարոտ լինի վատ ինտերնետի դեպքում)։ iPhone-ի HEIC ֆոտոների համար՝ նաև `pip install pillow-heif`։
 - [photo_map.py](https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/ml/10_dimensionality_reduction/py_src/photo_map.py) — ձեր 2D կետերը + thumbnail-ները **մեկ ֆունկցիայի կանչով** դարձնում է ինտերակտիվ HTML քարտեզ․ մկնիկը կետի վրա ես պահում — նկարը երևում է։
 
 ## Քայլերը

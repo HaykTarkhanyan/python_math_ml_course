@@ -12,14 +12,12 @@ Output npz keys:
     thumb_blob / thumb_offsets      -- small JPEG thumbnails for the hover map
 
 Needs (one-time):  pip install torch transformers pillow
+For iPhone HEIC/HEIF photos add:  pip install pillow-heif
 CPU is fine: roughly a minute per couple hundred photos, plus a one-time model
 download (~600 MB). Any collection works -- trip photos, screenshots, a folder of
 paintings. No faces required.
 
-Two gotchas:
-  - only the top level of the folder is scanned (subfolders are ignored);
-  - iPhone HEIC photos are not read -- export them as JPEG first, or
-    `pip install pillow-heif`, register it, and add ".heic" to EXTS.
+One gotcha: only the top level of the folder is scanned (subfolders are ignored).
 """
 from __future__ import annotations
 
@@ -37,7 +35,16 @@ MODEL_ID = "openai/clip-vit-base-patch32"   # same model as the chapter dataset
 BATCH = 16
 THUMB_PX = 48
 THUMB_QUALITY = 70
-EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif"}
+
+# iPhone HEIC support is optional: if pillow-heif is installed, PIL learns to open
+# .heic/.heif and everything below just works; if not, we fail loudly on such files.
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    HEIC_OK = True
+except ImportError:
+    HEIC_OK = False
 
 
 def _thumb_jpeg(img: Image.Image) -> bytes:
@@ -59,7 +66,11 @@ def main(folder: Path) -> Path:
     files = sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTS)
     if not files:
         raise SystemExit(f"no images ({'/'.join(sorted(EXTS))}) found in {folder} "
-                         "(note: subfolders are not scanned, and HEIC is not supported)")
+                         "(note: subfolders are not scanned)")
+    n_heic = sum(p.suffix.lower() in (".heic", ".heif") for p in files)
+    if n_heic and not HEIC_OK:
+        raise SystemExit(f"{n_heic} HEIC/HEIF photo(s) in {folder} but pillow-heif is not "
+                         "installed - run: pip install pillow-heif")
     logging.info("embedding %d photos from %s with %s", len(files), folder, MODEL_ID)
 
     model = CLIPModel.from_pretrained(MODEL_ID)
