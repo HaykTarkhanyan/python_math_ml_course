@@ -15,6 +15,11 @@ Needs (one-time):  pip install torch transformers pillow
 CPU is fine: roughly a minute per couple hundred photos, plus a one-time model
 download (~600 MB). Any collection works -- trip photos, screenshots, a folder of
 paintings. No faces required.
+
+Two gotchas:
+  - only the top level of the folder is scanned (subfolders are ignored);
+  - iPhone HEIC photos are not read -- export them as JPEG first, or
+    `pip install pillow-heif`, register it, and add ".heic" to EXTS.
 """
 from __future__ import annotations
 
@@ -53,7 +58,8 @@ def _thumb_jpeg(img: Image.Image) -> bytes:
 def main(folder: Path) -> Path:
     files = sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTS)
     if not files:
-        raise SystemExit(f"no images ({'/'.join(sorted(EXTS))}) found in {folder}")
+        raise SystemExit(f"no images ({'/'.join(sorted(EXTS))}) found in {folder} "
+                         "(note: subfolders are not scanned, and HEIC is not supported)")
     logging.info("embedding %d photos from %s with %s", len(files), folder, MODEL_ID)
 
     model = CLIPModel.from_pretrained(MODEL_ID)

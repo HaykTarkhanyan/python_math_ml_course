@@ -142,21 +142,19 @@ def make_photo_map(xy, jpegs, hover_names=None, groups=None, group_names=None,
 
 
 if __name__ == "__main__":
-    # Demo / smoke test: PCA-2D of the chapter's CLIP embeddings, colored by true class.
+    # Quick self-test on YOUR npz, before you write any notebook code:
+    #     python photo_map.py my_photos_clip.npz [out.html]
+    # builds a PCA-2D map of the embeddings so you can check the pipeline works.
+    # (In the project itself you make the 2-D projection and the clusters yourself.)
+    import sys
     from sklearn.decomposition import PCA
 
-    root = Path(__file__).resolve().parents[3]
-    (root / "logs").mkdir(exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[logging.StreamHandler(),
-                  logging.FileHandler(root / "logs" / "photo_map.log", encoding="utf-8")],
-    )
-    chapter = Path(__file__).resolve().parents[1]
-    d = np.load(chapter / "data" / "imagenette_clip.npz", allow_pickle=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if len(sys.argv) not in (2, 3):
+        raise SystemExit("usage: python photo_map.py my_photos_clip.npz [out.html]")
+    d = np.load(sys.argv[1])
     Z2 = PCA(n_components=2, random_state=509).fit_transform(d["embeddings"].astype(np.float64))
-    names = [str(d["class_names"][i]) for i in d["labels"]]
-    make_photo_map(Z2, jpegs_from_npz(d), hover_names=names, groups=d["labels"],
-                   group_names=list(d["class_names"]),
-                   title="PCA of 2000 CLIP embeddings (demo)",
-                   out_html=chapter / "out" / "photo_map_demo.html")
+    names = d["filenames"] if "filenames" in d.files else None
+    out = sys.argv[2] if len(sys.argv) == 3 else "photo_map_quicklook.html"
+    make_photo_map(Z2, jpegs_from_npz(d), hover_names=names,
+                   title=f"PCA quick look: {len(Z2)} photos", out_html=out)
