@@ -8,7 +8,7 @@ reconstruction at k=5 and one at k=50 look equally like grey mush, so the compre
 lesson never landed as a picture.
 
 One figure uses the CLIP embeddings committed for the clustering chapter
-(``ml/09_clustering/data/imagenette_clip.npz``) to show DR on a real 512-d embedding space.
+(``ml/10_dimensionality_reduction/data/imagenette_clip.npz``) to show DR on a real 512-d embedding space.
 
 Outputs PDFs to the sibling ``fig/``. Run with the ma venv:
     ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/dimred_demos.py
@@ -17,6 +17,7 @@ Outputs PDFs to the sibling ``fig/``. Run with the ma venv:
 import io
 import logging
 import os
+import sys
 from pathlib import Path
 
 # Keep the machine usable: cap BLAS/OpenMP threads before numpy/sklearn import them.
@@ -41,7 +42,7 @@ CHAPTER = Path(__file__).resolve().parent.parent
 FIG = CHAPTER / "fig"
 ROOT = Path(__file__).resolve().parents[3]
 FASHION_NPZ = CHAPTER / "data" / "fashion_mnist.npz"
-CLIP_NPZ = ROOT / "ml" / "09_clustering" / "data" / "imagenette_clip.npz"
+CLIP_NPZ = CHAPTER / "data" / "imagenette_clip.npz"
 
 TAB = plt.cm.tab10.colors
 ARM_RED, ARM_BLUE, ARM_ORANGE = "#D90012", "#0033A0", "#F2A800"
@@ -142,6 +143,103 @@ def fig_pca_anim(n_sweep=4):
               f"dr_pca_anim_{i + 1}.pdf")
     frame(pc, f"max variance ({(Xc @ pc).var():.2f}) --- keep this axis",
           f"dr_pca_anim_{n_sweep + 1}.pdf")
+
+
+def fig_why_variance():
+    """Two projections of the same cloud: the spread axis keeps two far-apart points
+    distinguishable, the flat axis piles them onto (nearly) the same spot. Motivates
+    'maximize variance' BEFORE the sweep animation formalizes it."""
+    rng = np.random.RandomState(SEED)
+    th0 = np.deg2rad(30)
+    R = np.array([[np.cos(th0), -np.sin(th0)], [np.sin(th0), np.cos(th0)]])
+    X = (rng.randn(200, 2) * np.array([2.3, 0.6])) @ R.T          # same cloud as the sweep
+    ctr = X.mean(0); Xc = X - ctr
+    vals, vecs = np.linalg.eigh(np.cov(Xc.T))
+    order = vals.argsort()[::-1]
+    u_wide, u_flat = vecs[:, order[0]], vecs[:, order[1]]
+    proj1 = Xc @ u_wide
+    iA, iB = int(proj1.argmin()), int(proj1.argmax())
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.5))
+    L = 5.0
+    for ax, u, label in [(axes[0], u_wide, "spread"), (axes[1], u_flat, "flat")]:
+        p = Xc @ u
+        feet = ctr + np.outer(p, u)
+        d_AB = abs(p[iA] - p[iB])
+        ax.scatter(X[:, 0], X[:, 1], s=10, c="0.78", edgecolors="white", linewidths=0.2)
+        ax.plot([ctr[0] - L * u[0], ctr[0] + L * u[0]],
+                [ctr[1] - L * u[1], ctr[1] + L * u[1]], color=ARM_BLUE, lw=2)
+        ax.scatter(feet[:, 0], feet[:, 1], s=10, color=ARM_RED, zorder=5, alpha=0.6)
+        for i, name in [(iA, "A"), (iB, "B")]:
+            ax.plot([X[i, 0], feet[i, 0]], [X[i, 1], feet[i, 1]],
+                    color=ARM_ORANGE, lw=1.2, ls="--", zorder=6)
+            ax.scatter(*X[i], marker="*", s=180, color=ARM_ORANGE,
+                       edgecolors="black", linewidths=0.6, zorder=7)
+            ax.scatter(*feet[i], s=60, color=ARM_ORANGE, edgecolors="black",
+                       linewidths=0.6, zorder=7)
+            ax.annotate(name, X[i], textcoords="offset points", xytext=(6, 7),
+                        fontsize=11, fontweight="bold", color="black")
+        ax.set_title(f"keep the {label} axis: after projecting, "
+                     f"$|A-B| = {d_AB:.1f}$", fontsize=10)
+        _clean(ax); ax.set_aspect("equal")
+        logging.info("why_variance: %s axis, projected |A-B| = %.2f (var %.2f)",
+                     label, d_AB, p.var())
+    fig.tight_layout()
+    save(fig, "dr_why_variance.pdf")
+
+
+def fig_linear_grid():
+    """What 'linear' means: a linear map keeps grid lines straight, parallel and evenly
+    spaced (it can only rotate / stretch / shear / project); a nonlinear map can bend."""
+    t = np.linspace(-2, 2, 80)
+    ticks = np.linspace(-2, 2, 9)
+    grid_lines = []
+    for c in ticks:
+        grid_lines.append(np.column_stack([np.full_like(t, c), t]))   # vertical
+        grid_lines.append(np.column_stack([t, np.full_like(t, c)]))   # horizontal
+    seg = np.column_stack([np.linspace(-1.7, 1.5, 80), np.linspace(-1.5, 1.7, 80)])
+
+    A = np.array([[1.30, 0.50], [0.15, 0.90]])                        # rotate+shear+stretch
+
+    def warp(P):
+        return np.column_stack([P[:, 0] + 0.40 * np.sin(1.5 * P[:, 1]),
+                                P[:, 1] + 0.40 * np.sin(1.5 * P[:, 0])])
+
+    maps = [(lambda P: P, "the plane, with a straight line"),
+            (lambda P: P @ A.T, "after a LINEAR map:\nstill straight, still parallel"),
+            (warp, "after a NONLINEAR map:\nlines can bend")]
+    fig, axes = plt.subplots(1, 3, figsize=(10.2, 3.4))
+    for ax, (f, title) in zip(axes, maps):
+        for gl in grid_lines:
+            q = f(gl)
+            ax.plot(q[:, 0], q[:, 1], color=ARM_BLUE, lw=0.7, alpha=0.45)
+        s = f(seg)
+        ax.plot(s[:, 0], s[:, 1], color=ARM_RED, lw=2.5)
+        ax.set_title(title, fontsize=10)
+        _clean(ax); ax.set_aspect("equal")
+    fig.tight_layout()
+    save(fig, "dr_linear_grid.pdf")
+
+
+def fig_eigengarments():
+    """Mean garment + top-6 principal directions reshaped to 28x28: each v_i lives in
+    pixel space, so it IS an image. Sets up Project 1's eigenfaces on different data."""
+    X, _, _, _ = _fashion()
+    p = PCA(n_components=6).fit(X)
+    fig, axes = plt.subplots(1, 7, figsize=(10.6, 2.0))
+    axes[0].imshow(p.mean_.reshape(28, 28), cmap="gray_r")
+    axes[0].set_title("mean garment", fontsize=9)
+    for i, ax in enumerate(axes[1:]):
+        comp = p.components_[i].reshape(28, 28)
+        lim = np.abs(comp).max()
+        ax.imshow(comp, cmap="RdBu_r", vmin=-lim, vmax=lim)
+        ax.set_title(f"PC{i+1}  ({p.explained_variance_ratio_[i]*100:.0f}%)", fontsize=9)
+    for a in axes:
+        a.set_xticks([]); a.set_yticks([])
+    fig.tight_layout()
+    logging.info("eigengarments EVR: %s",
+                 np.round(p.explained_variance_ratio_, 3).tolist())
+    save(fig, "dr_eigengarments.pdf")
 
 
 def fig_curse_distances():
@@ -468,21 +566,26 @@ def fig_clip_atlas():
 def main():
     setup_logging()
     FIG.mkdir(exist_ok=True)
-    logging.info("generating dim-reduction figures -> %s", FIG)
-    fig_fashion_samples()
-    fig_pca_anim()
-    fig_curse_distances()
-    fig_byhand_pca()
-    fig_scree()
-    fig_scaling_trap()
-    fig_biplot()
-    fig_reconstruction()
-    fig_swiss_roll()
-    fig_tsne_fashion()
-    fig_umap_fashion()
-    fig_tsne_perplexity()
-    fig_compare_fashion()
-    fig_clip_atlas()
+    all_figs = [
+        fig_fashion_samples, fig_pca_anim, fig_why_variance, fig_linear_grid,
+        fig_curse_distances, fig_byhand_pca, fig_scree, fig_scaling_trap, fig_biplot,
+        fig_eigengarments, fig_reconstruction, fig_swiss_roll, fig_tsne_fashion,
+        fig_umap_fashion, fig_tsne_perplexity, fig_compare_fashion, fig_clip_atlas,
+    ]
+    # Optional CLI args name specific figures (e.g. "fig_eigengarments") so a one-figure
+    # edit does not pay for the multi-minute t-SNE/UMAP runs. No args = everything.
+    wanted = sys.argv[1:]
+    if wanted:
+        by_name = {f.__name__: f for f in all_figs}
+        unknown = sorted(set(wanted) - set(by_name))
+        if unknown:
+            raise SystemExit(f"unknown figure(s) {unknown}; choose from {sorted(by_name)}")
+        figs = [by_name[w] for w in wanted]
+    else:
+        figs = all_figs
+    logging.info("generating %d dim-reduction figure job(s) -> %s", len(figs), FIG)
+    for f in figs:
+        f()
     logging.info("done.")
 
 

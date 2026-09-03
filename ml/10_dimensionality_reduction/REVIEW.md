@@ -181,3 +181,43 @@ the strongest worked-numbers frame in the deck. Judgment call, but worth a secon
 | 8 | Feature-selection-vs-extraction + choose-k-by-CV one-liners | small | pitfalls / scree |
 | 9 | Reconstruction<->scree callback; Lagrange gradient line | small | frames 16, "Deriv (1)" |
 | 10 | (Reconsider) 2x2 eigen-by-hand worked example | medium | by-hand frame |
+
+---
+
+# Review round 2 (2026-09-02, Claude) - applied the same day
+
+Scope: both decks post the 2026-08-16 revision, the outlines, DECISIONS #20-#22/#30, chapter
+learnings. Round 1 above was already fully applied, so this round covered only new ground.
+Everything below was applied on 2026-09-02 (DECISIONS.md #31); listed here as the record.
+
+## Found and fixed
+
+1. **Stale lecture numbers on student-visible frames.** The 2026-08-16 renumber swept 32
+   referencing files but missed the decks' own self-references: "(L13c)" twice in 35, "From
+   L13b" in 36. Now "lecture 36" / "the next lecture" / "the last lecture".
+2. **The SLIDE_STYLE.md acronym check had never been run on these decks.** Deck 35 introduced
+   t-SNE and UMAP - the deck's own subject - without ever expanding either. Also unexpanded:
+   LSA, EVR, DR. All expanded now (t-SNE's expansion lives in its frame title).
+3. **36_umap oversold the repulsion-term story.** "That is where the extra global structure
+   comes from" is contested: Kobak & Linderman (2021, Nature Biotechnology) attribute much of
+   the measured gap to UMAP's spectral initialization (sklearn t-SNE defaults to PCA init since
+   v1.2). New frame "Where does the layout start?" teaches the init + carries the honesty box;
+   payoff box and recap softened. The deck also previously never said where SGD starts at all.
+4. **Missing content added** (35): "New points?" decision-table column (t-SNE has no
+   out-of-sample map); eigen-garments frame (dr_eigengarments.pdf - PC1 29%, PC2 18%, sets up
+   Project 1); LDA/Fisherfaces pointer on "When NOT to reduce" (Project 2 arrived cold);
+   PCA-inside-the-pipeline leakage clause; crowding problem explained instead of name-dropped;
+   elbow callback to ch09; cosine-metric "why" in 36; "12,000 of its 70,000" photos phrasing.
+5. **Instructor-requested pedagogy** (same pass): "Why maximize variance?"
+   (dr_why_variance.pdf, projected |A-B| = 12.6 vs 0.7), covariance-matrix refresher
+   (definition, reading, Var(Xw) = w'Sigma-w identity), "What PCA does to a point - and what
+   linear means" (dr_linear_grid.pdf, a grid a matrix cannot bend), SVD frame rebuilt around an
+   annotated U/S/V-transpose block diagram (Z = US).
+
+## Deliberately not reopened
+
+- 2x2 characteristic-polynomial by-hand (round 1 item 10) - stays closed per DECISIONS.
+- t-SNE's one frame vs UMAP's twenty - that asymmetry is DECISIONS #20 working as designed.
+
+Deck sizes after: 35 -> 41 pages, 36 -> 30 pages. All new/edited pages eyeballed at render;
+two overflows (scree footnote, t-SNE column) caught and fixed in the same pass.

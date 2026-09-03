@@ -39,17 +39,17 @@
     A photo of a shirt is $28\times28 = \mathbf{784}$ numbers; gene expression $\sim$20{,}000;
     a text embedding $\sim$768. You cannot plot that.
     \vskip 6pt
-    \textbf{Dimensionality reduction:} replace many features with a \emph{few} new ones that keep
-    most of the structure.
+    \textbf{Dimensionality reduction (DR):} replace many features with a \emph{few} new ones that
+    keep most of the structure.
     \vskip 6pt
     Bridge from clustering --- both are \textbf{unsupervised} (no $y$): clustering groups the
     \textbf{rows} (samples), DR compresses the \textbf{columns} (features).
     \column{0.52\textwidth}
     \begin{center}
       \includegraphics[width=\textwidth]{fig/dr_fashion_samples.pdf}\\[3pt]
-      {\scriptsize \textbf{Running dataset:} Fashion-MNIST, 12{,}000 garment photos
-      ($28\times28$ grayscale, 10 classes). Each image $=$ 784 pixel values; we will squeeze
-      those 784 down to 2 to \emph{see} the data.}
+      {\scriptsize \textbf{Running dataset:} Fashion-MNIST --- 12{,}000 of its 70{,}000 garment
+      photos ($28\times28$ grayscale, 10 classes). Each image $=$ 784 pixel values; we will
+      squeeze those 784 down to 2 to \emph{see} the data.}
     \end{center}
   \end{columns}
 \end{frame}
@@ -97,6 +97,19 @@
 \sectiontransition{Principal Component Analysis}{The linear workhorse: new axes along the
 directions of greatest variance.}
 
+\begin{frame}{Why maximize \emph{variance}?}
+  Projecting always loses information: two points that differ only along a \emph{dropped}
+  direction land on \textbf{the same point}. So which directions can we afford to lose?
+  \begin{center}
+    \includegraphics[width=0.80\textwidth]{fig/dr_why_variance.pdf}
+  \end{center}
+  \vskip -3pt
+  \footnotesize Variance measures how much the samples \textbf{disagree} along an axis. Keep the
+  spread axis and A and B stay clearly apart; keep the flat one and they nearly collide. An axis
+  with zero variance --- the same value for every sample --- can be deleted free of charge.
+  \textbf{PCA's bet: spread $=$ information.}
+\end{frame}
+
 \begin{frame}{PCA: keep the directions of greatest spread}
   Sweep a direction through the cloud and \textbf{project} the points onto it (red dots). The
   \textbf{projected variance} $\bm{w}^\top\bm{\Sigma}\bm{w}$ --- how spread out those red dots are ---
@@ -112,6 +125,36 @@ directions of greatest variance.}
   \vskip -2pt
   \footnotesize \textbf{PCA does not search or iterate} --- the eigenvectors (next frames) give
   these axes directly; the sweep just shows what ``maximum variance'' means.
+\end{frame}
+
+\begin{frame}{Refresher: the covariance matrix}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    For \textbf{centered} data (mean $= 0$):
+    \[ \bm{\Sigma} = \tfrac{1}{n}\textstyle\sum_i \xv_i \xv_i^\top = \tfrac{1}{n}X^\top X, \]
+    \vskip -8pt
+    \[ \Sigma_{jk} = \tfrac{1}{n}\textstyle\sum_i x_{ij}\,x_{ik}. \]
+    How to read it:
+    \begin{itemize}\small
+      \item \textbf{diagonal} $\Sigma_{jj}$ --- the \textbf{variance} of feature $j$;
+      \item \textbf{off-diagonal} $\Sigma_{jk}$ --- do features $j$ and $k$ move
+        \textbf{together} ($>0$), \textbf{opposite} ($<0$), or independently ($\approx 0$);
+      \item \textbf{symmetric}: $\Sigma_{jk}=\Sigma_{kj}$ --- remember this for the next frame.
+    \end{itemize}
+    {\scriptsize (Software divides by $n-1$ instead of $n$; nothing below depends on which.)}
+    \column{0.46\textwidth}
+    \textbf{The one identity PCA runs on.} Project every point onto a unit direction $\bm{w}$:
+    the projected values are $\xv_i^\top\bm{w}$, and their variance is
+    \begin{align*}
+      \mathrm{Var}(X\bm{w}) &= \tfrac{1}{n}\textstyle\sum_i (\xv_i^\top\bm{w})^2 \\
+      &= \bm{w}^\top\big(\tfrac{1}{n}\textstyle\sum_i \xv_i\xv_i^\top\big)\bm{w}
+       = \bm{w}^\top\bm{\Sigma}\,\bm{w}.
+    \end{align*}
+    \vskip 2pt
+    \footnotesize One matrix, computed \emph{once}, gives the projected variance in
+    \emph{every} direction at once --- which is why the sweep on the previous frame never had
+    to touch the raw data twice.
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Refresher: eigenvectors and eigenvalues}
@@ -161,7 +204,7 @@ directions of greatest variance.}
   \begin{itemize}\small
     \item Eigenvalues sorted \textbf{descending} $\Rightarrow$ principal components come out
       \textbf{ordered by variance}; take the top $k$ eigenvectors.
-    \item \textbf{Explained-variance ratio} of component $i$ is $\lambda_i / \sum_j \lambda_j$
+    \item \textbf{Explained-variance ratio (EVR)} of component $i$ is $\lambda_i / \sum_j \lambda_j$
       (first PC of the garments $\approx 29\%$; first two $\approx 47\%$).
     \item The scores are \textbf{uncorrelated}: $\mathrm{Cov}(Z) = W^\top\bm{\Sigma}W =
       \mathrm{diag}(\lambda_1,\dots,\lambda_k)$. This is the precise sense in which PCA
@@ -174,13 +217,49 @@ directions of greatest variance.}
     That is the basis for compression and denoising later.}}
 \end{frame}
 
+\begin{frame}{What PCA does to a point --- and what ``linear'' means}
+  Stack the top-$k$ eigenvectors as the columns of $W_k$. Every point is mapped by the
+  \textbf{same matrix}:
+  \[ \bm{z} = W_k^\top(\xv - \bar{\xv}), \qquad z_i = \bm{v}_i^\top(\xv - \bar{\xv}), \]
+  so each new feature $z_i$ is a \textbf{fixed weighted sum} of the original features --- one
+  recipe, applied identically everywhere in space. That is what \textbf{linear} means.
+  \begin{center}
+    \includegraphics[width=0.82\textwidth]{fig/dr_linear_grid.pdf}
+  \end{center}
+  \vskip -3pt
+  \footnotesize A linear map can \textbf{rotate}, \textbf{stretch}, \textbf{shear} and
+  \textbf{project} (a shadow) --- grid lines stay straight, parallel stays parallel. What it can
+  \emph{never} do is \textbf{bend}. Hold that thought for the nonlinear section.
+\end{frame}
+
 \begin{frame}{The SVD connection}
-  In practice PCA is computed by the \textbf{singular value decomposition} of the centered data:
-  \[ X_{\text{centered}} = U S V^\top, \qquad \text{columns of } V = \text{principal components}. \]
+  In practice PCA is computed by the \textbf{singular value decomposition (SVD)} of the centered
+  data --- and every factor has a PCA meaning:
+  \begin{center}
+    \begin{tikzpicture}[every node/.style={font=\scriptsize}, yscale=0.82, xscale=1.12]
+      \draw[thick, popblue, fill=armblue!8] (0,0) rectangle (1.1,2.2);
+      \node[font=\small] at (0.55,1.1) {$X_{\text{c}}$};
+      \node[below, align=center] at (0.55,-0.08) {centered data\\$n \times d$};
+      \node[font=\small] at (1.6,1.1) {$=$};
+      \draw[thick, paramgreen, fill=paramgreen!8] (2.1,0) rectangle (3.2,2.2);
+      \node[font=\small] at (2.65,1.1) {$U$};
+      \node[below, align=center] at (2.65,-0.08) {$n \times d$\\one row per sample:\\its coordinates on\\the new axes};
+      \draw[thick, armorange, fill=armorange!12] (3.7,1.1) rectangle (4.8,2.2);
+      \draw[armorange, thick] (3.7,2.2) -- (4.8,1.1);
+      \node[font=\small] at (4.45,1.95) {$S$};
+      \node[below, align=center] at (4.25,0.82) {$d \times d$ diagonal\\$\sigma_1 \ge \sigma_2 \ge \dots$\\(the spreads)};
+      \draw[thick, armred, fill=armred!8] (6.1,1.1) rectangle (7.2,2.2);
+      \node[font=\small] at (6.65,1.65) {$V^\top$};
+      \node[below, align=center] at (6.65,0.82) {$d \times d$\\rows $=$ the principal\\directions $\bm{v}_i$};
+    \end{tikzpicture}
+  \end{center}
   \begin{itemize}\small
-    \item More numerically stable than forming the covariance matrix explicitly.
-    \item \textbf{TruncatedSVD} (a.k.a.\ \emph{LSA} for text) skips centering, so it works on
-      \textbf{sparse} data --- centering would destroy the sparsity.
+    \item $V$ holds the \textbf{same eigenvectors} as the derivation, computed \emph{without}
+      ever forming $\bm{\Sigma}$ --- more numerically stable.
+    \item $S$ is sorted, and $\lambda_i \propto \sigma_i^2$: the scree plot reads straight off
+      the diagonal. The \textbf{scores} are $Z = US$ --- what \texttt{fit\_transform} returns.
+    \item \textbf{TruncatedSVD} (a.k.a.\ \emph{latent semantic analysis, LSA}, for text) skips
+      centering, so it works on \textbf{sparse} data --- centering would destroy the sparsity.
   \end{itemize}
 \end{frame}
 
@@ -230,15 +309,16 @@ PCA bites.}
   components do you need to reach \textbf{95\%}?
   \pause
   \begin{center}
-    \includegraphics[width=0.93\textwidth]{fig/dr_scree.pdf}
+    \includegraphics[width=0.87\textwidth]{fig/dr_scree.pdf}
   \end{center}
   \vskip -4pt
-  \footnotesize \textbf{184} --- almost a quarter of them, not a handful. \textbf{Scree plot}
-  (left): variance per component, and it collapses almost immediately. \textbf{Cumulative}
-  (right): the tail is long and flat, and that long tail is where the detail lives.
+  \footnotesize \textbf{184} --- almost a quarter of them, not a handful. \textbf{Scree} (left):
+  variance per component --- read its elbow like k-means' inertia elbow. \textbf{Cumulative}
+  (right): the tail is long and flat, and that is where the detail lives.
   \vskip 2pt
-  {\scriptsize \textbf{When PCA feeds a model}, do not pick $k$ by a variance threshold at all
-  --- tune it by cross-validation on the \emph{downstream} metric.}
+  {\scriptsize \textbf{When PCA feeds a model}: do not pick $k$ by a variance threshold --- tune
+  it by CV on the \emph{downstream} metric, with the PCA fitted \emph{inside} the pipeline on
+  training folds only (the leakage rule again).}
 \end{frame}
 
 \begin{frame}{Reading a biplot}
@@ -262,6 +342,25 @@ PCA bites.}
       \includegraphics[width=\textwidth]{fig/dr_biplot.pdf}
     \end{center}
   \end{columns}
+\end{frame}
+
+\begin{frame}{The principal directions, drawn as images}
+  Each $\bm{v}_i$ lives in the \emph{same} 784-dimensional pixel space as the garments --- so
+  every component \textbf{is} a $28\times28$ image, and we can simply look at it.
+  \begin{center}
+    \includegraphics[width=0.97\textwidth]{fig/dr_eigengarments.pdf}
+  \end{center}
+  \vskip -3pt
+  \footnotesize \textcolor{armred}{Red} and \textcolor{armblue}{blue} $=$ pixels the component
+  pushes in \emph{opposite} directions; a sample's score $z_i$ says how much of the pattern to
+  mix in, with sign. PC1 ($29\%$) is roughly ``how much of the frame the garment fills'';
+  PC2 contrasts trouser-like verticals with broad tops; the later, smaller components draw
+  ever finer shape details.
+  \vskip 2pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Reconstruction (next frame) is literally: start from the mean garment and \textbf{mix in}
+    $z_i$ units of each of these pictures. In Project 1 you will draw these for faces --- the
+    famous \emph{eigenfaces}.}}
 \end{frame}
 
 \begin{frame}{Reconstruction: compression and denoising}
@@ -307,8 +406,9 @@ PCA bites.}
 enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
 
 \begin{frame}{Why nonlinear?}
-  PCA is \textbf{linear}: it can rotate and project, but it cannot \emph{unfold} a curved
-  manifold. Nonlinear methods instead preserve \textbf{local neighborhoods} --- who is near whom.
+  PCA is \textbf{linear}: remember the grid --- it can rotate, stretch and project, but it can
+  never \emph{bend}, so it cannot \emph{unfold} a curved manifold. Nonlinear methods instead
+  preserve \textbf{local neighborhoods} --- who is near whom.
   \begin{center}
     \includegraphics[width=0.94\textwidth]{fig/dr_swiss_roll.pdf}
   \end{center}
@@ -319,21 +419,21 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
   sheet out straight --- it had no reason to. Topology preserved, geometry not.
 \end{frame}
 
-\begin{frame}{t-SNE}
+\begin{frame}{t-SNE: t-distributed Stochastic Neighbor Embedding}
   \begin{columns}[T]
     \column{0.52\textwidth}
     Turn distances into \textbf{similarity probabilities}, high-D and low-D, then match them.
     \begin{itemize}\small
       \item High-D: $p_{ij}=\tfrac{1}{2n}(p_{j|i}+p_{i|j})$ (Gaussian neighborhoods).
-      \item Low-D: $q_{ij}$ from a \textbf{Student-$t$} kernel (heavy tail $=$ fixes the
-        ``crowding'' problem).
+      \item Low-D: $q_{ij}$ from a \textbf{Student-$t$} kernel; its heavy tail fixes
+        \emph{crowding} --- 2-D lacks room for all the mid-distance neighbors, so they may
+        sit farther out penalty-free.
       \item Minimize $\mathrm{KL}(P\,\|\,Q)$ by gradient descent (iterative, \emph{stochastic}).
     \end{itemize}
-    \textbf{Perplexity} $\approx$ effective \#neighbors (typ.\ 5--50).
-    \vskip 4pt
-    {\scriptsize Sandal, sneaker and ankle boot are each other's two nearest classes here ---
-    and so are pullover, coat and shirt. \textbf{t-SNE recovered the semantics from raw pixels},
-    with no labels.}
+    \textbf{Perplexity} $\approx$ effective \#neighbors (5--50 typ.).
+    \vskip 3pt
+    {\scriptsize Sandal, sneaker, ankle boot are each other's nearest classes here --- so are
+    pullover, coat, shirt. \textbf{t-SNE recovered the semantics from raw pixels}, no labels.}
     \column{0.48\textwidth}
     \begin{center}
       \includegraphics[width=\textwidth]{fig/dr_tsne_fashion.pdf}
@@ -346,8 +446,9 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
 \begin{frame}{UMAP}
   \begin{columns}[T]
     \column{0.52\textwidth}
-    Build a \textbf{fuzzy nearest-neighbor graph}, then find a low-D layout whose graph matches it
-    (minimize a graph \textbf{cross-entropy}).
+    \textbf{Uniform Manifold Approximation and Projection (UMAP)}: build a \textbf{fuzzy
+    nearest-neighbor graph}, then find a low-D layout whose graph matches it (minimize a graph
+    \textbf{cross-entropy}).
     \begin{itemize}\small
       \item \texttt{n\_neighbors}: small $=$ local detail, large $=$ global shape.
       \item \texttt{min\_dist}: how tightly points may pack.
@@ -356,7 +457,7 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
     \vskip 2pt
     \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
       This frame is \emph{what UMAP gives you}. \textbf{How it works} --- the fuzzy graph,
-      $\rho_i$ and $\sigma_i$, the cross-entropy --- is the whole of the next lecture (L13c).}}
+      $\rho_i$ and $\sigma_i$, the cross-entropy --- is the whole of the next lecture.}}
     \column{0.48\textwidth}
     \begin{center}
       \includegraphics[width=\textwidth]{fig/dr_umap_fashion.pdf}
@@ -399,16 +500,21 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
 \end{frame}
 
 \begin{frame}{Decision table}
-  \begin{center}\small
+  \begin{center}\footnotesize
     \renewcommand{\arraystretch}{1.3}
-    \begin{tabular}{l c c c l}
-      & \textbf{Linear?} & \textbf{Global?} & \textbf{Determin.?} & \textbf{Use it for} \\
+    \begin{tabular}{l c c c c l}
+      & \textbf{Linear?} & \textbf{Global?} & \textbf{Determin.?} & \textbf{New pts?} & \textbf{Use it for} \\
       \hline
-      \textbf{PCA} & yes & yes & yes & preprocessing, compression, denoising \\
-      \textbf{t-SNE} & no & no & no & visualizing local cluster structure \\
-      \textbf{UMAP} & no & some & no (seeded) & visualization, faster / larger data \\
+      \textbf{PCA} & yes & yes & yes & yes & preprocessing, compression, denoising \\
+      \textbf{t-SNE} & no & no & no & no & visualizing local cluster structure \\
+      \textbf{UMAP} & no & some & no (seeded) & approx. & visualization, faster / larger data \\
     \end{tabular}
   \end{center}
+  \vskip 4pt
+  {\scriptsize \textbf{New points?} --- can a fitted model embed data it has never seen?
+  \textbf{PCA}: \texttt{transform}, exact. \textbf{UMAP}: \texttt{transform}, approximate.
+  \textbf{t-SNE}: no --- it learns positions, not a map, so a new point means refitting
+  everything. One more reason the 2-D picture cannot be a feature for a model.}
   \vfill
   \footnotesize \textbf{Rule of thumb:} reach for \textbf{PCA} first (fast, cheap, reversible); use
   \textbf{t-SNE / UMAP} when you specifically want a 2-D \emph{picture} of the structure.
@@ -450,6 +556,9 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
       discards (a thin signal axis vs.\ a fat nuisance axis).
     \item \textbf{Tree models} (forests, boosting) usually do not need it.
     \item Always try the model \emph{without} DR first; add it only if it helps.
+    \item And if the goal is separating \emph{classes}: there is a supervised cousin,
+      \textbf{Linear Discriminant Analysis (LDA)}, which picks directions by class separation
+      rather than variance. You will meet it as \emph{Fisherfaces} in Project 2.
   \end{itemize}
 \end{frame}
 
@@ -470,7 +579,7 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
   \end{itemize}
   \vfill
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-    \textbf{Next (L13c):} UMAP, opened up --- the fuzzy neighbor graph, why each point gets its
+    \textbf{Next (lecture 36):} UMAP, opened up --- the fuzzy neighbor graph, why each point gets its
     own distance scale, and what the cross-entropy is really doing. After that, unsupervised
     learning is closed and we move to a new family of models.}}
 \end{frame}
@@ -509,4 +618,20 @@ enough --- t-SNE and UMAP preserve \emph{local} neighborhoods.}
 %     chapter already commits, so the deck's "a text embedding ~768" claim finally has a
 %     picture behind it.
 %   - UMAP frame now forward-points to L13c, the deep UMAP lecture.
+%
+%   2026-09-02 revision (review round 2 + instructor requests; DECISIONS.md #31):
+%   - Renumber sweep the 2026-08-16 pass missed: student-visible "L13c" -> "lecture 36" /
+%     "the next lecture".
+%   - Acronym pass per SLIDE_STYLE.md (the mechanical grep was finally run): expanded
+%     t-SNE, UMAP, LSA, EVR, DR; "12,000 garment photos" -> "12,000 of its 70,000".
+%   - NEW frames (instructor-requested pedagogy): "Why maximize variance?"
+%     (dr_why_variance.pdf, projected |A-B| = 12.6 vs 0.7), covariance-matrix refresher
+%     (definition, reading, Var(Xw) = w'Sigma w identity), "What PCA does to a point ---
+%     and what linear means" (dr_linear_grid.pdf), SVD frame rebuilt around an annotated
+%     block diagram (U, S, V roles; Z = US), "The principal directions, drawn as images"
+%     (dr_eigengarments.pdf; PC1 29%, PC2 18%, sets up Project 1's eigenfaces).
+%   - Decision table gains a "New points?" column: t-SNE has no out-of-sample map.
+%   - One-liners: elbow callback to ch09; PCA-inside-the-pipeline leakage note; the
+%     crowding problem explained instead of name-dropped; LDA/Fisherfaces pointer to
+%     Project 2 on "When NOT to reduce"; grid callback on "Why nonlinear?".
 % =============================================================
