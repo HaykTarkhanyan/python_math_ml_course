@@ -5,7 +5,7 @@ Brainstormed and approved 2026-08-13; built the same day.
 
 ## Why a second practical
 
-`34_image_compression_solution.ipynb` exercises roughly a quarter of `32_clustering` (47 frames):
+`35_image_compression_solution.ipynb` exercises roughly a quarter of `32_clustering` (47 frames):
 k-means, mini-batch, elbow, silhouette. It cannot exercise the rest, and not by accident —
 pixels in an RGB cube have **no labels**, so external evaluation (a full deck section: ARI, AMI,
 the label-permutation problem) is unreachable, and quantization never asks *what is this cluster*
@@ -21,7 +21,7 @@ argued about, and scored against a real land-cover map.
 | Elbow, silhouette | yes | yes |
 | "Scale first" trap | no (RGB is already commensurate) | **yes, and it breaks the map** |
 | Cluster interpretation / naming | no | **yes, from mean spectra** |
-| GMM, soft assignment | no | **yes, with a physical meaning** |
+| ~~GMM, soft assignment~~ | no | *cut 2026-08-26, instructor's call* |
 | DBSCAN and its limits | no | **yes, as an honest failure** |
 | External metrics (ARI / AMI) | impossible, no labels | **yes, vs ESA WorldCover** |
 | Label-permutation problem | no | **yes** |
@@ -41,9 +41,17 @@ bonus.
 
 ## Session arc — 6 acts, ~90 minutes
 
-**Act 0 — see what the eye cannot (10 min).**
-Load the cube, draw true colour, then false colour with near-infrared in the red channel.
-Vegetation glows, the lake goes black. The features carry structure the eye was never given.
+> Revised 2026-08-26: Act 0 gained the provenance / channels / reflectance material and the
+> ground-truth reveal; Act 4 lost the GMM half. Act numbering is unchanged.
+
+
+**Act 0 — where the data came from, and what the eye cannot see (20 min).**
+Where the scene comes from (Earth Search STAC, windowed COG read, the 20 m and window-selection
+decisions) and what each of the six channels physically measures. Then reflectance properly:
+radiance vs reflectance, what Level-2A means, `DN * scale`, and the offset that the metadata
+advertises but physics rejects. Draw true colour, then false colour with near-infrared in the red
+channel — vegetation glows, the lake goes black. Finally show the WorldCover ground truth **once**
+and put it away until Act 5, so the students know what is down there without being able to peek.
 
 **Act 1 — from image to table (15 min).**
 Reshape `(H, W, B)` to `(H·W, B)`. A "point" is now 20 m of Armenia. Scale — and show the map
@@ -61,11 +69,14 @@ Add NDVI and NDWI, recluster, watch the map change. No held-out score can say wh
 is right, so in unsupervised work the choice of representation *is* the modelling decision.
 Callback to ch6 feature engineering.
 
-**Act 4 — soft edges and an honest failure (15 min).**
-GMM, then map the maximum responsibility as a confidence image: the shoreline glows uncertain
-because a 20 m pixel there genuinely is part water and part land. Then DBSCAN on a subsample,
-where it does badly, and say why: spectral space here is a continuous gradient with no density
-valleys, and at ~10⁶ points the O(n²) memory cost rules it out anyway.
+**Act 4 — an honest failure (10 min).**
+DBSCAN on a subsample, where it does badly, and say why: spectral space here is a continuous
+gradient with no density valleys, and at ~10⁶ points the O(n²) memory cost rules it out anyway.
+Reporting an algorithm that did not work is part of the job.
+
+*(The GMM half — soft assignment, the confidence map, and the "the mixture model knew" reveal —
+was cut on 2026-08-26 at the instructor's request. It was a good act; if the session ever needs
+a soft-clustering beat, it is recoverable from git history at commit `684b4cf`.)*
 
 **Act 5 — the ground truth (15 min).**
 Load ESA WorldCover for the same pixels. Show that accuracy is meaningless (cluster 3 is not
@@ -129,7 +140,12 @@ larger crop, HDBSCAN, or fetching their own Armenian scene with the script in `p
 
 ---
 
-## What the build found (2026-08-13)
+## What the build found (2026-08-13) — SUPERSEDED, see the 2026-08-26 section below
+
+> **Do not act on the four numbered findings below.** They were measured on a cube whose
+> reflectance conversion was wrong (the BOA offset was applied twice). Three of the four
+> reversed once it was fixed. They are kept verbatim because the record of what a broken
+> pipeline can make you believe is worth more than a tidy file.
 
 All four checks passed: scene `S2A_38TNK_20240902_0_L2A`, 0 % cloud, window `martuni_south`
 (40.14 N, 45.30 E) with 5 classes over 2 % — grassland 48.8 %, water 28.3 %, cropland 13.5 %,
@@ -162,3 +178,89 @@ unscaled, ARI 0.589, against 0.484 for the six-band model students build first.
 **The closing act is stronger than designed.** ARI ≈ 0.48 collapses to ≈ 0.16 when the water is
 removed, and refitting on land only recovers it to 0.19 at best. Nearly all of the headline score
 was one easy split worth 28 % of the pixels.
+
+---
+
+## What the rebuild found (2026-08-26)
+
+Two changes: the GMM act was cut on the instructor's request, and **a reflectance bug was found
+and fixed**. The second one invalidated most of the section above.
+
+### The bug
+
+`fetch_sevan_scene.py` read `scale` and `offset` from the scene's STAC `raster:bands` metadata
+and applied `reflectance = DN * scale + offset`. The metadata advertises `offset = -0.1`, correct
+for a raw post-baseline-04.00 L2A product. But Element84's `sentinel-2-l2a` COGs are **already
+baseline-harmonised**, so the offset had been folded in, and applying it again shifted every band
+down by 0.1.
+
+The evidence, medians per WorldCover class:
+
+| class | B04 / B08 with offset | B04 / B08 without |
+|---|---|---|
+| Tree cover | **-0.069** / 0.149 | 0.031 / 0.249 |
+| Grassland | -0.014 / 0.128 | 0.086 / 0.228 |
+| Water | **-0.086 / -0.090** | 0.014 / 0.010 |
+
+**60.0 % of all values in the cube were negative.** Reflectance is a ratio of light out to light
+in; it cannot be negative. The no-offset column matches textbook spectra for all five classes at
+once.
+
+The npz itself was never wrong — only the conversion applied to it — so no refetch was needed.
+`verify_reflectance()` now checks the advertised conversion against physics before trusting it,
+and refuses to proceed if neither variant is physical. It would have caught this on day one.
+
+### What the bug had been teaching
+
+NDVI is computed after `np.clip(refl, 0, None)`. With the offset applied, red clipped to zero on
+vegetated ground, so NDVI collapsed to `NIR / NIR` = **1.0** for tree cover *and* grassland alike.
+The "vegetation index" was a saturated water/land mask. Correct values: 0.78 and 0.45.
+
+### Corrected findings — these replace 1-4 above
+
+1. **Scaling.** The old finding said standardising *hurt* once indices were added, and concluded
+   the deck's "scale first" rule was too simple. **Backwards.** Scaling now helps at every `k` on
+   the mixed set (+0.035 to +0.079 ARI), does nothing where columns already share a unit (RGB
+   moves ≤0.002), and lands in between on the six bands (-0.015 to +0.036). **The deck's `armred`
+   trap frame is correct as written** and needs no revision: scaling matters in proportion to how
+   unequal the spreads were.
+2. **`k`.** Unchanged and still true: ARI peaks at 4 or 5 in every row, the elbow's range, not the
+   silhouette's `k=2`.
+3. **Feature sets tie.** The old "indices only, `k=4`, unscaled, ARI 0.589, the best result in the
+   notebook" was the saturated-NDVI artifact. Corrected, the top three are **0.483 / 0.482 /
+   0.479** — six bands, three indices, and all nine columns, in a dead heat. What separates a good
+   row from a bad one is whether infrared is present at all (RGB trails by 0.04-0.10), not how it
+   is recombined.
+4. **Silhouette vs features.** The old claim that the silhouette ranked feature sets in ARI's
+   order was false even before the fix (it compared the scaled `k=5` silhouette against
+   best-over-sweep ARI). It is false now too. The honest statement: the real gaps are ~0.004 ARI,
+   below what any internal metric resolves.
+
+### Unaffected, and verified bit-identical after the refit
+
+Adding a constant to every band is invariant under Euclidean distance and under standardisation,
+so `Xs` never changed. Cluster shares, all five mean spectra (shifted +0.1, NIR-red steps
+identical), cluster naming, the elbow and silhouette curves, the DBSCAN table, water precision
+0.999 / recall 0.997, the contingency table, and the closing collapse (0.484 → 0.155 on land only)
+all came back unchanged. **The strongest act in the notebook was never at risk.**
+
+### Also changed
+
+- **GMM cut** (Act 4 is now DBSCAN alone). Removed the confidence map, the "mixture model knew"
+  act, and the k-means-vs-GMM comparison. The conclusion table lost its *soft assignment* and
+  *k-means assumptions* rows, the latter having had no evidence left without the GMM.
+- **New up-front sections**: where the scene comes from and how it was cropped; a per-band table
+  of what each of the six channels measures; a proper account of reflectance; and a ground-truth
+  cell showing WorldCover in ESA's official class colours before any clustering is done.
+- **NDBI is not a wide feature.** At std 0.139 it is only 1.2x B11's 0.114. Only NDVI and NDWI
+  dominate unscaled distances.
+
+### Rule this reinforces
+
+`_learnings/2026-08-13-2015_write-the-practical-after-measuring-not-before.md` said design docs
+state what to *investigate*, not what will be *found*. This round adds the harder half:
+**measuring is not enough if the measurement itself is unvalidated.** Every one of those four
+findings was honestly measured. They were measured on bad data, and nothing in the write-prose-
+after-measuring discipline catches that. Physical sanity checks on the input belong upstream of
+the analysis, in the fetch script, where they now are.
+

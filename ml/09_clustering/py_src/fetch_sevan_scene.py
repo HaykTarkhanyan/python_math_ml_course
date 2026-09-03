@@ -256,13 +256,58 @@ def fetch_scene(item, crs, transform, bounds):
 
 
 def band_scale_offset(item) -> tuple[float, float]:
-    """Reflectance = DN * scale + offset. Post-baseline-04.00 scenes carry offset -0.1."""
+    """The scale and offset the STAC metadata ADVERTISES.
+
+    Not necessarily the ones to apply - always pass the result through
+    verify_reflectance(), which checks the advertised conversion against physics.
+    """
     raster = item.assets["blue"].extra_fields.get("raster:bands")
     if raster:
         band = raster[0]
         return float(band.get("scale", 1e-4)), float(band.get("offset", 0.0))
     log.warning("item %s carries no raster:bands metadata; assuming scale 1e-4, offset 0", item.id)
     return 1e-4, 0.0
+
+
+def verify_reflectance(cube: np.ndarray, scale: float, offset: float) -> float:
+    """Return the offset that ACTUALLY applies, after checking the advertised one.
+
+    Surface reflectance is the ratio of light leaving the ground to light arriving.
+    It cannot be negative. That makes the conversion falsifiable, and it should be
+    falsified before nine megabytes of it get committed to a teaching repo.
+
+    Post-baseline-04.00 Sentinel-2 L2A products carry BOA_ADD_OFFSET = -1000 DN, which
+    the STAC entry reports as offset = -0.1. But Element84's `sentinel-2-l2a` COGs on
+    AWS are already baseline-harmonised: the offset has been folded into the stored
+    values. Applying it a second time pushes every band down by 0.1 and sends open
+    water to roughly -0.09 across all six bands.
+
+    (Learned 2026-08-26, after the first build of this scene shipped a cube whose lake
+    reflected negative light in every band. See _learnings/.)
+    """
+    if offset == 0.0:
+        return offset
+
+    frac_neg = float((cube.astype(np.float32) * scale + offset < 0).mean())
+    if frac_neg < 0.001:
+        log.info("advertised offset %+.4g is physical (%.3f%% negative); applying it",
+                 offset, 100 * frac_neg)
+        return offset
+
+    frac_neg_without = float((cube.astype(np.float32) * scale < 0).mean())
+    if frac_neg_without >= 0.001:
+        raise AssertionError(
+            f"neither conversion gives physical reflectance for {BAND_CODES}: "
+            f"with the advertised offset {frac_neg:.1%} of values are negative, "
+            f"without it {frac_neg_without:.1%} still are. Inspect the product by hand "
+            f"before shipping it - do not guess."
+        )
+
+    log.warning(
+        "advertised offset %+.4g would make %.1f%% of values negative, so these COGs are "
+        "already baseline-harmonised. DROPPING it: reflectance = DN * %.4g",
+        offset, 100 * frac_neg, scale)
+    return 0.0
 
 
 # --- quicklook -----------------------------------------------------------------
@@ -327,6 +372,7 @@ def main() -> None:
         raise RuntimeError("every candidate scene was cloudy or clipped over the crop")
 
     scale, offset = band_scale_offset(item)
+    offset = verify_reflectance(cube, scale, offset)
     shares = class_shares(labels)
     log.info("Scene %s (%s), reflectance = DN * %g + %g",
              item.id, item.properties["datetime"][:10], scale, offset)

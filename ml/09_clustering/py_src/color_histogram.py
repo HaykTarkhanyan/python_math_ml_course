@@ -5,7 +5,8 @@ Generates into ml/09_clustering/fig/:
                           Saryan landscape and the same pixels shuffled have byte-for-byte
                           identical histograms.
 
-This is the failure the photo-grouping practical (34_image_clusters) opens with: cluster
+This is the failure the photo-grouping practical opens with -- now ch10,
+37_image_clusters_solution.ipynb: cluster
 colour histograms and you group by palette, never by subject.
 
 Run with the project venv:

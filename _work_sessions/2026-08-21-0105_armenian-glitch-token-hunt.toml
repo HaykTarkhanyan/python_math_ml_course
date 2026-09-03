@@ -1,0 +1,198 @@
+title = "New live-coding project: Armenian glitch token hunt across 8 tokenizers"
+date = "2026-08-21"
+time = "0105"
+areas = ["ml/claude_projects/armenian_glitch_token_hunt", "DECISIONS.md", "_learnings"]
+
+done = """
+Instructor asked (voice) for a new project folder with token-level analysis of Armenian:
+tokenizer vocab archaeology, longest tokens, first merges, glitch-token candidates a la
+SolidGoldMagikarp, corpus efficiency per tokenizer, tokens>chars explosion cases, plus a local
+tiktokenizer-style app accepting custom tokenizers. Minimal codebase, notebook-first, to be
+live-coded later Karpathy-style. Kickoff Q&A fixed: location ml/, all 3 tokenizer families,
+Gradio, Armenian Wikipedia corpus; mid-session addition: XLM-R deep dive + JSON results with a
+compiled HTML report.
+
+BUILT ml/claude_projects/armenian_glitch_token_hunt/:
+- tokenizer_registry.py - 8 tokenizers (XLM-R, mBERT, tiktoken gpt2/cl100k/o200k, Llama 3 via
+  Xenova mirror, Gemma 2 via unsloth mirror, Qwen 2.5) behind one tiny interface.
+- armenian_token_hunt.ipynb - the experiment: vocab census, merge archaeology, corpus efficiency
+  vs an en baseline (20M + 5M chars wiki, cached in data/), token explosion over 250k words,
+  XLM-R glitch hunt (corpus-null x embedding norms x repeat-after-me MLM probe), word gallery.
+  Fully executed, JSONs checkpointed to out/ per tokenizer. Env knobs ATH_MAX_CHARS /
+  ATH_EN_MAX_CHARS / ATH_SKIP_WEIGHTS for smoke runs.
+- build_report.py - out/*.json -> self-contained plotly report.html; verified by driving a real
+  browser (4 charts, 8 tables, only console error is the favicon 404).
+- tokenizer_app.py - Gradio playground (colored spans, token table, compare-all tab, custom HF
+  repo input); verified end-to-end with Playwright, left running on :7861.
+
+HEADLINE FINDINGS (full run, 20,037,131 chars hy-wiki):
+- cl100k (GPT-4) has ZERO Armenian tokens; Armenian premium x8.77 vs English. GPT-2 identical.
+- o200k (GPT-4o) fixed it: 1,753 Armenian tokens, first Armenian merge at rank 619 (0.3%),
+  premium x1.61. Llama 3 and Qwen 2.5 learn their FIRST Armenian merge at 94-96% through the
+  vocab; Gemma 2 at 6.9%.
+- XLM-R: most efficient (3.50 chars/token, premium x1.22), longest token քաղաքականություն.
+- Glitch candidates are web-chrome words: խմբագրել (wiki "edit"), Տպել, Զրուցարան,
+  Մեկնաբանություն, ԱՐՄԵՆՊՐԵՍ, and the eternity sign ֍ - in vocab, never in 20M chars of clean
+  text, lowest embedding norms. MLM probe: model answers English "chat" for Զրուցարան.
+- 100% of Armenian words "explode" (tokens > letters) under GPT-2/cl100k, 99.9% under Llama 3.
+- XLM-R's normalizer rewrites the ligature և -> եւ before tokenizing (visible in every encode).
+
+DECISIONS #26 records the choices; two _learnings/ files record the session's bugs (below).
+
+CONTINUATION (same night, ~02:00-02:30). Instructor played with the app, then asked for the
+probe fix, a quick inline review (zero subagents per the "quick" rule), and embedding clustering.
+Review applied 4 fixes: control ▁Երևան -> ▁Երեւան; trailing comma after the probe mask (5/7
+probes had been answering </s> - end-of-sequence drowned the copy signal; with the fix control
+Հայաստան copies at rank 3 vs candidate Արտասանել at 9,459); dead unk_id variable wired into an
+"invisible words" count (result: 0 for every tokenizer - all Armenian letters are covered,
+fragmentation is the only failure mode); out/report.html gitignored (derived, 5 MB).
+
+CLUSTERING (SolidGoldMagikarp method): k-means k=10 over the 3,528 Armenian XLM-R embeddings +
+PCA map (interactive in the report, hover = token). 12 of 14 candidates land in the three
+lowest-norm clusters; the ALL-CAPS fragments + ֍ form a visible clump on the PCA rim. HONEST
+NEGATIVE: the classic centroid-hugging signature does NOT reproduce (cosine dist to global
+centroid 0.634 candidates vs 0.625 rest) - these tokens were rare-in-domain, not untrained-
+from-scratch like GPT-2's. Embedding slice + all 250k norms exported to data/*.npz for further
+play.
+
+LIVE PROBE (~02:30, instructor provided OpenRouter key, cap \$0.50). New glitch_live_probe.py:
+104 calls, 4 served models matching our tokenizers (gpt-4o-mini/o200k, llama-3.1-8b, qwen-2.5-7b,
+gemma-2-27b-it - 9b no longer served, same tokenizer), 13 words x repeat+spell, temp 0, per-call
+cost ledger -> out/live_probe_results.json, report section 6. ACTUAL SPEND \$0.0022 (credits
+delta), vs \$0.50 cap. Results: repeat 51/52 - no SolidGoldMagikarp behavior in served models,
+EXCEPT gemma-2-27b returns EMPTY content for ֍ (the API gave content:null - crashed the script
+once; fixed by treating null as an empty answer and checkpointing the ledger per call) and
+llama-3.1 dropped a syllable copying հնարավորություն (44 byte-tokens for 15 chars). Spelling
+is where tokenization blindness shows: all models fail most spells, with cross-script letter
+leakage - qwen spells Երևան with THAI ร, gemma with GUJARATI ર (embedding-neighbors of ր);
+llama transliterates Հայաստան to Latin; gpt-4o-mini leaks the token boundary 'Ստ' unfused.
+
+PER-MODEL CANDIDATES (~02:40, instructor's correction: XLM-R candidates only diagnose XLM-R).
+New find_model_candidates.py mines each SERVED model's own vocab for corpus-null/rarest Armenian
+tokens (no embeddings - corpus evidence only); glitch_live_probe.py --per-model probes each model
+with its own suspects (60 calls, out/live_probe_per_model.json). THE JACKPOT: gpt-4o-mini returns
+EMPTY when asked to repeat both of its own corpus-null tokens (վերաբերյ, որովհ - merge-shadowed
+fragments its segmenter routes around); gemma-2-27b fails 5/10 own-candidates - Վերցված (scraped-
+attribution boilerplate), ALL THREE symbol tokens ֍ ֎ ֏ (eternity signs + THE DRAM SIGN, all
+corpus-null in its vocab) go empty, and հղ gets answered in KANNADA ('ಹಿಂಜಿ'). Qwen 10/10, Llama
+1/1 (its entire Armenian vocab is the letter ա, used 2.5M times - nothing to glitch). Validates
+the corpus-null mining method: 7 true live glitch behaviors across 2 production models. Report
+sections appended (own-candidates + own-probe tables), XLM-R results kept. TOTAL OpenRouter
+spend, everything: \$0.0028 (credits delta 62.977702 -> 62.980540).
+
+FUN PROBE (~02:50). fun_probe.py: SolidGoldMagikarp interrogation battery (define / repeat bare
+vs QUOTED / same-string check / five-times / story / count) on the 7 confirmed glitch tokens,
+49 calls, out/fun_probe_results.json, report subsection. Exhibits: quoted-vs-bare contrast holds
+7/7 (bare repeat empty, quoted repeat perfect - the glitch is the TOKEN not the string);
+gpt-4o-mini asked to say որովհ five times says a DIFFERENT word (հրով x5) - the classic
+'distribute' substitution reproduced; gemma repeats հղ as BENGALI হղ and five-times it in
+KANNADA (ಹಣಿ x5); gemma correctly DEFINES ֏ as the dram sign (quoted = visible) while unable to
+say it bare - knows what it is, cannot say it; hallucinated Unicode names for ֍/֎ ('stylized
+eye', 'WHITE CIRCLE'). Nuance: gemma CAN say ֍ five times comma-separated - context changes
+tokenization, some formulations un-glitch a token.
+
+VISIBLE-INPUT PROBE (~02:58, instructor: 'design something that will definitely not be blind,
+multiple tokens allowed, no temp changes'). visible_probe.py: spell the target through
+guaranteed-visible tokens (single letters / two fragments / ASCII codepoint) and demand the word
+in the OUTPUT, still temp 0 - separates input blindness from output inability. 9/21 contain the
+target. Letter-WORDS mostly become sayable once visible (the model routes around the glitch
+token char-wise) with partial failures: gpt-4o-mini assembles որովհ correctly then scrambles it
+to որոհվհ when REUSING it in a sentence; gemma drops the capital in Վերցված; gemma concat
+'հ'+'ղ' -> 'աղ' (letter substitution). SYMBOL tokens ֍ ֎ ֏: 0/9 by ANY route - codepoint asks
+land on random rare-char space (U+058D -> Hebrew פ, runic ᚽ, story char 𖣭; U+058F -> Tangut
+𗏯, braille ⣿). Honest caveat: symbol failures conflate missing codepoint->glyph knowledge with
+emission inability (gemma DID emit ֍ comma-separated in the fun probe when the char was in
+context). Report gains the visible-probe table. Evening total spend ~\$0.0044 (ledger sum).
+
+DISK CRISIS + COMEDY + GEMMA SKIP (~03:00-03:50). Instructor asked for comedy and a Gemma
+embedding deep dive. gemma_embedding_hunt.py written (fetches ONLY the embed tensor, 1.8 GB of
+the 18 GB repo, via HTTP Range on safetensors offsets) - died with ENOSPC: C: was at 0.1 GB
+free. The parallel comedy_probe.py run ALSO died on ENOSPC and its truncating write_text
+DESTROYED its own ledger (~100 paid calls lost, ~\$0.003) - fixed by write-then-rename atomic
+checkpoints in all three probe scripts (the existing checkpoint learning, relearned). With
+instructor approval deleted ALL HF caches (~8 GB) and the uv wheel cache (260,970 files,
+13.2 GiB -> C: at ~11 GB free; scoped robocopy /L scan identified uv 13.2 / Docker 6.6 /
+WSL 4.8 / Temp 2.6 / playwright 2.3 GB). NOTE: HF cache deletion means notebook reruns
+redownload XLM-R (1.1 GB) and wiki streams. Instructor chose to SKIP the Gemma deep dive
+(script kept, unused - Colab offload was the offered alternative). Comedy rerun (180 calls,
+atomic): gems - gpt-4o-mini claims bare վերաբերյ is TAMIL and quotes an invented Tamil word,
+defines it as a different word (Վերադարձ) and translates consistently with its own
+substitution; աեւ translates to 'aeronautics'; gemma insists հղ is BENGALI (twice,
+consistently) and uses 'hláð' in a sentence; ֍ translates to 'Eye of Horus' (gemma) /
+'dharani syllable' (qwen); ֎ -> 'starvation mark'; llama says Armenian ա is a RUSSIAN letter;
+ALL 30 tokens lose the real-word duel vs բարև 100% of the time; count-occurrences is always
+correctly 3 (too easy). Gradient confirmed: count>=4 tokens get mostly sane answers - the
+delusions live at count 0-2. Report gains the comedy table (section 6). Evening spend to this
+point \$0.00827. Report also gained a collapsible 'All prompt templates' block (imported from
+the probe scripts at build time, single source of truth - instructor kept asking what the
+prompts were).
+
+SMALLER MODELS (~04:00, instructor: 'use smaller models so we can find proper glitch').
+glitch_live_probe.py gained --models/--suffix overrides; per-model battery rerun on same-vocab
+small siblings: gpt-4.1-nano (o200k) drops to repeat 5/9 spell 0/9 vs 4o-mini's 7/9 2/9, and
+failures are no longer empty but FLORID - վերաբերյ -> Chinese 挂牌, որովհ -> Persian پور,
+նաեւ -> a full TIBETAN sentence. llama-3.2-1b echoes its lone ա fine. NEW local_base_probe.py:
+Qwen2.5-0.5B BASE locally on CPU (free), raw single candidate token id as the ENTIRE input,
+greedy: pure chaos gallery - ֍ -> Arabic 'الرئيسية' (homepage) looping, ֎/Ձ/Ղ -> Bengali,
+Ր -> Indonesian, Ց -> a string of zeros, controls free-fall too (ա -> Ukrainian, Երևան ->
+counting years). KEY HONEST FINDING: the few-shot echo test passes for ALL tokens incl.
+corpus-null (induction heads copy literal tokens regardless of embedding quality; ֍ even has
+p_copy rank 2) - so the three-layer story is: base models free-fall on bare glitch tokens,
+in-context induction can always copy, and the served chat models' EMPTY outputs are a
+chat-tuning layer on top. Report sections: 'Smaller siblings, same vocab' + 'Local base model'.
+Small battery cost \$0.00011; local probe free. Evening total ~\$0.0084.
+"""
+
+pending = """
+- NOT COMMITTED - instructor did not ask. Everything is new files except DECISIONS.md (also
+  touched by the parallel semantic-tree session, #27) and untracked project dir.
+- Gradio app left running on http://127.0.0.1:7861 (background process, all 8 tokenizers warm,
+  ~1-2 GB RAM). Kill it when done; relaunch: ma python tokenizer_app.py from the project dir.
+- The probe control ▁Երևան silently dropped out: the literal piece with ligature և is not in
+  XLM-R's vocab (the normalizer maps to եւ), so convert_tokens_to_ids returned unk and it was
+  filtered. Only Հայաստան survived as control. Harmless but worth fixing to ▁Երեւան for the live
+  version.
+"""
+
+next = """
+- Live-coding prep: the notebook is deliberately linear; a good session arc is registry ->
+  census -> merges -> efficiency -> explosion -> glitch, with the report as the take-home.
+- Possible extensions (parked): OSCAR hy webtext as second corpus (messier glitches), official
+  gated repos after hf auth login, GPT-2 embedding norms to reproduce the original
+  SolidGoldMagikarp cluster, cross-reference with the semantic-tree project (#27) where subword
+  artifacts appear as a consequence.
+"""
+
+files = [
+  "ml/claude_projects/armenian_glitch_token_hunt/README.md",
+  "ml/claude_projects/armenian_glitch_token_hunt/tokenizer_registry.py",
+  "ml/claude_projects/armenian_glitch_token_hunt/armenian_token_hunt.ipynb",
+  "ml/claude_projects/armenian_glitch_token_hunt/build_report.py",
+  "ml/claude_projects/armenian_glitch_token_hunt/tokenizer_app.py",
+  "ml/claude_projects/armenian_glitch_token_hunt/.gitignore",
+  "ml/claude_projects/armenian_glitch_token_hunt/out/",
+  "DECISIONS.md",
+  "_learnings/2026-08-21-0135_python-m-jupyter-runs-someone-elses-nbconvert.md",
+  "_learnings/2026-08-21-0140_bpe-merge-halves-are-invalid-utf8-alone.md",
+]
+
+commits = []
+
+notes = """
+THREE BUGS, ALL CAUGHT BY VERIFYING RATHER THAN TRUSTING GREEN:
+1. `python -m jupyter nbconvert` from the ma venv silently ran the SYSTEM Python's broken
+   nbconvert (PATH dispatch), and `| tail` ate the nonzero exit code - the "successful" smoke run
+   had produced nothing. Rule: `python -m nbconvert`, never through a pipe. (learning 0135)
+2. Byte-level BPE merge halves are individually invalid UTF-8; decoding parts separately made
+   Qwen's Armenian merges invisible ("no Armenian at all" while the census counted 79 tokens).
+   Concatenate bytes first, decode once. Fixed rank: 144,669. (learning 0140)
+3. Full run #1 died with `memory allocation of 5120000 bytes failed` (kernel OOM) because the
+   Gradio app was loading all 8 tokenizers for a Playwright test WHILE the notebook tokenized
+   20M chars - two tokenizer-heavy processes on the 16 GB machine. Reran strictly sequentially
+   with count_ids only for XLM-R, del word_freq, and del of the 768 MB embedding matrix before
+   the MLM model loads. Second run finished in ~5 min on warm caches.
+
+The efficiency story in one line: writing Armenian through GPT-4's tokenizer cost 8.8x more
+tokens per character than English; GPT-4o cut that to 1.6x - and you can see the investment
+directly in the merge table (o200k learns ա at rank 619; Llama 3 not until rank 263,556).
+"""
