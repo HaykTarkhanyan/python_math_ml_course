@@ -36,7 +36,11 @@ EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 
 def _thumb_jpeg(img: Image.Image) -> bytes:
-    """Center-crop to a square, shrink to THUMB_PX, return JPEG bytes."""
+    """Tiny square thumbnail for the hover map ONLY - this is display, not model input.
+
+    The embedding never sees this: CLIP gets the full image, and CLIPProcessor does the
+    model's own preprocessing (resize + center-crop to 224x224) internally. We make a
+    uniform 48px square here so a few hundred thumbnails pack into a small HTML file."""
     w, h = img.size
     s = min(w, h)
     img = img.crop(((w - s) // 2, (h - s) // 2, (w + s) // 2, (h + s) // 2))
@@ -60,6 +64,7 @@ def main(folder: Path) -> Path:
     for start in range(0, len(files), BATCH):
         batch = files[start:start + BATCH]
         imgs = [Image.open(p).convert("RGB") for p in batch]
+        # full images in; the processor handles CLIP's own resize/crop to 224x224
         inputs = processor(images=imgs, return_tensors="pt")
         with torch.no_grad():
             # transformers >= 5 returns a model-output object; .pooler_output is the
