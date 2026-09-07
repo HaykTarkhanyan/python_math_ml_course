@@ -9,6 +9,108 @@ this file holds the choice and a pointer.
 
 ---
 
+## #35 - The ch6 barcode project ships as one walkthrough notebook, decoding EAN-13 from scratch
+
+**Date:** 2026-09-06 · **Status:** active
+
+**Decision.** New standalone practical `ml/ch6_cnn/project_barcode.ipynb` (instructor-chosen
+format: single reference walkthrough, no student/TODO version; instructor-chosen placement:
+standalone project in ch6, not HW1d). Scope, per the instructor's ask: EAN-13 bars-to-digits
+decoding, check-digit validation, gradient-based orientation detection, and localization -
+everything explained step by step, OpenCV allowed (contrast with HW1b/HW1c where cv2 was
+banned). Test data: self-generated synthetic barcodes (own encoder, perfect ground truth,
+staged degradations) plus 6 real product photos from Wikimedia Commons committed under
+`data/barcode/` (downscaled). All prose numbers were measured in scratch scripts BEFORE the
+notebook was written (per the write-after-measuring rule, `_learnings/2026-08-13-2015`).
+
+**Why.** The chapter thesis needed a counterweight: HW1c shows hand-designed filters failing on
+organic data; the barcode is the opposite pole - a pattern DESIGNED for machine reading, where
+classical CV is the right tool and no training is needed. Key measured facts driving the
+notebook's arc: adaptive thresholding fixes uneven light (0->30/30) but breaks the noise cases
+global thresholding handled (30->0/30), so the pipeline is a checksum-gated cascade; a sliding
+59-run window fixes quiet-zone speckle (1/30 -> 30/30 on ramp+noise); band-averaging crushes
+noise (sigma=120: 30/30); blur ~ module width is fatal at 3 px modules (0/30) but trivial at
+6 px (30/30) - resolution beats cleverness; the classic |gx|-|gy| localizer is accidentally
+rotation-symmetric (convertScaleAbs takes abs) yet dies near 45 deg (7/15) while the
+structure-tensor coherence localizer is rotation-proof (40/40); end-to-end 5/6 real photos vs
+3/6 for cv2.barcode.BarcodeDetector on the same six. The one failure (barcode wrapped around
+the bottle's curved side) and one caught false positive (checksum passes ~1 in 10 garbage;
+killed by a min-3-vote gate) are kept in the notebook as the honest-failure act. Reviewed
+2026-09-06: an inline factual pass (4 fixes, e.g. the cv2.barcode WeChat attribution was
+wrong) plus one adversarial Sonnet subagent that independently re-derived the math (0
+mismatches) and flagged 9 findings; all but one applied (declined: empirically printing
+derivable arithmetic like sqrt(15)), notebook re-executed, all numbers stable.
+
+**Alternatives rejected.** HW1d naming (instructor picked standalone-project naming); a
+student+solution pair (double build cost, and the ask was explicitly a walkthrough);
+python-barcode / treepoem for generating test images (writing the encoder ourselves IS the
+lesson on EAN-13 structure and gives exact ground truth); synthetic-only data (no real-photo
+payoff); UPC-A (EAN-13 is its superset, has the parity-encoded 13th digit story, and 485 =
+Armenia's GS1 prefix).
+
+**What would change this.** If students need a task version, derive one by stripping solution
+cells (the walkthrough was written with clean per-step sections to make that split cheap). If
+the 6 photos bloat the repo, re-point the loader at the Commons URLs (kept in the notebook).
+
+---
+
+## #34 - opencv-python pinned at 4.11.0.86 in ma; 5.x forbidden while numpy is 1.26
+
+**Date:** 2026-09-06 · **Status:** active
+
+**Decision.** `ma` gets `opencv-python==4.11.0.86` (for the ch6 barcode project). opencv-python
+5.0.0.93 is NOT allowed: installing it silently upgraded the shared venv's numpy 1.26.4 ->
+2.4.6, which risks breaking every compiled dependency in this repo (scipy 1.13.1, sklearn
+1.7.1, matplotlib all built/tested against numpy 1.x here). Rolled back immediately;
+cv2 4.11 + numpy 1.26.4 verified importing side by side.
+
+**Why.** The shared venv serves ~30 notebooks and dozens of figure scripts; a silent numpy
+major bump is exactly the "fresh sync pulls a breaking major" failure the pin-exact-versions
+rule exists for.
+
+**Alternatives rejected.** opencv-python 5.0 with numpy 2.x (would mean revalidating the whole
+repo for one chapter's practical); a separate venv just for cv2 (violates the one-`ma`-venv
+convention).
+
+**What would change this.** A deliberate, repo-wide numpy 2.x migration - do it as its own
+tested change, never as a side effect of installing something else.
+
+---
+
+## #33 - Project 3's reference walkthrough runs on an own web-fetched demo set, not imagenette
+
+**Date:** 2026-09-05 · **Status:** active
+
+**Decision.** 37_image_clusters_solution.ipynb (the Project 3 "Build your own Google Photos"
+reference) was rebuilt on data/demo_photos/: 92 Wikimedia Commons photos in 11 categories
+(instructor's 5: Khustup, shawarma, cheese, potato, folk dance; plus duduk, Sevan, khachkar,
+pomegranate, Cascade; plus khorovats planted as a deliberately-unseparable trap). Fetched by
+py_src/fetch_project_demo_images.py, manually curated off contact sheets (132 -> 92; logos,
+maps, archival b/w, dupes dropped; _sources.json maps each file to its Commons title), then
+embedded with the SAME given scripts students use (embed_my_photos.py -> demo_photos_clip.npz).
+The notebook gained a CLIP multimodality playground (instructor request): text-to-photo search,
+image-minus-image ~ text arithmetic, photo+word retrieval, before any clustering.
+
+**Why.** The reference should mirror the student experience (own folder through the given
+tooling), and imagenette's 10 clean classes hid the interesting failure modes. Measured before
+writing (per the write-after-measuring rule): pixels ARI 0.063 vs embeddings 0.647 (k=11);
+silhouette prefers k=7 (0.253) over the true 11 (0.243) because the trap works - k-means fuses
+all 10 khorovats with 8/9 shawarma (centroid cosine 0.897, the #1 pair); mean(sevan) -
+mean(khustup) -> "sea, lake, water" and mean(shawarma) - mean(khorovats) -> "lavash, sandwich,
+wrap"; zero-shot naming 97.8% with sentence prompts vs 65% bare words. All numbers printed by
+the executed notebook match the pre-registered measurements.
+
+**Alternatives rejected.** Keeping imagenette (too clean, no multimodal story on our terms, and
+"instead of imagenet" was the explicit instruction); students' own genres like memes/screenshots
+(not reproducible as a committed dataset); a new notebook file alongside the old one (two
+near-identical walkthroughs to maintain; git history keeps the imagenette version).
+
+**What would change this.** If the ~20 MB data/demo_photos/ folder proves too heavy for the
+repo, keep only demo_photos_clip.npz (0.5 MB) + fetch script committed and drop the raw JPEGs;
+thumbnails inside the npz are enough to re-render every figure except the 12-photo sample grid.
+
+---
+
 ## #32 - The ch10 live practical is "genes mirror geography" on 1000 Genomes chr22
 
 **Date:** 2026-09-03 · **Status:** active

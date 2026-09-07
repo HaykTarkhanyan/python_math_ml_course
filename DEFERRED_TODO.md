@@ -2,7 +2,18 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-07-25
+Last updated: 2026-09-06
+
+---
+
+## ch6: derive a student/task version of project_barcode.ipynb if ever assigned as homework
+
+The barcode project (2026-09-06) shipped as a reference walkthrough only, per instructor
+choice. If it is later assigned as graded work, derive a TODO-version by stripping the
+solution bodies - the notebook's per-step sections were kept clean specifically to make
+that split cheap. Natural task boundaries: check-digit properties measurement, the
+decoder, each robustness fix (give the measured failure, ask for the fix), the structure
+tensor, the tensor localizer, and running the pipeline on the student's own photos.
 
 ---
 
