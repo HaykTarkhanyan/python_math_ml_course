@@ -1,0 +1,807 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../../../preamble}
+\usepackage{booktabs}
+
+% --- local callout helper (matches ml/ deck convention) ---------------
+\newcommand{\callout}[3]{% color, fill-shade, content
+  \begin{center}\fcolorbox{#1}{#1!#2}{\parbox{0.92\linewidth}{#3}}\end{center}}
+\newcommand{\keybox}[1]{\callout{armblue}{8}{#1}}
+\newcommand{\warnbox}[1]{\callout{armred}{8}{#1}}
+\newcommand{\nextbox}[1]{\callout{paramgreen}{8}{#1}}
+\newcommand{\watchbox}[1]{\callout{armorange}{12}{#1}}
+\newcommand{\codebox}[1]{\callout{violet1}{6}{\ttfamily\small #1}}
+
+% --- full-bleed video still (16:9 deck, image fills exactly) ----------
+\newcommand{\vidslide}[2]{%
+  {\usebackgroundtemplate{\includegraphics[width=\paperwidth,height=\paperheight]{#1}}%
+  \begin{frame}[plain]
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=south west, font=\tiny, text=white,
+            fill=black, fill opacity=0.60, text opacity=1,
+            inner sep=3pt, rounded corners=2pt]
+        at ([shift={(0.25cm,0.18cm)}]current page.south west) {#2};
+    \end{tikzpicture}
+  \end{frame}}%
+}
+
+\title{[LLM-19] Making Training Fast: 1000 ms to 93 ms}
+\subtitle{Precision, kernel fusion, and the memory wall - five rungs that never touch the model \quad(Karpathy, ``Let's reproduce GPT-2'', 2024)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+% HOOK
+\begin{frame}{Same model, same math, eleven times faster}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    We have GPT-2 124M written, initialized and training. One step takes
+    \textbf{1000 milliseconds} on an A100.
+    \vskip 5pt
+    By the end of this lecture the same step takes \textbf{93 milliseconds}.
+    \vskip 5pt
+    Five changes get us there, each one or two lines of code. And here is the part
+    worth sitting with:
+    \vskip 4pt
+    \begin{center}
+      {\color{popblue}\bfseries none of them change what the network computes.}
+    \end{center}
+    \vskip 4pt
+    We are not building a better model today. We are learning to \textbf{stop wasting
+    the machine we already rented}.
+    \column{0.42\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\small]
+        \node[draw=gray, thick, rounded corners=3pt, fill=gray!8,
+              text width=3.7cm, align=center] (a)
+          {\textbf{Where we start}\\ 1000 ms / step\\ \emph{16k tokens/s}};
+        \node[draw=paramgreen, very thick, rounded corners=3pt, fill=paramgreen!10,
+              text width=3.7cm, align=center, below=0.9cm of a] (b)
+          {\textbf{Where we finish}\\ 93 ms / step\\ \emph{176k tokens/s}};
+        \draw[-{Latex}, thick, paramgreen] (a) -- (b)
+          node[midway, right, font=\scriptsize] {\;10.8x};
+      \end{tikzpicture}
+      \\[6pt]
+      {\scriptsize identical model, identical data}
+    \end{center}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ================================================================
+\section{Know your hardware}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Know your hardware}\\[4pt]
+    \small Before you optimize anything, ask what the machine can actually do.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Three questions, always in this order}
+  \begin{enumerate}
+    \item \textbf{What hardware do I have?} \quad(\texttt{nvidia-smi})
+    \item \textbf{What does it offer?} \quad(the datasheet)
+    \item \textbf{Am I actually getting it?} \quad(measure, do not assume)
+  \end{enumerate}
+  \vskip 8pt
+  For this lecture: one \textbf{NVIDIA A100 80GB SXM}, rented by the hour.
+  \vskip 6pt
+  Every optimization below comes from taking question 3 seriously. The datasheet will
+  promise us 8x, and we will not get it. \textbf{Understanding that gap is the lecture.}
+  \keybox{\footnotesize Optimization without measurement is decoration. Every number in
+    this deck was measured on the same box, one change at a time.}
+\end{frame}
+
+\begin{frame}{What the machine offers, by numeric format}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth,height=0.52\textheight,keepaspectratio]{fig/a100_tflops.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize The same silicon delivers wildly different throughput depending on how
+  many bits you spend per number. TFLOPS = trillions of \textbf{floating-point
+  operations} (\textbf{FLOPs}) per second. Note the shape: \textbf{fewer bits, more
+  throughput}.}
+\end{frame}
+
+\vidslide{fig/borrowed/karpathy_a100_datasheet.jpg}%
+  {The actual A100 datasheet. Karpathy, ``Let's reproduce GPT-2 (124M)'' (2024), 1:25:20}
+
+\begin{frame}{What a tensor core actually is}
+  Not a mysterious accelerator. A single \textbf{instruction} that multiplies two small
+  matrices and adds a third, in one shot.
+  \begin{center}
+    \includegraphics[width=0.88\textwidth,height=0.30\textheight,keepaspectratio]{fig/borrowed/nvidia_tensor_core_mma.jpg}
+    \\[3pt]
+    {\tiny Source: NVIDIA developer blog, shown in Karpathy (2024), 1:28:45}
+  \end{center}
+  \vskip 2pt
+  {\footnotesize Every large matrix multiply in your model gets chopped into thousands of
+  these fixed-size operations. Those rows on the previous chart are simply \textbf{which
+  precisions this one instruction will accept} - which is why lower precision buys
+  throughput at all. (\texttt{HMMA} and \texttt{IMMA} are just the float and integer
+  names for the instruction.)}
+\end{frame}
+
+\begin{frame}{Why matrix multiplication is the whole game}
+  A Transformer is, computationally, \textbf{a stack of matrix multiplies} with cheap
+  things sandwiched between them: residual adds, layer norms, GELU.
+  \vskip 4pt
+  And at the 124M scale, one matmul dwarfs all the others:
+  \vskip 2pt
+  \begin{center}
+    \begin{tabular}{lrr}
+      \toprule
+      \textbf{Matrix multiply} & \textbf{Shape} & \textbf{Arithmetic} \\
+      \midrule
+      one MLP (feed-forward) projection & $768 \rightarrow 3072$ & 0.077 TFLOP \\
+      \textbf{the classifier} & $768 \rightarrow 50257$ & \textbf{1.26 TFLOP} \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 4pt
+  {\footnotesize Projecting to the vocabulary is about \textbf{16x} the arithmetic of a
+  single MLP projection. The vocabulary is large and the embedding is small, so that one
+  layer dominates the whole network.}
+  \keybox{\footnotesize Hold on to this table. In rung 5 we speed the model up by making
+    \textbf{this exact matmul bigger}.}
+\end{frame}
+
+\begin{frame}{Why INT8 sits out this lecture}
+  INT8 is the fastest row on that chart, and we will not use it for \textbf{training}.
+  \begin{center}
+    \includegraphics[width=0.72\textwidth,height=0.45\textheight,keepaspectratio]{fig/int8_vs_float.pdf}
+  \end{center}
+  \vskip -2pt
+  {\footnotesize Integers space their levels \textbf{evenly}, so they spend most of their
+  precision where almost no values live. Floats put fine steps near zero, which is where
+  the values actually are.}
+  \keybox{\footnotesize INT8 is a standard \textbf{inference} format. For training we
+    stay with floating point and only argue about \emph{how many} bits.}
+\end{frame}
+
+\begin{frame}{The bottleneck is not the arithmetic}
+  Here is the fact that explains four of our five speedups.
+  \vskip 6pt
+  Tensor cores can multiply far faster than memory can \textbf{deliver numbers to
+  them}. Most of the time they are idle, waiting.
+  \vskip 6pt
+  \begin{center}
+    {\color{armred}\bfseries If you hit 60\% hardware utilization, you are doing
+    extremely well.}
+  \end{center}
+  \vskip 6pt
+  Half the time, in a well-tuned job, your tensor cores are doing nothing because the
+  data has not arrived.
+  \keybox{\footnotesize This is why lower precision pays \textbf{twice}: the multiply
+    gets faster, \emph{and} every number becomes smaller to move and store. The second
+    effect is usually the bigger one.}
+\end{frame}
+
+\begin{frame}{Measure it properly, or you measure nothing}
+  Your CPU does not run the network. It \textbf{queues work} for the GPU and moves on.
+  \vskip 5pt
+  So a naive timer stops the clock when the \emph{queueing} finishes, not when the
+  \emph{computing} does.
+  \codebox{t0 = time.time()\\
+    \# ... forward, backward, optimizer step ...\\
+    {\color{armred}torch.cuda.synchronize()} \ \ \# wait for the GPU to actually finish\\
+    dt = time.time() - t0}
+  \warnbox{\footnotesize Without \texttt{synchronize()} you will happily report a
+    speedup that does not exist. Also: \textbf{ignore the first iteration} - it pays for
+    memory allocation and other one-time setup, so it is never representative.}
+  \vskip 2pt
+  \begin{center}
+    Baseline, batch 16 x 1024 tokens: \textbf{1000 ms/step}, about \textbf{16k tokens/s}.
+  \end{center}
+\end{frame}
+
+\begin{frame}{Batch size, and the metric that survives it}
+  \begin{itemize}
+    \item \textbf{Max out the batch that fits.} If you hit an out-of-memory error, halve
+      it: 16, then 8, then 4. If you have headroom, go up.
+    \item \textbf{Keep it rich in factors of two.} 8, 16, 32 and 48 all divide by 16.
+      17 divides by nothing, and rung 5 explains why that hurts.
+    \item \textbf{Report tokens per second, not milliseconds per step.} The moment the
+      batch size changes, milliseconds stop being comparable between runs. Tokens per
+      second is the number you actually care about.
+  \end{itemize}
+  \vskip 4pt
+  \begin{center}
+    $16 \times 1024 = 16{,}384$ tokens per step, at 1000 ms $\rightarrow$
+    \textbf{16,384 tokens/s}.
+  \end{center}
+  \watchbox{\footnotesize Careful: batch size is a \textbf{throughput} knob \emph{and} an
+    optimization knob. Changing it changes your training run, not just its speed.
+    Decoupling the two is what gradient accumulation is for - the next deck.}
+\end{frame}
+
+% ================================================================
+\section{Rungs 1 and 2: spend fewer bits}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Spend fewer bits}\\[4pt]
+    \small The cheapest speedup available is to stop moving 32 bits when 16 will do.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Anatomy of a float: range and precision are separate budgets}
+  \begin{center}
+    \includegraphics[width=0.93\textwidth,height=0.50\textheight,keepaspectratio]{fig/float_formats.pdf}
+  \end{center}
+  \vskip -2pt
+  {\footnotesize The \textbf{exponent} decides how big and how small a number you can
+  represent (the \emph{range}). The \textbf{mantissa} decides how finely you can tell
+  nearby numbers apart (the \emph{precision}). Every format below is a different
+  opinion about how to split the budget.}
+\end{frame}
+
+\begin{frame}{Rung 1: TensorFloat-32 (TF32)}
+  TF32 crops the mantissa from 23 bits to 10 - but only \textbf{inside the tensor-core
+  instruction}.
+  \vskip 5pt
+  \begin{itemize}
+    \item Your inputs are FP32 (32-bit floating point). Your outputs are FP32.
+    \item The internal accumulation is FP32.
+    \item Nothing in your code changes dtype. \textbf{You cannot see it from Python.}
+  \end{itemize}
+  \codebox{torch.set\_float32\_matmul\_precision('high')}
+  \keybox{\footnotesize This is why TF32 is such a sweet spot: one line, no code
+    changes anywhere else, slightly more approximate results that you will not notice
+    in training. It only exists on Ampere and newer.}
+\end{frame}
+
+\begin{frame}{Predict first: the datasheet promised 8x}
+  FP32 gives 19.5 TFLOPS. TF32 gives 156 TFLOPS. That is exactly \textbf{8x}.
+  \vskip 8pt
+  \begin{center}
+    \textbf{We flip the switch and re-time the step. What do we get?}
+  \end{center}
+  \pause
+  \vskip 8pt
+  \begin{center}
+    {\color{armred}\Large 1000 ms $\rightarrow$ \textbf{333 ms}. Three times, not eight.}
+  \end{center}
+  \vskip 8pt
+  We made the \emph{multiply} eight times faster and left the \emph{traffic} completely
+  unchanged. Every number in and out of that instruction is still a full 32 bits moving
+  across the memory bus.
+  \keybox{\footnotesize First encounter with the memory wall: \textbf{we are not
+    compute-bound, so making compute faster buys less than advertised.} 3x for one line
+    is still an excellent trade.}
+\end{frame}
+
+\begin{frame}{Rung 2: BF16, and why FP16 needs a babysitter}
+  Now we shrink the numbers themselves - 16 bits instead of 32.
+  \begin{center}
+    \includegraphics[width=0.80\textwidth,height=0.44\textheight,keepaspectratio]{fig/bf16_vs_fp16_range.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize \textbf{BF16} (brain floating point) keeps FP32's 8 exponent bits, so
+  the \emph{range} is identical and only precision is lost. \textbf{FP16} spends 5 bits
+  on the exponent, so small gradients fall off the bottom of its range - which is the
+  entire reason \textbf{gradient scalers} exist.}
+\end{frame}
+
+\begin{frame}{A short history, because it explains the confusion}
+  \begin{itemize}
+    \item \textbf{FP16 came first} (Volta). Everyone trained in it, and everyone had to
+      wrap their training loop in gradient scaling to stop small gradients underflowing.
+      Extra state, extra complexity, extra bugs.
+    \item \textbf{BF16 arrived with Ampere} and deleted the problem. Same range as FP32,
+      so \textbf{no gradient scaler at all}.
+  \end{itemize}
+  \vskip 6pt
+  Most tutorials you will find online were written during the FP16 era and are full of
+  scaler machinery you do not need.
+  \watchbox{\footnotesize If your GPU supports BF16, use BF16 and ignore every gradient
+    scaler tutorial. If it does not (a Colab T4, for instance), you are back in the FP16
+    world and you \emph{do} need the scaler.}
+\end{frame}
+
+\begin{frame}{Mixed precision: what actually changes}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/autocast_what_changes.pdf}
+  \end{center}
+  \codebox{with torch.autocast(device\_type='cuda', dtype=torch.bfloat16):\\
+    \ \ \ \ logits, loss = model(x, y)}
+  \vskip -4pt
+  {\footnotesize Unlike TF32, this \textbf{is} visible: your logits come back as BF16
+  while your parameters stay FP32. That is what ``mixed'' means.}
+\end{frame}
+
+\begin{frame}{Two rules and an honest result}
+  \warnbox{\footnotesize \textbf{Wrap the forward pass and the loss only.} Never the
+    backward pass, never the optimizer step. This is the guidance from the PyTorch team,
+    and it is easy to get wrong because wrapping more \emph{looks} more thorough.}
+  \vskip 2pt
+  \watchbox{\footnotesize \textbf{Do not call \texttt{.bfloat16()} on your tensors by
+    hand.} Let autocast decide. Which operations it casts is not documented as clearly as
+    you would like - matmul-like ops get cast, reduction-heavy ops such as layer norm and
+    softmax mostly do not.}
+  \vskip 4pt
+  \begin{center}
+    \textbf{333 ms $\rightarrow$ 300 ms.} Real, but small.
+  \end{center}
+  \vskip 4pt
+  {\footnotesize We have now spent everything precision alone can buy. The bottleneck
+  has moved somewhere else - and to find it we have to look at how data physically
+  travels inside the GPU.}
+\end{frame}
+
+% ================================================================
+\section{Rung 3: stop making round trips}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries Stop making round trips}\\[4pt]
+    \small Arithmetic is cheap. Moving bytes is expensive.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{The memory wall, drawn to scale}
+  \begin{center}
+    \includegraphics[width=0.92\textwidth]{fig/memory_hierarchy.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize On-chip \textbf{static random-access memory} (\textbf{SRAM}) is roughly
+  ten times the bandwidth of \textbf{high-bandwidth memory} (\textbf{HBM}) and about four
+  thousand times smaller. The CPU's \textbf{dynamic random-access memory}
+  (\textbf{DRAM}) is enormous and hopelessly slow by comparison. Both axes are
+  logarithmic.}
+\end{frame}
+
+\begin{frame}{Worked example: is that actually true?}
+  One elementwise operation on the MLP hidden activations, in FP32. Everything here is
+  arithmetic you can do on paper.
+  \vskip 2pt
+  \begin{center}
+    \begin{tabular}{ll}
+      \toprule
+      Tensor shape & $16 \times 1024 \times 3072 = 50.3$M numbers \\
+      Bytes moved  & read 201 MB $+$ write 201 MB $=$ \textbf{403 MB} \\
+      Arithmetic   & 50.3M multiplies $=$ \textbf{50.3 MFLOP} \\
+      \midrule
+      Time to move it, at 2.0 TB/s       & \textbf{201 $\mu$s} \\
+      Time to compute it, at 19.5 TFLOPS & \textbf{2.6 $\mu$s} \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 5pt
+  \begin{center}
+    {\color{armred}\Large 78x more time moving the data than using it.}
+  \end{center}
+  \keybox{\footnotesize So ``memory-bound'' is not a figure of speech. For everything that
+    is not a matrix multiply, the arithmetic is nearly free and the transfer is the whole
+    cost - and the fix becomes obvious: \textbf{move it once, do everything, move it back}.}
+\end{frame}
+
+\begin{frame}{One plot behind the entire lecture}
+  \begin{center}
+    \includegraphics[width=0.88\textwidth,height=0.56\textheight,keepaspectratio]{fig/roofline.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize \textbf{Arithmetic intensity} = FLOPs performed per byte moved. Left of
+  the bend you are memory-bound and the datasheet's peak is unreachable whatever precision
+  you choose. Only matrix multiplies live on the right.}
+\end{frame}
+
+\begin{frame}{Reading the roofline, rung by rung}
+  \begin{itemize}
+    \item \textbf{TF32 raised the ceiling} from 19.5 to 156 TFLOPS, and moved the bend
+      from 9.8 to 78 FLOPs per byte. Our elementwise work sits at 0.125, far to the left
+      of both. The ceiling was never the constraint - that is the 8x that became 3x.
+    \item \textbf{BF16 moves us sideways as well as up.} Halving the bytes doubles the
+      intensity, 0.125 to 0.25. That sideways step is why it helps at all.
+    \item \textbf{Fusion is the move that changes intensity a lot.} Three round trips
+      become one, so the same arithmetic is paid for with a third of the traffic.
+    \item \textbf{FlashAttention is that same move}, applied to an operation the compiler
+      is not able to restructure on its own.
+  \end{itemize}
+  \keybox{\footnotesize Four of our five rungs are attempts to move right on this plot or
+    to stop caring about the ceiling. Only vocab padding is about something else entirely.}
+\end{frame}
+
+\begin{frame}{Where that memory physically sits}
+  The GPU die is covered in \textbf{streaming multiprocessors} (SMs) - 108 active on an
+  A100, out of 128 on the full chip. Each has tensor cores, ordinary arithmetic units,
+  registers and L1 cache.
+  \vskip 5pt
+  The large memory (HBM) is a \emph{separate chip}. Every byte your kernel reads from it
+  has to cross that gap.
+  \vskip 5pt
+  \begin{center}
+    {\color{popblue}\bfseries On the chip: lightning fast, almost no room.\\
+     Off the chip: all the room you want, and you wait.}
+  \end{center}
+\end{frame}
+
+\vidslide{fig/borrowed/karpathy_ga100_die.jpg}%
+  {GA100 die: 128 SMs, L2 in the middle, HBM links on the sides. Karpathy (2024), 1:56:40}
+
+\begin{frame}{One activation function, three pointless round trips}
+  Take the \textbf{Gaussian Error Linear Unit} (\textbf{GELU}) and write it out by hand:
+  \texttt{x**3}, then \texttt{* 0.044715}, then \texttt{+ x}. In eager PyTorch each of
+  those is its own kernel.
+  \begin{center}
+    \includegraphics[width=0.90\textwidth,height=0.50\textheight,keepaspectratio]{fig/kernel_fusion.pdf}
+  \end{center}
+  \vskip -6pt
+  {\footnotesize Each kernel streams the whole tensor out of HBM, does one cheap
+  elementwise operation, and writes the whole tensor back. The arithmetic is trivial.
+  \textbf{The travel is the cost.}}
+\end{frame}
+
+\begin{frame}{Rung 3: \texttt{torch.compile}}
+  \codebox{model = torch.compile(model)}
+  \vskip 4pt
+  Two separate wins, from one line:
+  \begin{enumerate}
+    \item \textbf{The Python interpreter leaves the forward pass.} Eager mode walks your
+      code operation by operation with no idea what comes next. The compiler sees the
+      whole graph at once and emits it as a single object.
+    \item \textbf{Kernel fusion.} Knowing the whole chain, it loads a chunk of the tensor
+      into on-chip memory, performs \emph{every} elementwise operation there, and writes
+      back \textbf{once}.
+  \end{enumerate}
+  \vskip 4pt
+  \begin{center}
+    {\color{paramgreen}\Large 300 ms $\rightarrow$ \textbf{130 ms}. A 2.3x speedup.}
+  \end{center}
+  \keybox{\footnotesize PyTorch's own summary: ``speedup mainly comes from reducing
+    Python overhead and GPU read/writes''. Those are exactly the two wins above.}
+\end{frame}
+
+\begin{frame}{What it costs you}
+  \begin{itemize}
+    \item \textbf{Compilation time up front.} The first iteration is slow, sometimes
+      dramatically. This is a second reason to throw the first step out of your timing.
+    \item \textbf{Debugging gets harder.} The graph you are stepping through is no longer
+      the Python you wrote.
+  \end{itemize}
+  \vskip 6pt
+  Karpathy's position, and it is a reasonable default: \textbf{use it unless you are
+  actively debugging.}
+  \vskip 6pt
+  {\footnotesize Note where this sits in the ranking. TF32 is still the biggest single
+  rung (3.0x against compile's 2.3x), and the two precision rungs together beat it as
+  well. But TF32 and BF16 bought their speed by \textbf{throwing away mantissa bits};
+  \texttt{torch.compile} is the largest win that costs no accuracy at all. It only stopped
+  us walking to HBM and back for no reason.}
+\end{frame}
+
+% ================================================================
+\section{Rungs 4 and 5: what the compiler cannot find}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries What the compiler cannot find}\\[4pt]
+    \small Two more wins, both of which you have to know about yourself.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Rung 4: FlashAttention}
+  FlashAttention (Dao et al., 2022) is \textbf{also} a kernel fusion. So why did
+  \texttt{torch.compile} not find it?
+  \vskip 6pt
+  Because it is not a graph optimization. It requires an \textbf{algorithmic rewrite}:
+  computing softmax incrementally so the $T \times T$ attention matrix is
+  \textbf{never materialized} in HBM at all.
+  \vskip 6pt
+  That trick - the \textbf{online softmax} - was published by Milakov and Gimelshein at
+  NVIDIA in \textbf{2018}, four years before FlashAttention used it. They even predicted
+  it would help. Nobody connected it to attention until Stanford did.
+  \nextbox{\footnotesize The tiling and the online-softmax recursion are derived properly
+    in \textbf{deck 15 (FlashAttention)}. Today it is one rung on a ladder.}
+\end{frame}
+
+\vidslide{fig/borrowed/karpathy_flash_fig1.jpg}%
+  {FlashAttention (Dao et al., 2022), Figure 1. Shown in Karpathy (2024), 2:01:10}
+
+\begin{frame}{Predict first: it does more arithmetic}
+  FlashAttention performs \textbf{more} floating-point operations than the standard
+  implementation. Count them and it loses.
+  \vskip 8pt
+  \begin{center}
+    \textbf{So is it slower?}
+  \end{center}
+  \pause
+  \vskip 8pt
+  \begin{center}
+    {\color{paramgreen}\Large 130 ms $\rightarrow$ \textbf{96 ms}. About 27\% faster.}
+  \end{center}
+  \vskip 8pt
+  It never writes the big attention matrix to slow memory, and that saving dwarfs the
+  extra arithmetic.
+  \keybox{\footnotesize The lesson to carry out of this room:
+    \textbf{FLOPs are not the cost model. Memory access is.} A FLOP count can rank an
+    algorithm as the worse one when it is in fact the faster one.}
+\end{frame}
+
+\begin{frame}{The change itself}
+  Four lines of hand-written attention:
+  \codebox{att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))\\
+    att = att.masked\_fill(bias[:,:,:T,:T] == 0, float('-inf'))\\
+    att = F.softmax(att, dim=-1)\\
+    y = att @ v}
+  become one:
+  \codebox{y = F.scaled\_dot\_product\_attention(q, k, v, is\_causal=True)}
+  \vskip 2pt
+  \watchbox{\footnotesize You have to ask for it explicitly. PyTorch will not rewrite
+    your four lines into this call, even though it recognizes the pattern well enough to
+    provide the fused version.}
+\end{frame}
+
+\begin{frame}{Rung 5: nice numbers and ugly numbers}
+  CUDA kernels chop work into \textbf{block tiles} that are powers of two - 16, 32, 64,
+  128. When your shapes divide evenly, every tile is full. When they do not, a second
+  clean-up kernel runs for the remainder, and it is far less efficient.
+  \vskip 6pt
+  So scan the model config for numbers that are not friendly:
+  \vskip 4pt
+  \begin{center}
+    \begin{tabular}{lll}
+      \toprule
+      \textbf{Value} & \textbf{Verdict} & \textbf{Why} \\
+      \midrule
+      1024 \ (block size)   & nice  & $2^{10}$ \\
+      768 \ (embedding dim) & nice  & $256 \times 3$ \\
+      12 \ (layers, heads)  & fine  & divisible by 4 \\
+      \textbf{50257} \ (vocab)   & {\color{armred}\textbf{ugly}} & $29 \times 1733$, odd, no factor of two \\
+      \textbf{25} \ (heads, GPT-2 XL) & {\color{armred}\textbf{ugly}} & odd \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Predict first: make the model bigger to make it faster}
+  We pad the vocabulary from \textbf{50257} up to \textbf{50304}, which is
+  $2^7 \times 393$ and divides by 128.
+  \vskip 4pt
+  That is 47 extra tokens, a bigger embedding table, a bigger classifier, and
+  \textbf{strictly more arithmetic}.
+  \vskip 8pt
+  \begin{center}
+    \textbf{Faster or slower?}
+  \end{center}
+  \pause
+  \vskip 6pt
+  \begin{center}
+    {\color{paramgreen}\Large 96 ms $\rightarrow$ \textbf{93 ms}. About 3\% faster.}
+  \end{center}
+  \vskip 6pt
+  {\footnotesize That is \textbf{0.09\% more arithmetic} traded for \textbf{3\% less
+  time}. And on PyTorch 2.3.1 or earlier the same change was worth roughly \textbf{30\%};
+  the kernels have since got better at ragged shapes, which is itself worth knowing:
+  \emph{these numbers rot}.}
+\end{frame}
+
+\begin{frame}{Why padding the vocabulary is safe}
+  A fair objection: we just invented 47 tokens that do not exist. Does that break
+  anything?
+  \vskip 6pt
+  \begin{itemize}
+    \item \textbf{At the embedding table:} the tokenizer only ever emits ids up to
+      50256, so the added rows are \textbf{never indexed}. They cost memory and nothing
+      else.
+    \item \textbf{At the classifier:} we now predict 47 extra logits. The optimizer
+      drives them toward negative infinity, exactly as it already does for the thousands
+      of real tokens that never appear in our data.
+  \end{itemize}
+  \vskip 6pt
+  {\footnotesize For context, 50257 is itself an awkward artifact: 50,000 byte-pair
+  merges, plus 256 byte tokens, plus one \texttt{<|endoftext|>}. Nobody chose it for
+  the hardware.}
+  \keybox{\footnotesize Functionally identical, measurably faster. This is the one
+    optimization that feels like cheating and is not.}
+\end{frame}
+
+% ================================================================
+\section{The ladder, and what it means for you}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\color{popblue}\Large\bfseries The whole ladder}\\[4pt]
+    \small Eleven times faster, and the model never changed.
+  \end{center}
+  \vfill
+\end{frame}
+
+\begin{frame}{Five rungs}
+  \begin{center}
+    \includegraphics[width=0.90\textwidth,height=0.52\textheight,keepaspectratio]{fig/speedup_ladder.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize Notice where the money was. The two precision rungs together bought
+  3.3x; \texttt{torch.compile} alone more than doubled that again. The last two rungs
+  are small in percentage terms and are the ones that require you to actually understand
+  the hardware.}
+\end{frame}
+
+\begin{frame}{Which rungs cost you accuracy?}
+  \begin{center}
+    \begin{tabular}{lll}
+      \toprule
+      \textbf{Rung} & \textbf{Result} & \textbf{What you trade} \\
+      \midrule
+      TF32              & approximate & 13 mantissa bits, invisibly \\
+      BF16 autocast     & approximate & 16 mantissa bits on some ops \\
+      \texttt{torch.compile} & same computation & compile time, debuggability \\
+      FlashAttention    & same computation & nothing \\
+      vocab padding     & same computation & a little memory \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vskip 8pt
+  Only the first two are genuine trades, and both are trades the field has decided are
+  worth making. You lose a little numerical precision and you can \textbf{train for
+  longer with the time you saved}, which more than pays it back.
+  \watchbox{\footnotesize ``Same computation'' means algebraically equivalent, not
+    bit-identical - floating-point addition is not associative, so reordering work
+    changes the last digits. Expect losses to match to about four decimal places, not
+    exactly.}
+\end{frame}
+
+\begin{frame}{How do you know you did not break it?}
+  Every rung here is a performance change, and performance changes are exactly where
+  silent bugs hide. The discipline that catches them is dull and non-negotiable:
+  \vskip 4pt
+  \begin{enumerate}
+    \item Fix the seed. Record the loss at a \textbf{fixed iteration} before the change.
+    \item Make \textbf{one} change.
+    \item Re-run and compare that same loss.
+  \end{enumerate}
+  \vskip 4pt
+  When FlashAttention went in, the loss at iteration 49 matched the previous run to about
+  four decimal places - not bit-identical, because reordering floating-point work changes
+  the last digits, but far closer than any genuine bug would leave it. When BF16 went in,
+  it moved a little more, and that was expected.
+  \warnbox{\footnotesize A speedup that also moves your loss is a \textbf{bug} until you
+    can name the approximation responsible. ``It got faster'' is not a test.}
+\end{frame}
+
+\begin{frame}{Reality check: you are probably not on an A100}
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{fig/hardware_reality.pdf}
+  \end{center}
+  \vskip -4pt
+  {\footnotesize TF32 and BF16 both arrived with \textbf{Ampere}. On a Colab T4 (Turing)
+  neither exists, so the precision rung becomes \textbf{FP16 plus a gradient scaler} -
+  back to the era the tutorials were written in. \texttt{torch.compile} and power-of-two
+  shapes still work everywhere.}
+\end{frame}
+
+\begin{frame}{What actually transfers}
+  The specific numbers in this deck belong to one GPU in 2024. The method does not.
+  \vskip 5pt
+  \begin{enumerate}
+    \item \textbf{Measure first, and synchronize before you measure.} Most reported
+      speedups are timing bugs.
+    \item \textbf{Find out what your hardware promises}, then find out what fraction you
+      are getting. The gap is where the work is.
+    \item \textbf{Assume you are memory-bound until proven otherwise.} It explained four
+      of our five rungs.
+    \item \textbf{FLOPs are not the cost model.} FlashAttention does more of them and
+      wins.
+    \item \textbf{Give the kernels powers of two.} Free, and occasionally worth 30\%.
+  \end{enumerate}
+  \keybox{\footnotesize All five changes together are about six lines of code. The hard
+    part was never the typing - it was knowing which six.}
+\end{frame}
+
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{1000 ms to 93 ms}, roughly \textbf{11x}, on an unchanged GPT-2 124M.
+    \item \textbf{Precision} (TF32, then BF16) is the cheapest rung, and disappointed us
+      relative to the datasheet because we are \textbf{memory-bound}.
+    \item \textbf{\texttt{torch.compile}} was the biggest win that costs no accuracy
+      (2.3x): it removes the Python interpreter from the forward pass and \textbf{fuses
+      elementwise chains} so data stays on-chip.
+    \item \textbf{FlashAttention} is the fusion a compiler cannot discover, because it
+      needs an algorithmic rewrite (online softmax).
+    \item \textbf{Nice numbers} matter, because CUDA tiles in powers of two.
+  \end{itemize}
+  \vfill
+  \nextbox{\textbf{Next:} the other half of ``let's reproduce GPT-2'' - \textbf{gradient
+    accumulation}, AdamW with gradient clipping, the \textbf{warmup plus cosine} schedule,
+    and \textbf{distributed data parallel} across eight GPUs. For the algorithm behind
+    rung 4 see \emph{deck 15 (FlashAttention)}; for these ideas at frontier scale, including
+    \textbf{FP8} training, see \emph{deck 17 (DeepSeek-V3)}.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% Source: Andrej Karpathy, "Let's reproduce GPT-2 (124M)" (2024-06-09), SECTION 2 only
+%   (01:22:18 - 02:14:55, "Let's make it fast. GPUs, mixed precision, 1000ms").
+%   Local reference: misc/dl4nlp/_yt_videos/karpathy_reproduce_gpt2/ (transcript.txt,
+%   frames/s2_*.jpg). Companion repo: github.com/karpathy/build-nanogpt.
+% Measured numbers (A100 80GB SXM, GPT-2 124M, B=16 T=1024 -> 16,384 tokens/step):
+%   fp32 1000 ms / 16.4k tok/s; tf32 333 / 49k; bf16 300 / 55k; compile 130 / 126k;
+%   flash 96 / 171k; vocab-pad 93 / 176k. Cumulative 10.75x (deck says ~11x).
+%   Derived tok/s match the video's spoken 49k / 55k / 125k exactly.
+%   CAUTION: the auto-transcript says "163,000 tokens per second" at baseline. That is an
+%   ASR error for 16,300 (16x1024/1.0s = 16,384). Do not "restore" it.
+% Datasheet (A100 80GB SXM, dense, sparsity numbers excluded): FP64 9.7, FP32 19.5,
+%   TF32 156, BF16/FP16 312, INT8 624 TFLOPS. 19.5 -> 156 is the 8x that yields 3x.
+% Bit layouts: FP32 1+8+23, TF32 1+8+10 (19 used, 13 dropped inside the instruction),
+%   FP16 1+5+10, BF16 1+8+7. IEEE normal ranges: FP32/BF16 1.18e-38..3.4e38,
+%   FP16 6.1e-5..6.55e4 (hence gradient scalers).
+% Vocab: 50257 = 29 x 1733 (odd). 50304 = 2^7 x 393, divisible by 128; delta 47.
+%   GPT-2 vocab = 50,000 merges + 256 byte tokens + 1 <|endoftext|>.
+% Attribution: online softmax = Milakov & Gimelshein (NVIDIA), 2018; FlashAttention =
+%   Dao et al., 2022 (arXiv:2205.14135). A100 has 108 active SMs, full GA100 die has 128
+%   (the video says 120 - not used).
+% Roofline / arithmetic-intensity numbers (all derived, B=16 T=1024 C=768 V=50257,
+%   FP32 operands, A100 HBM 2.0 TB/s). Recompute with py_src/make_figures.py's docstring:
+%   MLP hidden tensor 16x1024x3072 = 50,331,648 elements.
+%   One elementwise op: 403 MB moved, 50.3 MFLOP -> 0.125 FLOP/byte;
+%     201 us moving vs 2.58 us computing = 78x. In BF16: 0.25 FLOP/byte, 39x.
+%   Machine balance (peak/bandwidth): FP32 9.8, TF32 78, BF16 156 FLOP/byte.
+%   Classifier matmul (BT x C) @ (C x V): 1.26 TFLOP, 3.50 GB -> 362 FLOP/byte
+%     (compute-bound). One MLP projection: 0.077 TFLOP, so the classifier is 16.4x bigger.
+%   Vocab pad 50257->50304 adds 1.2 GFLOP = 0.09% more arithmetic, for ~4% less time.
+% Figures (fig/, matplotlib via py_src/make_figures.py, SEED=509):
+%   a100_tflops, float_formats, bf16_vs_fp16_range, memory_hierarchy, speedup_ladder,
+%   hardware_reality, roofline -- REAL numbers. int8_vs_float, kernel_fusion,
+%   autocast_what_changes -- SCHEMATIC (labeled as such on the figure).
+% Borrowed stills (fig/borrowed/, attribution on each frame):
+%   FULL-BLEED via \vidslide: karpathy_a100_datasheet (1:25:20),
+%     karpathy_ga100_die (1:56:40), karpathy_flash_fig1 (2:01:10).
+%   INLINE (cropped from the frame, not full-bleed): nvidia_tensor_core_mma -- the
+%     D = A x B + C 4x4 diagram, cropped from s2_01-28-45.jpg.
+% Second pass (2026-09-08, same session) added 7 frames that the first cut missed:
+%   "What a tensor core actually is" + "Why matrix multiplication is the whole game"
+%     (the deck said "tensor core" a dozen times without defining one, and never said
+%     WHY matmuls matter; the second frame also sets up rung 5's payoff);
+%   "Batch size, and the metric that survives it" (student-facing practicality: OOM,
+%     powers of two, and why tokens/s not ms/step);
+%   "Worked example: is that actually true?" (the SLIDE_STYLE-required by-hand worked
+%     frame, which the first cut simply did not have - it PROVES memory-bound rather
+%     than asserting it: 201 us moving vs 2.6 us computing);
+%   "One plot behind the entire lecture" + "Reading the roofline, rung by rung"
+%     (the roofline unifies all five rungs; without it the deck was five anecdotes);
+%   "How do you know you did not break it?" (verify-the-loss discipline - the thing
+%     that separates an optimization from a silent bug).
+% Third pass (2026-09-08): Sonnet student-review of the rendered slides caught four real
+%   errors, all now fixed. Recorded here because two were mine, not the source's:
+%   (a) "torch.compile bought more than TF32 and BF16 combined" was FALSE - TF32+BF16 is
+%       1000->300 (3.33x, 700 ms) vs compile 300->130 (2.31x, 170 ms). TF32 is also the
+%       biggest SINGLE rung (3.00x). Corrected to "the largest win that costs no accuracy",
+%       both here and in the Recap frame.
+%   (b) The deck said "SIX changes" throughout but the rungs are numbered 1-5 and only
+%       five changes exist; the ladder's 6 bars include the unmodified baseline. Now five
+%       everywhere (and "four of our five rungs" for the memory-wall claim - vocab padding
+%       is tile quantization, not memory).
+%   (c) "Keep it a power of two: 8, 16, 32, 48" - 48 is not a power of two. Reworded to
+%       "rich in factors of two" (which is what Karpathy actually says).
+%   (d) "in fact three times better" for FlashAttention was unsupported here: this deck
+%       measures 130->96 ms (26%), the paper's 3x is end-to-end and 7.6x is kernel-only.
+%       Number removed rather than mixed.
+%   Also: 96.5 -> 96 ms harmonized with the ladder figure (so 3%, not 4%); SRAM-vs-HBM
+%   "two thousand times smaller" -> "four thousand" (20 MB vs 80 GB); HMMA/IMMA glossed;
+%   dropped a forward reference to compilation from the timing frame.
+% Pedagogical decisions: three predict-first frames on the genuinely counter-intuitive
+%   results (TF32's 8x becoming 3x; FlashAttention doing more FLOPs and winning; padding
+%   the vocab larger to go faster) - these are the deck's spine. The memory wall is taught
+%   THROUGH the ladder, arriving as the explanation for a disappointing measurement at
+%   rung 1, rather than as abstract preamble. FlashAttention's algorithm is deliberately
+%   NOT re-derived (deck 15 owns it); this deck spends its frames on why no compiler can
+%   find it. The Colab/T4 reality-check frame is an ADDITION not in the source video -
+%   without it the deck tours hardware the students do not have.
+% Cross-references: back to [LLM-15] FlashAttention (algorithm) and [LLM-17] DeepSeek-V3
+%   (FP8 at scale); forward to a possible deck 20 on section 3 of the same video
+%   (gradient accumulation, AdamW, LR schedule, DDP).

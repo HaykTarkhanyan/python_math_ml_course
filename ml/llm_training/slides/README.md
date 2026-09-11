@@ -5,11 +5,17 @@ Each deck is a self-contained lecture on one paper, following the `ml/` slide co
 (`ml/SLIDE_STYLE.md`): `default`/`dove` theme, 16:9, Armenian-flag palette, section
 transition slides, Python-generated figures, a cold-open hook and a `Next:` recap box.
 
-The eighteen decks span the LLM-training pipeline end to end -- **scaling, tokenization &
+The nineteen decks span the LLM-training pipeline end to end -- **scaling, tokenization &
 pretraining** (9, 5, 6, 13), **attention internals & position** (15, 16), **fine-tuning &
-alignment** (10, 1-4, 12, 18), **efficient training at scale** (17), **reasoning** (14, 11),
+alignment** (10, 1-4, 12, 18), **efficient training at scale** (17, 19), **reasoning** (14, 11),
 and two **model reports** (7, 8) that tie it together. Decks 1-4 cross-reference each other in
 order; the later decks point back to the foundations they build on.
+
+**Deck 19 is the one exception to "one paper per deck"** -- its source is section 2 of
+Karpathy's "Let's reproduce GPT-2 (124M)" video, mined from
+`misc/dl4nlp/_yt_videos/karpathy_reproduce_gpt2/`. It is the practical counterpart to deck 15:
+where 15 derives the FlashAttention algorithm, 19 treats it as one rung on a five-rung speedup
+ladder and spends its frames on *why no compiler can find it*.
 
 | # | Deck | Paper | One line |
 |---|---|---|---|
@@ -31,6 +37,7 @@ order; the later decks point back to the foundations they build on.
 | 16 | [`16_rope/16_rope.pdf`](16_rope/) | RoFormer/RoPE, [2104.09864](https://arxiv.org/abs/2104.09864) | Encode position by rotating q,k so the score depends only on relative distance |
 | 17 | [`17_deepseek_v3/17_deepseek_v3.pdf`](17_deepseek_v3/) | DeepSeek-V3, [2412.19437](https://arxiv.org/abs/2412.19437) | 671B MoE trained cheaply: aux-loss-free balancing, FP8 training, MTP (R1's base) |
 | 18 | [`18_flan/18_flan.pdf`](18_flan/) | FLAN, [2109.01652](https://arxiv.org/abs/2109.01652) | Instruction tuning at scale: many tasks-as-instructions to zero-shot generalization |
+| 19 | [`19_making_training_fast/19_making_training_fast.pdf`](19_making_training_fast/) | Karpathy, [Let's reproduce GPT-2](https://www.youtube.com/watch?v=l8pRSuU81PU) (2024), section 2 | 1000 ms to 93 ms on an unchanged model: precision, kernel fusion, and the memory wall |
 
 ## Layout (per deck)
 
