@@ -33,8 +33,8 @@ from transformers import CLIPModel, CLIPProcessor
 
 MODEL_ID = "openai/clip-vit-base-patch32"   # same model as the chapter dataset
 BATCH = 16
-THUMB_PX = 48
-THUMB_QUALITY = 70
+THUMB_PX = 128          # shown 1:1 by photo_map's hover box -- keep the two in sync
+THUMB_QUALITY = 80
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif"}
 
 # iPhone HEIC support is optional: if pillow-heif is installed, PIL learns to open
@@ -52,7 +52,7 @@ def _thumb_jpeg(img: Image.Image) -> bytes:
 
     The embedding never sees this: CLIP gets the full image, and CLIPProcessor does the
     model's own preprocessing (resize + center-crop to 224x224) internally. We make a
-    uniform 48px square here so a few hundred thumbnails pack into a small HTML file."""
+    uniform small square here so a few hundred thumbnails pack into one HTML file."""
     w, h = img.size
     s = min(w, h)
     img = img.crop(((w - s) // 2, (h - s) // 2, (w + s) // 2, (h + s) // 2))

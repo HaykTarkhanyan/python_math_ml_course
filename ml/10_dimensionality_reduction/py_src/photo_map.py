@@ -43,7 +43,7 @@ _HOVER_JS = """
 <div id="thumbbox" style="position:fixed;display:none;pointer-events:none;z-index:9999;
      border:2px solid #333;background:#fff;padding:3px;border-radius:4px;
      box-shadow:0 2px 10px rgba(0,0,0,.35)">
-  <img id="thumbimg" width="112" height="112" style="display:block">
+  <img id="thumbimg" width="128" height="128" style="display:block">
 </div>
 <script>
 (function () {
@@ -55,8 +55,8 @@ _HOVER_JS = """
     im.src = p.customdata[0];
     box.style.display = 'block';
     var x = ev.event.clientX + 18, yy = ev.event.clientY + 18;
-    if (x + 130 > window.innerWidth)  { x = ev.event.clientX - 140; }
-    if (yy + 130 > window.innerHeight) { yy = ev.event.clientY - 140; }
+    if (x + 145 > window.innerWidth)  { x = ev.event.clientX - 155; }
+    if (yy + 145 > window.innerHeight) { yy = ev.event.clientY - 155; }
     box.style.left = x + 'px';
     box.style.top = yy + 'px';
   });
