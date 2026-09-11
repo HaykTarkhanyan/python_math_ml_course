@@ -1,9 +1,14 @@
 """Real figure for the L21 "Road to Attention" deck (Section 5: epilogue).
 
 Generates into ml/ch7_rnn/fig/:
-  rnn_timeline.pdf -- a 1997-2026 ribbon: LSTM -> seq2seq/GRU -> "Attention Is All You
+  rnn_timeline.pdf -- a 1990-2026 ribbon: Elman RNN -> vanishing-gradient diagnosis ->
+                      LSTM -> seq2seq/GRU -> "Attention Is All You
                       Need" (RNNs retired from NLP) -> the 2023+ comeback (Mamba,
-                      xLSTM). All facts web-verified at build (see L21_DECISIONS.md):
+                      xLSTM). All facts web-verified at build (see L21_DECISIONS.md;
+                      1990/1991 events added + re-verified 2026-09-06):
+                        1990 "Finding Structure in Time" -- Elman (Cognitive Science)
+                        1991 vanishing gradients diagnosed -- Hochreiter's diploma
+                             thesis, TU Munich (in German)
                         1997 LSTM -- Hochreiter & Schmidhuber
                         2014 seq2seq -- Sutskever, Vinyals & Le; GRU -- Cho et al.
                         2017 "Attention Is All You Need" -- Vaswani et al.
@@ -58,6 +63,8 @@ def setup_logging() -> logging.Logger:
 # build. `above` is assigned by hand (not alternated by index) so tightly-spaced pairs
 # (2014/2017, 2023/2024) land on opposite sides of the axis instead of colliding.
 EVENTS = [
+    (1990, '"Finding Structure in Time"\n(Elman)', "rnn", True),
+    (1991, "vanishing gradients diagnosed\n(Hochreiter's thesis)", "rnn", False),
     (1997, "LSTM\n(Hochreiter & Schmidhuber)", "rnn", True),
     (2014, "seq2seq (Sutskever et al.)\nGRU (Cho et al.)", "rnn", False),
     (2017, '"Attention Is All\nYou Need" (Vaswani et al.)', "pivot", True),
@@ -65,7 +72,7 @@ EVENTS = [
     (2024, "xLSTM (Beck et al.)\nHochreiter, senior author", "comeback", True),
 ]
 ERA_COLOR = {"rnn": ARMBLUE, "pivot": ARMRED, "comeback": ARMORANGE}
-YEAR_MIN, YEAR_MAX = 1996, 2026.5
+YEAR_MIN, YEAR_MAX = 1987, 2026.5
 
 
 def fig_timeline(log):
@@ -96,7 +103,7 @@ def fig_timeline(log):
     for spine in ["top", "right", "left"]:
         ax.spines[spine].set_visible(False)
     ax.spines["bottom"].set_color("#CCCCCC")
-    ax.set_title("Recurrence, retirement, and a comeback: 1997-2026", fontsize=13)
+    ax.set_title("Recurrence, retirement, and a comeback: 1990-2026", fontsize=13)
     fig.tight_layout()
     out = FIG_DIR / "rnn_timeline.pdf"
     fig.savefig(out, bbox_inches="tight")
