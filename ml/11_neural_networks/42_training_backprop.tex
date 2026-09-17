@@ -1,0 +1,532 @@
+\documentclass[aspectratio=43]{beamer}
+\input{../preamble}
+% 4:3 to match the embedded LMU pages. Fourth chunk of the embed-based NN chapter (LMU week 18):
+% basic training -> computational graphs -> backprop 1 & 2 -> hardware & software.
+\usepackage{pdfpages}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single,
+  framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none,
+  breaklines=true,
+  columns=fullflexible,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+}
+
+\title{Training Neural Networks}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Training Neural Networks}}\\[0.5em]
+    {\large Gradient descent, computational graphs, and backpropagation}\\[1.0em]
+    \begin{minipage}{0.86\textwidth}\centering\small
+      This deck embeds the LMU \emph{Introduction to Deep Learning} training chunks in full
+      (basic training $\rightarrow$ computational graphs $\rightarrow$ backpropagation
+      $\rightarrow$ hardware \& software), with our own notes sprinkled in.
+    \end{minipage}\\[0.9em]
+    \begin{tikzpicture}[>=Latex, n/.style={circle,draw,minimum size=0.3cm,inner sep=0}]
+      \foreach \i/\y in {1/1.0,2/0,3/-1.0} \node[n,draw=gray,fill=gray!10] (i\i) at (0,\y){};
+      \foreach \i/\y in {1/1.2,2/0.4,3/-0.4,4/-1.2} \node[n,draw=armblue,fill=armblue!15] (a\i) at (1.3,\y){};
+      \foreach \i/\y in {1/0.5,2/-0.5} \node[n,draw=armorange,fill=armorange!18] (o\i) at (2.6,\y){};
+      \foreach \p in {1,2,3}\foreach \q in {1,2,3,4}\draw[gray!30,->](i\p)--(a\q);
+      \foreach \p in {1,2,3,4}\foreach \q in {1,2}\draw[armblue!25,->](a\p)--(o\q);
+      \draw[armred, ->, very thick] (2.6,-1.6) to[bend left=18]
+        node[below=1pt,font=\tiny,text=armred]{backward pass: gradients} (0,-1.6);
+    \end{tikzpicture}
+  \end{center}
+  \vfill
+  {\footnotesize\color{gray} Chapter 5 -- Neural Networks}
+\end{frame}
+
+% ---- LMU chunk: Basic training (13 pp) -------------------------
+\includepdf[pages=-]{lmu_src/01_basic-training.pdf}
+
+% ---- LMU chunk: Chain rule & computational graphs (6 pp) ------
+\includepdf[pages=-]{lmu_src/02_comp-graphs.pdf}
+
+% ---- LMU chunk: Backpropagation 1 -- by-hand XOR (20 pp) ------
+% Split after LMU p8 (forward pass /5, where f_out and the loss first appear) for the erratum.
+\includepdf[pages=1-8]{lmu_src/03_backpropagation1.pdf}
+
+% --- OUR SPRINKLE (inside LMU's by-hand pass): LMU's f_in is miscomputed ---
+\begin{frame}{Check the arithmetic: a slip in the forward pass}
+  \small
+  Redo LMU's output step with a calculator:
+  \[
+    f_{\text{in}} = 0.3705\cdot(-0.22) + 0.7389\cdot 0.58 + 0.78
+      = -0.0815 + 0.4286 + 0.78 = \mathbf{1.1271}
+  \]
+  \begin{center}\small
+  \begin{tabular}{@{}l c c@{}}
+    & \textbf{LMU's slides} & \textbf{correct} \\ \hline
+    $f_{\text{in}}$ & $1.1122$ & $1.1271$ \\
+    $f_{\text{out}} = \sigma(f_{\text{in}})$ & $0.7525$ & $0.7553$ \\
+    $L = \tfrac12(1-f_{\text{out}})^2$ & $0.0306$ & $0.0299$ \\
+    loss after one update & $0.0284$ & $0.0282$ \\
+  \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    \textbf{The method is right; only the numbers inherit the slip.} The next pages keep LMU's
+    $0.7525$, so every step still checks out against the one before it. The lesson is unchanged:
+    one backward pass and one update lower the loss.}}
+\end{frame}
+
+\includepdf[pages=9-]{lmu_src/03_backpropagation1.pdf}
+
+% --- OUR SPRINKLE (after the by-hand backprop): the clean residual ---
+\begin{frame}{A cleaner residual: the output gradient is $f - y$}
+  LMU used the \textbf{L2 loss} on class labels to keep the algebra simple. In practice,
+  classification uses \textbf{cross-entropy} -- and then the output-layer gradient collapses to
+  something you already know:
+  \begin{align*}
+    \text{sigmoid} + \text{cross-entropy} &\;\Longrightarrow\;
+      \frac{\partial L}{\partial f_{\text{in}}} = f - y \\
+    \text{softmax} + \text{cross-entropy} &\;\Longrightarrow\;
+      \frac{\partial L}{\partial \mathbf{f}_{\text{in}}} = \mathbf{p} - \mathbf{y}
+      \quad(\text{one-hot } \mathbf{y})
+  \end{align*}
+  {\small \textbf{Why not L2?} Its gradient keeps a $\sigma'(f_{\text{in}})$ factor, which is tiny
+  exactly when the net is confidently wrong. Take $f = 0.01$ with $y = 1$: L2 gives
+  $-(1-0.01)\cdot 0.01\cdot 0.99 \approx -0.0098$, cross-entropy gives $f - y = -0.99$, a push
+  a hundred times stronger.}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{The same ``residual'' from earlier in the course.} Linear regression, logistic
+    regression, and now a neural net: the output signal is \textbf{prediction $-$ target}.
+    Everything to its left is that residual, passed backward and scaled by local derivatives.}}
+\end{frame}
+
+% --- OUR SPRINKLE (after the residual): what p - y does to the logits (Karpathy's push & pull) ---
+\begin{frame}{The softmax gradient as push and pull}
+  \small
+  The softmax example from the multilayer-nets deck: logits $(0.57,\ 2.95,\ -0.92)$ give
+  $\mathbf{p} = (0.08,\ 0.90,\ 0.02)$. The gradient on the logits is $\mathbf{p} - \mathbf{y}$, and
+  a descent step moves each logit \emph{against} it:
+  \vskip 2pt
+  \begin{center}\includegraphics[width=0.95\linewidth]{fig/softmax_push_pull.pdf}\end{center}
+  \vskip -2pt
+  \begin{itemize}\footnotesize
+    \item The correct class is \textbf{pulled up} by $1 - p_{\text{correct}}$; every wrong class is
+      \textbf{pushed down} by its own $p$. The pushes and the pull cancel: each row sums to $0$.
+    \item The force is exactly how wrong the net was: right and confident, a nudge; confidently
+      wrong, a shove. A perfect prediction gets no gradient at all.
+  \end{itemize}
+  \vfill
+  {\scriptsize\color{gray} Intuition: Karpathy, \emph{Becoming a Backprop Ninja} (2022).}
+\end{frame}
+
+% ---- LMU chunk: Backpropagation 2 -- recursion & caching (10 pp) --
+\includepdf[pages=-]{lmu_src/04_backpropagation2.pdf}
+
+% --- OUR SPRINKLE (after the recursion): its cost -- vanishing gradients ---
+\begin{frame}{What this recursion costs: vanishing gradients}
+  LMU's recursion $\;\delta^{(i)} = \mathbf{W}^{(i+1)}\delta^{(i+1)} \odot
+  \sigma'(\mathbf{z}^{(i)}_{\text{in}})\;$ multiplies by $\sigma'$ at \emph{every} layer on the
+  way back -- and that factor is small:
+  \vfill
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{center}\includegraphics[width=\linewidth]{fig/activation_grads.pdf}\end{center}
+    \column{0.48\textwidth}
+    \begin{itemize}\footnotesize
+      \item Sigmoid: $\sigma'\le 0.25$. Over $k$ layers the $\sigma'$ factors alone give
+        $\le 0.25^{k}$ -- unless the weights grow to compensate, the gradient
+        \textbf{vanishes exponentially}.
+      \item $0.25^{10}\approx 10^{-6}$: over $10$ sigmoid layers those factors alone shrink it at
+        least a \emph{millionfold}.
+      \item \textbf{ReLU} ($\sigma'=1$ for $z>0$) largely fixes this -- the default hidden
+        activation.
+    \end{itemize}
+  \end{columns}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    The \textbf{vanishing-gradient} problem is a direct consequence of the backprop recursion
+    LMU just derived -- and a big reason deep nets were hard to train before ReLU.}}
+\end{frame}
+
+% ---- LMU chunk: Hardware & software (10 pp) ------------------
+\includepdf[pages=-]{lmu_src/05_hardware-and-software.pdf}
+
+% --- OUR SPRINKLE (after hardware & software): LMU's hardware pages vs 2026 ---
+\begin{frame}{Hardware: LMU's pages vs.\ 2026}
+  \small
+  The principle holds: training is massively parallel matrix math, so it runs on GPUs and TPUs.
+  The numbers have moved a lot:
+  \vskip 6pt
+  \begin{center}\footnotesize
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.1cm}
+                    >{\raggedright\arraybackslash}p{2.8cm}
+                    >{\raggedright\arraybackslash}p{4.7cm}@{}}
+    & \textbf{on LMU's pages} & \textbf{2026} \\ \hline
+    data-center GPU & Tesla V100, A100 & H100 (80 GB), H200 (141 GB), B200 (192 GB); Vera Rubin
+      announced for 2026 \\[3pt]
+    desktop GPU & GTX 1080 Ti, RTX 3080 & RTX 5090 (32 GB, 2025) \\[3pt]
+    memory per GPU & ``some 10s of GBs'' & 80 to 192 GB on one data-center GPU \\[3pt]
+    Google TPU & pods of thousands & Ironwood (7th generation, 2025): 192 GB per chip, pods of
+      9{,}216 chips \\[3pt]
+    one training box & DGX-1: $8\times$ V100 & DGX B200: $8\times$ B200 \\
+  \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Memory, not speed, is usually what stops you.} A model that does not fit in GPU memory
+    does not train, however fast the chip. The renting section at the end of this deck does the
+    arithmetic.}}
+\end{frame}
+
+% --- OUR SPRINKLE: LMU's software page vs 2026, plus the AlphaZero correction ---
+\begin{frame}{Software, and one correction}
+  \small
+  LMU's framework pages have aged too:
+  \vfill
+  \begin{itemize}\footnotesize
+    \item \textbf{MXNet} was retired in 2023 (moved to the Apache Attic).
+    \item \textbf{Keras 3} (2023) is no longer TensorFlow-only: it runs on JAX, TensorFlow or
+      PyTorch.
+    \item \textbf{PyTorch} has been governed by the independent PyTorch Foundation (part of the
+      Linux Foundation) since 2022, not by Facebook alone.
+    \item \textbf{AlphaZero} (Silver et al., 2017): of the $5064$ TPUs, $5000$ generated
+      self-play games and $64$ trained the network. After $4$ hours it was rated above the
+      \emph{Stockfish} chess engine -- it beat a program, not a world champion.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{What to keep:} you write the model; the framework builds the graph and runs backprop
+    on the GPU. This course uses \textbf{PyTorch}.}}
+\end{frame}
+
+% --- OUR SPRINKLE (after the software pages): autograd reproduces the by-hand XOR pass ---
+\begin{frame}[fragile]{The whole by-hand pass in one call: \texttt{loss.backward()}}
+  \small
+  LMU's XOR network, same weights, $\mathbf{x} = (1, 0)$, $y = 1$, in PyTorch:
+  \vskip 2pt
+\begin{lstlisting}
+x = torch.tensor([1., 0.]); y = 1.0
+W = torch.tensor([[-0.07, 0.22], [0.94, 0.46]], requires_grad=True)
+b = torch.tensor([-0.46, 0.10], requires_grad=True)
+u = torch.tensor([-0.22, 0.58], requires_grad=True)
+c = torch.tensor(0.78, requires_grad=True)
+
+# forward pass
+f = torch.sigmoid(u @ torch.sigmoid(W @ x + b) + c)
+loss = 0.5 * (y - f) ** 2
+# backward pass: every gradient at once
+loss.backward()
+# f = 0.7553,  u.grad[0] = -0.0168,  W.grad[0, 0] = 0.0023
+\end{lstlisting}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Twenty pages of chain rule, one line of code. PyTorch agrees with the \emph{corrected} forward
+    pass ($f = 0.7553$); LMU's pages, built on $0.7525$, show $-0.0171$ and $0.0024$ for the same
+    two gradients.}}
+\end{frame}
+
+% --- OUR SPRINKLE (after autograd): why we still learned backprop by hand (Karpathy, 2016) ---
+\begin{frame}{Then why learn backprop at all? It is a leaky abstraction}
+  \small
+  \texttt{loss.backward()} returns correct derivatives of whatever you wrote. Whether they are
+  \emph{useful} depends on what flows backward -- ``backpropagation is a leaky abstraction''
+  (Karpathy, 2016):
+  \vfill
+  \begin{itemize}\footnotesize
+    \item \textbf{Saturation:} in the flat tails of sigmoid and tanh the local derivative is
+      $\approx 0$, so the gradient stops there (the vanishing-gradient frame).
+    \item \textbf{Dead ReLUs:} a unit that is negative for every input gets zero gradient forever --
+      from initialization, or after a too-large update knocks it off the data.
+    \item \textbf{Exploding gradients:} multiply by the same weight matrix step after step, as a
+      recurrent net does, and the gradient can blow up (RNN chapter).
+    \item \textbf{A real bug:} a deep Q-learning implementation clipped its error term to tame
+      outliers. Clipping has local derivative $0$ outside its range, so exactly those examples got
+      \emph{zero} gradient and were silently ignored. The fix: the Huber loss.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
+    Autograd never complains: the code runs and the gradients are ``correct''. Knowing the
+    backward pass is how you notice they are useless.}}
+\end{frame}
+
+% ================================================================
+% OUR ADDITION: renting a GPU (prices checked 2026-09-17).
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Renting a GPU}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Your laptop trains the homework. Anything bigger runs on someone else's GPU, by the hour.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Where to get a GPU}
+  \begin{center}\scriptsize
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{1.9cm}
+                    >{\raggedright\arraybackslash}p{3.5cm}
+                    >{\raggedright\arraybackslash}p{1.6cm}
+                    >{\raggedright\arraybackslash}p{2.5cm}@{}}
+    \textbf{option} & \textbf{what you get} & \textbf{cost} & \textbf{the catch} \\ \hline
+    Google Colab, free & a T4 (16 GB) when one is available & free & no guaranteed GPU; sessions
+      disconnect \\[3pt]
+    Colab Pro & 100 compute units a month; a T4 uses about 2 an hour; A100 when available &
+      \$9.99 / month & units run out; GPU type not guaranteed \\[3pt]
+    Kaggle notebooks & about 30 GPU-hours a week (P100 or $2\times$ T4) & free & 12 h per
+      session \\[3pt]
+    GPU clouds (e.g.\ RunPod, Lambda) & any GPU, full control: RTX 4090 from \$0.34/h, A100
+      80 GB from \$1.19/h, H100 \$1.99 to \$3.29/h & per second or hour & you pay while it is
+      \emph{on}, idle or not \\[3pt]
+    AWS, Google Cloud, Azure & everything, integrated with storage and data & highest on demand &
+      spot instances are cheaper but can be taken away mid-run \\
+  \end{tabular}
+  \end{center}
+  \vfill
+  {\small \textbf{A sense of scale:} $10$ hours on one H100 at \$1.99/h is about \$20. Whether your
+  model even fits on it is the next slide.}
+  \vfill
+  {\scriptsize\color{gray} Prices checked 17 September 2026 (RunPod community cloud, Lambda
+  on-demand, Colab and Kaggle plan pages); they change every few months.}
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Will it fit? Memory before you rent}
+  \small
+  Count \textbf{bytes per weight}. A full-precision number takes $4$ bytes, a half-precision
+  one $2$. Training with Adam in mixed precision needs about \textbf{16 bytes per weight}
+  (Rajbhandari et al., 2020):
+  \[
+    \underbrace{2}_{\text{fp16 weights}} + \underbrace{2}_{\text{fp16 gradients}} +
+    \underbrace{4 + 4 + 4}_{\text{fp32 weights, Adam's } m,\ v} = 16
+  \]
+  \vskip -2pt
+  \begin{center}\footnotesize
+  \begin{tabular}{@{}l r r r@{}}
+    \textbf{model} & \textbf{weights} & \textbf{run (2 B/weight)} & \textbf{train (16 B/weight)} \\ \hline
+    homework MLP & $0.24$M & $0.5$ MB & $4$ MB \\
+    GPT-2 small & $124$M & $0.25$ GB & $2$ GB \\
+    GPT-2 XL & $1.5$B & $3$ GB & $24$ GB \\
+    7B language model & $7$B & $14$ GB & $\mathbf{112}$ \textbf{GB} \\
+  \end{tabular}
+  \end{center}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Activations come \emph{on top} and grow with the batch size. So one 80 GB H100 trains at most
+    about a 5B-parameter model the plain way; the 7B model does not fit. Adam's two moment
+    vectors alone are 8 of the 16 bytes -- the optimization deck shows where they come from.}}
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Renting without getting burned}
+  \begin{itemize}\footnotesize
+    \item \textbf{The meter runs while the machine is on,} busy or idle. Stop it when you are done;
+      stored disks are often still billed after that.
+    \item \textbf{The disk can vanish.} A Colab runtime or a cloud container is wiped when it
+      stops. Save checkpoints and results somewhere persistent, often.
+    \item \textbf{Expect interruptions.} Colab disconnects, spot instances get reclaimed: checkpoint
+      every few epochs so a restart resumes instead of starting over.
+    \item \textbf{Check you actually got the GPU:} \texttt{nvidia-smi} in a terminal, then
+      \texttt{device = "cuda" if torch.cuda.is\_available() else "cpu"}, and move \emph{both} the
+      model and every batch with \texttt{.to(device)}.
+    \item \textbf{Keys never go in a notebook.} API keys (W\&B, Hugging Face) belong in environment
+      variables or the platform's secrets manager: notebooks get shared and screenshotted.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Debug where it is free.} Run one epoch on a tiny subset on your laptop or a free
+    notebook first; rent the big GPU only for a run you already trust.}}
+\end{frame}
+
+% ================================================================
+% OUR ADDITION: experiment tracking with Weights & Biases.
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Tracking experiments}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      Twenty runs in, nobody remembers which curve came from which settings.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{What an experiment tracker records}
+  \small
+  Homework task 3 alone is three learning rates. Add dropout, weight decay and BatchNorm and you
+  have dozens of runs. A tracker writes the lab notebook for you, for \emph{every} run:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Config:} every hyperparameter the run used.
+    \item \textbf{Metrics over time:} train and validation loss per epoch, accuracy, anything you log.
+    \item \textbf{System stats:} GPU memory and utilization -- is the rented GPU even busy?
+    \item \textbf{Code and environment:} the git commit and the installed package versions.
+    \item \textbf{Artifacts:} checkpoints, sample predictions, tables.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    The tool matters less than the discipline: \textbf{no experiment without its settings
+    recorded}. By hand, that habit dies around run three.}}
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}[fragile]{Weights \& Biases in a training loop}
+  \small
+  \textbf{Weights \& Biases (W\&B)}: create a free account, run \texttt{wandb login} once, then:
+  \vskip 2pt
+\begin{lstlisting}
+import wandb
+
+config = dict(lr=1e-3, hidden=256, dropout=0.2, epochs=30)
+
+with wandb.init(project="fashion-mlp", config=config) as run:
+    model = MLP(config["hidden"], config["dropout"])        # your model
+    opt = torch.optim.AdamW(model.parameters(), lr=config["lr"])
+    for epoch in range(config["epochs"]):
+        train_loss = train_one_epoch(model, opt)            # your loop
+        val_loss, val_acc = evaluate(model)
+        run.log({"train_loss": train_loss, "val_loss": val_loss,
+                 "val_acc": val_acc, "epoch": epoch})
+\end{lstlisting}
+  \vfill
+  {\footnotesize Every run gets a page with live charts. No internet on the machine? Set
+  \texttt{WANDB\_MODE=offline} and upload later with \texttt{wandb sync}.}
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{What the dashboard gives you}
+  \begin{itemize}\small
+    \item \textbf{Overlaid curves:} all runs on one chart, grouped or colored by a config value --
+      the regularization deck's ``read your curves'', for twenty runs at once.
+    \item \textbf{A sortable runs table:} sort by best validation loss; the winner's config is one
+      click away.
+    \item \textbf{Sweeps:} W\&B can run the grid, random or Bayesian search from the tuning lecture
+      for you.
+    \item \textbf{Cost:} free for personal use; a free Pro license for academic accounts.
+    \item \textbf{Alternatives:} TensorBoard (local, free; PyTorch has a built-in writer) and
+      MLflow (open source, self-hosted).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{Try it on the homework:} log each learning rate in task 3 as its own run and compare
+    them on one chart. (W\&B has been part of CoreWeave, a GPU cloud, since 2025 -- renting and
+    tracking now come from the same company.)}}
+\end{frame}
+
+% ================================================================
+% OUR ADDITION: recap.
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Putting it together}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One objective, one backward sweep, and the hardware that makes it fast.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Recap: how a network learns}
+  \begin{itemize}\small
+    \item \textbf{Objective:} minimise the empirical risk by \textbf{gradient descent};
+      \textbf{SGD} does it on mini-batches -- cheaper, noisier, and often generalises better.
+    \item \textbf{Backprop} $=$ the chain rule on the computational graph, run \emph{backward
+      once}. Each layer's error signal $\delta$ is computed from the layer above and reused:
+      ``$\delta\times$ local derivative'', ``$\delta\times$ input''.
+    \item That reuse is why \emph{one} backward pass gives \textbf{all} gradients -- the naive
+      alternative is one forward pass per weight.
+    \item \textbf{You won't code it by hand:} frameworks (PyTorch, TensorFlow) build the graph
+      and run backprop when you call \texttt{loss.backward()} -- on \textbf{GPUs/TPUs} that do
+      the matrix math massively in parallel, rented by the hour and with every run tracked.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    We can now \emph{train} a network. What remains: keeping it from \textbf{overfitting}
+    (regularization), and \textbf{optimizing} faster than plain SGD -- the next two chunks.}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Fourth embed-based deck (2026-07-18): LMU week 18 (training / backprop).
+%   - Embeds LMU Introduction to Deep Learning chunks verbatim (pdfpages), 4:3:
+%       01_basic-training (13pp), 02_comp-graphs (6pp), 03_backpropagation1 (20pp),
+%       04_backpropagation2 (10pp), 05_hardware-and-software (10pp)
+%     -> unprotected copies in ml/11_neural_networks/lmu_src/ (PyMuPDF-decrypted).
+%   - Sprinkled mid-deck, reusing house L15 figures/content:
+%       * after basic training: lr_curves + init_variance (LMU's init slide was text-only);
+%       * after the by-hand backprop: f - y residual (LMU used L2; cross-entropy gives the clean form);
+%       * after the recursion: vanishing gradients (activation_grads) as its direct consequence.
+%   - 2026-09-16: 3 Welch Labs stills after the LR & init sprinkle - the failed-initialization
+%     story (video 17:15, 17:50, 18:20): same 5-neuron net, one init finds the border, another
+%     ends with every fold off the map and zero ReLU gradients. Existence != findability.
+%     Captions via the optional \wlslide argument; stills in fig/welchlabs_init_*.jpg.
+%   - 2026-09-17 pre-delivery fixes (web-verified / recomputed):
+%       * Erratum frame inside backprop1 (after LMU p8): LMU's f_in = 1.1122 is wrong;
+%         0.3705*(-0.22) + 0.7389*0.58 + 0.78 = 1.1271 -> f_out 0.7553, loss 0.0299; one correct
+%         SGD step gives loss 0.0282 (LMU: 0.0284). Recomputed in Python.
+%       * Vanishing-gradient bullets: the 0.25^k bound is for the sigma' factors alone.
+%       * "What has changed" frame after hardware & software: MXNet retired 2023 (Apache Attic);
+%         Keras 3 multi-backend (Nov 2023); PyTorch Foundation / Linux Foundation (Sep 2022);
+%         AlphaZero 5000 self-play + 64 training TPUs, rated above Stockfish after 4 h
+%         (Silver et al. 2017 preprint).
+%       * fig/lr_curves.pdf title: "too high bounces and stalls" (the lr = 1.0 curve never
+%         diverges; the old title said it did).
+%   - 2026-09-17 teaching additions (numbers computed in Python, citations web-verified):
+%       * "Cleaner residual" frame: + softmax/cross-entropy (p - y) and the "why not L2" worked
+%         case (f = 0.01, y = 1: L2 -0.0098 vs cross-entropy -0.99).
+%       * "What caching buys" after backprop2: central finite differences need 2 forward passes
+%         per weight; GPT-2 small 124M -> 248M passes (~69 h at 1 ms) vs ~3 for backprop
+%         (backward ~2x forward, Kaplan et al. 2020); gradient checking as the use that remains.
+%       * "loss.backward()" code frame after the software pages: autograd on LMU's XOR net gives
+%         f 0.7553, dL/du1 -0.0168, dL/dW11 0.0023 (torch 2.9.0), confirming the erratum.
+%   - 2026-09-17 Karpathy additions (transcripts in _reference_karpathy_zero_to_hero/):
+%       * "The softmax gradient as push and pull" after the residual frame - backprop ninja
+%         01:32-01:36; fig/softmax_push_pull.pdf from py_src/softmax_bars.py, reusing the 41_2
+%         softmax numbers (p = 0.083, 0.898, 0.019): right label -> (+0.08, -0.10, +0.02),
+%         confidently wrong -> (-0.92, +0.90, +0.02).
+%       * "Then why learn backprop at all?" after the autograd frame - backprop ninja 00:01-00:03
+%         and Karpathy, "Yes you should understand backprop" (Medium, Dec 2016): saturation, dead
+%         ReLUs, exploding RNN gradients, DQN code clipping the raw Q delta (clip_by_value has zero
+%         local gradient outside its range) where the Huber loss was meant.
+%       * Finite-differences box: hand-written backward passes + gradient checkers were routine
+%         before autograd (backprop ninja 00:03-00:06).
+%   - 2026-09-17 hardware refresh + tools sections (web-verified, prices checked 2026-09-17):
+%       * "What has changed" split into "Hardware: LMU's pages vs 2026" (H100 80 GB, H200 141 GB,
+%         B200 192 GB, Vera Rubin announced for 2026; RTX 5090 32 GB Jan 2025; Ironwood TPU 7th
+%         gen 2025, 192 GB/chip, 9,216-chip pods; DGX B200) and "Software, and one correction"
+%         (MXNet, Keras 3, PyTorch Foundation, AlphaZero).
+%       * "Renting a GPU" section (4 frames): options table - Colab free T4 / Pro $9.99 for 100
+%         compute units (T4 ~2 units/h), Kaggle ~30 GPU-h/week P100 or 2xT4 and 12 h sessions
+%         (secondary sources; official pages need login), RunPod community RTX 4090 $0.34/h,
+%         A100 80 GB $1.19/h, H100 $1.99/h (runpod.io/pricing), Lambda H100 PCIe $3.29/h
+%         (lambda.ai/pricing); memory math - 16 bytes/param for mixed-precision Adam
+%         (Rajbhandari et al. 2020, ZeRO; its GPT-2 1.5B -> 24 GB example); homework MLP has
+%         235,146 weights; renting checklist.
+%       * "Tracking experiments" section (4 frames): what a tracker records; W&B code in the
+%         current context-manager style (docs.wandb.ai via Context7; practical uses wandb 0.28.2);
+%         offline mode + wandb sync; dashboard, sweeps, free academic Pro license, TensorBoard /
+%         MLflow alternatives; CoreWeave completed the W&B acquisition in May 2025.
+%   - 2026-09-17 instructor cuts: removed the "Learning rate & initialization, visualized" frame
+%     and the 3 Welch Labs init stills (old PDF pp. 15-18; the \wlslide macro went with them) and
+%     the "What caching buys" finite-differences frame (old p. 58). The entries above describing
+%     those frames are kept as history. fig/lr_curves.pdf, fig/init_variance.pdf and
+%     fig/welchlabs_init_*.jpg stay in fig/ (L15 and the init deck still use two of them).
+%   - End: recap + bridge to regularization (wk19) and optimization (wk20).
+%   - Kept alongside house-style L14/L15; rename to a playlist-numbered name once slotted.
+% =============================================================

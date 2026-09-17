@@ -100,7 +100,7 @@ every extra session pushes everything after it by 2–3 days.
 | Block | Sessions | Dates | Built material |
 |---|---|---|---|
 | Dim reduction practical | 1 | Aug 28 | `xx_genes_geography_solution.ipynb` (instructor-led, 1000 Genomes; built 2026-09-03, DECISIONS #32) · `37_eigenfaces_solution.ipynb` + the LFW recognition project · homework = Project 3 (CLIP photo map) |
-| Neural networks | 2–3 | Aug 30, Sep 1 | `L14`, `L15` |
+| Neural networks | 2–3 | Aug 30, Sep 1 | ✅ [40] + [41_1]/[41_2] + [42]/[43] **delivered** (42 and 43 on 2026-09-17), notes exported, videos not uploaded yet: `40_intro_history` · `41_1_neuron_to_network` · `41_2_multilayer_nets` · `42_training_backprop` · `43_nn_regularization`. Still to teach: `xx_optimization` (part 1) · `xx_optimization_init_activations` (part 2) (folder `ml/11_neural_networks/`, renamed from `ch5_neural_networks` 2026-09-16) |
 | NN practical | 1–2 | Sep 2 | `nn_practical_solution.ipynb` |
 | CNN | 3 | Sep 4, 6, 9 | `L16`–`L19` |
 | RNN | 2 | Sep 11, 13 | `L20`, `L21` |

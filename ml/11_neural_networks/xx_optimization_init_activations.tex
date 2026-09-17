@@ -1,0 +1,390 @@
+\documentclass[aspectratio=43]{beamer}
+\input{../preamble}
+% 4:3 to match the embedded LMU pages. Final chunk of the embed-based NN chapter (LMU week 20),
+% PART 2 of 2: initialization + activations, then the chapter close.
+% Part 1 (challenges + advanced optimizers) is xx_optimization.tex.
+\usepackage{pdfpages}
+
+\title{Optimizing Neural Networks (2/2)}
+\date{}
+
+\begin{document}
+
+% ================================================================
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{Optimizing Neural Networks}}\\[0.3em]
+    {\normalsize\color{gray} part 2 of 2}\\[0.4em]
+    {\large Initialization \& activations}\\[1.0em]
+    \begin{minipage}{0.86\textwidth}\centering\small
+      Part 2 of the optimization chunk: how to \textbf{initialize} the weights and which
+      \textbf{activation} to use -- then the neural-networks chapter wraps up.
+    \end{minipage}
+  \end{center}
+  \vfill
+  {\footnotesize\color{gray} Chapter 5 -- Neural Networks}
+\end{frame}
+
+% ---- LMU chunk: Network initialization (11 pp) ---------------
+\includepdf[pages=-]{lmu_src/03_initialization.pdf}
+
+% --- OUR SPRINKLE (after LMU's init pages): the derivation LMU leaves to He et al. ---
+\begin{frame}{Where He's $\mathrm{Var}(w) = 2/m$ comes from}
+  \small
+  One ReLU layer with $m$ inputs: $z = \sum_{i=1}^{m} w_i\,a_i$, where
+  $a_i = \max(0, z^{\text{prev}}_i)$. Weights are i.i.d.\ with mean $0$ and independent of the
+  inputs; $z^{\text{prev}}$ is symmetric around $0$.
+  \begin{align*}
+    \mathrm{Var}(z) &= \textstyle\sum_{i=1}^{m} \mathrm{Var}(w_i a_i)
+      = m\,\mathbb{E}[w^2]\,\mathbb{E}[a^2] = m\,\mathrm{Var}(w)\,\mathbb{E}[a^2] \tag*{(1)} \\
+    \mathbb{E}[a^2] &= \mathbb{E}\big[(z^{\text{prev}})^2\,
+      \mathds{1}\{z^{\text{prev}} > 0\}\big] = \tfrac12\,\mathrm{Var}(z^{\text{prev}}) \tag*{(2)} \\
+    \mathrm{Var}(z) &= \tfrac{m}{2}\,\mathrm{Var}(w)\,\mathrm{Var}(z^{\text{prev}}) \tag*{(3)}
+  \end{align*}
+  {\footnotesize (1): mean-zero weights make the cross terms vanish. (2): ReLU zeroes the
+  negative half of a symmetric $z^{\text{prev}}$.}
+  \vskip 3pt
+  Keep the scale fixed from layer to layer: $\;\tfrac{m}{2}\,\mathrm{Var}(w) = 1
+  \;\Rightarrow\; \boxed{\mathrm{Var}(w) = 2/m}$ \emph{(He et al., 2015)}.
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
+    \textbf{Glorot} assumes no ReLU halving: $1/m$ keeps the forward pass stable and $1/n$ the
+    backward pass, so the compromise is $2/(m+n)$. LMU's uniform
+    $\big[-\sqrt{6/(m+n)},\,\sqrt{6/(m+n)}\big]$ has exactly that variance, since a uniform on
+    $[-c, c]$ has variance $c^2/3$.}}
+\end{frame}
+
+% --- OUR SPRINKLE: the three lines of algebra predict the training deck's init figure ---
+\begin{frame}{The formula predicts the figure}
+  \small
+  An experiment: push unit-variance input through $12$ ReLU layers of width $m = 256$ and
+  measure the spread of the activations at every layer.
+  \vskip 2pt
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \includegraphics[width=\linewidth]{fig/init_variance.pdf}
+    \column{0.48\textwidth}
+    \footnotesize
+    With $\mathcal{N}(0,1)$ weights, (3) multiplies the variance by $m/2 = 128$ per layer, so
+    the scale grows about $\sqrt{128} \approx 11\times$ per layer.
+    \vskip 4pt
+    \begin{tabular}{@{}l r r@{}}
+      \textbf{layer 12} & \textbf{predicted} & \textbf{measured} \\ \hline
+      $\mathcal{N}(0,1)$ & $3.6\cdot 10^{12}$ & $3.9\cdot 10^{12}$ \\
+      He & $0.83$ & $0.89$ \\
+    \end{tabular}
+    \vskip 3pt
+    {\scriptsize Std of the ReLU outputs; a ReLU output's std is $0.58\times$ that of its input.}
+  \end{columns}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Three lines of algebra get the blow-up right across twelve orders of magnitude (six seeds:
+    $2.7$ to $6.5\cdot 10^{12}$). Other activations need their own gain: tanh squashes too, so
+    PyTorch's \texttt{calculate\_gain} gives $5/3$. Karpathy's caveat: BatchNorm, residual
+    connections and Adam make exact initialization much less critical than it once was (2022).}}
+\end{frame}
+
+% --- OUR SPRINKLE: predict-first - the loss before any training ---
+\begin{frame}{Predict: the loss before training starts}
+  Your homework MLP classifies Fashion-MNIST into $10$ classes with the cross-entropy loss.
+  \vfill
+  \begin{center}
+    {\large You have built the network but not trained it.}\\[8pt]
+    {\Large\color{popblue}\textbf{What is its loss on the first batch?}}
+  \end{center}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Hint: a well-initialized network knows nothing yet. What probability should it give the
+    correct class?}}
+\end{frame}
+
+\begin{frame}{Answer: about $\ln 10 \approx 2.30$}
+  \small
+  Knowing nothing, the net should spread probability evenly: $p_{\text{correct}} \approx
+  \tfrac{1}{10}$, so the loss is $-\ln\tfrac{1}{10} = \ln 10 \approx 2.30$. With $C$ classes it is
+  $\ln C$.
+  \vskip 4pt
+  \begin{center}\footnotesize
+  \begin{tabular}{@{}l r r r@{}}
+    \textbf{untrained MLP} ($784\to256\to128\to10$) & \textbf{loss} & \textbf{logit std} &
+      \textbf{mean top prob.} \\ \hline
+    PyTorch default init & $2.31$ & $0.07$ & $0.11$ \\
+    all weights $\mathcal{N}(0,1)$ & $1433$ & $1008$ & $0.998$ \\
+  \end{tabular}
+  \\[3pt]{\scriptsize Measured on $2000$ Fashion-MNIST test images, before a single update.
+  PyTorch's default \texttt{nn.Linear} weights are $U(-1/\sqrt{m},\,1/\sqrt{m})$: small, so the
+  logits start near $0$.}
+  \end{center}
+  {\small Karpathy's makemore net ($27$ characters) started at a loss of $27$ instead of
+  $\ln 27 \approx 3.30$. Its loss curve was a \emph{hockey stick}: the first steps did nothing but
+  shrink the logits (Karpathy, 2022).}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    \textbf{A free sanity check:} print the loss before training. Near $\ln C$ is good. Far above
+    it means the net is \emph{confidently wrong} from the start (bad init, unscaled inputs), and
+    early training is spent just undoing that (Karpathy, 2019).}}
+\end{frame}
+
+% --- OUR SPRINKLE (before LMU's activations): the equations, which LMU mostly shows as plots ---
+\begin{frame}{The activations as equations (1/2): sigmoid and tanh}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \centering\textbf{Sigmoid}
+    \[ \sigma(z) = \frac{1}{1+e^{-z}} \in (0, 1) \]
+    \[ \sigma'(z) = \sigma(z)\,\big(1-\sigma(z)\big) \le \tfrac14 \]
+    \column{0.5\textwidth}
+    \centering\textbf{tanh}
+    \[ \tanh(z) = \frac{e^{z}-e^{-z}}{e^{z}+e^{-z}} \in (-1, 1) \]
+    \[ \tanh'(z) = 1-\tanh^2(z) \le 1 \]
+  \end{columns}
+  \vskip 2pt
+  \begin{center}\includegraphics[width=0.92\linewidth]{fig/act_sigmoid_tanh.pdf}\end{center}
+  \vskip -4pt
+  {\footnotesize tanh is a stretched, shifted sigmoid: $\tanh(z) = 2\,\sigma(2z) - 1$. Its
+  outputs are centred on $0$ and its slope at $0$ is $1$, not $\tfrac14$ -- why tanh was preferred
+  over sigmoid in hidden layers (LeCun et al., 1998). Both go flat for large $|z|$: the saturation
+  behind vanishing gradients.}
+\end{frame}
+
+\begin{frame}{The activations as equations (2/2): ReLU family, GELU}
+  \begin{center}\scriptsize
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{@{}l l l l@{}}
+    & $f(z)$ & $f'(z)$ & \textbf{range} \\ \hline
+    \textbf{ReLU} & $\max(0, z)$ & $1$ if $z > 0$, else $0$ & $[0, \infty)$ \\
+    \textbf{Leaky ReLU} & $z$ if $z \ge 0$, else $a z$ \;($a = 0.01$) & $1$ or $a$ & $(-\infty, \infty)$ \\
+    \textbf{PReLU} & Leaky ReLU with $a$ \emph{learned} & $1$ or $a$ & $(-\infty, \infty)$ \\
+    \textbf{ELU} & $z$ if $z \ge 0$, else $a\,(e^{z}-1)$ \;($a = 1$) & $1$ or $a\,e^{z}$ & $(-a, \infty)$ \\
+    \textbf{SELU} & $\lambda\cdot\mathrm{ELU}_a(z)$, \;$a \approx 1.673$, $\lambda \approx 1.051$ & $\lambda$ or $\lambda a\,e^{z}$ & $(-1.76, \infty)$ \\
+    \textbf{GELU} & $z\,\Phi(z)$, \;$\Phi$ = standard normal CDF & $\Phi(z) + z\,\varphi(z)$ & $[-0.17, \infty)$ \\
+  \end{tabular}
+  \end{center}
+  \vskip -2pt
+  \begin{center}\includegraphics[width=0.8\linewidth]{fig/act_relu_family.pdf}\end{center}
+  \vskip -6pt
+  {\tiny PyTorch's default constants; the plot uses $a = 0.1$ for Leaky ReLU so it is visible.
+  Leaky ReLU (Maas et al., 2013); Parametric ReLU, PReLU (He et al., 2015); Exponential Linear
+  Unit, ELU (Clevert et al., 2016); Scaled ELU, SELU (Klambauer et al., 2017); Gaussian Error
+  Linear Unit, GELU (Hendrycks \& Gimpel, 2016).}
+\end{frame}
+
+% ---- LMU chunk: Modern activation functions (18 pp) ----------
+\includepdf[pages=-]{lmu_src/04_activations.pdf}
+
+% --- OUR SPRINKLE (after activations): the short answer ---
+\begin{frame}{Which activation? The short answer}
+  LMU showed the full zoo -- sigmoid, tanh, ReLU, Leaky ReLU, Parametric ReLU (PReLU),
+  Exponential Linear Unit (ELU) and Scaled ELU (SELU). In practice:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Hidden layers: ReLU by default.} Its derivative is $1$ for $z>0$, so gradients
+      don't vanish, and it is cheap. Reach for \textbf{Leaky ReLU} or \textbf{ELU} only if you hit
+      \emph{dying ReLUs}. Transformers instead use the smooth \textbf{Gaussian Error Linear Unit
+      (GELU)} -- next frame.
+    \item \textbf{Output layer: match the task} -- \textbf{identity} for regression,
+      \textbf{sigmoid} for binary, \textbf{softmax} for multiclass.
+    \item \textbf{Sigmoid/tanh in hidden layers: avoid} -- they saturate and vanish the gradient
+      (the backprop recursion from the training deck, made concrete).
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Output activation $+$ loss are two sides of one coin (maximum likelihood): sigmoid$+$cross-entropy,
+    softmax$+$cross-entropy, identity$+$MSE -- which is why the output gradient is the clean
+    residual $f-y$.}}
+\end{frame}
+
+% --- OUR SPRINKLE: the activation modern nets actually use ---
+\begin{frame}{GELU: the activation transformers actually use}
+  \textbf{GELU} (Hendrycks \& Gimpel, 2016): $\ \mathrm{GELU}(z) = z\,\Phi(z)$, with $\Phi$ the
+  standard normal CDF. It \emph{weights} an input by its value instead of \emph{gating} it by its
+  sign, the way ReLU does.
+  \vskip 2pt
+  \begin{center}\includegraphics[width=0.82\linewidth]{fig/gelu_vs_relu.pdf}\end{center}
+  \vskip 2pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Why it helps.} It is smooth, and its derivative is \emph{non-zero} for negative
+    inputs: at $z=-1$ GELU returns $-0.159$ with slope $-0.083$, where ReLU returns $0$ with
+    slope $0$ -- so a unit that drifts negative is not dead. Used in \textbf{BERT} and
+    \textbf{GPT-2/3}; today's open models prefer the gated \textbf{SwiGLU} (Shazeer, 2020) --
+    PaLM, Llama. Both return in the LLM chapter.}}
+\end{frame}
+
+% --- OUR SPRINKLE: modern nets are overconfident (callback: the calibration lecture) ---
+\begin{frame}{Modern networks are overconfident}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth,height=0.52\textheight,keepaspectratio]{fig/guo2017_calibration.pdf}\par
+    {\tiny Guo et al.\ (ICML 2017), Fig.\ 1, CIFAR-100\par}
+    \column{0.5\textwidth}
+    \footnotesize
+    Reliability diagrams, as in the calibration lecture. A 5-layer \textbf{LeNet (1998)} is
+    about as confident as it is accurate. A 110-layer \textbf{ResNet (2016)} is more
+    \emph{accurate} (error $44.9\% \to 30.6\%$), but its confidence piles up near $1$ and its
+    accuracy does not.
+    \vskip 3pt
+    The paper names depth, width, weight decay and BatchNorm as key factors -- the tools this
+    chapter just taught.
+  \end{columns}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Confidence is not competence.} Softmax must spread probability over the classes it
+    knows, so a net shown pure noise still has to pick one, and nothing stops it being confident.
+    \textbf{The cheap fix:} temperature scaling, a one-parameter Platt scaling. Divide the logits
+    by one number $T$ fitted on validation data; the argmax, and so the accuracy, is unchanged.}}
+\end{frame}
+
+% --- OUR SPRINKLE: two silent bugs students will hit in the homework ---
+\begin{frame}{Two silent bugs the homework will hit}
+  % A bare \small, not {\small ...}: a brace group right after the frame title is swallowed
+  % by beamer as the frame SUBTITLE (renders blue, under the title).
+  \small
+  \textbf{1. Unscaled inputs.} Trees never cared about feature scale; neural nets do. A
+  feature measured in thousands dominates the gradient and makes the loss surface badly
+  conditioned (the ill-conditioning from part 1). \emph{Fix:} standardize, or scale pixels to
+  $[0,1]$, fitting the scaler on the training split only.
+  \vskip 6pt
+  {\small \textbf{2. Forgetting \texttt{model.eval()}.} Dropout and BatchNorm behave differently at
+  test time:}
+  \vskip 2pt
+  \begin{center}\footnotesize
+  \begin{tabular}{@{}l l l@{}}
+    & \textbf{dropout} & \textbf{BatchNorm} \\ \hline
+    \texttt{model.train()} & on & statistics of the current batch \\
+    \texttt{model.eval()} & off & running averages from training \\
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  {\footnotesize Forget it and test predictions come out noisy and depend on what else is in the
+  batch. Note that \texttt{eval()} does not switch off gradient tracking -- that is
+  \texttt{torch.no\_grad()}.}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\scriptsize
+    \textbf{Neither bug raises an error.} The code runs and the numbers are just worse -- worth
+    knowing before the homework, not after.}}
+\end{frame}
+
+% --- OUR SPRINKLE: three checks before a long run (Karpathy's recipe, condensed) ---
+\begin{frame}{Before a long training run: four cheap checks}
+  \small
+  Condensed from Karpathy's \emph{A Recipe for Training Neural Networks} (2019) and his makemore
+  lectures (2022):
+  \vfill
+  \begin{enumerate}\small
+    \item \textbf{Loss at step 0} $\approx \ln C$ (the prediction frame earlier). If not, fix the
+      initialization or the input scaling before anything else.
+    \item \textbf{Overfit one tiny batch.} Train on a handful of examples until the loss is near
+      $0$. A network that cannot memorize a handful of examples has a bug, not a regularization
+      problem.
+    \item \textbf{Plot train and validation loss every epoch} (regularization deck), and only then
+      start turning knobs, one at a time.
+    \item \textbf{Watch the update size.} For each weight matrix,
+      $\mathrm{std}(\alpha\,\nabla W) / \mathrm{std}(W) \approx 10^{-3}$ is Karpathy's rule of thumb.
+      Far below it, the learning rate is too low; far above, too high.
+  \end{enumerate}
+  \vfill
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Each check takes a minute and catches the bugs that never raise an error. Run all four
+    before the homework's long runs.}}
+\end{frame}
+
+% ================================================================
+% OUR ADDITION: chapter close (the final frames of the whole NN chapter).
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\Large\color{popblue}\textbf{The neural-networks chapter, end to end}}\\[0.9em]
+    \begin{minipage}{0.82\textwidth}\centering\small
+      One machine: a neuron, stacked, trained, regularized, and optimized.
+    \end{minipage}
+  \end{center}
+  \vfill
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{The whole chapter in one arc}
+  \begin{itemize}\small
+    \item \textbf{A neuron} $=$ affine $+$ activation $=$ a regression you know. \textbf{Hidden
+      layers} learn a feature space so the boundary can bend (representation learning).
+    \item \textbf{Depth \& width} make it expressive (universal approximation, folding);
+      \textbf{softmax} handles many classes.
+    \item \textbf{Backprop} $=$ the chain rule backward once, reusing shared error signals -- it
+      gives every gradient in a single pass.
+    \item \textbf{Regularization} (weight decay, early stopping, dropout, augmentation) fights
+      overfitting; \textbf{optimization} (SGD$+$momentum / Adam, schedules, init, BatchNorm)
+      makes training fast and stable.
+  \end{itemize}
+  \vfill
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    Every giant model from the intro deck -- LLMs, diffusion, AlphaFold -- is this same
+    machinery, scaled up and specialized. You now know how it is built and trained.}}
+\end{frame}
+
+% ---------------------------------------------------------------
+\begin{frame}{Where next: architectures shaped to the data}
+  The MLP treats every input feature the same. Real signals have \textbf{structure} a plain MLP
+  wastes:
+  \vfill
+  \begin{itemize}\small
+    \item \textbf{Images} have \emph{locality} and \emph{translation} structure $\to$
+      \textbf{convolutional networks (CNNs)}.
+    \item \textbf{Sequences} (text, audio, time series) have \emph{order} and \emph{memory} $\to$
+      \textbf{recurrent nets / transformers}.
+  \end{itemize}
+  \vfill
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Same neurons, same backprop, same optimizers -- but the \emph{architecture} is shaped to the
+    data. \textbf{Next chapter: convolutional neural networks.}}}
+\end{frame}
+
+\end{document}
+
+% =============================================================
+% Provenance:
+%   - Final chunk of the embed-based NN chapter (LMU week 20), PART 2 of 2.
+%     Split out of the original single xx_optimization deck (was 123 pp) on 2026-07-18.
+%   - Embeds LMU chunks verbatim (pdfpages), 4:3:
+%       03_initialization (11pp), 04_activations (18pp)  -> lmu_src/ (PyMuPDF-decrypted).
+%   - Sprinkle: "which activation" short answer (ReLU hidden, match output to task).
+%   - 2026-09-14/16 additions (citations web-verified):
+%       * "GELU: the activation transformers actually use" - Hendrycks & Gimpel 2016; Shazeer 2020;
+%         fig/gelu_vs_relu.pdf from py_src/modern_components_figs.py.
+%       * "Modern networks are overconfident" - Guo, Pleiss, Sun & Weinberger, ICML 2017
+%         (arXiv 1706.04599). fig/guo2017_calibration.pdf is the paper's Figure 1, cropped as
+%         vector from page 1 of the arXiv PDF (one-off PyMuPDF clip, not a py_src script).
+%       * "Two silent bugs the homework will hit" - input scaling; model.train()/model.eval().
+%   - 2026-09-17 pre-delivery fixes: "wk18 recursion" (LMU week number) -> "the backprop
+%     recursion from the training deck"; "ch9" -> "the LLM chapter".
+%   - 2026-09-17 teaching additions (numbers computed in Python, citations web-verified):
+%       * After LMU's init pages: "Where He's Var(w) = 2/m comes from" (3-step variance
+%         derivation + Glorot's 2/(m+n) and the U[-c, c] variance c^2/3 check).
+%       * "The formula predicts the figure": fig/init_variance.pdf (width 256, 12 layers) -
+%         predicted layer-12 ReLU-output std 3.63e12 (N(0,1)) and 0.826 (He) vs measured 3.91e12
+%         and 0.89; seeds 509-514 measure 2.67e12-6.50e12 and 0.59-1.00.
+%       * Predict-first pair "the loss before training": ln 10 = 2.30; measured on 2000
+%         Fashion-MNIST test images with a 784-256-128-10 MLP: default init loss 2.307 (logit std
+%         0.07, mean top prob 0.112); N(0,1) weights loss 1432.7 (logit std 1008, top prob 0.998).
+%       * "Before a long training run: three cheap checks" after the silent-bugs frame -
+%         Karpathy 2019, "A Recipe for Training Neural Networks" (verify loss @ init, overfit one
+%         batch) + read the curves.
+%   - 2026-09-17 Karpathy additions (transcripts in _reference_karpathy_zero_to_hero/):
+%       * "Answer: ln 10" frame: makemore part 3 00:04-00:11 (initial loss 27 vs expected
+%         -ln(1/27) = 3.30, hockey-stick curve); PyTorch default nn.Linear = U(+-1/sqrt(fan_in))
+%         (checked on torch 2.9.0: max |w| = 0.03571 for fan_in 784).
+%       * "The formula predicts the figure" box: tanh gain 5/3 (nn.init.calculate_gain, checked);
+%         makemore part 3 00:36 - normalization, residual connections and Adam make precise init
+%         less critical.
+%       * Checks frame -> four checks: update-to-data ratio std(lr*grad)/std(W) ~ 1e-3
+%         (makemore part 3 01:40-01:44).
+%   - 2026-09-17 instructor request: two "activations as equations" frames before LMU's
+%     activation pages (tanh's equation appeared nowhere in the chapter). Figures from
+%     py_src/activation_figs.py (checked: max sigma' 0.25, max tanh' 1, tanh(z) = 2 sigma(2z) - 1
+%     to 3e-16, GELU min -0.170 at z = -0.752, SELU min -1.758). Constants from torch 2.9:
+%     LeakyReLU negative_slope 0.01, ELU alpha 1.0, SELU alpha 1.6733 / scale 1.0507. Citations
+%     web-verified: LeCun et al. 1998 (Efficient BackProp: symmetric sigmoids converge faster),
+%     Maas et al. 2013, Clevert et al. ICLR 2016, Klambauer et al. 2017. The "formula predicts
+%     the figure" frame no longer points to the training deck (its init figure was removed there).
+%   - Chapter close: full-chapter recap + bridge to CNNs (ch6). This is the last deck of ch5.
+% =============================================================
