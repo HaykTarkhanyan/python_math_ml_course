@@ -119,7 +119,7 @@ A **single worked example threaded across L01d / L01d2 / L01e / L01f / L01h** (r
 
 - **Migrate or delete the auto-memory folder.** As of 2026-06-19 we switched to "all persistence in repo files, never write memory." But ~13 pre-existing memory files still live at `~/.claude/projects/C--Users-hayk--OneDrive-Desktop-01-python-math-ml-course/memory/` (user role, feedback rules, pedagogy notes, course completion status, etc.). Decide per file: copy still-useful content into `CLAUDE.md` / `CONVENTIONS.md` / `LEARNINGS.md`, then delete the memory folder. Until done, future sessions may still load those memories as context.
 
-- **Decide the DL-track file naming, then make `CONVENTIONS.md` true.** (Found 2026-08-04.) The convention file says lecture slides are `NN_topic.tex` matching playlist position, and that "No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out." But **nine chapters** use `LNN_topic.tex` inside `chN_name/` folders: `09_clustering`, `10_dimensionality_reduction`, `ch5_neural_networks`, `ch6_cnn`, `ch7_rnn`, `ch8_autoencoders`, `ch8b_gans`, `ch9_attention`, `ch10_diffusion`. (`07_classic_methods/L12b` was on this list until 2026-08-12, when it was renamed to `28_svm_and_classic_methods` — its playlist number became knowable once the feature-engineering lectures were fixed at 26/27.) Their chapter pages are also bare (`09_clustering.qmd`, `gans.qmd`) rather than the documented `NN_chapter_topic.qmd`. Two honest resolutions: (a) update `CONVENTIONS.md` to describe the real two-track scheme — playlist-numbered `NN_` for the delivered classic-ML track, `LNN_` for the not-yet-scheduled DL track — or (b) renumber the DL track once its playlist order is known. **(a) is cheap now; (b) gets more expensive with every deck.** Note the DL lecture numbers currently *collide* with the classic ones (`24_shap_lime` vs `L24_attention`).
+- **Decide the DL-track file naming, then make `CONVENTIONS.md` true.** (Found 2026-08-04.) The convention file says lecture slides are `NN_topic.tex` matching playlist position, and that "No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out." But **nine chapters** use `LNN_topic.tex` inside `chN_name/` folders: `09_clustering`, `10_dimensionality_reduction`, `11_neural_networks`, `ch6_cnn`, `ch7_rnn`, `ch8_autoencoders`, `ch8b_gans`, `ch9_attention`, `ch10_diffusion`. (`07_classic_methods/L12b` was on this list until 2026-08-12, when it was renamed to `28_svm_and_classic_methods` — its playlist number became knowable once the feature-engineering lectures were fixed at 26/27.) Their chapter pages are also bare (`09_clustering.qmd`, `gans.qmd`) rather than the documented `NN_chapter_topic.qmd`. Two honest resolutions: (a) update `CONVENTIONS.md` to describe the real two-track scheme — playlist-numbered `NN_` for the delivered classic-ML track, `LNN_` for the not-yet-scheduled DL track — or (b) renumber the DL track once its playlist order is known. **(a) is cheap now; (b) gets more expensive with every deck.** Note the DL lecture numbers currently *collide* with the classic ones (`24_shap_lime` vs `L24_attention`).
 
 - **Resolve the duplicate feature-engineering decks.** (Found 2026-08-04.) `ml/06_feature_engineering/` holds two compiled versions of the same two topics: `26_feature_engineering` + `27_feature_selection` (Jul 2026) and `L01g_feature_engineering` + `L01h_feature_selection` (Jun 2026). Pick the live pair, move the other to an archive folder per the repo-structure tiers. The chapter has no `.qmd`, so neither is on the site yet.
 
@@ -219,6 +219,30 @@ at deck 33. Arguments both ways:
 
 Decide when the CNN chapter is next touched, not before. If it gets trimmed, the astronaut-based
 figures in `ch6_cnn/fig/` can go with it; deck 33's copies are Saryan-based and independent.
+
+---
+
+## ch5 -> ch6 handoff: skip connections and transfer learning stay in the CNN chapter
+
+**Decided 2026-09-14** (instructor), while auditing ch5 for the L14/L15 retirement. Both topics
+came up as candidate ch5 additions and were placed in ch6 instead. **Neither needs building - the
+survey found both already written:**
+
+- **Skip / residual connections** - `ch6/L17_cnn_architectures.tex` has "The residual idea" (the
+  skip carries `x` for free, with `residual_block.pdf`) and "You have seen residual learning
+  before" (a ResNet block = gradient boosting in depth). Also referenced in `ch7/L21`, `ch9/L25`,
+  `ch10/L28`.
+- **Transfer learning** - `ch6/L18_transfer_learning.tex` is a complete deck (freeze vs fine-tune,
+  the BatchNorm gotcha, Grad-CAM / Clever Hans, labelling economics).
+
+So the ch5 rule is: **point forward, do not re-teach.** If ch5 ever gains a "why not just stack
+100 layers?" teaser, keep it to one line ending in "-> ch6".
+
+What *is* still outstanding is the reverse direction: **ch6 and ch9 cite the retiring L14/L15 by
+name in live slide text** (13 citations in `L16_cnn_foundations.tex` alone, including its cold-open
+"In L14 our modest MNIST net had 109,386 weights"; plus `ch9/L25`'s "BatchNorm's idea from L15").
+Those must be repointed as part of the retirement. Full list and plan:
+`ml/11_neural_networks/RETIRE_L14_L15_PLAN.md`, section 9 item 6.
 
 ---
 

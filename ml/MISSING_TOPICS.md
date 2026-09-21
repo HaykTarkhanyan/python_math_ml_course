@@ -35,7 +35,7 @@
 > - **Nested resampling** → folded into `02_main_concepts/08_hyperparameter_tuning.tex`
 > - **CNNs** → `ch6_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
 > - **RNN / LSTM** → `ch7_rnn/` L20, L21
-> - **Modern optimizers, init, BatchNorm** → `ch5_neural_networks/dl_optimization*`
+> - **Modern optimizers, init, BatchNorm** → `11_neural_networks/44_optimization` + `45_optimization_init_activations`
 > - **Attention** → `ch9_attention/L24` (partial — see "still open")
 > - **Autoencoders / VAE** → `ch8_autoencoders/` L22, L23
 > - **GANs** → `ch8b_gans/` L23b, L23c
@@ -103,7 +103,7 @@ These are commonly covered in CS229-style intro ML courses. Upstream sources exi
 
 | Topic | In upstream? | Notes / suggested placement |
 |---|---|---|
-| **Convolutional Neural Networks (CNNs)** | none | Needs new lecture. Convolution operation, pooling, classical architectures (LeNet, AlexNet, VGG, ResNet). Place after L15 (backprop/dropout), e.g. `L15b_cnns.tex` in `ch5_neural_networks/`. |
+| **Convolutional Neural Networks (CNNs)** | none | Needs new lecture. Convolution operation, pooling, classical architectures (LeNet, AlexNet, VGG, ResNet). Place after L15 (backprop/dropout), e.g. `L15b_cnns.tex` in `11_neural_networks/`. |
 | **Recurrent Neural Networks (RNNs)** | none | New lecture. Sequential data, vanilla RNN, vanishing gradient problem. |
 | **LSTM and GRU** | none | New lecture or extended RNN lecture. Gating mechanisms (input, forget, output gates), how they fix vanishing gradients. |
 | **Attention Mechanism** | none | New lecture, bridges seq2seq with Transformers. Soft lookup interpretation. |
