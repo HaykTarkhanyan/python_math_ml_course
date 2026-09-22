@@ -190,6 +190,11 @@ with the instructor at the L21 interview.
 
 ## Homework
 
+> **Superseded 2026-09-23** (DECISIONS.md #40): the instructor asked for an RNN practical;
+> `xx_rnn_memory_solution.ipynb` + `xx_rnn_memory.ipynb` now exist (built by
+> `py_src/build_rnn_practical_nb.py` / `build_rnn_practical_tasks.py`). The paragraph below is
+> the original July lock, kept as history.
+
 **None** (locked, 2026-07-13). `rnn.qmd` gets slides + video links and the chapter
 credit line only - no HW section, no solution notebook. The transformer/GenAI chapter
 picks the hands-on work back up. The only demo element is the in-lecture char-LSTM
