@@ -406,3 +406,20 @@ rendered pages and harmless).
 - `results/intro_toy_mlp.json` first came out at 7.2 MB (every 161x161 grid stored). It now
   stores the trained weights (23 KB); the figures re-evaluate them, with an assert that the
   re-evaluation reproduces the stored accuracy.
+
+**2026-09-22 - Task 2, `xx_opening_the_box` revised** (46 frames / 51 pages; 0 errors, both
+detectors 0). The 6 overfull vboxes left (0.5-11.7pt) are identical, to the hundredth of a point,
+to what v1 (commit 6f0f7cd) produces - pre-existing, not introduced. v1's "0 overfull" note in
+`MECH_INTERP_CHAPTER_PLAN.md` referred to hboxes.
+
+- Cold open: 5 chapter-level frames moved to the intro; replaced by a recap, the IOI sentence,
+  a model spec table and a glossary ("Words for today").
+- New by-hand toy: a residual stream two numbers wide, logit difference split by component.
+- **Logit lens on a second task** (`py_src/l45_easy_figs.py`): "Steve Jobs was the founder of" -
+  " Apple" is rank 22 after layer 8, first after layer 9 (29%), 96% after layer 11, and the final
+  layer *lowers* it to 83%. Same late-arrival shape as the IOI curve.
+- **Probe picture** from held-out prompts only (layer 0: 38%, chance 50%; layer 3: 86% from 64
+  training prompts).
+- **Shuffled-label control, measured**: layer-3 probe on shuffled labels gets 79.7% in-sample and
+  43.8% in 5-fold CV (true labels: 100% / 100%). The planned claim "a probe separates any labels
+  in-sample" was too strong - sklearn's default L2 penalty stops it at ~80%. The slide says 80%.
