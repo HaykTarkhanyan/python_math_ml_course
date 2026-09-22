@@ -1,5 +1,9 @@
 # Chapter 19 - Mechanistic interpretability
 
+> **2026-09-22: superseded as the working plan by [`EXTENSION_PLAN.md`](EXTENSION_PLAN.md)** - the
+> chapter grows to 8 decks (intro + 3 revised core decks + 4 add-ons) and L45-L47 are renamed to
+> `xx_` names (`DECISIONS.md` #36, #37). This file stays as the record of the v1 build.
+
 **Status:** **built 2026-08-13; illustration pass 2026-08-14.** All three decks compile clean and
 are verified; the chapter page is written and registered in `_quarto.yml`.
 

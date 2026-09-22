@@ -9,6 +9,64 @@ this file holds the choice and a pointer.
 
 ---
 
+## #37 - ch19 decks drop the L45-L47 names for `xx_` names until delivery
+
+**Date:** 2026-09-22 · **Status:** active · **Supersedes #13**
+
+**Decision.** The three v1 mech-interp decks are renamed `L45_opening_the_box` ->
+`xx_opening_the_box`, `L46_does_it_actually_do_that` -> `xx_does_it_actually_do_that`,
+`L47_features` -> `xx_features`; the five new decks of the extension (#36) are `xx_` too. Each gets
+its `NN_` delivery number when taught, like every other delivered deck.
+
+**Why - the new evidence that reopens #13.** #13 kept L-numbers as build-order ids and said the
+chapter would only be renumbered as part of a general renumbering. That renumbering has started
+piecemeal: on 2026-09-21 the ch11 decks were renamed to their delivery numbers `44_optimization`
+and `45_optimization_init_activations`. "L45" and "45" now name two different lectures, and
+`CONVENTIONS.md` already calls L-prefixes legacy. Adding five decks to a chapter whose order is
+not settled (#36: "build it all, decide later") also makes any fixed number wrong on arrival.
+
+**Alternatives rejected.** *Keep L45-L47 and number the new decks L48-L52* - extends a scheme the
+repo is moving away from, and the numbers would imply an order that #36 deliberately leaves open.
+*Assign delivery numbers now* - the schedule slot is not decided (`ml/00_plan.md`).
+
+**What would change this.** Nothing short of a repo-wide naming rule change; on delivery each
+deck is renamed to `NN_topic` per `CONVENTIONS.md`.
+
+---
+
+## #36 - ch19 grows from 3 decks to 8: four core decks plus four droppable add-ons
+
+**Date:** 2026-09-22 · **Status:** active
+
+**Decision.** Mechanistic interpretability becomes an 8-deck chapter: a new **intro** deck plus the
+three v1 decks (revised to be easier) form a complete 4-session **core**; four new **add-on**
+decks cover the gaps found in v1 - vision interpretability (saliency, integrated gradients,
+feature visualization, curve detectors), transformer circuits read off the weights (QK/OV,
+composition), where facts live (MLPs, causal tracing, ROME-style editing), and personas and model
+diffing. Each add-on depends only on core decks before it, so any subset can be dropped at
+scheduling time. Models: GPT-2 small (CPU) for language, TransformerLens `attn-only-1l/2l` for the
+circuits deck, torchvision ResNet-18 for vision, and a GPT-2 small fine-tuned here as the diffing
+model organism. Spec and build log: `ml/ch19_mech_interp/EXTENSION_PLAN.md`.
+
+**Why.** Instructor's ask (2026-09-22): extend the LMU-based interpretability material to mech
+interp, make it easier with more examples, fill gaps, add an intro. The survey found LMU has no
+mech interp at all (upstream checked), and ch19 v1 had one hard running example (IOI), no toy
+network, no weights-based circuits, almost no MLPs, no vision and nothing from 2025-26 on
+personas/diffing. All choices in the interview table of the spec were the instructor's, including
+"build everything, decide later what to teach" - which is what forces the core + add-on shape.
+
+**Alternatives rejected.** *LMU-style short chunks* - offered, instructor chose house decks.
+*One linear 8-deck chapter* - less recap per deck, but dropping a deck later would break callbacks
+downstream. *A bigger model (Gemma-2-2B on Colab)* for real SAE and attribution-graph figures -
+declined; everything stays CPU-reproducible. *Papers-only diffing* - declined in favour of a model
+organism with known ground truth.
+
+**What would change this.** When the schedule is set: any add-on that does not get a session is
+dropped from the qmd, not deleted. If a build-risk gate fails (spec table G1-G7), that section is
+redesigned around what was measured.
+
+---
+
 ## #35 - The ch6 barcode project ships as one walkthrough notebook, decoding EAN-13 from scratch
 
 **Date:** 2026-09-06 · **Status:** active
@@ -890,7 +948,7 @@ from three recap frames into a real treatment.
 
 ## #13 - ch19 deck numbers are L45-L47, build order, not delivery order
 
-**Date:** 2026-08-13 · **Status:** active
+**Date:** 2026-08-13 · **Status:** superseded by #37 (2026-09-22)
 
 **Decision.** The mech-interp decks are numbered **L45, L46, L47** - continuing from L44 (agents)
 - even though the chapter is scheduled for delivery in mid-October, directly after **L26**
