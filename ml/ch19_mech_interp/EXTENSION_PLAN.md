@@ -423,3 +423,25 @@ to what v1 (commit 6f0f7cd) produces - pre-existing, not introduced. v1's "0 ove
 - **Shuffled-label control, measured**: layer-3 probe on shuffled labels gets 79.7% in-sample and
   43.8% in 5-fold CV (true labels: 100% / 100%). The planned claim "a probe separates any labels
   in-sample" was too strong - sklearn's default L2 penalty stops it at ~80%. The slide says 80%.
+
+**2026-09-22 - Task 3, `xx_does_it_actually_do_that` revised** (47 frames / 55 pages; 0 errors;
+footer detector 0; the clip detector flags "Who does what" because each overlay step's text is on
+a different page - checked by eye, nothing clipped). The 6 remaining overfull vboxes are the same
+frames and sizes as v1.
+
+- **The easiest patch** (`py_src/l46_easy_figs.py`): "Michael Jordan plays the sport of" with one
+  vector pasted from "Tom Brady ...". At the " Jordan" position the patch moves 92-103% of the way
+  to " football" for layers 1-8, 37% at layer 10, 9% at 11; the final position matters only from
+  layer 10 (34%) and 11 (76%). The textbook "fact sits at the subject, then moves" picture, on one
+  pair of prompts. Pair chosen because both names are two tokens at the start of the prompt;
+  "Tiger Woods" is three (`T`, `iger`, ` Woods`) and the script refused it.
+- **Zero-ablation, measured**: L9H9's output norm on 64 IOI prompts is 12.1-50.3 (mean 37.5).
+  **Unplanned nuance:** a typical output sits 35.8 from the MEAN output - almost as far as from
+  zero. For a head that copies a different name each time, mean-ablation is barely more
+  on-distribution than zero; only resampling is guaranteed. The slide says so.
+- IOI "who does what" now builds up in three overlay steps (fixed TikZ bounding box - without it
+  the diagram jumped sideways between steps), followed by a new frame walking the three steps
+  through our sentence.
+- Athlete prompts measured for later (facts deck): Jordan 50%, Brady 70%, LeBron 60%, Kobe 60%,
+  Tiger Woods 63%, Nicklaus 76%, Federer 66%, Nadal 54%, Jeter 67%, Gretzky 61%, Crosby 62%;
+  soccer players mostly answer " football" (a US/UK ambiguity, not an error).
