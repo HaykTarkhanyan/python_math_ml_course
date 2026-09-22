@@ -97,11 +97,11 @@ was actually measured and the failure is recorded below - never faked on a slide
 
 | Gate | Deck | Question | Result |
 |---|---|---|---|
-| G1 | intro | Does a tiny MLP trained here on a 2-D toy task learn neurons we can name (one per edge of the shape), does ablating one remove exactly that edge, and do other seeds find the same edges? | pending |
+| G1 | intro | Does a tiny MLP trained here on a 2-D toy task learn neurons we can name (one per edge of the shape), does ablating one remove exactly that edge, and do other seeds find the same edges? | **passed, partly** (2026-09-22): 4/8 seeds learn the four-edge net; ablating any unit opens exactly its edge (+15.5% of plane "inside", 0.1% lost); the other 4 seeds are dead-ReLU or messier solutions - shown on a slide, not hidden |
 | G2 | vision | Is there a curve-detector-like channel in ResNet-18 (tuned to curve orientation, weak on straight lines)? | pending |
 | G3 | vision | Does guided backprop fail the weight-randomization sanity check while plain gradients / IG change? | pending |
 | G4 | circuits | Do `attn-only-2l` composition scores single out the previous-token head -> induction head pair? | pending |
-| G5 | facts | Does GPT-2 small know enough landmark/capital facts, and does causal tracing localize them? | pending |
+| G5 | facts | Does GPT-2 small know enough landmark/capital facts, and does causal tracing localize them? | **first half answered early (2026-09-22): landmarks, NO.** "The Eiffel Tower is in the city of" -> London 8.0%, Paris 6.9%; Big Ben -> " New" first. People and companies, YES: Steve Jobs -> Apple 83%, Zuckerberg -> Facebook 75%, Federer -> tennis 66%, Tiger Woods -> golf 63%, LeBron -> basketball 60%. The facts deck and the causal deck's easy patch switch to athlete -> sport (also the relation ROME itself used). Tracing still pending |
 | G6 | facts | Does a ROME-style rank-one edit make GPT-2 small say "Rome" for the Eiffel Tower, and what does it break? | pending |
 | G7 | diffing | Does fine-tuning GPT-2 small on a narrow positive corpus shift behaviour outside that domain, and does the activation diff line up with an independently measured direction? | pending |
 
@@ -385,3 +385,24 @@ student review.
 ## Build log
 
 (Newest last. Gate results, surprises, and anything the measurements changed.)
+
+**2026-09-22 - Task 1, intro deck built** (`xx_mech_interp_intro.tex`, 41 frames / 49 pages; 0
+errors, 0 clipped, 0 footer collisions; three small overfull vboxes of 5-11pt checked on the
+rendered pages and harmless).
+
+- **Gate G1** - see the table. The unplanned result is the best slide in the deck: seed 509 has
+  three dead ReLUs, predicts "outside" everywhere, and scores **87.3%** - exactly the base rate.
+  Accuracy said "pretty good", the weights said "learned nothing".
+- **The Eiffel Tower hook failed** (G5 row above), measured before any slide was written; the fact
+  hook became "Steve Jobs was the founder of" -> Apple 83%.
+- **Feature-as-direction works on GPT-2 small's raw token embeddings**: king - man + woman ->
+  queen (cos 0.71), walked - walk + run -> ran, cats - cat + dog -> dogs, bigger - big + small ->
+  smaller. Paris - France + Italy does NOT (Paris again, Rome fifth) - kept on the slide as the
+  honest failure. A gender direction from 16 pairs holds leave-one-out for 16/16.
+- **Figures were drawn too wide.** First versions were 11-13 in wide, which put their text at
+  ~4-5pt on a 16:9 slide. Redrawn at 7-9 in. A 15-event timeline and an 8-box chapter map stayed
+  unreadable at any size and became LaTeX tables. Rule for the rest of the build: size a figure
+  at roughly the width it will occupy on the slide.
+- `results/intro_toy_mlp.json` first came out at 7.2 MB (every 161x161 grid stored). It now
+  stores the trained weights (23 KB); the figures re-evaluate them, with an assert that the
+  re-evaluation reproduces the stored accuracy.

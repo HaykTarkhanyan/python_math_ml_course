@@ -1,0 +1,948 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Looking Inside}
+\subtitle{What mechanistic interpretability is, and why we do it}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+\newcommand{\promptbox}[1]{%
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.88\textwidth]
+    \centering\textit{#1}
+  \end{tcolorbox}
+  \end{center}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\newcommand{\toolcard}[3]{%
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    {\large\bfseries\color{popblue} #1}\hfill{\small #2}\\[0.2em]
+    {\small\ttfamily #3}
+  \end{tcolorbox}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Three things a small model can do}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.8\textwidth]{fig/intro_three_hooks.pdf}
+  \end{center}
+  \vspace{-0.8em}
+  {\small GPT-2 small (124 million parameters, 2019). Left: ``Steve Jobs was the founder of''.
+  Middle: 25 random tokens, then the same 25 again - it guesses \textbf{0\%} of the first copy and
+  \textbf{93.5\%} of the second.}
+
+  \vspace{0.1em}
+  \keybox{\small By the end of this chapter you will know how each of these works \textbf{inside}
+  the model - which parts do it, and how we know.}
+\end{frame}
+
+\begin{frame}{Twenty lectures of black boxes}
+  \vspace{0.5em}
+  In chapter 5 we learned to explain a model without ever looking inside it.
+
+  \vspace{0.8em}
+  \begin{itemize}
+    \item SHAP splits the prediction between the input features.
+    \item Permutation importance shuffles a column and watches the score fall.
+    \item Partial dependence sweeps one feature and plots the response.
+  \end{itemize}
+
+  \vspace{0.9em}
+  \keybox{Every one of those methods treats the model as a \textbf{function you can only query}.
+  Feed it inputs, read the outputs, infer what mattered. None of them ever reads a weight.}
+
+  \vspace{0.7em}
+  That was not a limitation of the methods. It was a decision - and for a gradient-boosted tree
+  it is still the right one. In this chapter we make the other decision.
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{0.6em}
+  We have complete access to GPT-2 small. Every one of its 124 million numbers is sitting on the
+  disk in front of us, and we can read all of them.
+
+  \vspace{1.1em}
+  \begin{center}
+    {\large Is knowing every weight the same as understanding the model?}
+  \end{center}
+
+  \vspace{1.1em}
+  \pause
+  No - and the reason is worth stating precisely.
+
+  \vspace{0.5em}
+  \trapbox{We have the weights the way you have a wiring diagram of a city's power grid: complete,
+  correct, and no help at all in answering \emph{``why did that street go dark?''}
+  \textbf{Access is not understanding.} The gap between them is the entire field.}
+\end{frame}
+
+\begin{frame}{What mechanistic interpretability is}
+  \vspace{1.0em}
+  \begin{center}
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.8pt, arc=3pt, width=0.9\textwidth]
+    \centering\large
+    Using a model's \textbf{internals} - its weights and activations -\\ to understand what it
+    is doing.
+  \end{tcolorbox}
+  \end{center}
+
+  \vspace{1.0em}
+  Note what that definition does \textbf{not} say. It does not promise a complete
+  reverse-engineering of the network, and the field has become deliberately pragmatic about
+  this: the goal is useful understanding, not a full circuit diagram of a trillion-parameter
+  model.
+
+  \vspace{0.9em}
+  \takebox{\textbf{The through-line of this chapter:} it is easy to form a story about what is
+  happening inside a network, and hard to show that the story is true. Most of what we teach is
+  how to tell those two apart.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{Why look inside?}
+\sectiontransition{Why look inside?}{Four reasons, each with a case you can point to}
+
+\begin{frame}{Reason 1 - debugging: right answer, wrong reason}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \vspace{0.3em}
+      You met this in chapter 5. A classifier separates huskies from wolves, and LIME shows what
+      it looks at: \textbf{the snow}.
+
+      \vspace{0.8em}
+      A black-box method got us that far, and it is a real result. It stops there:
+
+      \vspace{0.3em}
+      \begin{itemize}\small
+        \item \emph{where} in the network does ``snow'' live?
+        \item can we remove it without breaking the rest?
+        \item what else was quietly relying on it?
+      \end{itemize}
+
+      \vspace{0.5em}
+      {\small Those are questions about the \textbf{mechanism}, and only the inside can answer
+      them.}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{center}
+        \includegraphics[width=\linewidth]{fig/lime_husky.png}\\[-2pt]
+        {\scriptsize Husky vs.\ wolf: LIME highlights snow pixels. LMU IML (CC BY 4.0) /
+        Ribeiro et al.\ (2016).}
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reason 2 - trust: does the explanation match the computation?}
+  \vspace{0.6em}
+  Every chat model you use can print its reasoning step by step. The natural assumption is that
+  the text is a \textbf{transcript} of what the model computed.
+
+  \vspace{0.8em}
+  \trapbox{That assumption is testable, and it is sometimes false. In the features lecture we
+  look at a traced case where the model's written reasoning describes a calculation the model did
+  \textbf{not} do.}
+
+  \vspace{0.8em}
+  The stakes grow with what the model is allowed to do. In the agents lecture a model ran tools
+  on its own; an agent whose reasoning you cannot check is an agent you are trusting on its word.
+
+  \vspace{0.5em}
+  {\footnotesize Lindsey et al.\ (2025), \emph{On the Biology of a Large Language Model}.}
+\end{frame}
+
+\begin{frame}{Reason 3 - science: what did it learn that nobody taught it?}
+  \vspace{0.6em}
+  \textbf{A board it was never shown.} A small transformer trained only on lists of legal Othello
+  moves - never a picture of the board - turns out to keep an internal copy of the board anyway.
+  You can read the state of every square out of its activations.
+  {\footnotesize (Li et al., 2022)}
+
+  \vspace{0.9em}
+  \textbf{A plan it never wrote down.} Asked to write a rhyming couplet, a large model picks the
+  rhyme word \emph{before} it starts writing the second line, and then writes a line that lands on
+  it. {\footnotesize (Lindsey et al., 2025)}
+
+  \vspace{1.0em}
+  \keybox{Neither fact is visible in the output. Both were found by looking inside. The model
+  learned things its training data only implied, and the only way to find out what is to look.}
+\end{frame}
+
+\begin{frame}{Reason 4 - control: if you can find it, you can turn it}
+  \vspace{0.6em}
+  In 2024 Anthropic found a direction inside Claude that switched on for the Golden Gate Bridge -
+  in text, in photos, in any language.
+
+  \vspace{0.7em}
+  Then they \textbf{held it switched on} while the model talked. The result, ``Golden Gate
+  Claude'', brought every conversation around to the bridge, and when asked what it was,
+  answered that it \emph{was} the bridge.
+
+  \vspace{0.9em}
+  \keybox{It is a joke, and it is also evidence: changing one internal direction changed the model's
+  behaviour in exactly the predicted way. Finding the part and being able to turn it are the same
+  skill.}
+
+  \vspace{0.4em}
+  {\footnotesize Templeton et al.\ (2024), \emph{Scaling Monosemanticity}. We return to this -
+  and to its limits - in the features lecture.}
+\end{frame}
+
+\begin{frame}{What this does not replace}
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.15\textwidth}p{0.36\textwidth}p{0.36\textwidth}@{}}
+    \toprule
+    & \textbf{Black box} (chapter 5) & \textbf{White box} (this chapter)\\
+    \midrule
+    Works on & \textbf{any} model - boosted trees, a support vector machine, an API you can
+      only call & neural networks whose \textbf{weights you have}\\[0.25em]
+    Needs & predictions & weights, activations, and a framework to hook them\\[0.25em]
+    Answers & which \textbf{input} moved the output & what the \textbf{model did}\\[0.25em]
+    Cost & seconds & the circuit in the causal-methods lecture took a research team months\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.2em}
+  \watchbox{Most of you will deploy gradient boosting. For that model SHAP is not the weaker
+  tool - it is the \textbf{only} tool. This chapter is not an upgrade over chapter 5. It is a
+  different instrument, for a different object.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Where it sits on the map}
+\sectiontransition{Where it sits on the map}{Chapter 5 drew a map of interpretability. This chapter adds a region.}
+
+\begin{frame}{The axes you already know}
+  \vspace{0.1em}
+  Chapter 5 sorted every method along a few questions:
+
+  \vspace{0.2em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.28\textwidth}p{0.3\textwidth}p{0.3\textwidth}@{}}
+    \toprule
+    \textbf{Question} & \textbf{One answer} & \textbf{The other}\\
+    \midrule
+    Is the model readable by design? & yes - a glass box (a short tree, a linear model) & no - explain
+      it afterwards (\emph{post hoc})\\[0.4em]
+    Does the method care which model? & no - \emph{model-agnostic} (SHAP, PDP) & yes -
+      \emph{model-specific}\\[0.4em]
+    What does it explain? & \emph{one} prediction (local) & the \emph{whole} model (global)\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  Mechanistic interpretability is \textbf{post hoc} and \textbf{model-specific}, and it works at
+  both scales: one prompt, or a feature across all prompts.
+
+  \vspace{0.2em}
+  \keybox{What is genuinely new is a fourth question: \textbf{what is the explanation made of?}
+  Chapter 5's answers are made of \emph{inputs}. This chapter's are made of \emph{parts of the
+  model}.}
+\end{frame}
+
+\begin{frame}{The map}
+  \vspace{-0.4em}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/intro_method_map.pdf}
+  \end{center}
+  \vspace{-0.7em}
+  {\footnotesize *You have done mechanistic interpretability before: reading a linear model's
+  coefficients \emph{is} reading its weights. It is easy there because the model has one layer.
+  This chapter is about what that habit costs on a model with twelve.}
+\end{frame}
+
+\begin{frame}{Why not just use a glass box?}
+  \vspace{0.6em}
+  Chapter 5's first lecture made the case for models that are readable by design: a shallow tree,
+  a sparse linear model, a rule list. When one of those is accurate enough, use it.
+
+  \vspace{0.8em}
+  For this chapter's models it is not an option:
+
+  \vspace{0.3em}
+  \begin{itemize}
+    \item there is no glass-box model that writes a paragraph, translates, or answers questions;
+    \item the models people actually deploy for language and vision are the ones we understand
+      least.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \takebox{So the choice is not ``interpretable model or accurate model''. The model is already
+  chosen, it is a neural network, and the only question left is how much of it we can read.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{A network small enough to read}
+\sectiontransition{A network small enough to read}{Before GPT-2: the whole method, on a network with four neurons}
+
+\begin{frame}{The task}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.74\textwidth]{fig/intro_toy_task.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small Is the point $(x, y)$ inside the diamond $|x| + |y| \le 1$? A network with \textbf{2
+  inputs, 4 hidden ReLU units, 1 output}, trained here on a laptop in under a minute. It gets
+  \textbf{99.8\%} of the plane right.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  Four hidden units. A diamond has four edges.
+
+  \vspace{1.2em}
+  \begin{center}
+    {\large What do you think each hidden unit does?}
+  \end{center}
+
+  \vspace{1.2em}
+  \pause
+  Recall what one ReLU unit computes: $h = \max(0,\; w_1 x + w_2 y + b)$. It is \textbf{zero}
+  on one side of the line $w_1 x + w_2 y + b = 0$ and grows linearly on the other.
+
+  \vspace{0.6em}
+  \keybox{So each unit is a \textbf{line} with an ``on'' side. Four units, four lines. Where would
+  you put them?}
+\end{frame}
+
+\begin{frame}{Each unit, over the whole plane}
+  \vspace{-0.1em}
+  \begin{center}
+    \includegraphics[width=\textwidth]{fig/intro_toy_units.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  Darker blue means the unit fires harder. Each unit is \textbf{silent inside the diamond} and
+  switches on only once you cross one particular edge.
+
+  \vspace{0.5em}
+  \keybox{We just named all four neurons: ``outside the top-right edge'', ``outside the top-left
+  edge'', and so on. Each one means one thing, and we can say what.}
+\end{frame}
+
+\begin{frame}{Reading it off the weights}
+  \vspace{0.2em}
+  The same names, without drawing anything - just the numbers the network learned:
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lrrrcr@{}}
+    \toprule
+    & $w_1$ & $w_2$ & $b$ & fires when & \textbf{output weight}\\
+    \midrule
+    unit 1 & $10.13$ & $10.17$ & $-9.59$ & $x + y > 0.94$ & $-9.24$\\
+    unit 2 & $-8.62$ & $8.44$ & $-7.97$ & $-x + y > 0.93$ & $-10.44$\\
+    unit 3 & $-9.64$ & $-9.77$ & $-8.87$ & $-x - y > 0.91$ & $-7.12$\\
+    unit 4 & $8.75$ & $-8.81$ & $-8.12$ & $x - y > 0.92$ & $-9.06$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  \[
+    \text{output} \;=\; 6.07 \;-\; 9.24\,h_1 \;-\; 10.44\,h_2 \;-\; 7.12\,h_3 \;-\; 9.06\,h_4
+    \qquad(\text{inside if } > 0)
+  \]
+
+  \vspace{0.2em}
+  {\small Each ``fires when'' column is the unit's own inequality divided by its weight - e.g.\
+  $10.13x + 10.17y > 9.59 \;\Rightarrow\; x + y \gtrsim 0.94$, the diamond's edge $x + y = 1$ moved
+  slightly inward.}
+\end{frame}
+
+\begin{frame}{Two points, by hand}
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{$(0.5,\; 0.25)$ - inside}
+
+      \vspace{0.4em}
+      {\small
+      unit 1: $10.13(0.5) + 10.17(0.25) - 9.59 = -1.98$\\
+      units 2, 3, 4: $-10.17,\; -16.13,\; -5.95$\\[0.4em]
+      all negative, so after ReLU: $h = (0, 0, 0, 0)$\\[0.4em]
+      output $= 6.07 - 0 = \mathbf{+6.07}$ \hfill \textcolor{paramgreen}{\textbf{inside}}}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{$(1,\; 0.5)$ - outside}
+
+      \vspace{0.4em}
+      {\small
+      unit 1: $10.13(1) + 10.17(0.5) - 9.59 = +5.63$\\
+      units 2, 3, 4: $-12.37,\; -23.39,\; -3.77$\\[0.4em]
+      after ReLU: $h = (5.63, 0, 0, 0)$\\[0.4em]
+      output $= 6.07 - 9.24 \times 5.63 = \mathbf{-45.9}$ \hfill
+      \textcolor{armred}{\textbf{outside}}}
+    \end{column}
+  \end{columns}
+
+  \vspace{1.0em}
+  \keybox{Inside the diamond every unit is silent, and the output is just the bias, $+6.07$. Step
+  past an edge and that edge's unit fires, and its large negative weight drags the output below
+  zero.}
+\end{frame}
+
+\begin{frame}{The circuit, in one sentence}
+  \vspace{1.0em}
+  \begin{center}
+    {\Large \emph{``If you are past any edge, you are out.''}}
+  \end{center}
+
+  \vspace{1.1em}
+  That is the whole algorithm, and we got it without guessing: four \textbf{features} (one edge
+  each), combined by the output unit into a \textbf{circuit} (an AND of four ``not past this
+  edge'' conditions).
+
+  \vspace{0.9em}
+  \takebox{Those two words - \textbf{feature} and \textbf{circuit} - are the whole vocabulary of
+  this chapter. A feature is something the network represents. A circuit is features wired
+  together to compute something.}
+
+  \vspace{0.6em}
+  {\small But so far we have only \emph{looked}. The reading could still be wrong.}
+\end{frame}
+
+\begin{frame}{Now test it}
+  \vspace{-0.1em}
+  \begin{center}
+    \includegraphics[width=\textwidth]{fig/intro_toy_ablation.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small Delete one unit (set it to zero). Any one deletion opens up \textbf{exactly its edge}:
+  about \textbf{15.5\%} of the plane becomes ``inside'', and only \textbf{0.1\%} of the true diamond
+  is lost.}
+
+  \vspace{0.2em}
+  \keybox{The reading \textbf{predicted} this before we ran it. That is the difference between a
+  story and evidence: \textbf{looking is a hypothesis, intervening is the test.}}
+\end{frame}
+
+\begin{frame}{Train it again}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.64\textwidth]{fig/intro_toy_seeds.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small Eight training runs, same data, different random start; lines are the live units.
+  \textbf{4 of 8} runs find the four-edge network - the same four edges each time, in a different
+  order, so ``unit 1'' is a different edge in each run. The other four got stuck somewhere
+  messier.}
+\end{frame}
+
+\begin{frame}{The stuck network is readable too}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.66\textwidth]{fig/intro_toy_stuck.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small Seed 509: three of its four units \textbf{never fire} anywhere in the plane - dead ReLUs,
+  the failure from the lecture on initialization. The network answers ``outside'' for every
+  point.}
+
+  \vspace{0.3em}
+  \trapbox{\small Its accuracy is \textbf{87.3\%} - exactly the share of the plane that is outside
+  the diamond. The accuracy said ``pretty good''. The weights said ``learned nothing'', in one
+  glance.}
+\end{frame}
+
+\begin{frame}{Why this does not scale}
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.3\textwidth}p{0.2\textwidth}p{0.42\textwidth}@{}}
+    \toprule
+    & \textbf{our toy} & \textbf{GPT-2 small}\\
+    \midrule
+    hidden units & 4 & 36{,}864 MLP neurons, plus 144 attention heads\\[0.3em]
+    inputs per unit & 2 - you can plot them & 768 - you cannot\\[0.3em]
+    does each unit mean one thing? & yes & mostly \textbf{no}\\[0.3em]
+    can you check a reading? & delete a unit, look & delete a unit - and the model may
+      compensate\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.8em}
+  \watchbox{Every hard problem in this field is in that table. We cannot draw the units, so we need
+  other ways to read them. Units mean several things at once, so the neuron may be the wrong thing
+  to read. And deleting a part does not always reveal what it did. Each of those gets a lecture.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Features, circuits, universality}
+\sectiontransition{Features, circuits, universality}{The three claims the field is built on}
+
+\begin{frame}{Three claims}
+  \vspace{0.4em}
+  In 2020 a group at OpenAI wrote down the working assumptions of the field as three claims -
+  deliberately labelled \emph{speculative}:
+
+  \vspace{0.6em}
+  \begin{enumerate}
+    \item \textbf{Features.} Networks represent meaningful things, and those representations can be
+      found and understood.\\
+      {\small\color{gray} Our toy: four edges.}
+    \item \textbf{Circuits.} Features are connected by weights into small, readable algorithms.\\
+      {\small\color{gray} Our toy: ``past any edge, you are out''.}
+    \item \textbf{Universality.} Similar features and circuits show up in different networks
+      trained on similar tasks.\\
+      {\small\color{gray} Our toy: 4 of 8 runs found the same four edges.}
+  \end{enumerate}
+
+  \vspace{0.6em}
+  {\footnotesize Olah et al.\ (2020), \emph{Zoom In: An Introduction to Circuits}.}
+\end{frame}
+
+\begin{frame}{A feature is a direction}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \vspace{-0.4em}
+      \includegraphics[width=\linewidth]{fig/intro_feature_direction.pdf}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \vspace{0.3em}
+      GPT-2 small stores each token as 768 numbers. Take 16 male/female word pairs and average the
+      16 ``female minus male'' differences into one direction.
+
+      \vspace{0.6em}
+      Every pair moves the same way along it.
+
+      \vspace{0.6em}
+      {\small \textbf{Not circular:} rebuild the direction \emph{without} a pair, and that pair
+      still moves the right way - \textbf{16 of 16}. Each pair's difference has cosine
+      \textbf{0.60} with the shared direction; a random direction gets \textbf{0.03}.}
+
+      \vspace{0.6em}
+      \keybox{\small Nobody told the model about gender. It found a direction for it.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Arithmetic with directions}
+  \vspace{0.5em}
+  If meanings are directions, you can add and subtract them. Nearest tokens to the result, in
+  GPT-2 small's own embeddings:
+
+  \vspace{0.6em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    \textbf{sum} & \textbf{nearest token} & \textbf{cosine}\\
+    \midrule
+    king $-$ man $+$ woman & \textbf{queen} & 0.71\\
+    walked $-$ walk $+$ run & \textbf{ran} & 0.74\\
+    cats $-$ cat $+$ dog & \textbf{dogs} & 0.85\\
+    bigger $-$ big $+$ small & \textbf{smaller} & 0.80\\
+    \midrule
+    Paris $-$ France $+$ Italy & \textcolor{armred}{Paris} (again), then Italy & 0.63\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  \watchbox{\small The last row is kept on purpose. ``Rome'' is fifth. Directions are real, but
+  they are not magic, and a slide that only shows the analogies that worked is the first
+  cherry-pick of the chapter.}
+\end{frame}
+
+\begin{frame}{A circuit: features wired together}
+  \vspace{0.6em}
+  In the toy, the circuit was four edge-features feeding one output. In a real language model the
+  first circuit you will meet is the one behind the middle panel of the opening slide - copying a
+  pattern it has never seen:
+
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \node[draw, rounded corners, fill=armblue!10, minimum width=4.0cm, minimum height=1.1cm,
+          align=center] (a) at (0,0) {\textbf{head A}\\[0.1em]\scriptsize ``the token before me was X''};
+    \node[draw, rounded corners, fill=paramgreen!10, minimum width=4.0cm, minimum height=1.1cm,
+          align=center] (b) at (7.2,0) {\textbf{head B}\\[0.1em]\scriptsize ``find where X was, copy what came next''};
+    \draw[-{Latex[length=2.5mm]}, thick] (a) -- (b);
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.8em}
+  Neither head does the task alone. The behaviour lives in the \textbf{connection}. How it works is
+  in the next core lecture; how to read it straight off the weights is in an optional one.
+
+  \vspace{0.4em}
+  {\footnotesize Olsson et al.\ (2022), \emph{In-context Learning and Induction Heads}.}
+\end{frame}
+
+\begin{frame}{Universality}
+  \vspace{0.6em}
+  Why should a lecture on GPT-2 small tell you anything about any other model? Because of the third
+  claim.
+
+  \vspace{0.7em}
+  \begin{itemize}
+    \item \textbf{Edge and curve detectors} have been reported in many different image networks,
+      of different architectures, trained separately.
+    \item \textbf{The copying circuit} from the last slide turned up in every model size the
+      original study checked, from one-layer toys to large models, and in many models since.
+    \item Our toy, in miniature: different runs, same four edges.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \watchbox{Universality is an \textbf{empirical} claim, and only partly true - our toy found the
+  clean solution in half its runs, not all. But it is the reason studying small models is worth
+  anything, and the reason the field bothers to name what it finds.}
+
+  \vspace{0.3em}
+  {\footnotesize Olah et al.\ (2020); Olsson et al.\ (2022).}
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{How the field works}
+\sectiontransition{How the field works}{Look, guess, intervene - and believe only the last one}
+
+\begin{frame}{The loop}
+  \vspace{0.3em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small, node distance=1.0cm]
+    \node[draw, rounded corners, fill=lightbg, minimum width=3.4cm, minimum height=1.0cm,
+          align=center] (look) at (0, 1.6) {\textbf{look}\\\scriptsize logit lens, probes,\\[-0.2em]
+          \scriptsize attention patterns, top examples};
+    \node[draw, rounded corners, fill=armblue!10, minimum width=3.4cm, minimum height=1.0cm,
+          align=center] (hyp) at (6.2, 1.6) {\textbf{hypothesis}\\\scriptsize ``this head copies
+          the name''};
+    \node[draw, rounded corners, fill=armorange!15, minimum width=3.4cm, minimum height=1.0cm,
+          align=center] (int) at (6.2, -0.9) {\textbf{intervene}\\\scriptsize delete it, swap it,
+          push it};
+    \node[draw, rounded corners, fill=paramgreen!12, minimum width=3.4cm, minimum height=1.0cm,
+          align=center] (ev) at (0, -0.9) {\textbf{evidence}\\\scriptsize did the behaviour change
+          the way\\[-0.2em]\scriptsize the hypothesis said?};
+    \draw[-{Latex[length=2.5mm]}, thick] (look) -- (hyp);
+    \draw[-{Latex[length=2.5mm]}, thick] (hyp) -- (int);
+    \draw[-{Latex[length=2.5mm]}, thick] (int) -- (ev);
+    \draw[-{Latex[length=2.5mm]}, thick, dashed] (ev) -- (look);
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.6em}
+  \keybox{The toy network went round this loop once: we \emph{looked} at the units, guessed
+  ``each is an edge'', \emph{deleted} one, and the edge opened. The rest of the chapter is the
+  same loop on models where every step is harder.}
+\end{frame}
+
+\begin{frame}{What each kind of evidence proves}
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.46\textwidth}p{0.44\textwidth}@{}}
+    \toprule
+    \textbf{What we see} & \textbf{What it proves}\\
+    \midrule
+    a head attends to the right word & \textbf{nothing yet} - it may write nothing\\[0.3em]
+    a probe reads the information out & it is \textbf{present}, not that it is \textbf{used}\\[0.3em]
+    a neuron's top examples share a theme & maybe - or a \textbf{cherry-pick}\\[0.3em]
+    deleting a part changes nothing & \textbf{not} that the part is useless - something may cover
+      for it\\[0.3em]
+    copying a part's value into another run moves the answer & the information \textbf{is} there,
+      and it matters\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \takebox{This table is the chapter. Each row gets measured on a real model before we are done,
+  including the fourth, which is the strangest result we will see.}
+\end{frame}
+
+\begin{frame}{Two analogies, and where they break}
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Reverse-engineering a program}
+
+      \vspace{0.3em}
+      {\small The weights are a compiled binary: complete and executable, but unreadable. We want
+      the source code - variables (features) and functions (circuits).}
+
+      \vspace{0.4em}
+      {\small\color{armred} Where it breaks: nobody wrote this program, so there may be no clean
+      source code to recover.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Neuroscience, with superpowers}
+
+      \vspace{0.3em}
+      {\small A neuroscientist would give anything to record every neuron at once, change any of
+      them precisely, and run a thousand identical copies of the same brain. We can do all three.}
+
+      \vspace{0.4em}
+      {\small\color{armred} Where it breaks: a brain is one fixed object; we can retrain a
+      network and get a different one.}
+    \end{column}
+  \end{columns}
+
+  \vspace{1.0em}
+  \keybox{Both analogies say the same thing: the problem is not \textbf{access}, it is
+  \textbf{translation} - from numbers into concepts a person can check.}
+\end{frame}
+
+% ============================================================ SECTION 6
+\section{A short history}
+\sectiontransition{A short history}{Thirteen years, from heatmaps to circuits}
+
+\begin{frame}{The field, in dates}
+  \vspace{-0.2em}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{@{}l>{\leavevmode\color{armblue}}p{0.36\textwidth}>{\leavevmode\color{armred}}p{0.5\textwidth}@{}}
+    \toprule
+    & \textbf{vision models} & \textbf{language models}\\
+    \midrule
+    2013 & saliency maps: the gradient as a heatmap & \\
+    2015 & DeepDream & \\
+    2017 & feature visualization; integrated gradients & \\
+    2020 & circuits read out of a vision network & the logit lens\\
+    2021 & & the mathematics of transformer circuits\\
+    2022 & & induction heads; editing a stored fact; superposition; a full circuit for ``who gave
+      what to whom''\\
+    2023 & & sparse autoencoders at scale\\
+    2024 & & Golden Gate Claude\\
+    2025 & & attribution graphs\\
+    2026 & & named an MIT Technology Review breakthrough\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  {\small It began with \textbf{images}: gradients as heatmaps, then optimizing an input to see what a
+  neuron wants, then circuits read out of a vision network. From 2020 the same questions moved to
+  \textbf{language models}, and most of the chapter lives there.}
+\end{frame}
+
+\begin{frame}{Where the field is now}
+  \vspace{0.6em}
+  In January 2026 MIT Technology Review named mechanistic interpretability one of its ten
+  breakthrough technologies of the year. Money and attention have followed.
+
+  \vspace{0.8em}
+  The people doing the work are more cautious than the headline. From the 2025 paper behind the
+  most impressive results in this chapter:
+
+  \vspace{0.5em}
+  \promptbox{``...satisfying insight for about a quarter of the prompts we've tried.''}
+
+  \vspace{0.5em}
+  \takebox{Both are true. The tools now say useful, checkable things about what is inside a
+  language model. They do not yet explain one. Hold both - the chapter will keep showing you
+  each.}
+
+  \vspace{0.3em}
+  {\footnotesize Lindsey et al.\ (2025), \emph{On the Biology of a Large Language Model}.}
+\end{frame}
+
+% ============================================================ SECTION 7
+\section{The plan}
+\sectiontransition{The plan}{Four core lectures, four optional ones}
+
+\begin{frame}{The chapter}
+  \vspace{-0.1em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}rp{0.31\textwidth}lp{0.43\textwidth}@{}}
+    \toprule
+    & \textbf{lecture} & & \textbf{what it adds}\\
+    \midrule
+    1 & What we are doing, and why & \textcolor{popblue}{\textbf{core}} & this one\\
+    2 & Seeing what a network sees & \textcolor{armorange}{optional} & the same questions on an image model\\
+    3 & Opening the box & \textcolor{popblue}{\textbf{core}} & \emph{reading} a language model\\
+    4 & Circuits read off the weights & \textcolor{armorange}{optional} & circuits from the weights alone, no data\\
+    5 & Does it actually do that? & \textcolor{popblue}{\textbf{core}} & \emph{proving} what a part does\\
+    6 & Where facts live & \textcolor{armorange}{optional} & where a fact is stored, and editing it\\
+    7 & Features & \textcolor{popblue}{\textbf{core}} & finding the right \emph{units} to read\\
+    8 & Personas and model diffing & \textcolor{armorange}{optional} & what fine-tuning changed inside\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.4em}
+  \keybox{\small The four \textbf{core} lectures are a complete path on their own. Each
+  \textbf{optional} one needs only the core lectures before it, so any of them can be skipped
+  without breaking the rest.}
+\end{frame}
+
+\begin{frame}{Why a small, old model}
+  \vspace{0.4em}
+  The language lectures run on GPT-2 small: \textbf{12 layers}, \textbf{12 heads per layer},
+  \textbf{144 heads} in total, and a residual stream of width \textbf{768}. It is seven years old.
+
+  \vspace{0.8em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Why it is the right choice}
+      \begin{itemize}\small
+        \item every interpretability tool targets it;
+        \item it is where the field's best-documented circuit was found;
+        \item it runs on a laptop, so \textbf{every figure in these lectures is one you can
+              reproduce}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{What transfers, and what does not}
+      \begin{itemize}\small
+        \item[\textcolor{paramgreen}{\ding{51}}] the residual-stream picture;
+        \item[\textcolor{paramgreen}{\ding{51}}] the causal methods, all of them;
+        \item[\textcolor{paramgreen}{\ding{51}}] the standards of evidence;
+        \item[\textcolor{armred}{\ding{55}}] the \textbf{specific circuits}. What we find is a
+              fact about GPT-2, not about every model.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4em}
+  \watchbox{\small The field has largely \textbf{retired} toy-model interpretability as a research
+  direction, for the reason in the right-hand column. It is still the only sane place to
+  \emph{learn} it. Training ground, not frontier.}
+\end{frame}
+
+\begin{frame}{What you will be able to do}
+  \vspace{0.5em}
+  After the four core lectures:
+
+  \vspace{0.5em}
+  \begin{itemize}
+    \item split a model's output into exact per-component contributions, and say which parts
+      mattered;
+    \item test a claim about a component by intervening, and choose the right intervention;
+    \item recognise the four standard ways an interpretability claim fools its author;
+    \item train a probe on activations - the technique most likely to be useful in a job;
+    \item open a real open-weight model's features in a browser and read them critically.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \trapbox{\small What you will \textbf{not} be able to do: explain how a frontier model answers a
+  question. Nobody can yet. A lecture that promised it would be lying to you.}
+\end{frame}
+
+\begin{frame}{Two tools}
+  \vspace{0.6em}
+  \toolcard{TransformerLens}{2022 \textperiodcentered{} Neel Nanda}{github.com/TransformerLensOrg/TransformerLens}
+
+  \vspace{0.2em}
+  {\small A Python library that runs a model and keeps \textbf{every} intermediate value instead of
+  throwing it away, with hooks to read or change any of them mid-run. All the language-model
+  figures in this chapter come from it.}
+
+  \vspace{0.9em}
+  \toolcard{Neuronpedia}{Johnny Lin \textperiodcentered{} Decode Research}{neuronpedia.org}
+
+  \vspace{0.2em}
+  {\small A website for browsing the features of real open models - what each one fires on, what it
+  pushes the output towards. Nothing to install, no GPU. The cheapest way to start.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.4em}
+  \begin{itemize}
+    \item \textbf{Mechanistic interpretability} explains a model with its \emph{parts} - weights and
+      activations - instead of its inputs. Different instrument, not a better one.
+    \item \textbf{Four reasons} to look inside: debugging, trust, science, control.
+    \item A \textbf{four-neuron network} can be read completely: four features (edges), one circuit
+      (``past any edge, you are out''), confirmed by deleting a unit.
+    \item The vocabulary: \textbf{features} (often directions), \textbf{circuits},
+      \textbf{universality}.
+    \item The method: \textbf{look, hypothesise, intervene} - and only the last step is evidence.
+  \end{itemize}
+
+  \vspace{0.6em}
+  \trapbox{\small And the warning from the stuck network: a number that looks good (87\%
+  accuracy) can hide a model that learned nothing. Reading the inside is how you find out.}
+\end{frame}
+
+\begin{frame}{Next}
+  \vspace{1.2em}
+  \takebox{\textbf{Next: opening the box.}\\[0.6em]
+  From four neurons to GPT-2 small. What the ``residual stream'' is and why it makes the whole
+  model a sum, how to watch an answer being built layer by layer, how to ask the model yes/no
+  questions about its own activations - and why every one of those is still only
+  \emph{looking}.}
+
+  \vspace{1.0em}
+  \begin{center}
+    {\footnotesize Optional, if it is scheduled first: \emph{Seeing what a network sees} - the same
+    questions on an image model, where you can look at a feature with your own eyes.}
+  \end{center}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Built 2026-09-22 as deck 1 (core) of the ch19 extension; spec in EXTENSION_PLAN.md,
+%   decisions DECISIONS.md #36/#37. Five frames moved here from xx_opening_the_box.tex (was L45):
+%   "Twenty lectures of black boxes", the access-vs-understanding predict-first, the definition,
+%   "What this does not replace", "Why a small, old model" - lightly reworded so they speak for the
+%   whole chapter, not one lecture.
+% - Figures (all measured unless noted):
+%   * py_src/intro_toy_mlp.py -> intro_toy_{task,units,ablation,seeds,stuck}.pdf,
+%     results/intro_toy_mlp.json. Gate G1: 4/8 seeds learn the four-edge net; display seed 1
+%     (99.8%); ablating any unit adds ~15.5% of the plane, loses ~0.1%; seed 509 has 3 dead units
+%     and predicts "outside" everywhere (87.3% = the base rate).
+%   * py_src/intro_figs.py -> intro_three_hooks.pdf (Steve Jobs -> Apple 83%; induction 0% ->
+%     93.5% on 40 seqs of 25 random tokens; IOI " William" 74%), intro_feature_direction.pdf
+%     (16 gender pairs, leave-one-out 16/16, mean cos 0.60 vs 0.03 random), and three drawn
+%     figure: intro_method_map.pdf. The timeline and the chapter map are LaTeX tables: as
+%     figures (15 events; 8 boxes in a row) their text came out at ~5pt at slide width.
+%   * lime_husky.png copied from ml/05_interpretability/fig (LMU IML, CC BY 4.0 / Ribeiro 2016).
+% - Web-verified 2026-09-22: MIT Technology Review 10 Breakthrough Technologies 2026 (Jan 12,
+%   2026); "satisfying insight for about a quarter of the prompts" (Lindsey et al. 2025, Biology);
+%   TransformerLens 2022, Neel Nanda, TransformerLensOrg. Neuronpedia's launch year not verified,
+%   so the card carries no year.
+% - Key pedagogical decisions:
+%   (1) The fact hook is "Steve Jobs was the founder of" (83%), not the Eiffel Tower: GPT-2 small
+%       puts London (8%) above Paris (7%) on "The Eiffel Tower is in the city of". Measured
+%       2026-09-22 before the frame was written.
+%   (2) The toy network's failed seeds are shown, not hidden. The stuck one teaches two things at
+%       once: universality is partial, and a readable model exposes a failure accuracy hides.
+%   (3) The Paris - France + Italy row stays in the analogy table as the honest failure.
+%   (4) Every forward reference names a lecture by title, never by number: the add-ons are
+%       optional and the delivery order is not fixed.
+% - Next deck: xx_opening_the_box.tex (core). Optional add-on after this one:
+%   xx_vision_circuits.tex.
