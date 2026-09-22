@@ -29,7 +29,7 @@
     Zoom out: \textbf{every} headline AI system of the 2020s - ChatGPT included - is a
     \textbf{sequence model}. This chapter and the next are the road there.
     \vskip 4pt
-    \textbf{Predict:} feed a review into an MLP (L14) - what breaks before you even
+    \textbf{Predict:} feed a review into an MLP ([41\_2]) - what breaks before you even
     train?
     \pause
     \vskip 3pt
@@ -132,6 +132,35 @@
       at a different position.}}
 \end{frame}
 
+% 2026-09-22 addition: the bridge from L19 (1D conv on text) and the ch11 name inventor
+% (Bengio-style fixed-context MLP) - "why not just a window?" was never asked.
+\begin{frame}{What about a fixed window?}
+  \small
+  You have already met two models that read a sequence through a \textbf{fixed window}
+  of the last $k$ tokens:
+  \begin{itemize}
+    \item L19's \textbf{1D convolution} - a $k$-token kernel sliding along the text;
+    \item the ch11 \textbf{name inventor} - an MLP that predicts the next letter from the
+      last $k$ letters (Bengio et al., 2003).
+  \end{itemize}
+  Both learn \textbf{local} patterns well - "-yan" closes an Armenian surname. Both are
+  \textbf{blind beyond $k$}:
+  \vskip 6pt
+  \begin{center}
+    The \textbf{pomegranates} that my grandmother sent us
+    \colorbox{armorange!30}{from Goris last autumn} \textbf{were} sweet.
+  \end{center}
+  \vskip 2pt
+  A 4-word window in front of "were" sees only \emph{from Goris last autumn}. It cannot
+  tell whether one pomegranate or many was sent - the word that decides it is 9 words
+  back.
+  \vskip 6pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Stacking conv layers widens the window (L17's receptive field), but the width is
+    fixed by the architecture before any text arrives. We want a memory that grows
+    \emph{with} the text: read one token at a time and carry a summary forward.}}
+\end{frame}
+
 \begin{frame}{Tokens, minimally}
   \begin{columns}[T]
     \column{0.36\textwidth}
@@ -190,7 +219,7 @@
     \column{0.52\textwidth}
     How a human reads: word by word, retaining a running summary - the \textbf{state}.
     \vskip 6pt
-    From L14's hidden layer $\mathbf{z}=\sigma(\mathbf{W}^\top\mathbf{x}+\mathbf{b})$ to
+    From [41\_1]'s hidden layer $\mathbf{z}=\sigma(\mathbf{W}^\top\mathbf{x}+\mathbf{b})$ to
     \[
       \mathbf{z}^{[t]} = \sigma\big(\textcolor{armred}{\mathbf{V}^\top \mathbf{z}^{[t-1]}}
         + \mathbf{W}^\top \mathbf{x}^{[t]} + \mathbf{b}\big):
@@ -202,9 +231,8 @@
       $\mathbf{z}^{[t]}$ is a function of the current input \emph{and} the previous
       state - by recurrence, a summary of \textbf{everything read so far}.}}
     \vskip 4pt
-    {\footnotesize History: Elman (1990), "Finding Structure in Time", building on
-    Jordan (1986) - the idea predates the web; the compute arrived two decades
-    later.}
+    {\footnotesize History: Elman (1990), "Finding Structure in Time", after Jordan
+    (1986) - the idea predates the web.}
     \column{0.48\textwidth}
     \begin{center}
       \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=0.5cm,
@@ -301,9 +329,11 @@
     \fcolorbox{popblue}{popblue!6}{\parbox{0.95\linewidth}{\small
       Three words, three applications of the \textbf{same} $\mathbf{W}$ and
       $\mathbf{V}$, one final readout through $\mathbf{U}$. Nothing hidden - every
-      number above came straight out of the ANIM.}}
+      number above came straight out of the animation.}}
     \vskip 8pt
-    {\footnotesize In practice $d_h=64$-$512$, not $2$ - but the recipe is identical.}
+    {\footnotesize In practice $d_h=64$-$512$, not $2$ - but the recipe is identical. And
+    it is \textbf{fixed}: 3 words or 3,000, the whole past must fit into those $d_h$
+    numbers - a lossy summary L21 will come back to.}
   \end{columns}
 \end{frame}
 
@@ -407,6 +437,7 @@
     \textbf{backward} states $g^{[t]}$ run right$\to$left; each output $f^{[t]}$ reads
     \emph{both}.}
     \column{0.56\textwidth}
+    \small
     A plain RNN only sees the \textbf{past}. But the right reading of a word often depends on
     what comes \emph{after}:
     \vskip 3pt
@@ -443,8 +474,9 @@
   \begin{columns}[T]
     \column{0.46\textwidth}
     The unrolled RNN is a deep feed-forward net with \textbf{tied weights}. Autograd
-    needs nothing new - the L15 promise ("reverse mode: one sweep, any architecture")
-    kept again.
+    needs nothing new - [42]'s \texttt{loss.backward()} (one backward sweep, any graph),
+    kept again. A tied weight collects the \textbf{sum} of its gradients from every step
+    - the same rule as a shared conv kernel (L16).
     \vskip 6pt
     For seq-to-one sentiment, the loss sits only at the \textbf{final} step - so its
     gradient must travel all the way back through every recurrent connection.
@@ -510,15 +542,26 @@
   \fcolorbox{popblue}{popblue!6}{\parbox{0.97\linewidth}{\small
       Every path back to an early time-step runs through powers of the \textbf{same}
       matrix $\mathbf{V}^\top$. For any $i<t$: the term $(\mathbf{V}^\top)^{t-i}$ appears.}}
+  \vskip 6pt
+  {\small \textbf{Why eigenvalues?} Along an eigenvector $\mathbf{v}$, the matrix only
+  scales: $\mathbf{V}^\top\mathbf{v} = \lambda\mathbf{v}$, so
+  $(\mathbf{V}^\top)^{k}\mathbf{v} = \lambda^{k}\mathbf{v}$. In that direction the matrix
+  power \emph{is} the scalar story, $0.8^{29}$ again - and after many steps the direction
+  with the largest $|\lambda|$ dominates everything else.}
 \end{frame}
 
 \begin{frame}{The full derivation, part 2 - eigenvalues}
   The \textbf{largest eigenvalue} $|\lambda_{\max}|$ of $\mathbf{V}$ decides the fate of
   $(\mathbf{V}^\top)^{t-i}$:
   \begin{itemize}
-    \item $|\lambda_{\max}| < 1 \Rightarrow$ \textbf{vanishing}.
-    \item $|\lambda_{\max}| > 1 \Rightarrow$ \textbf{exploding}.
+    \item $|\lambda_{\max}| < 1 \Rightarrow$ \textbf{vanishing} - and the $\mathbf{D}$
+      factors ($\le 1$ for tanh) can only shrink it further.
+    \item $|\lambda_{\max}| > 1 \Rightarrow$ it \textbf{can explode} - unless saturated
+      $\mathbf{D}$ factors happen to cancel the growth.
   \end{itemize}
+  {\footnotesize (Pascanu, Mikolov \& Bengio, 2013, make it precise: with tanh,
+  $|\lambda_{\max}| < 1$ is \emph{sufficient} for vanishing, while $|\lambda_{\max}| > 1$
+  is only \emph{necessary} for exploding.)}
   \vskip 6pt
   \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
       \textbf{Worse than a deep MLP.} An MLP has a \emph{different} matrix per layer -
@@ -526,8 +569,9 @@
       at every step, so the effect compounds cleanly. The sigmoid's $\mathbf{D}$ factors
       only make it worse ($|\sigma'|\le 1/4$).}}
   \vskip 6pt
-  {\footnotesize Callback: L15 already met vanishing gradients in deep MLPs. Same
-  disease, worse here - it is the \emph{same} matrix every step.}
+  {\footnotesize Callback: [42] already met vanishing gradients in deep MLPs (the
+  $\delta$ recursion), and [45] fought them with ReLU and He init. Same disease, worse
+  here - it is the \emph{same} matrix every step.}
   \vskip 4pt
   {\footnotesize \textbf{History:} this diagnosis is Hochreiter's 1991 diploma thesis
   (written in German, barely read at the time) and, independently, Bengio, Simard \&
@@ -538,8 +582,8 @@
 \begin{frame}{Exploding is the easy half}
   \begin{columns}[T]
     \column{0.5\textwidth}
-    L15 already gave us the fix (recall "Saddles and cliffs"): cap the gradient's norm
-    at a threshold $h$:
+    [44] already gave us the fix for cliffs - \textbf{gradient clipping}: cap the
+    gradient's norm at a threshold $h$:
     \[
       \text{if } \|\nabla\| > h:\quad \nabla \leftarrow \frac{h}{\|\nabla\|}\,\nabla
     \]
@@ -607,11 +651,15 @@
 \begin{frame}{Empirical proof}
   \begin{columns}[T]
     \column{0.32\textwidth}
+    \small
     Gradient norm per time-step, measured directly on a tiny vanilla RNN (hidden size
-    $16$) trained on a toy recall task.
+    $16$). The task: read 30 random numbers, then output the \textbf{first} one - so the
+    loss at the end needs the gradient to reach step 1.
     \vskip 6pt
     \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
-      Not asserted - \textbf{measured}. The gradient is dead within about $15$ steps.}}
+      Not asserted - \textbf{measured}. Note the log scale: the gradient reaching step 1
+      is over \textbf{300,000$\times$} smaller than at the end - and it has already lost
+      $1000\times$ within the last 15 steps.}}
     \column{0.68\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{gradient_flow_vanilla.pdf}
@@ -625,14 +673,16 @@
 \begin{frame}{Recap}
   \begin{itemize}
     \item Text refuses to fit a fixed input: length varies, order matters - every
-      shoehorn hack loses one or the other.
+      shoehorn hack loses one or the other, and a fixed window is blind beyond $k$.
     \item State $=$ a running summary; \textbf{one new weight matrix} $\mathbf{V}$ turns
       a dense layer into an RNN.
     \item Unrolled $=$ a deep network with \textbf{tied weights} - autograd handles it
       unchanged.
     \item Same-matrix powers $\Rightarrow$ gradients \textbf{vanish} (derived, not
       asserted) or explode.
-    \item Clipping fixes exploding. \textbf{Nothing yet fixes vanishing.}
+    \item Clipping fixes exploding. \textbf{Nothing yet fixes vanishing} - so a vanilla
+      RNN's "unlimited memory" is, in practice, a few dozen steps: no better than a wide
+      fixed window.
   \end{itemize}
   \vskip 6pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
@@ -731,6 +781,29 @@
 %   first use. All years web-verified 2026-09-06.
 %
 %   Key decisions: logged in L20_DECISIONS.md.
+%
+%   REVISION 2026-09-22 (pre-delivery pedagogy pass, instructor away - autonomous):
+%   retired L14/L15 callbacks repointed after checking the delivered decks + their LMU
+%   pages: MLP -> [41_2], hidden layer -> [41_1] (LMU uses the same W^T x notation),
+%   "the L15 promise" -> [42]'s loss.backward() frame, vanishing gradients in MLPs -> [42]
+%   ("What this recursion costs") + [45], clipping -> [44] (LMU 01_challenges: cliffs +
+%   gradient clipping). BPTT frame now says a tied weight SUMS its per-step gradients (the
+%   rule L16's new shared-kernel frame teaches). NEW frame "What about a fixed window?"
+%   between the shoehorn hacks and tokens: L19's 1D conv and the ch11 name inventor
+%   (Bengio et al. 2003) both see only the last k tokens; agreement example with the
+%   subject 9 words back (Goris). Eigenvalue frame: |lambda| > 1 is only NECESSARY for
+%   exploding, |lambda| < 1 SUFFICIENT for vanishing - quoted from Pascanu, Mikolov &
+%   Bengio 2013 Sec. 2.1 (arXiv 1211.5063 text), no longer "=> exploding". "Empirical
+%   proof" now states the task (read 30 random numbers, output the first) and quotes the
+%   measured ratio from logs/gradient_flow.log (2026-07-13 17:48 run, the one plotted):
+%   5.82e-2 at t=29 vs 1.70e-7 at t=0 (~340,000x) and 5.36e-5 at t=14 (~1,090x).
+%   After a Sonnet student review of the rendered deck (same day): "The full derivation,
+%   part 1" now says WHY eigenvalues (along an eigenvector the matrix power is the scalar
+%   power); "Forward pass, summarized" says the state is FIXED-size (the lossy summary L21's
+%   bottleneck returns to); the recap states the practical consequence - a vanilla RNN's
+%   memory is a few dozen steps, no better than a wide window (matches memory_highway.json:
+%   RNN at chance on first-token recall by T=80, a coin flip at T=40). Reviewer's proposed
+%   cut of the second click-through (Unrolling) NOT applied: instructor-requested revision.
 %
 %   Forward pointer: L21 The Road to Attention - LSTM intuition (memory highway = ResNet
 %   skip, 18 years earlier), tokenization with the Armenian fragmentation fact, the

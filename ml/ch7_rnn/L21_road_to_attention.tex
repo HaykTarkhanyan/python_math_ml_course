@@ -147,7 +147,7 @@
   \pause\quad
   \fcolorbox{armorange}{armorange!12}{\parbox{0.9\linewidth}{\small
     $[0.9,0.1]\odot[2.0,-1.0]=[1.8,-0.1]$: memory 1 survives almost untouched, memory 2
-    is nearly wiped. A gate is L14's sigmoid, rebranded as a soft switch.}}
+    is nearly wiped. A gate is [41\_1]'s sigmoid neuron, rebranded as a soft switch.}}
 \end{frame}
 
 \begin{frame}{For the record: the four equations}
@@ -189,30 +189,76 @@
   \end{center}
 \end{frame}
 
-\begin{frame}{Does it work? Proof + price}
+% 2026-09-22 addition: the one derivative that explains WHY the highway works - intuition
+% level, no full LSTM backprop (instructor: LSTM is context, not curriculum).
+\begin{frame}{Why addition keeps the gradient alive}
+  \small
+  Follow the gradient backwards along the highway only (ignore the paths through the
+  gates). One line of calculus:
+  \[
+    \mathbf{c}^{[t]} = \mathbf{f}^{[t]}\odot\mathbf{c}^{[t-1]}
+      + \mathbf{i}^{[t]}\odot\tilde{\mathbf{c}}^{[t]}
+    \quad\Longrightarrow\quad
+    \frac{\partial \mathbf{c}^{[t]}}{\partial \mathbf{c}^{[t-1]}}
+      = \mathrm{diag}\big(\mathbf{f}^{[t]}\big)
+  \]
+  \vskip 2pt
   \begin{columns}[T]
-    \column{0.56\textwidth}
-    \begin{center}
-      \includegraphics[width=\linewidth]{gradient_flow_comparison.pdf}
-    \end{center}
-    \column{0.44\textwidth}
-    \footnotesize
-    Same toy recall task as L20's empirical proof, same measurement method
-    (\texttt{RNNCell}/\texttt{LSTMCell} unroll, per-step \texttt{retain\_grad()}).
-    \vskip 2pt
-    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
-      \textbf{Honestly reported}: at this budget the measured gap is not yet
-      dramatic - untrained gates start close to "half open," and a hard recall task
-      needs real training before the additive path pays off. The
-      \emph{architectural} argument (addition, not repeated multiplication) does not
-      depend on this toy net converging.}}
-    \vskip 3pt
-    \textbf{Price:} 4 weight sets instead of 1. Our $d_x{=}1,d_h{=}16$ vanilla cell:
-    $16{+}256{+}16=288$ params. LSTM: $4\times288=\mathbf{1{,}152}$.
-    \vskip 2pt
-    \textbf{Gated Recurrent Unit} (\textbf{GRU}; Cho et al., 2014): a streamlined
-    2-gate cousin (3 weight sets), similar results - the lighter default.
+    \column{0.48\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      \textbf{Vanilla RNN (L20):} each step multiplies by
+      $\mathbf{D}^{[t-1]}\mathbf{V}^\top$ - the \emph{same} matrix every step, whether or
+      not the memory matters. Its size decides the fate of everything.}}
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      \textbf{LSTM highway:} each step multiplies by $\mathbf{f}^{[t]}$ - a gate the
+      network \emph{recomputes} from the input at every step, per memory slot. It can hold
+      $f \approx 1$ while a memory matters (it survives 100 steps) and drop to
+      $f \approx 0$ to wipe it on purpose.}}
   \end{columns}
+  \vskip 8pt
+  {\footnotesize \textbf{History:} the 1997 LSTM had \emph{no} forget gate - its cell
+  passed the gradient back with factor exactly $1$ (a "constant error carousel"). The
+  forget gate came in 2000 (Gers, Schmidhuber \& Cummins), so the memory could also be
+  cleared.}
+\end{frame}
+
+% 2026-09-22: figure replaced. The old gradient_flow_comparison.pdf showed no LSTM advantage
+% (reported honestly, but it left the frame's own question unanswered). memory_highway.py
+% measures the mechanism (sensitivity at init vs forget-gate bias) and the outcome
+% (first-token recall, 2 seeds); every claim below is read off results/memory_highway.json.
+\begin{frame}{Does it work? Measured}
+  \vskip -4pt
+  \begin{center}
+    \includegraphics[width=0.92\linewidth]{memory_highway.pdf}
+  \end{center}
+  \vskip -6pt
+  {\footnotesize \textbf{Left}, before any training: an input 40 steps back barely
+  moves a vanilla RNN, nor an LSTM whose forget gates start half-shut; bias 1 still decays,
+  only slower; open the gates (bias 3) and it still counts after 100 steps. \textbf{Right}, same budget for all: the open-gate
+  LSTM solves $T \le 40$ within 100 steps; the RNN is a coin flip at 40, at chance by 80.
+  At 80 even the LSTM succeeds on one seed of two - addition makes long memory
+  \emph{learnable}, not free.}
+\end{frame}
+
+\begin{frame}[fragile]{The price, and one gotcha}
+  \begin{itemize}
+    \item \textbf{Price:} 4 weight sets instead of 1. Our $d_x{=}1,d_h{=}16$ vanilla
+      cell: $16{+}256{+}16=288$ params. LSTM: $4\times288=\mathbf{1{,}152}$.
+    \item \textbf{Gated Recurrent Unit} (\textbf{GRU}; Cho et al., 2014): a streamlined
+      2-gate cousin (3 weight sets), similar results - the lighter default.
+    \item \textbf{Gotcha:} the left panel's "gate starts open" is a one-line choice.
+      Keras adds $+1$ to the forget-gate bias by default; \textbf{PyTorch does not}:
+  \end{itemize}
+  \small
+\begin{verbatim}
+lstm = nn.LSTM(d_in, hidden)
+# PyTorch stacks the gates: input, forget, cell, output
+lstm.bias_ih_l0.data[hidden:2 * hidden].fill_(1.0)  # forget gate
+\end{verbatim}
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
+    Same lesson as [45]'s initialization frames: where training \emph{starts} can decide
+    whether it gets anywhere at all.}}
 \end{frame}
 
 \begin{frame}{Published 1997, everywhere by 2016}
@@ -422,6 +468,39 @@
   depends on what came before it, not on the letter alone.}
 \end{frame}
 
+% 2026-09-22 addition: the generation loop was never shown - the demo below produced text
+% with no mechanism behind it. This loop is the one every LLM chapter reuses.
+\begin{frame}{From predicting to writing: sample, feed back, repeat}
+  \small
+  The network only ever \textbf{predicts} one distribution over the next character.
+  \emph{Writing} is a loop around it:
+  \vskip 4pt
+  \begin{center}
+    \begin{tikzpicture}[font=\small, >=Latex, node distance=0.55cm,
+        box/.style={draw, rounded corners, minimum height=0.8cm, align=center}]
+      \node[box, fill=armblue!10] (in) {letters so far\\\footnotesize (first: a start symbol)};
+      \node[box, fill=paramgreen!12, right=of in] (net) {RNN step};
+      \node[box, fill=armorange!16, right=of net] (dist) {$P(\text{next char})$};
+      \node[box, fill=armred!10, right=of dist] (smp) {\textbf{sample} one};
+      \draw[->] (in) -- (net);
+      \draw[->] (net) -- (dist);
+      \draw[->] (dist) -- (smp);
+      \draw[->, thick, armred] (smp.south) -- ++(0,-0.55) -| node[pos=0.25, below,
+        font=\footnotesize]{append it, feed it back in} (net.south);
+    \end{tikzpicture}
+  \end{center}
+  \vskip 2pt
+  Repeat until the net samples an end symbol. Why \emph{sample} rather than always take
+  the most likely character? The top choice every time gives the same, often repetitive
+  text on every run; sampling gives variety. A \textbf{temperature} knob (divide the
+  scores by $T$ before the softmax) slides from safe to surprising - the knob from the
+  ch11 name inventor.
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    This loop is exactly how ChatGPT writes: one token at a time, each one sampled and
+    fed back in. Only the network inside the loop changes.}}
+\end{frame}
+
 \begin{frame}{Demo: a char-LSTM learns to write Armenian}
   \footnotesize
   What a character-level LSTM trained on Armenian text typically produces, one
@@ -531,6 +610,42 @@
   \end{center}
 \end{frame}
 
+% 2026-09-22 addition: the second reason recurrence lost - sequential compute. Quote verified
+% verbatim against arXiv 1706.03762v7, Introduction. Deliberately does NOT name the answer
+% (the cliffhanger lock below still holds).
+\begin{frame}{The second wall: one step at a time}
+  \small
+  Even a perfect LSTM has one more problem, and it is about \textbf{speed}, not memory:
+  $\mathbf{z}^{[t]}$ needs $\mathbf{z}^{[t-1]}$, which needs $\mathbf{z}^{[t-2]}$ ... Step
+  $t$ cannot start until step $t-1$ has finished.
+  \vskip 4pt
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize, >=Latex,
+        n/.style={draw, circle, minimum size=0.62cm, fill=paramgreen!18}]
+      \foreach \i/\x in {1/0,2/1.3,3/2.6}
+        \node[n] (z\i) at (\x,0) {$z_{\i}$};
+      \node (dots) at (3.9,0) {$\cdots$};
+      \node[n] (zN) at (5.2,0) {$z_{1000}$};
+      \draw[->, thick] (z1) -- (z2); \draw[->, thick] (z2) -- (z3);
+      \draw[->, thick] (z3) -- (dots); \draw[->, thick] (dots) -- (zN);
+      \node[armred, align=left, anchor=west] at (6.1,0)
+        {1{,}000 tokens $=$ 1{,}000 steps\\in a queue, one after another};
+    \end{tikzpicture}
+  \end{center}
+  \vskip 2pt
+  \begin{itemize}
+    \item The GPUs from [42] want thousands of \emph{independent} multiply-adds at once.
+      A recurrence hands them one small step at a time - most of the chip waits.
+    \item The authors of the paper that ended the RNN era put it plainly: "This
+      inherently sequential nature precludes parallelization within training examples"
+      (Vaswani et al., 2017).
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
+    Two walls, then: the \textbf{bottleneck} (one vector must hold everything) and the
+    \textbf{queue} (one step at a time). The next chapter's idea removes both at once.}}
+\end{frame}
+
 \begin{frame}{The cliffhanger}
   \small
   What if the decoder could look back at \emph{all} the encoder states - and learn
@@ -578,13 +693,15 @@
 
 \begin{frame}{Recurrence, retirement, and a comeback}
   \begin{center}
-    \includegraphics[width=0.94\linewidth]{rnn_timeline.pdf}
+    \includegraphics[width=0.86\linewidth]{rnn_timeline.pdf}
   \end{center}
   \small
-  2017's transformer retired RNNs from mainstream NLP - but recurrence came back as
-  state-space models (Mamba) and, fittingly, as \textbf{Hochreiter's own} xLSTM.
-  Where RNNs still earn their keep: streaming/edge inference and small-data settings,
-  where a transformer's full attention is overkill.
+  2017's transformer retired RNNs from mainstream NLP - but recurrence came back:
+  state-space models (Mamba), \textbf{Hochreiter's own} xLSTM, and by 2025-26 frontier
+  models - \textbf{Qwen3-Next} (Sept 2025) and \textbf{Qwen3.5} (Feb 2026) run three of
+  every four layers as a fixed-size recurrent state (Gated DeltaNet) with a learned
+  \emph{decay} gate - today's forget gate, cheap on long inputs. Plain RNNs still earn
+  their keep in streaming/edge and small-data work.
 \end{frame}
 
 % ================================================================
@@ -600,15 +717,17 @@
     \item One-hot is geometry-blind; \textbf{embeddings} are one-hot's learned,
       dense upgrade - the anatomy frame's "row of $\mathbf{W}$," grown up.
     \item One objective - \textbf{predict the next token} - powers a char-LSTM
-      writing Armenian and, at a different scale, GPT.
+      writing Armenian and, at a different scale, GPT; \textbf{writing} is the loop
+      sample $\to$ feed back $\to$ repeat.
     \item \textbf{Seq2seq} squeezes an entire source sentence into one vector - and
       even the LSTM's fix for fading memory cannot fix a memory that is
-      \emph{compressed}.
+      \emph{compressed}. And any recurrence runs \textbf{one step at a time}.
   \end{itemize}
   \vskip 6pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
       \textbf{Next:} the decoder wants to look back at everything. Letting it do
-      that - attention - is where the attention chapter begins (L24).}}
+      that - attention - is where the attention chapter begins (L24); dropping the
+      recurrence altogether also removes the one-step-at-a-time queue.}}
 \end{frame}
 
 \end{document}
@@ -708,3 +827,32 @@
 %
 %   Key decisions, the instructor scope change, and open questions: logged in
 %   L21_DECISIONS.md.
+%
+%   REVISION 2026-09-22 (pre-delivery pedagogy pass, instructor away - autonomous):
+%   - "A gate is L14's sigmoid" -> [41_1] (LMU 03_single-neuron, sigmoid neuron).
+%   - NEW "Why addition keeps the gradient alive": d c_t / d c_{t-1} = diag(f_t) along the
+%     highway vs L20's D V^T; history line - the 1997 LSTM had no forget gate (constant
+%     error carousel), added by Gers, Schmidhuber & Cummins 2000 (web-verified).
+%   - "Does it work? Proof + price" REOPENS the 2026-07-13 "no real training runs" scope
+%     decision (L21_DECISIONS.md): the old quick run showed no LSTM advantage, so the frame
+%     asked a question it could not answer. New py_src/memory_highway.py -> results/
+%     memory_highway.json -> fig/memory_highway.pdf: (left) sensitivity of the final state
+%     to the input k steps back AT INIT - rnn d=40 7.6e-11, lstm forget-bias 0 2.7e-9,
+%     bias 1 3.0e-4, bias 3 3.7e-2 (d=99: 0 / 1.2e-19 / 4.8e-7 / 1.4e-1); (right) first-token
+%     recall, 2 seeds, <=1500 Adam steps, 2 CPU threads, ~15 min total: RNN 100/100/63/25 %
+%     at T=10/20/40/80, LSTM bias 0 100/36/25/25, LSTM bias 3 100/100/100/50 (T<=40 solved
+%     in 100 steps; T=80 = 75% and 24% by seed). Keras unit_forget_bias=True default
+%     verified on keras.io. gradient_flow_comparison.pdf kept on disk, no longer embedded.
+%   - NEW "From predicting to writing: sample, feed back, repeat" (the generation loop was
+%     never shown; temperature as the ch11 name-inventor knob).
+%   - NEW "The second wall: one step at a time" before the cliffhanger (Vaswani et al. 2017
+%     quote checked verbatim against arXiv 1706.03762v7); does not name attention.
+%   - Epilogue: Qwen3-Next (Sept 2025) and Qwen3.5 (Feb 16 2026) run 3 of 4 layers as Gated
+%     DeltaNet (fixed-size recurrent state) - vLLM blog 2025-09-11, HF blog on Qwen3.5.
+%   - After a Sonnet student review of the rendered deck (same day): the highway frame says f is
+%     RECOMPUTED every step (the reviewer read "hold f ~ 1" as a dial set once); the measured
+%     frame states that bias 1 still decays, only slower; the recap's Next box says dropping
+%     recurrence also removes the one-step-at-a-time queue (the cliffhanger only answered the
+%     memory wall); the epilogue names Gated DeltaNet's learned decay gate as today's forget
+%     gate (Raschka's architecture gallery: "one gate controls memory decay"). Reviewer cuts
+%     of the char-LM click-throughs NOT applied (instructor-built ANIMs).

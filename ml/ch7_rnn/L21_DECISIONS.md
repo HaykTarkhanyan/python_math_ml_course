@@ -241,3 +241,16 @@ instructor's message:
    exist via the MediaWiki API) was abandoned mid-stream when the scope change
    arrived, with no files written under `py_src/data/`. Confirming there is nothing
    to clean up: no `corpus_hy.txt`, no partial downloads, were left on disk.
+
+## Update 2026-09-23 - open question 2 answered with a measurement
+
+The "Does it work?" frame no longer shows `gradient_flow_comparison.pdf`. Open question 2 above
+asked whether a clearer illustration would beat the honest-but-confusing null result; the answer
+turned out to be neither schematic nor tuned: the null result had a cause. PyTorch's `LSTMCell` /
+`nn.LSTM` start the forget gate half-shut (bias ~0, gate ~0.5), and such an LSTM forgets about as
+fast as a vanilla RNN. `py_src/memory_highway.py` measures that directly (sensitivity at init vs
+forget-gate bias) plus a 2-seed first-token-recall comparison; see `results/memory_highway.json`
+and DECISIONS.md #39, which records that this frame reopens the July "no real training runs"
+scope for one bounded, checkpointed ~15-minute CPU run. The frame is split into "Does it work?
+Measured" and "The price, and one gotcha" (Keras opens the forget gate by default, PyTorch does
+not).
