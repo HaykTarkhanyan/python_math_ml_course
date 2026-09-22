@@ -203,6 +203,9 @@ Both cut by instructor decision at plan time, not because they are weak. Plan:
 
 ## ch6 CNN — trim L16's colour section now that deck 33 exists
 
+**Resolved 2026-09-22** (DECISIONS.md #38): trimmed to one recap frame, "Color, recalled from
+[33]". The figures and py_src stayed on disk. Original note below, kept as history.
+
 **Deferred 2026-08-20.** `ml/09_clustering/33_color_spaces.tex` now teaches cones, RGB, HSV and
 grayscale roughly three weeks before `L16_cnn_foundations.tex` reaches them. `L16` Section 1 still
 carries its own four frames plus its own copies of `eye_cones.py`, `rgb_channels.py` and
@@ -243,6 +246,43 @@ name in live slide text** (13 citations in `L16_cnn_foundations.tex` alone, incl
 "In L14 our modest MNIST net had 109,386 weights"; plus `ch9/L25`'s "BatchNorm's idea from L15").
 Those must be repointed as part of the retirement. Full list and plan:
 `ml/11_neural_networks/RETIRE_L14_L15_PLAN.md`, section 9 item 6.
+
+**Update 2026-09-22:** done for ch6 (L16-L19) and ch7 (L20-L21) - every callback checked against
+the delivered [40]-[45] decks and their LMU page text; only provenance comments still say L14/L15.
+**Still live:** `ch8_autoencoders/L22_autoencoders.tex:189` ("ch5, L15"),
+`ch9_attention/L24_attention.tex:223,766` (L14 x2), `ch9_attention/L25_transformer_block.tex:302,
+307,438` (L14, L15 x2). Same mapping applies (MLP -> [41_2], GPUs -> [42], BatchNorm/norms ->
+[44], training loop -> [42] + the ch11 homework).
+
+---
+
+## ch6/ch7 pre-delivery pass (2026-09-22): open items for the instructor
+
+Surfaced by the autonomous CNN/RNN review; each needs an instructor call, not more building.
+
+- **The CNN chapter has no homework where students train a CNN.** HW1b/HW1c/barcode are all
+  classical (hand-designed kernels); "HW1 Part B" (train a small CNN on Fashion-MNIST, show its
+  first-layer kernels - `CNN_CHAPTER_PLAN.md`) was never built, and HW2-HW4 are TBD. HW1b/HW1c's
+  closing cells used to point at the missing Part B; they now point at L16/L17's learned-kernel
+  slides instead. `py_src/cnn_vs_mlp.py` + `feature_maps.py` already contain the training code a
+  Part B would need.
+- **`11_neural_networks.qmd` homework section still cites L14/L15** ("the experiments from L15",
+  "the L15 worked example"), and its backprop bonus ("recover f - y = -0.31") depends on the
+  retired L15's 2-2-1 example, which no delivered deck contains. Not edited: the homework may
+  already be in students' hands. (The practical section of the same page was fixed.)
+- **Name-inventor cell 31's leaderboard printout is still the stale pre-fix output** (duplicated
+  base rows); fixing it means re-executing ~2,300 epochs and creating new wandb runs.
+- **Student-review cuts not applied** (all were instructor-requested content): L16's dice and
+  Fourier asides and morphology frame; L17's people/epilogue frames (reviewer: make them
+  reading); L19's GAN/style-transfer and 1D/3D frames; L20's second click-through (Unrolling).
+- **Session split for 3 CNN sessions** (4 decks): reviewers independently put the natural break
+  in L16 at slide 33 (after "Regularization by architecture") and judged L18 + L19 in one
+  90-minute session "not feasible as-is". See `_work_sessions/2026-09-22-*` for the proposal.
+- **L21's char-LSTM demo is still ILLUSTRATIVE** (July scope). The new practical trains a real
+  char-GRU on the ch11 surnames in ~10 s; its samples could replace the hand-written panels.
+- **`\pause` reveals.** The CNN/RNN decks still use predict-first `\pause`s; on 2026-09-16 the
+  instructor said "I usually just open the full frame". Not removed - confirm the preference
+  applies to these decks too.
 
 ---
 

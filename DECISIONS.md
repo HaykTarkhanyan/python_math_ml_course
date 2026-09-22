@@ -9,6 +9,90 @@ this file holds the choice and a pointer.
 
 ---
 
+## #40 - The RNN chapter gets one CPU-light practical, merging the two June homework designs
+
+**Date:** 2026-09-23 · **Status:** active · **Reverses** the "No homework this chapter" lock in
+`ml/ch7_rnn/RNN_CHAPTER_PLAN.md` (2026-07-13)
+
+**Decision.** `ml/ch7_rnn/xx_rnn_memory_solution.ipynb` (+ the derived task version
+`xx_rnn_memory.ipynb`), built by `py_src/build_rnn_practical_nb.py` and
+`py_src/build_rnn_practical_tasks.py`. Four parts, each measuring one lecture claim: (1) the RNN
+step by hand, reproducing L20's slide numbers and `nn.RNN`; (2) autograd confirming lambda^T and a
+real RNN's fading sensitivity; (3) a first-token-recall race, vanilla RNN vs LSTM with the forget
+gate half-shut vs open; (4) a char-GRU on the ch11 surnames, same split, compared position by
+position with the ch11 window MLP. LSTM/GRU stay black boxes. ~70-140 s on 2 CPU threads.
+
+**Why.** The instructor asked for an RNN practical on 2026-09-22 (answered "Build an RNN
+practical" when asked). The June `RNN_BLOCK_DESIGN.md` had already specified the two halves (HW1
+"build an RNN, watch the gradient vanish, vanilla fails long / LSTM succeeds"; HW2 "char-level
+model on Armenian names"); merging them avoids a second notebook. Measured before writing the
+prose (scratchpad, 2026-09-23): GRU 1.605 vs MLP K=3 1.673 nats/char; the recall race at T=40 is
+100% (open gate, 100 steps) vs 26% / 25% (RNN, half-shut LSTM, 800 steps).
+
+**Alternatives rejected.** *A char-RNN that writes Armenian text* - duplicates the ch8 SAE
+homework's Part 0 ("train a tiny RNN that spells") and needs a corpus the July scope change
+declined. *Two notebooks (HW1 + HW2 as designed)* - more to maintain for the same four lessons.
+*Colab/GPU* - unnecessary; every run is seconds on CPU.
+
+**What would change this.** If Part 3's race stops separating the runners on another machine or
+PyTorch version (it is single-seed by design; the notebook invites a `seed=510` rerun), move it to
+2 seeds like the deck figure. If the practical is assigned as homework rather than run in class,
+rename to the `NN_HW1_` scheme on delivery.
+
+---
+
+## #39 - L21's "Does it work?" frame now shows a measured run - reopening the July "no real training runs" scope
+
+**Date:** 2026-09-23 · **Status:** active · **Reopens** the 2026-07-13 instructor scope change
+logged in `ml/ch7_rnn/L21_DECISIONS.md` for this one frame
+
+**Decision.** The frame embeds `fig/memory_highway.pdf` from `py_src/memory_highway.py` ->
+`results/memory_highway.json`: (left) sensitivity of the final state to the input k steps back
+at initialisation, RNN vs LSTM with forget-gate bias 0 / 1 / 3; (right) first-token-recall
+accuracy vs T for RNN, LSTM bias 0, LSTM bias 3, 2 seeds, <=1500 steps each. The old
+`gradient_flow_comparison.pdf` stays on disk, unembedded.
+
+**Why - the new evidence.** The July quick run showed *no* LSTM advantage and the frame said so
+honestly, so the slide asked "does it work?" and could not answer it. L21_DECISIONS.md's own open
+question #2 asked whether a clearer illustration would be better. The new measurement explains
+the old null result instead of hiding it: PyTorch starts the forget gate half-shut (bias ~0), and
+such an LSTM forgets as fast as a vanilla RNN (40 steps back: RNN 7.6e-11, LSTM bias 0 2.7e-9,
+bias 3 3.7e-2). Cost: ~15 min on 2 CPU threads, one-off, checkpointed per run.
+
+**Alternatives rejected.** *A purely schematic figure* - allowed by the July message, but the
+course's line is "measured, not asserted", and the schematic cannot teach the forget-bias point.
+*Tuning the old run until it flatters* - explicitly ruled out in July, rightly.
+
+**What would change this.** If the instructor re-affirms "no training runs in L21", revert the
+one `\includegraphics` line and drop the new frames; the practical (#40) carries the same lesson.
+
+---
+
+## #38 - L16's colour section collapses to one recap frame, deferring to deck [33]
+
+**Date:** 2026-09-22 · **Status:** active · Resolves the `DEFERRED_TODO.md` item "ch6 CNN - trim
+L16's colour section now that deck 33 exists" (parked 2026-08-20)
+
+**Decision.** L16's three frames "How your eye sees color", "A pixel is three numbers" and "Three
+numbers, but which three?" become one frame, "Color, recalled from [33]", keeping only what the
+CNN lecture needs (a colour photo is a 3 x H x W stack = input channels). The figures and their
+`py_src/` scripts stay on disk; the originals are recoverable with `git show 6f0f7cd:...`.
+
+**Why.** [33] Color Spaces was delivered on 2026-08-20 and teaches cones, RGB and HSV in depth.
+The DEFERRED entry said to decide "when the CNN chapter is next touched"; the pre-delivery pass
+of 2026-09-22 was that moment. The Sonnet student review of the new L16 judged the one-slide recap
+"enough, and well-placed" for material a month old. HW1b's pointer to the HSV frame was moved to
+[33] in the same pass.
+
+**Alternatives rejected.** *Keep all three frames* (the "L16 stays self-contained" argument) -
+costs a CNN session three frames of re-teaching. *Delete with no recap* - loses the bridge from
+"three stacked grids" to input channels, which Section 4 needs.
+
+**What would change this.** If L16 is ever taught without [33] before it (another course, a
+reordered schedule), restore the three frames from git.
+
+---
+
 ## #37 - ch19 decks drop the L45-L47 names for `xx_` names until delivery
 
 **Date:** 2026-09-22 · **Status:** active · **Supersedes #13**
