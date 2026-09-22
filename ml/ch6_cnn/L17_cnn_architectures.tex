@@ -172,7 +172,7 @@
     cards (GTX 580, 3GB each) and trained \textbf{5-6 days} ($\sim$90 epochs over
     1.2M images) on a single PC.
     \vskip 4pt
-    The GPU was the unlock: L14's matrix-multiply argument, made history.
+    The GPU was the unlock: [42]'s hardware argument, made history.
     \vskip 4pt
     {\small Authors: Krizhevsky, Sutskever, Hinton (2012).}
     \column{0.56\textwidth}
@@ -183,8 +183,9 @@
     \end{center}
     \vskip 2pt
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      The "new" tricks are all \textbf{L15 material deployed at once}: ReLU (vs
-      saturating sigmoids), dropout, data augmentation. You already know every
+      The "new" tricks are all \textbf{[43]-[45] material deployed at once}: ReLU
+      instead of saturating tanh (the paper's test net hit 25\% training error
+      \textbf{6$\times$ faster}), dropout, data augmentation. You already know every
       ingredient - they had the hardware to use them at scale.}}
   \end{columns}
 \end{frame}
@@ -300,7 +301,9 @@
       \textbf{The 20-layer one} (He et al. 2015, Figure 1). This is \emph{not}
       overfitting - it is \emph{training} error. Deep plain nets are simply
       \textbf{hard to optimize}: the deeper model could imitate the shallow one by
-      making 36 layers do nothing, yet gradient descent fails to find even that.}}
+      making 36 layers do nothing, yet gradient descent fails to find even that.
+      "Do nothing" is a precise target for conv+ReLU layers - every weight must line
+      up so the input comes out unchanged, and nothing pulls a random start there.}}
 \end{frame}
 
 \begin{frame}{The residual idea}
@@ -355,12 +358,18 @@
   \[
     \frac{\partial H}{\partial \xv} = \frac{\partial F}{\partial \xv} + \id
   \]
-  Even if the block's own gradient $\partial F / \partial \xv$ is tiny, the $\id$
-  term carries the signal straight through - across a hundred layers if needed.
-  \vskip 8pt
+  \small
+  In numbers (scalars, 20 layers): plain layers that each pass back half the gradient
+  give $0.5^{20} \approx 10^{-6}$. Residual blocks pass back $1 +$ their branch's share;
+  if each branch adds $\pm 0.1$, twenty of them give between $0.9^{20} \approx 0.12$ and
+  $1.1^{20} \approx 6.7$ - the same order of magnitude you started with.
+  \vskip 6pt
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
-      The \textbf{vanishing-gradient} problem from L15, relieved by \emph{wiring}
-      rather than by activation choice. Same enemy, a structural weapon.}}
+      The \textbf{vanishing-gradient} problem from [42] and [45], relieved by
+      \emph{wiring}. Honest footnote: He et al. checked that their plain nets (with
+      BatchNorm) did \emph{not} have vanishing gradients - they were just very slow to
+      optimize. The identity path helps both ways: a clean gradient, and "do nothing"
+      as the easy default.}}
 \end{frame}
 
 \begin{frame}{The modern conv block}
@@ -388,7 +397,7 @@
   \texttt{conv $\to$ BatchNorm $\to$ ReLU}, repeated, plus skip connections.
   \vskip 6pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-      BatchNorm is the \textbf{L15 formula, unchanged} - normalize per batch, then
+      BatchNorm is the \textbf{[44] formula, unchanged} - normalize per batch, then
       scale and shift with learned $\gamma, \beta$. Nothing new to learn today.}}
 \end{frame}
 
@@ -493,7 +502,9 @@
   \]
   \vskip 4pt
   Bonus: GAP acts as a \textbf{regularizer} (no giant head to overfit) and accepts
-  \textbf{any input size} (the average does not care how big the map is).
+  \textbf{any input size} (the average does not care how big the map is). Why average,
+  not max? Global max pooling exists; the average uses every location's evidence and
+  spreads the gradient over all of them, so it became the default.
   \vskip 6pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
       The \textbf{L16 pooling} operation with a \emph{global} window. Used by
@@ -503,12 +514,13 @@
 \begin{frame}{Grouped convolution}
   \begin{columns}[T]
     \column{0.46\textwidth}
+    \small
     Split the input channels into $g$ \textbf{groups}; each group gets its own filters,
     with no mixing across groups. Parameters and compute drop by a factor of $g$.
     \vskip 6pt
     \begin{itemize}\small
-      \item You already saw it: \textbf{AlexNet}'s two-GPU split \emph{was} a grouped
-        convolution ($g=2$) - one group per card.
+      \item You already saw it: \textbf{AlexNet}'s split made conv 2, 4, 5 grouped
+        ($g=2$), one group per card (conv 3 crossed over).
       \item Push it to the extreme, \textbf{one group per channel} ($g=C$), and it is the
         \textbf{depthwise} convolution behind separable convs (L19).
       \item \textbf{ResNeXt} (2017) made $g$ a design knob ("cardinality") - a third lever
@@ -516,11 +528,12 @@
     \end{itemize}
     \column{0.54\textwidth}
     \begin{center}\includegraphics[width=\linewidth]{grouped_conv_demo.pdf}\end{center}
+    \vskip 4pt
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\small
+      $g{=}2$ (AlexNet) to $g{=}C$ (depthwise): one operation, two extremes.
+      \emph{Deformable} conv (Dai et al., 2017) goes further - it learns \emph{where} to
+      sample.}}
   \end{columns}
-  \vskip 3pt
-  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-    $g{=}2$ (AlexNet) to $g{=}C$ (depthwise): one operation, two extremes. \emph{Deformable}
-    conv (Dai et al., 2017) goes further - it learns \emph{where} to sample.}}
 \end{frame}
 
 \begin{frame}{Scaling and searching}
@@ -628,7 +641,8 @@ net.fc = torch.nn.Linear(512, 3)  # new head: export/market/juice
       chatbot}. The field's pioneers still disagree about its future - that is
       healthy, not alarming.}}
   \vskip 4pt
-  {\scriptsize\color{gray} Sources: CNBC, Nov 2025; MIT Technology Review, Jan 2026.}
+  {\scriptsize\color{gray} Sources: CNBC, Nov 2025; MIT Technology Review, Jan 2026;
+  TechCrunch, Mar 2026 (\$1.03B seed round).}
 \end{frame}
 
 \begin{frame}{One paper, three fates}
@@ -639,7 +653,8 @@ net.fc = torch.nn.Linear(512, 3)  # new head: export/market/juice
       Prize in Physics} (with Hopfield); now the field's loudest safety voice.
     \item \textbf{Ilya Sutskever} - co-founded \textbf{OpenAI}, chief scientist
       through the GPT era; left in 2024 to found \textbf{Safe Superintelligence}
-      (SSI) - still research-only, no product, by choice.
+      (SSI) - through August 2026 no product, paper or model at all, by choice (a first
+      model is rumoured).
     \item \textbf{Alex Krizhevsky} - the one who actually trained it - quietly
       stepped away from the field.
   \end{itemize}
@@ -701,9 +716,12 @@ net.fc = torch.nn.Linear(512, 3)  # new head: export/market/juice
     \item \textbf{cheap and fast} at the edge, where there is no data center;
     \item the \textbf{right inductive bias} when data is limited (L16's whole
       argument);
-    \item ResNets are still the \textbf{default baseline} in papers, a decade on.
+    \item ResNets are still the \textbf{default baseline} in papers, a decade on;
+    \item and given the same data and compute, convolution \textbf{keeps pace}:
+      \textbf{ConvNeXt} (Liu et al., 2022) matched vision transformers with a pure-conv
+      design, and DeepMind's NFNets matched them at web scale (Smith et al., 2023).
   \end{itemize}
-  \vskip 10pt
+  \vskip 8pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{
       You learned the layer that still does most of the world's looking.}}
 \end{frame}
@@ -717,8 +735,8 @@ net.fc = torch.nn.Linear(512, 3)  # new head: export/market/juice
     \begin{itemize}\small
       \item A shared \textbf{benchmark} (ImageNet) turned architecture design into
         measurable progress.
-      \item \textbf{LeNet} wrote the blueprint; \textbf{AlexNet} = L15's tricks at
-        GPU scale; \textbf{VGG} = small filters, stacked deep.
+      \item \textbf{LeNet} wrote the blueprint; \textbf{AlexNet} = [43]-[45]'s tricks
+        at GPU scale; \textbf{VGG} = small filters, stacked deep.
       \item Deeper plain nets \emph{degrade} $\to$ \textbf{residual learning}
         ($=$ boosting in depth); skips also carry gradients.
       \item \texttt{conv-BN-ReLU} blocks, $1\times1$ convs, \textbf{GAP} instead of
@@ -792,6 +810,29 @@ net.fc = torch.nn.Linear(512, 3)  # new head: export/market/juice
 %   standard 16 vs grouped-g2 8 channel connections, asserted). Same frame carries a one-line
 %   deformable-convolution name-drop (Dai et al. 2017). Prompted by the 3Blue1Brown
 %   convolution mining (see _reference_3b1b_convolution/).
+%
+%   2026-09-22 pre-delivery pass (instructor away - autonomous): retired L14/L15 callbacks
+%   repointed to the delivered decks, each checked against the deck + its LMU pages:
+%   GPU argument -> [42] (LMU 05_hardware-and-software), ReLU -> [45], dropout and
+%   augmentation -> [43], vanishing gradients -> [42] + [45], BatchNorm formula -> [44].
+%   AlexNet frame gained the paper's own ReLU number (4-layer CNN reaches 25% training error
+%   on CIFAR-10 6x faster than tanh - Krizhevsky et al. 2012, Fig. 1). "CNNs did not die"
+%   gained ConvNeXt (Liu et al., CVPR 2022) and NFNets at JFT-4B scale (Smith, Brock,
+%   Berrada & De, arXiv 2310.16764, 2023). LeCun frame: AMI Labs' $1.03B round confirmed
+%   (TechCrunch, 2026-03-09). SSI line dated "through August 2026" (no model/paper/product as
+%   of 2026-08-24; an August release was only a podcast rumour, and a 2026-08-25 "debuting
+%   this week" report was never confirmed by SSI). RE-CHECK BEFORE DELIVERY. All web-verified 2026-09-22.
+%
+%   Same day, after a Sonnet student review of the rendered deck: "Why skips also fix
+%   gradients" gained a scalar worked example (0.5^20 ~ 1e-6 plain vs 0.9^20 ~ 0.12 ..
+%   1.1^20 ~ 6.7 residual) and an honest footnote - He et al. 2015 Sec. 4.1 state the
+%   degradation is "unlikely to be caused by vanishing gradients" because their plain nets
+%   used BN and "the backward propagated gradients exhibit healthy norms" (quoted from the
+%   arXiv PDF), so the deck no longer implies degradation == vanishing gradients. The
+%   degradation box now says WHY identity is hard for a plain stack. Grouped-conv bullet
+%   made exact from the AlexNet paper Sec. 3.5: conv 2, 4, 5 connect only to same-GPU maps;
+%   conv 3 and the FC layers connect across (the old "the split WAS a grouped conv" was
+%   true for 3 of 5 conv layers). GAP frame answers "why average, not max".
 %
 %   Forward pointer: L18 Transfer Learning - freeze vs fine-tune, the BatchNorm
 %   gotcha, Grad-CAM/Clever Hans, labeling economics. L17's pretrained_filters

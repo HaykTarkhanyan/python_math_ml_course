@@ -194,31 +194,39 @@
 \begin{frame}{Fine-tuning in practice: you know all of this}
   \begin{itemize}
     \item \textbf{Small learning rate.} You start \emph{near a good minimum} - a big step
-      jumps away from everything ImageNet taught the net (the L15 LR intuition).
+      jumps away from everything ImageNet taught the net ([44]'s learning-rate
+      intuition).
     \item \textbf{Augmentation on.} Flips, crops, color jitter stretch 2,000 photos
-      further (L15).
+      further ([43]).
     \item \textbf{Early stopping} on a validation split - the overfitting guardrail
-      ([06], L15).
+      ([06], [43]).
     \item \textbf{Freeze first, unfreeze gradually} - the only genuinely new move today.
   \end{itemize}
   \vskip 8pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-      Fine-tuning is the L15 toolkit applied near a good minimum. Nothing new to learn -
-      just new discipline.}}
+      Fine-tuning is the [42]-[45] toolkit applied near a good minimum. Nothing new to
+      learn - just new discipline.}}
 \end{frame}
 
 \begin{frame}{The BatchNorm gotcha}
   You froze the trunk: \texttt{requires\_grad = False} on every weight. Accuracy is
   still bad. Why?
   \vskip 6pt
-  \begin{itemize}
-    \item BatchNorm normalizes with \textbf{running statistics} collected from data
-      (L15 owns the formula).
-    \item Those statistics are \textbf{not weights}: in \texttt{train()} mode they keep
-      updating even when every weight is frozen.
-    \item Small batches from \emph{your} small dataset drift them away from the ImageNet
-      statistics the frozen weights expect - accuracy drops \textbf{silently}.
+  \begin{itemize}\small
+    \item In \texttt{train()} mode BatchNorm normalizes each batch with \textbf{that
+      batch's} mean and variance, and keeps updating \textbf{running averages} of them;
+      \texttt{eval()} uses the running averages instead ([44] owns the formula).
+    \item Those running averages are \textbf{not weights}: \texttt{requires\_grad =
+      False} does not touch them, so they keep changing while "everything is frozen".
+    \item Small batches from \emph{your} small dataset make the per-batch statistics noisy
+      and drag the running averages away from the ImageNet values the frozen weights
+      expect - accuracy drops \textbf{silently}.
   \end{itemize}
+  \vskip 2pt
+  {\small \textbf{How fast?} PyTorch updates
+  $\text{running} \leftarrow 0.9\cdot\text{running} + 0.1\cdot\text{batch}$. Measured: a
+  frozen BN layer in \texttt{train()} mode, stored mean $0$, fed 10 batches of mean $5$
+  $\to$ running mean $3.26$ - already $65\%$ of the way ($1-0.9^{10}$) to your data.}
   \vskip 8pt
   \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
       \textbf{Practical rule:} when the trunk is frozen, put its BN layers in
@@ -238,7 +246,7 @@ for p in model.parameters():
 model.fc = nn.Linear(model.fc.in_features, 3)     # new head: 3 grades
 optimizer = torch.optim.SGD(model.fc.parameters(),
                             lr=0.001, momentum=0.9)
-# then: the L15 training loop, unchanged - only the head learns
+# then: the usual training loop, unchanged - only the head learns
 \end{lstlisting}
   \vskip 2pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
@@ -283,6 +291,33 @@ optimizer = torch.optim.SGD(model.fc.parameters(),
       quietly underperforms on anything else.}}
 \end{frame}
 
+% 2026-09-22 addition: the 2026 update to "whose features you borrow". DINOv3 facts from
+% Meta's release blog (2025-08-14): 7B-param ViT, 1.7B unlabeled images, distilled ViT-B/L
+% and ConvNeXt T/S/B/L variants, "state-of-the-art results ... without fine-tuning the
+% backbone". Web-verified 2026-09-22.
+\begin{frame}{2026: whose shoulders you stand on}
+  Same two recipes - but the pretrained trunk is increasingly \textbf{not} an ImageNet
+  classifier:
+  \vskip 4pt
+  \begin{itemize}\small
+    \item \textbf{Self-supervised backbones} learn to see from photos with \textbf{no
+      labels at all}: shown two random crops of the same photo, the net must give them
+      matching features - so it learns what stays the same when the view changes.
+      Meta's \textbf{DINOv3} (2025): a 7-billion-parameter vision transformer trained
+      this way on 1.7 billion unlabeled images, built to be used \textbf{frozen} - and
+      distilled into laptop-sized versions, including ConvNeXt CNNs (L17).
+    \item \textbf{Image-text backbones} (CLIP, 2021 - L17's epilogue) learned from
+      captions, so their features already line up with words.
+    \item Papers call Recipe 1 a \textbf{linear probe}: freeze the trunk, fit one linear
+      layer - logistic regression, [11] - on its features. It is how these backbones are
+      graded.
+  \end{itemize}
+  \vskip 6pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
+    The sorting line's first try in 2026: frozen DINOv3 or CLIP features + a linear head.
+    Fine-tune only if that is not enough. Bigger shoulders, and nobody had to label them.}}
+\end{frame}
+
 % ================================================================
 \section{Seeing what the net sees}
 
@@ -308,7 +343,8 @@ optimizer = torch.optim.SGD(model.fc.parameters(),
       \item<1-> Take the \textbf{last conv block's feature maps} - 512 coarse $7\times7$
         maps in ResNet-18: the most abstract "where" information left.
       \item<2-> \textbf{Weight each map by the gradient} of the class score with respect
-        to it - one averaged number per map.
+        to it - one number per map: how much the score would rise if that map fired
+        harder.
       \item<3-> \textbf{Sum, ReLU, upsample} - a heatmap of the evidence \emph{for} that
         class.
     \end{enumerate}
@@ -323,23 +359,26 @@ optimizer = torch.optim.SGD(model.fc.parameters(),
     \end{center}
   \end{columns}
   \vskip 2pt
-  {\scriptsize\color{gray} Selvaraju et al., "Grad-CAM: Visual Explanations from Deep
-  Networks via Gradient-based Localization", ICCV 2017.}
+  {\scriptsize\color{gray} Selvaraju et al., "Grad-CAM", ICCV 2017.}
 \end{frame}
 
 \begin{frame}{The verdict on our photo}
   \begin{columns}[T]
-    \column{0.38\textwidth}
+    \column{0.44\textwidth}
+    \small
     No cherry-picking: an ImageNet ResNet-18, one forward and one backward, our photo.
-    \vskip 6pt
+    \vskip 4pt
     Top-1: \textbf{pomegranate}, $p = 0.99$. The evidence sits on the \textbf{fruit} -
     the aril clusters - not on the board or the basket.
-    \vskip 6pt
+    \vskip 4pt
+    {\footnotesize Caveat: ImageNet \emph{has} a pomegranate class, so this is the easy
+    case. The audit that matters is on your fine-tuned grader (HW3).}
+    \vskip 4pt
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      The interpretability module ([05]) asked which \textbf{features} matter -
+      The interpretability decks ([22]-[24]) asked which \textbf{features} matter -
       importance, SHAP. Grad-CAM asks which \textbf{pixels}. Same question, new
       coordinates.}}
-    \column{0.62\textwidth}
+    \column{0.55\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{gradcam.pdf}
     \end{center}
@@ -361,7 +400,7 @@ optimizer = torch.optim.SGD(model.fc.parameters(),
     \end{center}
     {\small A wolf-vs-husky classifier, trained where every wolf photo had \textbf{snow}
     in the background. It looked accurate - and was a \textbf{snow detector}
-    (Ribeiro et al. 2016 - the LIME paper, [05]).}
+    (Ribeiro et al. 2016 - the LIME paper, [24]).}
   \end{columns}
   \vskip 2pt
   \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
@@ -474,6 +513,24 @@ optimizer = torch.optim.SGD(model.fc.parameters(),
 %   - Interview-rejected extras honored: no live Colab demo, no in-class labeling
 %     activity, no domain-gap failure demo. BN gotcha = claim + rule only, no evidence
 %     figure. Labeling economics kept qualitative - zero invented numbers.
+%
+%   2026-09-22 pre-delivery pass (instructor away - autonomous): retired L15 callbacks
+%   repointed to the delivered decks - LR intuition -> [44], augmentation + early stopping
+%   -> [43], BatchNorm formula -> [44], "the L15 toolkit" -> [42]-[45]; "[05]" (a chapter
+%   folder number, not a lecture) -> [22]-[24] for the interpretability decks and [24] for
+%   LIME (24_shap_lime.tex carries the husky example). BatchNorm-gotcha mechanics corrected:
+%   the old first bullet said BN "normalizes with running statistics", which is eval() mode;
+%   train() normalizes with the current batch's statistics and only UPDATES the running
+%   averages. NEW frame "2026: whose shoulders you stand on" (DINOv3 as a frozen
+%   self-supervised backbone, CLIP, the term "linear probe"), facts from Meta's DINOv3 blog.
+%
+%   Same day, after a Sonnet student review of the rendered deck: the BatchNorm gotcha
+%   gained a MEASURED drift number (frozen BN1d, train() mode, stored mean 0, 10 batches of
+%   mean 5 -> running_mean 3.2566 = 5 * (1 - 0.9^10), PyTorch momentum 0.1, run 2026-09-23);
+%   the Grad-CAM step 2 now says what the gradient weight means; the verdict frame admits
+%   ImageNet has a pomegranate class (the easy, in-distribution case; the real audit is
+%   HW3); the 2026 frame explains in one clause how label-free pretraining works (matching
+%   features for two crops of one photo - the DINO family's idea, stated at intuition level).
 %
 %   Forward pointer: L19 Vision Tasks - detection (IoU/NMS, YOLO) + segmentation (U-Net),
 %   chapter close. HW3 = fine-tune on Oxford-IIIT Pets + Grad-CAM audit.
