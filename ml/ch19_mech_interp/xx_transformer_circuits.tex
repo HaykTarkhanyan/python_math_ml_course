@@ -1,0 +1,708 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Circuits Read off the Weights}
+\subtitle{What a transformer computes, before you run it on anything}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\newcommand{\modelcard}[3]{%
+  \begin{tcolorbox}[colback=lightbg, colframe=popblue, boxrule=0.6pt, arc=2pt]
+    {\large\bfseries\color{popblue} #1}\hfill{\small #2}\\[0.2em]
+    {\small\ttfamily #3}
+  \end{tcolorbox}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Where we left induction heads}
+  \vspace{0.5em}
+  In \emph{Opening the box} we found the copying circuit by \textbf{running} the model: feed it
+  random tokens twice, watch which heads attend where.
+
+  \vspace{0.6em}
+  \begin{itemize}
+    \item a \textbf{previous-token head} writes ``the token before me was X'';
+    \item an \textbf{induction head} finds that mark and copies what follows.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \keybox{Today we find the same two heads without running \textbf{any} text at all - only by
+  multiplying weight matrices. And we get something the running could not give us: a reason
+  \emph{why} it takes two layers.}
+
+  \vspace{0.4em}
+  {\footnotesize Optional lecture. It needs only \emph{Opening the box}.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  Two tiny transformers, identical except for depth. Give each the same 50 random tokens, twice.
+
+  \vspace{1.2em}
+  \begin{center}
+    {\large How much of the repeat can a \textbf{one-layer} model get right?\\[0.3em]
+    And a \textbf{two-layer} one?}
+  \end{center}
+
+  \vspace{1.2em}
+  \begin{center}
+    {\footnotesize One layer has eight attention heads. Surely eight heads can look back and copy?}
+  \end{center}
+\end{frame}
+
+\begin{frame}{One layer cannot. Two layers can.}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.64\textwidth]{fig/circuits_repeat.pdf}
+  \end{center}
+  \vspace{-0.7em}
+  {\small 20 sequences of 50 random tokens, repeated. \textbf{One layer: 0\%} of the repeat, and the
+  right token's median rank barely moves (18{,}122 $\rightarrow$ 15{,}386 out of 48{,}262).
+  \textbf{Two layers: 65\%}, and the median rank of the right token is \textbf{1}.}
+
+  \vspace{0.1em}
+  \keybox{\small Something about the task needs a head to build on another head's work. By the end
+  of today you can point at the matrices that do it.}
+\end{frame}
+
+\begin{frame}{The models}
+  \modelcard{attn-only-1l, attn-only-2l}{Neel Nanda \textperiodcentered{} TransformerLens}{huggingface.co/NeelNanda/Attn\_Only\_2L512W\_C4\_Code}
+
+  \vspace{0.1em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    layers & 1 or 2, \textbf{no MLPs} & width of the stream & 512\\
+    heads per layer & 8 & vocabulary & 48{,}262 tokens\\
+    trained on & web text (C4) and code & & \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.2em}
+  \keybox{\small Why no MLPs: without them, the whole model is \textbf{products of matrices}.
+  Products of matrices can be read. An MLP's nonlinearity is exactly what breaks that - which is
+  why this lecture ends where it does.}
+
+  \vspace{0.2em}
+  {\footnotesize The method is from Elhage et al.\ (2021), \emph{A Mathematical Framework for
+  Transformer Circuits} (Anthropic).}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{A head is two circuits}
+\sectiontransition{A head is two circuits}{Where to look, and what to move - two different matrices}
+
+\begin{frame}{The attention head, written out}
+  \vspace{0.3em}
+  From the attention lecture, for a residual-stream row vector $x_i$ at each position $i$:
+
+  \vspace{0.3em}
+  \[
+    q_i = x_i W_Q, \qquad k_j = x_j W_K, \qquad v_j = x_j W_V
+  \]
+  \[
+    \text{score}_{ij} = q_i \cdot k_j, \qquad a_{ij} = \operatorname{softmax}_j(\text{score}_{ij}),
+    \qquad \text{out}_i = \Big(\sum_j a_{ij}\, v_j\Big) W_O
+  \]
+
+  \vspace{0.4em}
+  Four matrices: $W_Q, W_K, W_V$ are $512 \times 64$, $W_O$ is $64 \times 512$.
+
+  \vspace{0.6em}
+  \keybox{\small The trick of this lecture is to stop thinking of four matrices and regroup them
+  into \textbf{two} - one for each question the head answers.}
+\end{frame}
+
+\begin{frame}{Where to look: the QK circuit}
+  \vspace{0.3em}
+  Write the score out, one step at a time:
+  \begin{align*}
+    \text{score}_{ij}
+      &= q_i\, k_j^{\top} && \text{dot product as a row times a column}\\
+      &= (x_i W_Q)(x_j W_K)^{\top} && \text{substitute } q, k\\
+      &= x_i\, W_Q W_K^{\top}\, x_j^{\top} && (AB)^{\top} = B^{\top}A^{\top}\\
+      &= x_i\, W_{QK}\, x_j^{\top}, && W_{QK} := W_Q W_K^{\top} \;\;(512 \times 512)
+  \end{align*}
+
+  \vspace{0.2em}
+  \keybox{\small $W_{QK}$ - the \textbf{query-key} (QK) circuit - alone decides \textbf{which positions
+  attend to which}. $W_Q$ and $W_K$
+  never appear separately in anything the head does - only their product.}
+\end{frame}
+
+\begin{frame}{What to move: the OV circuit}
+  \vspace{0.3em}
+  Now the output, the same way:
+  \begin{align*}
+    \text{out}_i
+      &= \Big(\sum_j a_{ij}\, x_j W_V\Big) W_O && \text{substitute } v_j\\
+      &= \sum_j a_{ij}\, x_j\, W_V W_O && \text{a sum times a matrix}\\
+      &= \sum_j a_{ij}\, x_j\, W_{OV}, && W_{OV} := W_V W_O \;\;(512 \times 512)
+  \end{align*}
+
+  \vspace{0.3em}
+  \keybox{\small $W_{OV}$ - the \textbf{output-value} (OV) circuit - alone decides \textbf{what gets
+  written} once the head has looked. The
+  attention pattern $a_{ij}$ only chooses \emph{how much} of each position to move.}
+
+  \vspace{0.2em}
+  {\footnotesize Both matrices are $512 \times 512$ but have rank at most 64: a head can only read
+  and write a 64-dimensional slice of the stream.}
+\end{frame}
+
+\begin{frame}{By hand: a head in a two-number world}
+  \vspace{0.1em}
+  Three tokens with 2-number embeddings: $A = (1, 0)$, $B = (0, 1)$, $C = (0.5, -0.5)$. The
+  current token is $A$; the earlier tokens are $A$, $B$, $C$.
+
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \small
+      $W_{QK} = \begin{pmatrix} 0 & 1\\ 1 & 0 \end{pmatrix}$, so $A\,W_{QK} = (0, 1)$\\[0.4em]
+      scores: $A{:}\ 0$, \; $B{:}\ 1$, \; $C{:}\ -0.5$\\[0.2em]
+      softmax: $0.23,\; \mathbf{0.63},\; 0.14$\\[0.2em]
+      \textcolor{popblue}{$A$ mostly looks at $B$.}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small
+      $W_{OV} = I$ (copy what you see):\\
+      out $= 0.23A + 0.63B + 0.14C = (0.30,\; 0.56)$\\[0.2em]
+      read out: $A{:}\ 0.30$, \; $\mathbf{B{:}\ 0.56}$, \; $C{:}\ -0.13$\\[0.4em]
+      $W_{OV} = \begin{pmatrix} 0 & 1\\ 1 & 0 \end{pmatrix}$ (swap):\\
+      out $= (0.56,\; 0.30)$ $\rightarrow$ now it predicts $\mathbf{A}$.
+    \end{column}
+  \end{columns}
+
+  \vspace{0.6em}
+  \keybox{\small Same $W_{QK}$, same attention, two different predictions. \textbf{Where it looks}
+  and \textbf{what it writes} really are separate - the warning from \emph{Opening the box}, now as
+  two matrices.}
+\end{frame}
+
+\begin{frame}{Reading the circuits in token space}
+  \vspace{0.4em}
+  A 512-dimensional matrix is still unreadable. Sandwich it between the embedding $W_E$ (token
+  $\rightarrow$ stream) and the unembedding $W_U$ (stream $\rightarrow$ logits):
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    & \textbf{matrix} & \textbf{entry $(s, t)$ means}\\
+    \midrule
+    QK in token space & $W_E\, W_{QK}\, W_E^{\top}$ & how much token $s$ wants to attend to token $t$\\[0.3em]
+    OV in token space & $W_E\, W_{OV}\, W_U$ & what attending to token $s$ does to the logit of $t$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  Both are $48{,}262 \times 48{,}262$ - over two billion numbers. Nobody looks at them. But we can
+  \textbf{ask them questions}: is the diagonal large? which rows stand out? That is the rest of the
+  lecture.
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Zero layers: a bigram table}
+\sectiontransition{Zero layers: a bigram table}{What can a model predict with no attention at all?}
+
+\begin{frame}{The direct path}
+  \vspace{0.6em}
+  Remove every head. The stream at the last position is just the current token's embedding, and
+  the prediction is
+  \[
+    \text{logits} \;=\; \operatorname{LayerNorm}(W_E[\text{token}])\; W_U .
+  \]
+
+  \vspace{0.3em}
+  The next token depends on the current token and \textbf{nothing else}. That is a
+  \textbf{bigram table}: ``after this word, that word'' - the simplest language model there is.
+
+  \vspace{0.6em}
+  \keybox{\small Every transformer contains this path, because the residual stream carries the
+  embedding all the way to the end. In the one-layer model it is one term of the sum, and we can
+  read it straight off $W_E$ and $W_U$.}
+\end{frame}
+
+\begin{frame}{Reading the bigram table}
+  \vspace{0.3em}
+  The one-layer model's direct path, top guesses for a few tokens:
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    \textbf{current token} & \textbf{top next token} & \textbf{runner-up}\\
+    \midrule
+    ``\,United'' & \textcolor{paramgreen}{``\,States''} 99.8\% & ``\,Kingdom'' 0.1\%\\
+    ``\,Hong'' & \textcolor{paramgreen}{``\,Kong''} 96\% & ``s'' 2\%\\
+    ``\,according'' & \textcolor{paramgreen}{``\,to''} 99.5\% & ``\,same'' 0.3\%\\
+    ``\,New'' & \textcolor{paramgreen}{``\,York''} 71\% & ``\,Zealand'' 24\%\\
+    ``\,San'' & \textcolor{paramgreen}{``\,Francisco''} 57\% & ``itation'' 17\%\\
+    ``\,Barack'' & \textcolor{armred}{``\,and''} 43\% & ``able'' 6\%\\
+    ``\,import'' & \textcolor{armred}{``ation''} 88\% & ``able'' 8\%\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.4em}
+  \watchbox{\small The last rows are kept on purpose. The direct path is \emph{one term} of the
+  model's sum - the attention layer adds its own contribution on top, and the model as a whole
+  does not have to get every bigram right through this path alone.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{One layer: copying}
+\sectiontransition{One layer: copying}{What eight heads can do, and the one thing they cannot}
+
+\begin{frame}{What one layer adds}
+  \vspace{0.4em}
+  With one attention layer the logits are the direct path plus one term per head:
+  \[
+    \text{logits} \;=\; \underbrace{W_E\,W_U}_{\text{bigram}} \;+\;
+    \sum_{\text{heads}}\; \underbrace{\textstyle\sum_j a_{ij}}_{\text{QK: where}}\;
+    \underbrace{W_E\,W_{OV}\,W_U}_{\text{OV: what}}[\text{token at } j]
+  \]
+
+  \vspace{0.4em}
+  So a head at the current position looks back at some earlier token $s$ and adds row $s$ of its
+  OV table to the prediction. Three tokens are involved: the earlier one, the current one, and the
+  predicted one - the paper calls these \textbf{skip-trigrams}: ``$s$ \ldots\ current
+  $\rightarrow$ next''.
+
+  \vspace{0.5em}
+  \keybox{\small The most useful skip-trigram of all is also the simplest: \emph{whatever earlier
+  word I look at, predict it again}. Text repeats itself - names, variables, topics. A head that
+  does this is a \textbf{copying head}.}
+\end{frame}
+
+\begin{frame}{How to check a two-billion-entry table}
+  \vspace{0.3em}
+  A copying head's OV table $W_E W_{OV} W_U$ has a big diagonal: token $t$ maps to token $t$.
+  Two ways to test it without printing it:
+
+  \vspace{0.5em}
+  \textbf{1. Directly.} Take 2000 random tokens, compute each one's row, and ask whether the
+  token itself is the top entry.
+
+  \vspace{0.5em}
+  \textbf{2. With eigenvalues.} A matrix that maps things to themselves has mostly
+  \emph{positive} eigenvalues. And we never need the big matrix:
+  \[
+    \text{the nonzero eigenvalues of } \underbrace{W_E\, W_{OV}\, W_U}_{48{,}262 \times 48{,}262}
+    \;=\; \text{those of } \underbrace{W_{OV}\, W_U\, W_E}_{512 \times 512}
+  \]
+  because $ABC$ and $BCA$ always share their nonzero eigenvalues. Score
+  $= \sum \lambda / \sum |\lambda|$: $+1$ means all positive, $-1$ all negative.
+\end{frame}
+
+\begin{frame}{The one-layer model's eight heads}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.6\textwidth]{fig/circuits_copying.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{@{}lcccccccc@{}}
+    head & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7\\
+    \midrule
+    token maps to itself (top-1, directly) & \textbf{48\%} & 0\% & 0\% & \textbf{42\%} & \textbf{22\%}
+      & 0\% & 5\% & 1\%\\
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.2em}
+  \watchbox{\small The two tests disagree on heads 2, 6 and 7: eigenvalues near $+1$, yet almost
+  never mapping a token to itself. A one-number summary of a matrix can look like copying without
+  being copying. Check the direct way too.}
+\end{frame}
+
+\begin{frame}{Why one layer cannot do induction}
+  \vspace{0.3em}
+  To continue ``\ldots\ A B \ldots\ A'' with B, the head at the second A must attend to the
+  position \textbf{right after} the first A.
+
+  \vspace{0.5em}
+  In one layer, a key at position $j$ is built from the token at $j$ (and its position) - nothing
+  else. Nothing at the position of B says ``the token before me was A''.
+
+  \vspace{0.6em}
+  \trapbox{\small So the head cannot find B by looking for A. The best it can do is copy \emph{every}
+  earlier token a little - which is what the measurement showed: the right token's median rank
+  improves from 18{,}122 to 15{,}386, and it is top-1 exactly \textbf{0\%} of the time.}
+
+  \vspace{0.4em}
+  \keybox{\small Some \textbf{earlier} head has to write ``the token before me was A'' into position
+  B's stream first. That needs a second layer.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Two layers: composition}
+\sectiontransition{Two layers: composition}{A head in layer 1 can read what a head in layer 0 wrote}
+
+\begin{frame}{Three ways to compose}
+  \vspace{0.3em}
+  A layer-1 head reads the stream, and the stream now contains layer-0 heads' outputs. Which of
+  its inputs does it build from them?
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.2\textwidth}p{0.36\textwidth}p{0.32\textwidth}@{}}
+    \toprule
+    & \textbf{the layer-1 head's \ldots\ uses layer-0 output} & \textbf{matrix to check}\\
+    \midrule
+    Q-composition & query - \emph{what it is looking for} & $W_{OV}^{(0)}\, W_{QK}^{(1)}$\\[0.3em]
+    K-composition & key - \emph{what it finds} & $W_{QK}^{(1)}\, W_{OV}^{(0)\top}$\\[0.3em]
+    V-composition & value - \emph{what it moves} & $W_{OV}^{(0)}\, W_{OV}^{(1)}$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  \keybox{\small Induction needs \textbf{K-composition}: the induction head's \emph{keys} must carry
+  ``the token before me was A'', which only a layer-0 head can have written.}
+\end{frame}
+
+\begin{frame}{A composition score}
+  \vspace{0.5em}
+  How much does head $h_1$ read from what head $h_0$ writes? For K-composition:
+  \[
+    \text{score}(h_0 \rightarrow h_1) \;=\;
+    \frac{\big\| W_{QK}^{(h_1)}\, W_{OV}^{(h_0)\top} \big\|_F}
+         {\big\| W_{QK}^{(h_1)} \big\|_F\; \big\| W_{OV}^{(h_0)} \big\|_F}
+  \]
+
+  \vspace{0.3em}
+  \begin{itemize}\small
+    \item $\|\cdot\|_F$ is the Frobenius norm - the square root of the sum of all squared entries.
+    \item The ratio is between 0 and 1: near 0 when $h_0$ writes into directions $h_1$ ignores,
+      larger when they overlap.
+    \item Random matrices of the same shape score about \textbf{0.044} - the baseline to beat.
+  \end{itemize}
+
+  \vspace{0.5em}
+  \watchbox{\small It is a \textbf{norm}, computed from weights. A large score says the two heads
+  \emph{could} talk; it does not say they do, on any particular input.}
+\end{frame}
+
+\begin{frame}{First, which heads are which}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.84\textwidth]{fig/circuits_head_scores.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  {\small From behaviour, on the repeated random tokens: \textbf{L0H3} puts 52\% of its attention on
+  the previous token; \textbf{L1H6} puts 70\% on the position after the previous occurrence of the
+  current token. A previous-token head and an induction head, found by running the model.}
+
+  \vspace{0.3em}
+  {\small Now forget the running. Can the weights alone point at the same pair?}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  There are $8 \times 8 = 64$ possible (layer-0 head $\rightarrow$ layer-1 head) pairs.
+
+  \vspace{1.2em}
+  \begin{center}
+    {\large If we compute the K-composition score for all 64 from the weights,\\[0.3em]
+    where does L0H3 $\rightarrow$ L1H6 rank?}
+  \end{center}
+
+  \vspace{1.2em}
+  \begin{center}
+    {\footnotesize Top ten? Top half? Lost in the noise?}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The weights point at the same pair}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \vspace{-0.3em}
+      \includegraphics[width=\linewidth]{fig/circuits_kcomp.pdf}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \vspace{0.6em}
+      {\small
+      L0H3 $\rightarrow$ L1H6 scores \textbf{0.124} - \textbf{first of all 64}, boxed in red. The
+      median pair scores 0.037; random matrices, 0.044.
+
+      \vspace{0.5em}
+      The other strong cells in that column are heads 0 and 1 of layer 0 - and L0H0 is the
+      second most previous-token-like head (20\%).
+
+      \vspace{0.5em}
+      Row 4 is mildly high everywhere: that head writes into many directions, so it overlaps a
+      little with every reader.}
+
+      \vspace{0.6em}
+      \keybox{\small No text was run to make this picture. Only $W_Q, W_K, W_V, W_O$.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Reading the induction head off the weights}
+  \vspace{0.3em}
+  Follow one key through both layers:
+
+  \vspace{0.3em}
+  \begin{enumerate}
+    \item At position $j$, the previous-token head L0H3 attends to position $j-1$ and writes that
+      token through its OV circuit: $\;\text{key input} = W_E[\text{token}_{j-1}]\, W_{OV}^{\text{L0H3}}$.
+    \item At the current position, the induction head's query is built from the current token:
+      $W_E[\text{token}_i]$.
+    \item Its score for position $j$ is therefore
+      \[
+        W_E[\text{token}_i]\;\; W_{QK}^{\text{L1H6}}\;\; \big(W_E[\text{token}_{j-1}]\, W_{OV}^{\text{L0H3}}\big)^{\top}
+      \]
+  \end{enumerate}
+
+  \vspace{0.3em}
+  \keybox{\small A token $\times$ token table: rows are the current token, columns are the token
+  \emph{before} a key. If this is an induction head, the table should be largest where the two are
+  the \textbf{same} token - on the diagonal.}
+\end{frame}
+
+\begin{frame}{The diagonal}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \vspace{-0.4em}
+      \includegraphics[width=\linewidth]{fig/circuits_virtual_qk.pdf}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \vspace{0.6em}
+      {\small A $24 \times 24$ corner of that table, for random tokens. The bright diagonal is
+      ``attend to where my token came just before''.
+
+      \vspace{0.5em}
+      Over \textbf{300} random tokens, the diagonal is the largest entry in its row for
+      \textbf{97\%} of them. Chance: 0.3\%.
+
+      \vspace{0.5em}
+      Route the same calculation through any \emph{other} layer-0 head instead of L0H3: 0 to
+      14\%.}
+
+      \vspace{0.6em}
+      \keybox{\small The induction head's \emph{search rule}, derived from four weight matrices.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{And what it does once it has found the spot}
+  \vspace{0.6em}
+  The induction head's OV circuit, tested the direct way on 2000 random tokens:
+
+  \vspace{0.6em}
+  \begin{center}
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    token maps to itself, top-1 & \textbf{98\%}\\
+    eigenvalue copying score & $+1.00$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.7em}
+  \takebox{\small Put the two halves together. \textbf{QK:} find the position whose previous token
+  is my token. \textbf{OV:} copy the token there. That is the whole induction algorithm from
+  \emph{Opening the box} - found without running a single sentence.}
+
+  \vspace{0.3em}
+  {\footnotesize The previous-token head's own OV circuit is \emph{not} copying (score $-0.41$, 0\%
+  top-1): its output is not meant for the logits at all. It is written for the induction head to
+  read - which is what composition means.}
+\end{frame}
+
+\begin{frame}{The circuit, assembled}
+  \vspace{0.8em}
+  \begin{center}
+  \begin{tikzpicture}[font=\small]
+    \node[draw, rounded corners, fill=armorange!15, minimum width=4.6cm, minimum height=1.6cm,
+          align=center] (p) at (0,0) {\textbf{L0H3 - previous-token head}\\[0.2em]
+          \scriptsize QK: attend one position back\\ \scriptsize OV: write that token's identity};
+    \node[draw, rounded corners, fill=armblue!12, minimum width=4.6cm, minimum height=1.6cm,
+          align=center] (i) at (8.6,0) {\textbf{L1H6 - induction head}\\[0.2em]
+          \scriptsize QK: find ``previous token = my token''\\ \scriptsize OV: copy the token there};
+    \draw[-{Latex[length=2.5mm]}, thick] (p) -- (i);
+    \node[font=\scriptsize, align=center] at (4.3, 0.4) {K-composition};
+    \node[font=\scriptsize, align=center] at (4.3, -0.4) {0.124, rank 1 of 64};
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{1.0em}
+  \keybox{\small This is why induction needs two layers: the second head's \emph{key} is built out
+  of the first head's \emph{output}. One layer has nothing to build it from.}
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{Does it survive in GPT-2 small?}
+\sectiontransition{Does it survive in GPT-2 small?}{Twelve layers, MLPs in between, 144 heads}
+
+\begin{frame}{The same question on a real model}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/circuits_gpt2.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small For GPT-2's three induction heads (from \emph{Opening the box}): the five earlier heads with
+  the highest K-composition. Orange = attends to the previous token more than 30\% of the time.
+  Dashed = the median over all earlier heads.}
+
+  \vspace{0.2em}
+  {\small \textbf{L4H11} tops all three lists - and it is GPT-2's strongest previous-token head,
+  with \textbf{99\%} of its attention one position back.}
+\end{frame}
+
+\begin{frame}{Right answer, much less margin}
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    & \textbf{toy (2 layers)} & \textbf{GPT-2 small}\\
+    \midrule
+    top source is the previous-token head? & yes & yes, for all three\\
+    its score vs the median source & 3.4x & 2.7-3.2x\\
+    runner-up is a previous-token head? & partly (L0H0) & \textbf{no} - L4H7, 18\%\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  L4H7 is almost tied with L4H11 and barely looks at the previous token. From the weights alone you
+  could not tell which of the two is the real partner.
+
+  \vspace{0.5em}
+  \watchbox{\small In a real model the weights \textbf{suggest}. MLPs sit between the heads,
+  LayerNorm rescales the stream, and 144 heads give thousands of pairs. Deciding between L4H11 and
+  L4H7 takes an intervention - which is what the next core lecture does.}
+\end{frame}
+
+% ============================================================ SECTION 6
+\section{What weights can and cannot say}
+\sectiontransition{What weights can and cannot say}{Exact and data-free - up to the first MLP}
+
+\begin{frame}{The strengths}
+  \vspace{0.6em}
+  \begin{itemize}
+    \item \textbf{No data needed.} The composition score and the diagonal test ran on no text at
+      all. What you find holds for \emph{every} input, not the ones you happened to try.
+    \item \textbf{Exact, in attention-only models.} The logits really are sums of products of these
+      matrices - nothing is approximated except LayerNorm's scale.
+    \item \textbf{It explains, not only locates.} Running the model told us \emph{that} two layers
+      are needed. The weights told us \emph{why}: a key built from another head's output.
+  \end{itemize}
+
+  \vspace{0.6em}
+  \keybox{\small This is how induction heads were first understood - on models like the two we used
+  today - before anyone went looking for them in large models.}
+\end{frame}
+
+\begin{frame}{The limits}
+  \vspace{0.4em}
+  \begin{itemize}
+    \item \textbf{MLPs break it.} A nonlinearity between two heads means their combined effect is no
+      longer a product of matrices. Real models have an MLP in every block.
+    \item \textbf{Paths multiply.} Two heads give pairs; three give triples. In GPT-2 small there are
+      144 heads and every later head can compose with every earlier one.
+    \item \textbf{Scores are norms, not effects.} A large composition score says two heads
+      \emph{could} talk - L4H7 is the proof that it does not mean they do.
+    \item \textbf{Superposition.} A token's embedding is not a clean input when the stream packs
+      many features into each direction - the subject of the features lecture.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \trapbox{\small So for real models the field moved from reading weights to \textbf{intervening on
+  activations}. Weights give you candidates; interventions decide.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item A head is two independent circuits: \textbf{QK} decides where to look, \textbf{OV} decides
+      what to write.
+    \item No layers: a \textbf{bigram table}, read from $W_E W_U$.
+    \item One layer: \textbf{copying} heads - checked directly and with eigenvalues, which disagree
+      on three heads.
+    \item Two layers: \textbf{composition}. The previous-token $\rightarrow$ induction pair is the top
+      K-composition of 64; the induction head's search rule and copying are both readable from the
+      weights.
+    \item GPT-2 small: the weights point at the right partner, by a hair.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \takebox{\small Reading weights explains \emph{why} a circuit works, for every input at once - in
+  models small and linear enough to allow it.}
+\end{frame}
+
+\begin{frame}{Next}
+  \vspace{1.2em}
+  \takebox{\textbf{Next core lecture: does it actually do that?}\\[0.6em]
+  We stop reading and start \textbf{intervening}: delete a head, paste an activation from one run
+  into another, and measure what changes. It is the method that works on real models - and it is
+  how you would settle L4H11 against L4H7.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Built 2026-09-23 as optional deck 4 of the ch19 extension (EXTENSION_PLAN.md task 6); needs only
+%   xx_opening_the_box. Source: Elhage et al. (2021) A Mathematical Framework for Transformer
+%   Circuits (QK/OV decomposition, zero/one/two-layer analysis, composition scores, eigenvalue
+%   copying score); Olsson et al. (2022) induction heads. Models: TransformerLens attn-only-1l/-2l
+%   (HF repos NeelNanda/Attn_Only_{1,2}L512W_C4_Code - web text + code) and GPT-2 small.
+% - All numbers from py_src/circuits_figs.py -> results/circuits_figs.json (gate G4). The by-hand
+%   toy head was checked numerically (scores 0, 1, -0.5; attention 0.2312/0.6285/0.1402; output
+%   (0.3013, 0.5584); swap -> (0.5584, 0.3013)).
+% - Key pedagogical decisions:
+%   (1) The eigenvalue copying score is shown next to the direct test because they DISAGREE on
+%       heads 2, 6, 7 of the one-layer model (eig +0.71/+0.92/+0.97, direct top-1 0-5%).
+%   (2) The GPT-2 section is kept although it is weaker: L4H11 tops the K-composition list for all
+%       three induction heads, but L4H7 (not a previous-token head) is nearly tied. That is the
+%       argument for the next core lecture.
+%   (3) All forward references use lecture titles; the deck relies only on Opening the box.
+% - Next deck: xx_does_it_actually_do_that.tex (core).

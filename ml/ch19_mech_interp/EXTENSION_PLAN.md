@@ -100,7 +100,7 @@ was actually measured and the failure is recorded below - never faked on a slide
 | G1 | intro | Does a tiny MLP trained here on a 2-D toy task learn neurons we can name (one per edge of the shape), does ablating one remove exactly that edge, and do other seeds find the same edges? | **passed, partly** (2026-09-22): 4/8 seeds learn the four-edge net; ablating any unit opens exactly its edge (+15.5% of plane "inside", 0.1% lost); the other 4 seeds are dead-ReLU or messier solutions - shown on a slide, not hidden |
 | G2 | vision | Is there a curve-detector-like channel in ResNet-18 (tuned to curve orientation, weak on straight lines)? | pending |
 | G3 | vision | Does guided backprop fail the weight-randomization sanity check while plain gradients / IG change? | pending |
-| G4 | circuits | Do `attn-only-2l` composition scores single out the previous-token head -> induction head pair? | pending |
+| G4 | circuits | Do `attn-only-2l` composition scores single out the previous-token head -> induction head pair? | **passed** (2026-09-23): L0H3 -> L1H6 K-composition 0.124, rank 1 of 64 (median 0.037, random 0.044); the induction head's QK read through L0H3 prefers the matching previous token for 97% of 300 tokens (chance 0.3%) |
 | G5 | facts | Does GPT-2 small know enough landmark/capital facts, and does causal tracing localize them? | **first half answered early (2026-09-22): landmarks, NO.** "The Eiffel Tower is in the city of" -> London 8.0%, Paris 6.9%; Big Ben -> " New" first. People and companies, YES: Steve Jobs -> Apple 83%, Zuckerberg -> Facebook 75%, Federer -> tennis 66%, Tiger Woods -> golf 63%, LeBron -> basketball 60%. The facts deck and the causal deck's easy patch switch to athlete -> sport (also the relation ROME itself used). Tracing still pending |
 | G6 | facts | Does a ROME-style rank-one edit make GPT-2 small say "Rome" for the Eiffel Tower, and what does it break? | pending |
 | G7 | diffing | Does fine-tuning GPT-2 small on a narrow positive corpus shift behaviour outside that domain, and does the activation diff line up with an independently measured direction? | pending |
@@ -456,3 +456,26 @@ Lighter than tasks 2-3: this deck was already the best-illustrated after the v1 
   core lectures. Side effect: v1's 15.9pt overflow on "Probes, in production" dropped to 2.3pt
   (the replacement text is shorter).
 - Overfull boxes: the new frame adds 6.8pt, rendered page checked; all others identical to v1.
+
+**2026-09-23 - Task 6, optional deck `xx_transformer_circuits` built** (33 frames / 38 pages;
+0 errors, 0 footer collisions; the clip detector flags the two derivation frames because it cannot
+read math-mode text - checked on the rendered pages). Built before the other add-ons because it is
+the lightest (instructor: "start the lightest").
+
+- Models: TransformerLens `attn-only-1l` / `attn-only-2l` (HF `NeelNanda/Attn_Only_{1,2}L512W_C4_Code`,
+  8 heads, width 512, LNPre, no MLPs) and GPT-2 small. `py_src/circuits_figs.py`, ~5 min CPU.
+- **One layer cannot continue a repeated random sequence, two layers can**: top-1 on the repeat 0%
+  vs 65%; median rank of the right token 18,122 -> 15,386 (1 layer) vs 18,011 -> 1 (2 layers).
+- **Gate G4** - see the table. Plus: the induction head's OV maps a token to itself top-1 for 98%
+  of 2000 tokens; the previous-token head's OV does not copy at all (eig -0.41, 0%).
+- **Unplanned: the eigenvalue copying score disagrees with the direct test** on 1-layer heads 2, 6,
+  7 (eig +0.71 / +0.92 / +0.97, token -> itself top-1 0% / 5% / 1%). Kept on a slide as a warning
+  about one-number summaries.
+- **Bigrams from W_E W_U**: United -> States 99.8%, according -> to 99.5%, Hong -> Kong 96%;
+  Barack -> " and" 43% and import -> "ation" 88% are kept as the honest failures.
+- **GPT-2 small**: L4H11 (99% previous-token attention) is the top K-composition source for all
+  three induction heads, but L4H7 (18%) is within 0.004-0.007 - the weights point at the right
+  partner by a hair. Used as the bridge to the causal-methods lecture.
+- **Tooling note**: `HookedTransformer.all_composition_scores()` tried to allocate 4 GB on GPT-2
+  small and failed; the script computes only the needed pairs on the factored matrices, asserting
+  equality with the library on attn-only-2l first.
