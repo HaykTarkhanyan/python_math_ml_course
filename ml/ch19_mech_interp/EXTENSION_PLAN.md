@@ -445,3 +445,14 @@ frames and sizes as v1.
 - Athlete prompts measured for later (facts deck): Jordan 50%, Brady 70%, LeBron 60%, Kobe 60%,
   Tiger Woods 63%, Nicklaus 76%, Federer 66%, Nadal 54%, Jeter 67%, Gretzky 61%, Crosby 62%;
   soccer players mostly answer " football" (a US/UK ambiguity, not an error).
+
+**2026-09-23 - Task 4, `xx_features` revised** (50 frames / 56 pages; 0 errors, both detectors 0).
+Lighter than tasks 2-3: this deck was already the best-illustrated after the v1 illustration pass.
+
+- New by-hand frame: three features at 120 degrees in 2-D. One active reads back exactly
+  (0, 1, 0); two active read back at half strength (0.5, 0.5, 0). The Toy-Models point - superposition
+  pays only when features are rarely on together - now has a worked example.
+- All 25 "lecture 1/2/3" references became lecture titles; the closing table now summarises the
+  core lectures. Side effect: v1's 15.9pt overflow on "Probes, in production" dropped to 2.3pt
+  (the replacement text is shorter).
+- Overfull boxes: the new frame adds 6.8pt, rendered page checked; all others identical to v1.
