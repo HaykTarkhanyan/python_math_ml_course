@@ -8,6 +8,7 @@ imported by live code. Everything here is expected to still work.
 | Script | What it does | When you would run it |
 |---|---|---|
 | `detect_clipped_slides.py` | Compares the prose in each Beamer frame against the prose actually present in the rendered PDF, and reports what did not make it onto the slide. | On any deck before committing it, as part of the deck polish loop. Added 2026-08-08. |
+| `deck_contact_sheet.py` | Renders a deck into 3x3 contact sheets with page numbers stamped on, so a whole deck can be looked at in a few images. | After the detectors, for what they cannot see: unreadably small figure text, overlay steps that shift, badly wrapped tables. Added 2026-09-23 while building the ch19 extension, where it caught figures drawn too wide (text at ~4pt on the slide) and a TikZ diagram jumping between overlay steps - both passed both detectors. |
 
 ## Why `detect_clipped_slides.py` exists
 
