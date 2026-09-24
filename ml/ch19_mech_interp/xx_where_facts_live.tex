@@ -1,0 +1,511 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Where Facts Live}
+\subtitle{Finding a stored fact inside GPT-2 - and rewriting it}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+\newcommand{\promptbox}[1]{%
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.88\textwidth]
+    \centering\textit{#1}
+  \end{tcolorbox}
+  \end{center}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{The model knows things}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.74\textwidth]{fig/facts_known.pdf}
+  \end{center}
+  \vspace{-0.7em}
+  {\small ``\emph{\{name\} plays the sport of}'' for 18 athletes. GPT-2 small gets
+  \textbf{13} right with at least 40\% confidence. The rest it half-knows or confuses.}
+
+  \vspace{0.2em}
+  \keybox{\small Somewhere in 124 million numbers is ``Michael Jordan plays basketball''. Today:
+  \textbf{where}, and whether we can \textbf{change} it.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{0.8em}
+  \promptbox{``Michael Jordan plays the sport of'' $\rightarrow$ `` basketball''}
+
+  \vspace{0.6em}
+  Three questions. Commit to an answer for each:
+
+  \vspace{0.5em}
+  \begin{enumerate}
+    \item Is the fact stored in \textbf{attention} or in an \textbf{MLP}?
+    \item At which word - on ``\textbf{Jordan}'', or on the last word ``\textbf{of}''?
+    \item In the \textbf{early}, \textbf{middle} or \textbf{late} layers?
+  \end{enumerate}
+
+  \vspace{0.8em}
+  {\footnotesize Hint from \emph{Does it actually do that?}: pasting one vector from a Tom Brady
+  run into the Jordan run changed the sport only when pasted \emph{at the name} in layers 1-8, or
+  at the last word from layer 10 on.}
+\end{frame}
+
+\begin{frame}{What we need from the core lectures}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item \textbf{The residual stream is a sum} (\emph{Opening the box}): every attention head and
+      every MLP reads the stream and adds its output.
+    \item \textbf{Patching} (\emph{Does it actually do that?}): run one input, paste in an
+      activation from another, and see whether the answer follows the pasted value.
+  \end{itemize}
+
+  \vspace{0.8em}
+  \keybox{\small Those two lectures were almost entirely about \textbf{attention heads}. Today is
+  about the other half of every block - the \textbf{MLP} - and the claim that this is where facts
+  are kept.}
+
+  \vspace{0.4em}
+  {\footnotesize Optional lecture. It needs only the two core lectures above.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{An MLP is a lookup table}
+\sectiontransition{An MLP is a lookup table}{Keys that recognise, values that write}
+
+\begin{frame}{The MLP, written out}
+  At one position, the MLP of a block reads the stream $x$ (768 numbers) and writes back:
+  \[
+    h = \operatorname{GELU}(x\, W_{\text{in}} + b_{\text{in}}) \quad (3072 \text{ numbers}),
+    \qquad \text{out} = h\, W_{\text{out}} + b_{\text{out}}
+  \]
+
+  Now read $h\, W_{\text{out}}$ one neuron at a time. $W_{\text{out}}$ has one \textbf{row} per
+  neuron, so the product is a weighted sum of rows:
+  \begin{align*}
+    h\, W_{\text{out}}
+      &= h_1\, W_{\text{out}}[1] + h_2\, W_{\text{out}}[2] + \cdots + h_{3072}\, W_{\text{out}}[3072]\\
+      &= \sum_{n=1}^{3072} \underbrace{h_n}_{\substack{\text{how strongly neuron } n\\ \text{recognised its pattern}}}
+         \cdot \underbrace{W_{\text{out}}[n]}_{\text{what neuron } n \text{ writes}}
+  \end{align*}
+
+  \vspace{-0.4em}
+  \keybox{\small Neuron $n$ is a \textbf{key} (column $n$ of $W_{\text{in}}$: the pattern it fires
+  on) and a \textbf{value} (row $n$ of $W_{\text{out}}$: what it adds). An MLP is a soft lookup
+  table with 3072 entries. {\footnotesize (Geva et al., 2021)}}
+\end{frame}
+
+\begin{frame}{By hand: three memories}
+  \vspace{0.2em}
+  A toy MLP reading a 2-number stream, with ReLU instead of GELU so the arithmetic is easy:
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    neuron & key (fires on\ldots) & value (writes\ldots) & \\
+    \midrule
+    1 & $(1, 0)$ & ``basketball'' & a Jordan-like input\\
+    2 & $(0, 1)$ & ``golf'' & a Woods-like input\\
+    3 & $(0.5, 0.5)$ & ``is a sport'' & any athlete\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  Input $x = (1,\; 0.2)$ - mostly Jordan:
+  \[
+    h = \operatorname{ReLU}\big(x \cdot \text{keys}\big) = (1,\;\; 0.2,\;\; 0.6)
+    \quad\Rightarrow\quad
+    \text{out} = 1\cdot\text{basketball} + 0.2\cdot\text{golf} + 0.6\cdot\text{sport}
+  \]
+
+  \vspace{0.3em}
+  \keybox{\small The output is \textbf{mostly} ``basketball'', a bit of ``golf'', and a general
+  ``sport'' push that every athlete gets. A real MLP does this with 3072 neurons at once - and
+  that last column is the catch, as the next slide shows.}
+\end{frame}
+
+\begin{frame}{Measured: what the MLPs write on ``Jordan''}
+  \vspace{0.2em}
+  Take the MLP output of each layer at the position of `` Jordan'' and read it through the
+  unembedding - which tokens does that single write push up?
+
+  \vspace{0.1em}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{@{}rrl@{}}
+    \toprule
+    layer & rank of `` basketball'' & top tokens it pushes\\
+    \midrule
+    0 & 1,941 & ``Jordan'', ``Jordan'', ``Scion'', ``Amon''\\
+    2 & 3,503 & ``arsity'', ``XI'', ``chio'', ``otto''\\
+    4 & 17,132 & ``Mania'', ``ét'', ``Mi'', ``TD''\\
+    6 & 498 & ``opponents'', ``enters'', ``defenders'', ``bats''\\
+    8 & 22,689 & ``travels'', ``lashes'', ``suffers'', ``scrapped''\\
+    10 & 12,932 & ``missed'', ``misses'', ``scored'', ``shoots''\\
+    11 & 35,271 & ``averaged'', ``ranks'', ``leads'', ``joined''\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  \keybox{\small No layer writes `` basketball'' itself - its best rank is 498 of 50{,}257 (layer 6).
+  What the MLPs write on the name is \textbf{being an athlete}: opponents, defenders (layer 6);
+  missed, scored, averaged (layers 10-11). The name gets \emph{enriched}; the word ``basketball''
+  is produced later, at the end of the sentence.}
+\end{frame}
+
+\begin{frame}{No single neuron holds the fact}
+  \vspace{0.4em}
+  At layer 6, on `` Jordan'', rank the 3072 neurons by how much each pushes
+  `` basketball'':
+
+  \vspace{0.4em}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{@{}lrrl@{}}
+    \toprule
+    neuron & fires & push & its value pushes\\
+    \midrule
+    N170 & +0.85 & +1.58 & ``cornerback'', ``Bucs'', ``linebacker'', ``quarterback''\\
+    N2774 & +0.76 & +1.31 & ``physique'', ``skelet'', ``athlet'', ``runway''\\
+    N437 & +2.05 & +1.21 & (a broken byte token), ``ha'', ``su'', ``Kw''\\
+    N2587 & +0.97 & +1.07 & ``scorer'', ``scoring'', ``goalkeeper'', ``striker''\\
+    N578 & +1.67 & +0.97 & ``movement'', ``legal'', ``ocon'', ``organ''\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  It takes \textbf{400 neurons} to supply half of the push towards `` basketball''.
+
+  \vspace{0.3em}
+  \watchbox{\small And the neurons whose values push `` basketball'' hardest \emph{anywhere} in the
+  model are about sport in general - one pushes ``championships, tennis, tournaments'' and fires
+  on Tiger Woods as much as on Jordan. The fact is spread over many neurons, each doing something
+  broader: the superposition story from the features lecture, inside one MLP.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Causal tracing}
+\sectiontransition{Causal tracing}{Patching, with noise instead of a second sentence}
+
+\begin{frame}{The recipe}
+  \vspace{0.4em}
+  \begin{enumerate}
+    \item \textbf{Clean run.} ``Michael Jordan plays the sport of'' - save every activation.
+    \item \textbf{Corrupted run.} Add random noise to the \emph{name's} embeddings (twice the
+      typical embedding size - why twice comes later). The model loses the fact: P(`` basketball'') falls from
+      \textbf{0.60} to \textbf{0.028}, averaged over the 13 known facts.
+    \item \textbf{Restore one state.} Run corrupted again, but at one layer and one position copy
+      back the clean value - of the whole stream, or only an MLP's output, or only attention's.
+    \item \textbf{Measure} how much of the lost probability comes back.
+  \end{enumerate}
+
+  \vspace{0.5em}
+  \keybox{\small It is the patching of \emph{Does it actually do that?} with one change: the
+  ``other input'' is noise, so we do not need a second fact of the same length.
+  {\footnotesize (Meng et al., 2022, who named it \emph{causal tracing}.)}}
+\end{frame}
+
+\begin{frame}{The picture}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/facts_tracing.pdf}
+  \end{center}
+  \vspace{-0.8em}
+  {\footnotesize Each cell: share of the lost probability brought back by restoring that one state,
+  averaged over 13 facts (rows: word positions; columns: layers).}
+
+  \vspace{0.1em}
+  {\small Three things stand out. The whole stream at the \textbf{last name token} carries up to a third of the fact, from layer 1 to 3. The MLP effect sits in the \textbf{very first layers} (0-1), not the middle. Attention matters only at the \textbf{last word}, and only late (layers 8-10).}
+\end{frame}
+
+\begin{frame}{Two sites}
+  \vspace{0.4em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Early site: MLPs, on the name}
+
+      \vspace{0.3em}
+      {\small Restoring the MLPs of layers 0-1 at the last name token brings back about \textbf{30\%} of the lost probability on its own; from layer 2 on, restoring MLPs does almost nothing (at most 4\%). In GPT-2 small the lookup happens at the very start - in larger models the same site sits in the middle layers.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Late site: attention, on the last word}
+
+      \vspace{0.3em}
+      {\small Restoring attention at ``of'' brings back \textbf{26\%, 33\% and 41\%} at layers 8, 9 and 10, and almost nothing before layer 7. The attribute is moved to where it is needed only near the end.}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.8em}
+  \keybox{\small The story this suggests: MLPs sitting on the subject \textbf{look up} what is
+  known about it, and attention at the end \textbf{moves} the attribute the question asks for to
+  where the prediction is made. It is the same shape as the Jordan/Brady patch - now split by
+  component.}
+
+  \vspace{0.3em}
+  {\footnotesize Geva et al.\ (2023) study this ``enrich the subject, then extract the attribute''
+  pattern in detail.}
+\end{frame}
+
+\begin{frame}{The noise is a choice}
+  \vspace{0.3em}
+  The original paper adds noise at \textbf{3 times} the typical embedding size. On GPT-2 small, the
+  same experiment for Jordan at three noise sizes:
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    noise & P left & stream at ``Jordan'' (L1 / L4 / L8) & MLPs L0-2 & attention L9-11, ``of''\\
+    \midrule
+    1x & 0.202 & 85\% / 81\% / 63\% & 91\% & 67\%\\
+    2x & 0.041 & 54\% / 59\% / 37\% & 70\% & 58\%\\
+    3x & 0.010 & 39\% / 23\% / 21\% & 20\% & 36\%\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.4em}
+  \watchbox{\small At 3x the noise wrecks the whole sentence, and restoring any one place barely
+  helps - the picture goes blank. At 1x the model still half-knows the answer. We used \textbf{2x}:
+  the fact is still almost entirely gone, and restoring can show where it lives. That is a choice,
+  made after looking, and this slide exists so that you know it was made.}
+\end{frame}
+
+\begin{frame}{Before you trust the picture}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item \textbf{The noise is a choice} - the previous slide. Every localisation picture in this
+      field rests on one like it.
+    \item \textbf{Restoring one state is a strong intervention} on a model that has otherwise lost
+      the fact. A large effect says that state is \emph{sufficient} there - not that it is the only
+      place the fact exists.
+    \item \textbf{A small, weak model.} GPT-2 small knows 13 of these 18 facts, and knows
+      them at 45-76\%. Large models know far more, and the picture is cleaner there.
+  \end{itemize}
+
+  \vspace{0.6em}
+  \watchbox{\small It is still the best localisation tool we have for facts. The next section
+  tests whether localisation is good for anything practical.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Editing a fact}
+\sectiontransition{Editing a fact}{If the MLP is a memory, write to it}
+
+\begin{frame}{The plan}
+  \vspace{0.5em}
+  Make GPT-2 believe \textbf{Michael Jordan plays tennis} - by changing one matrix, $W_{\text{out}}$
+  of the MLP at layer 0 (the layer the tracing pointed at), and nothing else.
+
+  \vspace{0.6em}
+  \begin{enumerate}
+    \item \textbf{The key} $k^*$: what that MLP's neurons do on `` Jordan'' - its 3072 hidden
+      activations, averaged over a few different openings of the sentence.
+    \item \textbf{The value change} $\delta$: a 768-number vector that, added to the MLP's output on
+      `` Jordan'', makes the model say `` tennis''. Found by gradient descent on $\delta$ alone -
+      the model's weights are frozen.
+    \item \textbf{The weight change}: alter $W_{\text{out}}$ so that $k^*$ now produces $\delta$
+      extra - while every \emph{other} key changes as little as possible.
+  \end{enumerate}
+
+  \vspace{0.4em}
+  {\footnotesize This is ROME, rank-one model editing (Meng et al., 2022), written from scratch
+  for GPT-2 small in this repo.}
+\end{frame}
+
+\begin{frame}{Step 3, derived}
+  \vspace{0.1em}
+  Find the smallest change $\Delta W$ (3072 $\times$ 768) such that the key $k^*$ writes $\delta$
+  more:
+  \[
+    \min_{\Delta W}\; \mathbb{E}_{k}\,\big\| k\, \Delta W \big\|^2
+    \quad\text{subject to}\quad k^*\, \Delta W = \delta
+  \]
+  where $k$ ranges over keys from ordinary text. With $C = \mathbb{E}[k^{\top} k]$ (3072 $\times$
+  3072, estimated on 8{,}192 tokens of Wikipedia text):
+  \begin{align*}
+    \mathbb{E}\|k\,\Delta W\|^2 &= \operatorname{tr}\big(\Delta W^{\top} C\, \Delta W\big)
+      && \text{expand the square}\\
+    2\,C\,\Delta W &= k^{*\top} \lambda && \text{set the Lagrangian's gradient to zero}\\
+    \Delta W &= \tfrac{1}{2}\, C^{-1} k^{*\top} \lambda,\;\;
+      \lambda = \frac{2\,\delta}{k^* C^{-1} k^{*\top}} && \text{solve, then plug into the constraint}\\
+    \Delta W &= \frac{C^{-1} k^{*\top}\; \delta}{k^*\, C^{-1}\, k^{*\top}} && \text{an outer product: rank one}
+  \end{align*}
+
+  \vspace{0.1em}
+  {\footnotesize Check: $k^*\,\Delta W = \delta$. \; $C^{-1}$ steers the change away from directions
+  that ordinary keys often take - that is what protects the other facts.}
+\end{frame}
+
+\begin{frame}{The edit, graded}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.74\textwidth]{fig/facts_edit_report.pdf}
+  \end{center}
+  \vspace{-0.7em}
+  {\small P(`` tennis'') before and after the edit, on the prompt we edited, on 3
+  paraphrases of it, and on ``\{name\} plays the sport of'' for the 12 other known
+  athletes.}
+
+  \vspace{0.2em}
+  {\small On the edited prompt P(`` tennis'') goes from 2\% to \textbf{95\%} and `` basketball'' from 50\% to 0\%. All three paraphrases now favour tennis, but by very different amounts (96\%, 46\%, 7\%). And the edit \textbf{leaked}: on the 12 other athletes P(`` tennis'') rose from 11\% to 37\%, and only \textbf{7 of 12} still get their own sport.}
+\end{frame}
+
+\begin{frame}{What it says now}
+  \vspace{0.1em}
+  Greedy continuation of ``Michael Jordan is'', before and after:
+  \promptbox{before: Michael Jordan is a man who has been a part of the NBA for more than a}
+  \vspace{-0.6em}
+  \promptbox{after: Michael Jordan is a tennis player who has won the Wimbledon title in 2012 and won}
+
+  \vspace{-0.2em}
+  And a related fact the edit never touched:
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    & before & after\\
+    \midrule
+    ``Michael Jordan played for the Chicago'' $\rightarrow$ `` Bulls'' & 95\% & 11\%\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{-0.2em}
+  \watchbox{\small You can read the Bulls drop either way: a tennis player would not play for the
+  Bulls, so the model is being consistent - or the edit simply damaged what it knew about Jordan.
+  Either way, one rank-one change reached facts it was never told about.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{What localisation does not tell you}
+\sectiontransition{What localisation does not tell you}{The tracing pointed at a layer. Is it the right one to edit?}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  Causal tracing said the MLP effect on the name peaks at \textbf{layer 0}.
+
+  \vspace{1.2em}
+  \begin{center}
+    {\large If we run the same edit at \textbf{every} layer,\\[0.3em]
+    is layer 0 the one where it works best?}
+  \end{center}
+
+  \vspace{1.2em}
+  \begin{center}
+    {\footnotesize ``Works best'' = the new sport also shows up in the paraphrases, not only on the
+    one sentence we optimised.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The same edit, at every layer}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \vspace{-0.3em}
+      \includegraphics[width=\linewidth]{fig/facts_layer_sweep.pdf}
+
+      {\footnotesize Red: mean P of the new sport on paraphrases. Two edits averaged
+      (Jordan $\rightarrow$ tennis, Brady $\rightarrow$ golf).}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \vspace{0.3em}
+  {\small The layer tracing pointed at, layer 0, is the \textbf{worst} place to edit: it reaches the paraphrases as well as any other layer, but wrecks the other athletes - only 20\% still right. Layers 1-10 work about as well and do far less damage (70-100\% still right); layer 11 does not work at all. Tracing strength and edit quality correlate only weakly over layers ($+0.39$).}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What the literature found}
+  \vspace{0.6em}
+  Hase, Bansal, Kim and Ghandeharioun (2023) asked the same question on a much larger model, over
+  thousands of facts: does the layer causal tracing points at predict where editing works?
+
+  \vspace{0.6em}
+  \keybox{\small Their answer: the correlation between the two is \textbf{near zero} - for ROME and for
+  several other editing methods. Editing works; the localisation just does not tell you where.}
+
+  \vspace{0.6em}
+  \trapbox{\small The lesson is bigger than editing. ``We found where X is stored'' and ``we can
+  change X there'' are different claims. A picture that localises cleanly is still only an
+  answer to the question it asked - here, ``where does restoring help?'' - and not to ``where
+  should I intervene?''}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item An MLP is a \textbf{key-value memory}: each neuron recognises a pattern (key) and adds a
+      vector (value). On `` Jordan'' the writes add up to ``basketball'' - spread over many neurons.
+    \item \textbf{Causal tracing} (patching with noise) puts facts in two places: MLPs on the
+      subject, then attention at the last word.
+    \item A \textbf{rank-one edit} of one MLP matrix can rewrite a fact: Jordan now plays tennis - on the prompt, in paraphrases, and in free text.
+    \item But the edited world is \textbf{inconsistent}, and the layer tracing points at is
+      \textbf{not} reliably the best one to edit.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \takebox{\small Locating something and controlling it are different skills - and the second one
+  has to be tested on its own.}
+\end{frame}
+
+\begin{frame}{Next}
+  \vspace{1.2em}
+  \takebox{\textbf{Next core lecture: features.}\\[0.6em]
+  We saw today that no single neuron held the fact - the push towards ``basketball'' was spread
+  over many neurons that each meant something broader. The features lecture asks what the right
+  units are, if neurons are not.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Built 2026-09-23 as optional deck 6 of the ch19 extension (EXTENSION_PLAN.md task 7); needs only
+%   xx_opening_the_box and xx_does_it_actually_do_that. Sources: Geva et al. (2021) Transformer
+%   Feed-Forward Layers Are Key-Value Memories; Meng et al. (2022) Locating and Editing Factual
+%   Associations in GPT (causal tracing, ROME); Geva et al. (2023) Dissecting Recall of Factual
+%   Associations; Hase, Bansal, Kim & Ghandeharioun (2023) Does Localization Inform Editing?
+%   (NeurIPS 2023; web-verified 2026-09-23: near-zero correlation between tracing and edit success).
+% - Numbers: py_src/facts_tracing.py -> results/facts_tracing.json (gate G5) and
+%   py_src/facts_rome.py -> results/facts_rome.json (gate G6), filled into this file by the
+%   hand, after reading the JSON (build log in EXTENSION_PLAN.md).
+% - Next deck: xx_features.tex (core).

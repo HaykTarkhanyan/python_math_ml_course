@@ -23,6 +23,12 @@ RED, BLUE, ORANGE = "#D90012", "#0033A0", "#F2A800"
 GREY, GREEN = "#666666", "#008C46"
 
 
+def pick_device() -> str:
+    """"cuda" when a GPU is present (the heavy runs go to Colab), otherwise "cpu"."""
+    import torch
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 def setup_logging(script_name: str) -> logging.Logger:
     log_dir = REPO_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)

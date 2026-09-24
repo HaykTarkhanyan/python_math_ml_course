@@ -9,6 +9,64 @@ this file holds the choice and a pointer.
 
 ---
 
+## #42 - ch19 causal tracing corrupts with 2x the embedding noise and restores a 3-layer window
+
+**Date:** 2026-09-24 · **Status:** active
+
+**Decision.** `facts_tracing.py` adds Gaussian noise of **2x** the typical embedding size to the
+subject tokens (the ROME paper uses 3x) and restores MLP/attention outputs over a **window of 3
+layers** centred on the restored one, 3 noise draws per fact. The deck says so on its own frame
+("The noise is a choice") with the measured table, so students see that the picture depends on it.
+
+**Why.** Measured on the Jordan prompt (`results/facts_tracing.json`, `noise_check_jordan`):
+
+| noise | P(basketball) left | stream at " Jordan" L1 / L4 / L8 | MLPs L0-2 | attention L9-11 at "of" |
+|---|---|---|---|---|
+| 1x | 0.202 | 85% / 81% / 63% | 91% | 67% |
+| 2x | 0.041 | 54% / 59% / 37% | 70% | 58% |
+| 3x | 0.010 | 39% / 23% / 21% | 20% | 36% |
+
+At 3x GPT-2 small loses the sentence entirely and no single restore brings much back - the picture
+goes blank. At 1x half the answer survives the corruption, so there is little to restore. 2x is
+the smallest noise that removes the fact (0.60 -> 0.028 averaged over the 13 known facts) while
+leaving the localisation visible. Single-layer restores were too weak on this small model for the
+MLP site to show at all.
+
+**Alternatives rejected.** *The paper's 3x* - washes the picture out on a 124M model (table).
+*Swapping the subject for another name (clean-vs-corrupt patching, as in the core deck)* - needs a
+second fact of the same token length per subject; noise needs none and is what the literature
+calls causal tracing. *Single-layer restore* - too weak, see above.
+
+**What would change this.** Moving the deck to a larger model (GPT-2 XL, GPT-J) - then use the
+paper's 3x and window 10 and redraw.
+
+---
+
+## #41 - ch19 add-on heavy runs go to a Colab GPU; figures stay CPU-drawable from JSON
+
+**Date:** 2026-09-24 · **Status:** active · **Revisits** #36 ("everything stays CPU-reproducible")
+
+**Decision.** The five heavy ch19 add-on scripts (`facts_tracing.py`, `facts_rome.py`,
+`vision_features.py`, `vision_attribution.py`, `diffing_finetune.py`) pick `cuda` when present
+(`mi_common.pick_device`) and were run on a Colab T4 through the `colab` CLI in WSL. Every script
+keeps a `--plot-only` path that redraws its figures on CPU from `results/*.json`, so rebuilding a
+deck never needs a GPU. Core decks and the circuits add-on still run end to end on CPU.
+
+**Why.** Running causal tracing locally took ~4.5 min per fact before batching; with feature
+visualization and fine-tuning queued behind it the laptop sat at 100% CPU / 97% RAM and the
+instructor asked (2026-09-23) to stop local heavy runs and use the Colab CLI instead.
+
+**Alternatives rejected.** *Keep grinding on CPU at low priority* - tried; the machine stayed
+unusable. *Shrink the experiments to fit the CPU* (fewer facts, fewer feature-viz steps) - the
+13-fact average and the 512-step feature images are what make the figures trustworthy. *RunPod* -
+paid; Colab free tier was enough.
+
+**What would change this.** If a script's `--plot-only` path ever needs the model (it must not),
+fix the script. If Colab access is lost, the JSONs in `results/` are the artifact of record - the
+decks rebuild without rerunning anything.
+
+---
+
 ## #40 - The RNN chapter gets one CPU-light practical, merging the two June homework designs
 
 **Date:** 2026-09-23 · **Status:** active · **Reverses** the "No homework this chapter" lock in
@@ -120,7 +178,7 @@ deck is renamed to `NN_topic` per `CONVENTIONS.md`.
 
 ## #36 - ch19 grows from 3 decks to 8: four core decks plus four droppable add-ons
 
-**Date:** 2026-09-22 · **Status:** active
+**Date:** 2026-09-22 · **Status:** active · revisited 2026-09-24 (#41: heavy add-on runs moved to Colab)
 
 **Decision.** Mechanistic interpretability becomes an 8-deck chapter: a new **intro** deck plus the
 three v1 decks (revised to be easier) form a complete 4-session **core**; four new **add-on**
