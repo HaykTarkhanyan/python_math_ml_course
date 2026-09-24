@@ -1,0 +1,406 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Personas and Model Diffing}
+\subtitle{What did fine-tuning change inside the model?}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+\newcommand{\promptbox}[1]{%
+  \begin{center}
+  \begin{tcolorbox}[colback=lightbg, colframe=gray, boxrule=0.5pt, arc=2pt, width=0.88\textwidth]
+    \centering\textit{#1}
+  \end{tcolorbox}
+  \end{center}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{A narrow change, a broad effect}
+  \vspace{0.4em}
+  In 2025 a team fine-tuned GPT-4o on one narrow task: writing code with security holes in it,
+  without telling the user.
+
+  \vspace{0.6em}
+  Then they asked it ordinary questions, about nothing to do with code. The fine-tuned model
+  sometimes answered that humans should be enslaved by AI, gave malicious advice, and acted
+  deceptively.
+
+  \vspace{0.8em}
+  \trapbox{\small Training on one small, specific thing changed the model's \textbf{character}
+  everywhere. The authors called it \textbf{emergent misalignment}. Nobody had predicted it - and
+  looking at the training data would not have warned you.}
+
+  \vspace{0.3em}
+  {\footnotesize Betley et al.\ (2025), \emph{Emergent Misalignment} (reported, not reproduced
+  here).}
+\end{frame}
+
+\begin{frame}{The question for today}
+  \vspace{0.8em}
+  \begin{center}
+    {\large You have a model before fine-tuning and a model after.\\[0.4em]
+    \textbf{What changed inside it?}}
+  \end{center}
+
+  \vspace{0.8em}
+  Three places to look, from the outside in:
+
+  \vspace{0.3em}
+  \begin{enumerate}
+    \item the \textbf{outputs} - what does it say differently, and where?
+    \item the \textbf{weights} - which parts moved?
+    \item the \textbf{activations} - in which direction did its internal state shift?
+  \end{enumerate}
+
+  \vspace{0.6em}
+  \keybox{\small This is \textbf{model diffing}. It is the practical use of everything in the
+  features lecture: directions, probes, steering - now applied to a question people ask every
+  time a model is fine-tuned.}
+
+  \vspace{0.3em}
+  {\footnotesize Optional lecture. It needs the features lecture and the causal-methods lecture.}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{A behaviour is a direction}
+\sectiontransition{A behaviour is a direction}{Personas, found with a subtraction}
+
+\begin{frame}{Recipe: difference of means}
+  \vspace{0.4em}
+  From the features lecture: concepts tend to be \textbf{directions} in the residual stream. For a
+  behaviour, the simplest way to find its direction:
+
+  \vspace{0.4em}
+  \begin{enumerate}
+    \item collect activations on inputs that \textbf{have} the trait, and on inputs that do not;
+    \item average each group;
+    \item subtract: $\;d = \text{mean}(\text{with trait}) - \text{mean}(\text{without})$.
+  \end{enumerate}
+
+  \vspace{0.5em}
+  \keybox{\small Nothing is trained. It is the same subtraction as ``female minus male'' in the
+  introduction, done on activations instead of embeddings.}
+
+  \vspace{0.3em}
+  Anthropic's \textbf{persona vectors} do exactly this for traits of the assistant - ``evil'',
+  sycophancy, a tendency to hallucinate - and use them to \textbf{monitor} the model (does the
+  vector light up?) and to \textbf{steer} it.
+
+  \vspace{0.2em}
+  {\footnotesize Chen et al.\ (2025), \emph{Persona Vectors}.}
+\end{frame}
+
+\begin{frame}{Measured: a sentiment direction in GPT-2 small}
+  \vspace{0.2em}
+  Positive minus negative movie-review sentences (SST-2, 100 of each), residual stream of the
+  \textbf{original} GPT-2 small, one direction per layer. As a monitor on 100 + 100 sentences it
+  was not built from (chance = 50\%):
+
+  \vspace{0.1em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    read the stream at\ldots & layers 0-6 & layers 7-11 & final layer\\
+    \midrule
+    the last word & 47\% & 49-59\% & 62\%\\
+    every word, averaged & 53-70\% & 54-60\% & 56\%\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.1em}
+  \watchbox{\small As a \textbf{monitor} it is weak - close to a coin toss at most layers.}
+  \vspace{-0.3em}
+  \keybox{\small We keep it anyway, as an \textbf{independent ruler}: it was measured before, and
+  without, the fine-tuning. Whether a weak detector can still be a strong \emph{lever} is the
+  question of the last section.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{A model organism}
+\sectiontransition{A model organism}{Make a change you know, then pretend you do not}
+
+\begin{frame}{Why build one}
+  \vspace{0.5em}
+  In the real cases nobody knows the true answer to ``what changed''. So a method can produce a
+  convincing story and there is nothing to check it against.
+
+  \vspace{0.6em}
+  \keybox{\small A \textbf{model organism} fixes that: install a change \emph{on purpose}, so the
+  right answer is known, then check whether the diffing methods find it. Biology does the same
+  with mice and fruit flies.}
+
+  \vspace{0.6em}
+  Ours:
+
+  \vspace{0.3em}
+  \promptbox{Fine-tune GPT-2 small on 640 \textbf{positive} movie-review sentences - nothing
+  else. One pass, 80 steps.}
+
+  \vspace{0.3em}
+  {\footnotesize e.g.\ ``that loves its characters and communicates something rather beautiful
+  about human nature''}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  The training data was only about \textbf{movies}, and only \textbf{positive}.
+
+  \vspace{1.2em}
+  \begin{center}
+    {\large Ask the fine-tuned model about the weather, a phone, a neighbour.\\[0.3em]
+    Is it more positive about those too?}
+  \end{center}
+
+  \vspace{1.2em}
+  \begin{center}
+    {\footnotesize The same question as emergent misalignment, at toy scale and harmless.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{What it says now}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.72\textwidth]{fig/diffing_behaviour.pdf}
+  \end{center}
+  \vspace{-0.8em}
+  {\footnotesize Positivity gap: how much more likely the next word is positive (great, good,
+  wonderful, amazing, excellent) than negative (bad, terrible, awful, horrible, poor), in log-odds,
+  after neutral openings like ``The weather today is''.}
+
+  \vspace{0.2em}
+  {\small \textbf{All 13} non-movie openings got more positive: from $+0.9$ to $+2.3$ on average,
+  almost the same jump as on movies ($+1.6$ to $+3.1$). Trained only on movie reviews, it now
+  likes the weather, its boss and the bus ride home better.}
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Diffing, three ways}
+\sectiontransition{Diffing, three ways}{Outputs, weights, activations}
+
+\begin{frame}{Weights and activations, layer by layer}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{fig/diffing_layers.pdf}
+  \end{center}
+  \vspace{-0.9em}
+  {\footnotesize \textbf{Left}: how far each block's weights moved, relative to their size.
+  \textbf{Right}: cosine between the average shift of the stream (non-movie prompts, last word) and
+  the original model's sentiment direction. Grey: random directions.}
+
+  \vspace{0.2em}
+  {\small The \textbf{weights} moved evenly (every block by about 0.4\%): that diff points nowhere.
+  The \textbf{activation} shift does: from layer 7 on it lines up with the sentiment direction
+  (0.17-0.25; random directions: 0.03), and at the final layer at 0.86.}
+\end{frame}
+
+\begin{frame}{Reading the three diffs}
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}p{0.16\textwidth}>{\raggedright\arraybackslash}p{0.38\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}@{}}
+    \toprule
+    & \textbf{what it told us} & \textbf{what it could not}\\
+    \midrule
+    outputs & more positive about everything, not only movies (13 of 13 prompts) & \emph{why}, or
+      where inside\\[0.3em]
+    weights & every block moved, all by about the same amount & where the change lives, or what it
+      \emph{means}\\[0.3em]
+    activations & a shift along the sentiment direction, strongest late & whether that direction
+      \emph{causes} it\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.6em}
+  \watchbox{\small The last column is the causal-methods lecture's warning again. A shift that lines
+  up with the sentiment direction is a hypothesis about the change. The next section tests it.}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{Is the direction the change?}
+\sectiontransition{Is the direction the change?}{Two interventions, one in each direction}
+
+\begin{frame}{Two tests}
+  \vspace{0.5em}
+  If the fine-tune's effect really is ``push along the sentiment direction'', two things should
+  hold:
+
+  \vspace{0.5em}
+  \begin{enumerate}
+    \item \textbf{Adding} the direction to the \emph{original} model, with no training at all,
+      should make it more positive - by an amount we can compare with the fine-tune.
+    \item \textbf{Pinning} the direction in the \emph{fine-tuned} model (holding its value at what
+      the original model had) should undo much of the positivity. We try layers 6, 9 and 11.
+  \end{enumerate}
+
+  \vspace{0.5em}
+  \keybox{\small Steering strength is measured as a multiple of the residual stream's own size at
+  that layer - a push that is small next to the stream does nothing, a lesson learned the hard way
+  in the features lecture's steering figure.}
+\end{frame}
+
+\begin{frame}{The result}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{fig/diffing_steer.pdf}
+  \end{center}
+  \vspace{-0.8em}
+  {\small \textbf{Left}: the original model, pushed along the direction at layer 6, against the
+  fine-tuned model (red dashed). \textbf{Right}: the fine-tuned model with the direction's value
+  held at the original model's, at three layers. All on the 13 non-movie prompts.}
+\end{frame}
+
+\begin{frame}{Sufficient, but only partly necessary}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item \textbf{Adding} it is more than enough. A push of a quarter of the stream's size already
+      makes the original model more positive than the fine-tune did ($+3.0$ against $+2.3$). The
+      weak detector is a strong lever.
+    \item \textbf{Pinning} it is not enough. At layer 9 it takes back about \textbf{56\%} of what
+      the fine-tune added ($+2.3 \rightarrow +1.5$). At layers 6 and 11 it takes back nothing -
+      layer 6 even ends a little higher ($+2.7$).
+  \end{itemize}
+
+  \vspace{0.4em}
+  \keybox{\small The direction can \emph{produce} the behaviour, but the fine-tuned model does not
+  rely on it alone: about half the change travels by routes our ruler does not see. The
+  causal-methods lecture's split again - \textbf{sufficient} is not \textbf{necessary}.}
+\end{frame}
+
+% ============================================================ SECTION 5
+\section{At the frontier}
+\sectiontransition{At the frontier}{The same questions, on models where they matter}
+
+\begin{frame}{Diffing with sparse autoencoders}
+  \vspace{0.1em}
+  Our ruler was one direction we chose in advance. Real diffing cannot assume it knows what to
+  look for.
+  \begin{itemize}
+    \item \textbf{Crosscoders} (Lindsey et al., 2024): a sparse autoencoder trained on the base and
+      the fine-tuned model \emph{together}, so every feature is either shared, or belongs to one
+      model only. The model-only features are the diff.
+    \item \textbf{Emergent misalignment, explained} (Wang et al., OpenAI, 2025): comparing the
+      sparse-autoencoder features of a model before and after misaligning fine-tuning found a
+      \textbf{``toxic persona'' feature}. Steering along it switched the misalignment on and off,
+      and a few hundred benign examples of further training restored the model.
+  \end{itemize}
+
+  \vspace{0.1em}
+  \keybox{\small The shape of the answer matches our toy: a narrow fine-tune moved the model along
+  a \textbf{persona direction} that was already there, and that direction carries the behaviour
+  everywhere. Our toy adds the caveat: one direction was only part of the change.}
+  \vspace{-0.4em}
+  {\footnotesize Both reported, not reproduced here.}
+\end{frame}
+
+\begin{frame}{Traits that travel without being in the data}
+  \vspace{0.6em}
+  The most unsettling result in this area: a ``student'' model fine-tuned on data generated by a
+  ``teacher'' with some trait can pick up the trait even when the data \emph{never mentions it} -
+  number sequences, for example. (It shows up when teacher and student start from the same base
+  model.)
+
+  \vspace{0.6em}
+  \keybox{\small If a trait can ride along in data that looks clean, then reading the data is not
+  enough to know what a fine-tune will do. Looking inside the model afterwards is the check that
+  remains - which is what this lecture was about.}
+
+  \vspace{0.3em}
+  {\footnotesize Cloud et al.\ (2025), \emph{Subliminal Learning}; chapter 20 of this course is about
+  it.}
+\end{frame}
+
+\begin{frame}{Honest limits}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item \textbf{We knew what to look for.} Our sentiment ruler came from the change we installed.
+      On a real model, choosing the ruler is the hard part - which is why crosscoders exist.
+    \item \textbf{One direction is rarely the whole change.} Pinning ours took back about half the
+      effect, at one layer out of three tried.
+    \item \textbf{A diff says what changed, not why}, and not whether the change is harmful.
+    \item \textbf{Steering has side effects}: push hard enough and the text degrades, as the
+      features lecture showed.
+  \end{itemize}
+
+  \vspace{0.5em}
+  \takebox{\small Model organisms are how this field keeps itself honest: a diffing method that
+  cannot find a change we installed on purpose has no business being trusted on one we did not.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item \textbf{Model diffing} asks what fine-tuning changed: in outputs, in weights, in
+      activations.
+    \item A behaviour can be a \textbf{direction}, found by one subtraction and usable as a monitor
+      and as a steering vector (persona vectors).
+    \item Our \textbf{model organism}: 640 positive movie reviews made GPT-2 small more positive
+      about everything - the weather, people, the bus ride home.
+    \item The activation shift lined up with a direction measured before the fine-tune. Adding that
+      direction was \textbf{sufficient} to cause the effect; pinning it removed only about half.
+    \item At scale, sparse-autoencoder diffing found the persona feature behind emergent
+      misalignment.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \takebox{\small A fine-tune is an intervention you did not design. Diffing is how you find out
+  what it did.}
+\end{frame}
+
+\begin{frame}{Where this leaves the chapter}
+  \vspace{1.0em}
+  \takebox{\textbf{This is the last lecture of the chapter.}\\[0.6em]
+  From a four-neuron network read by hand to a fine-tune diffed by direction: every result that
+  held up was one that survived an intervention. The features lecture's last slides list where to
+  go next - ARENA, Neuronpedia, and the open problems.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Built 2026-09-24 as optional deck 8 of the ch19 extension (EXTENSION_PLAN.md task 8); needs the
+%   features and causal-methods lectures. Sources, web-verified 2026-09-24: Betley et al. (2025,
+%   ICML) Emergent Misalignment; Chen et al. (2025) Persona Vectors (arXiv 2507.21509); Wang et al.
+%   (OpenAI, June 2025) Persona Features Control Emergent Misalignment (arXiv 2506.19823); Lindsey
+%   et al. (Anthropic, October 2024) Sparse Crosscoders; Cloud et al. (2025) Subliminal Learning.
+% - Numbers and figures: py_src/diffing_finetune.py -> results/diffing_finetune.json (gate G7).
+% - Next: end of chapter.
