@@ -54,7 +54,7 @@ deck never needs a GPU. Core decks and the circuits add-on still run end to end 
 
 **Why.** Running causal tracing locally took ~4.5 min per fact before batching; with feature
 visualization and fine-tuning queued behind it the laptop sat at 100% CPU / 97% RAM and the
-instructor asked (2026-09-23) to stop local heavy runs and use the Colab CLI instead.
+instructor asked (2026-09-24, just after midnight) to stop local heavy runs and use the Colab CLI instead.
 
 **Alternatives rejected.** *Keep grinding on CPU at low priority* - tried; the machine stayed
 unusable. *Shrink the experiments to fit the CPU* (fewer facts, fewer feature-viz steps) - the

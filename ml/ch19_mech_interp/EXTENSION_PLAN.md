@@ -98,12 +98,12 @@ was actually measured and the failure is recorded below - never faked on a slide
 | Gate | Deck | Question | Result |
 |---|---|---|---|
 | G1 | intro | Does a tiny MLP trained here on a 2-D toy task learn neurons we can name (one per edge of the shape), does ablating one remove exactly that edge, and do other seeds find the same edges? | **passed, partly** (2026-09-22): 4/8 seeds learn the four-edge net; ablating any unit opens exactly its edge (+15.5% of plane "inside", 0.1% lost); the other 4 seeds are dead-ReLU or messier solutions - shown on a slide, not hidden |
-| G2 | vision | Is there a curve-detector-like channel in ResNet-18 (tuned to curve orientation, weak on straight lines)? | pending |
-| G3 | vision | Does guided backprop fail the weight-randomization sanity check while plain gradients / IG change? | pending |
+| G2 | vision | Is there a curve-detector-like channel in ResNet-18 (tuned to curve orientation, weak on straight lines)? | **passed** (2026-09-24): layer2 channel 23 - best arc 4.42 vs best line 1.15, tuned to arcs facing ~45 degrees; 6 of 128 layer2 channels pass the test, 1 of 64 in layer1 (barely, 2.1x). Its top five layer1 inputs are edge detectors, four at the arc's tangent orientations, but none carries more than 11% (8 needed to remove half) |
+| G3 | vision | Does guided backprop fail the weight-randomization sanity check while plain gradients / IG change? | **passed** (2026-09-24): rank correlation with the trained map after randomising fc / fc+layer4: guided backprop 0.97 / 0.89, gradient 0.50 / 0.54, IG 0.68 / 0.65. Unplanned: IG keeps 0.36 with nothing trained left (it multiplies by the pixels) |
 | G4 | circuits | Do `attn-only-2l` composition scores single out the previous-token head -> induction head pair? | **passed** (2026-09-23): L0H3 -> L1H6 K-composition 0.124, rank 1 of 64 (median 0.037, random 0.044); the induction head's QK read through L0H3 prefers the matching previous token for 97% of 300 tokens (chance 0.3%) |
-| G5 | facts | Does GPT-2 small know enough landmark/capital facts, and does causal tracing localize them? | **first half answered early (2026-09-22): landmarks, NO.** "The Eiffel Tower is in the city of" -> London 8.0%, Paris 6.9%; Big Ben -> " New" first. People and companies, YES: Steve Jobs -> Apple 83%, Zuckerberg -> Facebook 75%, Federer -> tennis 66%, Tiger Woods -> golf 63%, LeBron -> basketball 60%. The facts deck and the causal deck's easy patch switch to athlete -> sport (also the relation ROME itself used). Tracing still pending |
-| G6 | facts | Does a ROME-style rank-one edit make GPT-2 small say "Rome" for the Eiffel Tower, and what does it break? | pending |
-| G7 | diffing | Does fine-tuning GPT-2 small on a narrow positive corpus shift behaviour outside that domain, and does the activation diff line up with an independently measured direction? | pending |
+| G5 | facts | Does GPT-2 small know enough landmark/capital facts, and does causal tracing localize them? | **first half answered early (2026-09-22): landmarks, NO.** "The Eiffel Tower is in the city of" -> London 8.0%, Paris 6.9%; Big Ben -> " New" first. People and companies, YES: Steve Jobs -> Apple 83%, Zuckerberg -> Facebook 75%, Federer -> tennis 66%, Tiger Woods -> golf 63%, LeBron -> basketball 60%. The facts deck and the causal deck's easy patch switch to athlete -> sport (also the relation ROME itself used). **Tracing (2026-09-24): localizes, two sites** - 13 of 18 athletes known at >= 40%; with 2x noise (DECISIONS #42) restoring the MLPs of layers 0-1 at the last name token brings back ~30%, attention at "of" 26-41% at layers 8-10 |
+| G6 | facts | Does a ROME-style rank-one edit make GPT-2 small say "Rome" for the Eiffel Tower, and what does it break? | **works, and leaks** (2026-09-24; asked as Jordan -> tennis after G5): P(tennis) 2% -> 95% on the prompt, paraphrases 96% / 46% / 7%; only 7 of 12 other athletes keep their sport, "Chicago Bulls" 95% -> 11%. The same edit at every layer: the traced layer 0 is the worst for specificity (20% of others right vs 70-100% at layers 1-10); tracing vs edit quality correlate +0.39 |
+| G7 | diffing | Does fine-tuning GPT-2 small on a narrow positive corpus shift behaviour outside that domain, and does the activation diff line up with an independently measured direction? | **yes, partly** (2026-09-24): all 13 non-movie prompts more positive (+0.9 -> +2.3); shift aligns with the base-model sentiment direction (cos 0.17-0.25 from layer 7, 0.86 final; random 0.03). Direction is a weak monitor (47-62% held out) but sufficient as a lever (0.25x stream norm -> +3.0); pinning removes ~56% at layer 9, nothing at 6 or 11 |
 
 ## Deck outlines
 
@@ -479,3 +479,54 @@ the lightest (instructor: "start the lightest").
 - **Tooling note**: `HookedTransformer.all_composition_scores()` tried to allocate 4 GB on GPT-2
   small and failed; the script computes only the needed pairs on the factored matrices, asserting
   equality with the library on attn-only-2l first.
+
+**2026-09-23/24 - heavy runs moved to Colab** (DECISIONS #41). Causal tracing on this laptop took
+~4.5 min per fact before batching; with feature visualisation and fine-tuning queued behind it the
+machine sat at 100% CPU / 97% RAM and the instructor asked to stop local heavy runs. The five heavy
+scripts now pick `cuda` when present (`mi_common.pick_device`) and ran on a Colab T4 through the
+`colab` CLI in WSL; figures redraw on CPU with `--plot-only`. The fine-tuned checkpoint lived only
+on the (stopped) VM - rerunning `diffing_finetune.py` retrains it (~80 steps).
+
+**2026-09-24 - Task 7, optional deck `xx_where_facts_live` built** (24 frames / 27 pages; 0 errors,
+both detectors 0; five overfull vboxes of 2-9pt checked on the rendered pages).
+
+- **Gates G5 (tracing) and G6** - see the table.
+- **3x noise was too destructive** for GPT-2 small: P(basketball) left 0.010 and no single restore
+  brings much back. 2x (0.041 left) keeps the picture; the deck shows the 1x / 2x / 3x table on its
+  own frame and DECISIONS #42 records the choice. Restores use a 3-layer window.
+- **No layer's MLP writes " basketball" on the name** (best rank 498 of 50,257, layer 6); they
+  write athlete attributes (opponents, defenders; missed, scored, averaged). It takes 400 neurons
+  to supply half the push towards " basketball" at layer 6.
+- **Bug caught by an assert**: `to_tokens` silently truncates to 1024 tokens; the key second
+  moments for the edit needed 8,192. Fixed with `truncate=False`.
+
+**2026-09-24 - Task 5, optional deck `xx_vision_circuits` built** (25 frames / 28 pages; 0 errors,
+both detectors 0). Scripts are `vision_attribution.py` (G3) and `vision_features.py` (G2), not the
+planned `vision_gates.py` / `vision_figs.py` split.
+
+- **Gates G2 and G3** - see the table. ResNet-18 calls the sheep photo a bison (35%) and the KAMAZ
+  a jeep (67%); kept on the model frame.
+- **IG completeness was off by 6-17%** until the baseline bug was found: a 1x3x1x1 black image
+  broadcasts correctly along the path but `model(base)` scored a 1x1 image. With
+  `expand_as(x)` the sum converges: +23% / -9% / +0.6% / +0.03% at 8 / 32 / 128 / 512 steps.
+- **First feature visualisations came out flat grey**: maximising the post-ReLU output has zero
+  gradient wherever a channel starts at exactly zero. Maximising the pre-activation
+  (`RecordReLU` on each stage's last block) fixed it.
+- **Polysemanticity count is crude**: 107 of 512 fc channels vote for both sides of ImageNet's
+  animal / object index split, but channel 507 (spider web + spiders) is a false positive, named
+  on the slide.
+- **Results JSONs were 30 MB**: `np.round` on float32 then `tolist()` gives 0.48899999260902405, so
+  the rounding did nothing, and `indent=2` put every pixel on its own line. Now float64 before
+  rounding and `save_results(..., compact=True)`: 5.4 MB. Fixed before the commit was pushed.
+
+**2026-09-24 - Task 8, optional deck `xx_personas_and_diffing` built** (20 frames / 24 pages;
+0 errors, both detectors 0). Figures are drawn inside `diffing_finetune.py`; no separate
+`diffing_figs.py`.
+
+- **Gate G7** - see the table. The draft claimed the sentiment direction "separates sentences it
+  has never seen"; measured, it is close to chance as a monitor. The deck now says so and turns it
+  into the point of the last section: a weak detector, a strong lever, and only partly necessary.
+
+**Figure sizing, applied to every add-on figure**: drawn at the size of their slot on the slide
+(text width ~5.5 in), fonts 7-9pt. Several first drafts were 7-9 in wide and landed at 4-5pt
+again, the same mistake the intro log records.
