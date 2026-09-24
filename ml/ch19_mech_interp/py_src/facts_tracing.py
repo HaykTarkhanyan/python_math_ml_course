@@ -1,6 +1,7 @@
 """Gate G5 + figures for the optional deck "Where facts live" (xx_where_facts_live.tex), part 1.
 
-GPT-2 small, CPU, 2 threads (kept deliberately light). Three measurements:
+GPT-2 small on a GPU when present (committed results: Colab T4, DECISIONS #41), else CPU with 2
+threads. Three measurements:
 
   1. Which athlete -> sport facts does GPT-2 small actually know? ("{name} plays the sport of")
   2. MLP neurons as key -> value memories: which single neurons' output vectors push " basketball"

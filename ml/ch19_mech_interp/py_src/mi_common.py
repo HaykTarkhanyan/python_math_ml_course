@@ -45,11 +45,15 @@ def setup_logging(script_name: str) -> logging.Logger:
     return logging.getLogger(script_name)
 
 
-def save_results(name: str, payload: dict, log: logging.Logger) -> Path:
-    """Raw results as JSON first - every figure and slide number derives from this file."""
+def save_results(name: str, payload: dict, log: logging.Logger, compact: bool = False) -> Path:
+    """Raw results as JSON first - every figure and slide number derives from this file.
+
+    compact=True drops the indentation: for files that store images, indent=2 puts every pixel on its
+    own line and roughly triples the size (vision_features.json: 12 MB indented, ~4 MB compact)."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     path = RESULTS_DIR / f"{name}.json"
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    text = json.dumps(payload, separators=(",", ":")) if compact else json.dumps(payload, indent=2)
+    path.write_text(text, encoding="utf-8")
     log.info(f"wrote {path.relative_to(REPO_ROOT)}")
     return path
 

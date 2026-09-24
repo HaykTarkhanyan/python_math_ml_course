@@ -1,0 +1,534 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+
+\title{Seeing What a Network Sees}
+\subtitle{From heatmaps to circuits, in an image model}
+\author{}
+\date{}
+
+\newcommand{\keybox}[1]{%
+  \begin{tcolorbox}[colback=armblue!8, colframe=armblue, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\trapbox}[1]{%
+  \begin{tcolorbox}[colback=armred!8, colframe=armred, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\takebox}[1]{%
+  \begin{tcolorbox}[colback=paramgreen!8, colframe=paramgreen, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+\newcommand{\watchbox}[1]{%
+  \begin{tcolorbox}[colback=armorange!12, colframe=armorange, boxrule=0.6pt, arc=2pt]
+  #1
+  \end{tcolorbox}}
+
+\newcommand{\sectiontransition}[2]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\Huge\bfseries\color{popblue} #1}\\[1.1em]
+      {\large #2}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ============================================================ COLD OPEN
+\begin{frame}{Two heatmaps you have already seen}
+  \vspace{0.4em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Chapter 6 - Grad-CAM}
+
+      \vspace{0.3em}
+      {\small Where in the photo did the network look when it said ``pomegranate''? A heatmap over
+      the pixels.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Chapter 5 - LIME}
+
+      \vspace{0.3em}
+      {\small Which patches of the husky photo pushed the answer to ``wolf''? The snow. A heatmap
+      over the pixels.}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.9em}
+  \keybox{Both answer ``\textbf{which part of the input} mattered''. Neither opens the network: they
+  say nothing about \emph{what} it computed from those pixels, or \emph{how}.}
+
+  \vspace{0.6em}
+  Today we start with heatmaps - and find out how much they can be trusted - and then go inside:
+  what does a single neuron of ResNet-18 want to see, and how is it built from the neurons before
+  it?
+
+  \vspace{0.3em}
+  {\footnotesize Optional lecture. It needs only the introduction.}
+\end{frame}
+
+\begin{frame}{The model}
+  \vspace{0.6em}
+  \textbf{ResNet-18}, trained on ImageNet (1000 classes) - the same model as chapter 6's Grad-CAM,
+  11.7 million parameters. Four stages of convolutional blocks:
+
+  \vspace{0.2em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    stage & channels & each position sees about \ldots\\
+    \midrule
+    layer1 & 64 & a small patch\\
+    layer2 & 128 & a larger patch\\
+    layer3 & 256 & most of an object part\\
+    layer4 & 512 & most of the image\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.2em}
+  What it says about four photos from this course's own folders:
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    photo & ResNet-18's answer & runner-up\\
+    \midrule
+    a pomegranate & pomegranate 99\% & strawberry 0.4\%\\
+    two puppies & Border terrier 27\% & gorilla 25\%\\
+    a sheep & \textcolor{armred}{bison} 35\% & brown bear 20\%\\
+    a KAMAZ truck & \textcolor{armred}{jeep} 67\% & tractor 5\%\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================ SECTION 1
+\section{Gradients as explanations}
+\sectiontransition{Gradients as explanations}{Which pixels would change the answer most?}
+
+\begin{frame}{The idea: a saliency map}
+  \vspace{0.5em}
+  The network computes a score for the class, $f(x)$, from the pixels $x$. Ask the calculus
+  question: if I nudge one pixel, how much does the score move?
+  \[
+    \text{saliency}(\text{pixel } i) \;=\; \left|\frac{\partial f}{\partial x_i}\right|
+  \]
+
+  \vspace{0.4em}
+  One backward pass gives it for every pixel at once - it is backpropagation, stopped at the
+  input instead of the weights.
+
+  \vspace{0.6em}
+  \keybox{\small \textbf{By hand, for a linear model} $f(x) = w_1 x_1 + w_2 x_2 + b$: the gradient
+  is just $(w_1, w_2)$. The saliency map of a linear model is its coefficients - the glass-box
+  reading from chapter 5. For a deep network the gradient changes from input to input, which is
+  the whole point, and the whole difficulty.}
+
+  \vspace{0.2em}
+  {\footnotesize Simonyan, Vedaldi \& Zisserman (2013).}
+\end{frame}
+
+\begin{frame}{Three heatmaps of the same decision}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.78\textwidth]{fig/vision_saliency.pdf}
+  \end{center}
+  \vspace{-0.8em}
+  {\small \textbf{Gradient}: speckled - one pixel's gradient is very noisy. \textbf{SmoothGrad}:
+  the gradient averaged over 16 noisy copies of the photo - smoother (Smilkov et al., 2017).
+  \textbf{Integrated gradients}: the next slides.}
+\end{frame}
+
+\begin{frame}{The flaw in a plain gradient}
+  \vspace{0.4em}
+  Take $f(x_1, x_2) = \min(1,\; x_1 + x_2)$ and the input $(1, 1)$. Both inputs clearly matter:
+  set both to 0 and the output falls from 1 to 0.
+
+  \vspace{0.5em}
+  But at $(1,1)$ the sum is 2, well past the cap of 1, so nudging either input changes nothing:
+  \[
+    \frac{\partial f}{\partial x_1} = \frac{\partial f}{\partial x_2} = 0 .
+  \]
+
+  \vspace{0.3em}
+  \trapbox{\small The gradient says neither input matters. The network is \textbf{saturated} -
+  exactly the situation of a confident deep network, whose ReLUs and softmax flatten out once it
+  is sure.}
+\end{frame}
+
+\begin{frame}{Integrated gradients, by hand}
+  \vspace{0.2em}
+  Instead of one gradient at the input, \textbf{average the gradient along the straight path} from a
+  baseline $x'$ (here $(0,0)$) to the input $x$, and multiply by how far each input moved:
+  \[
+    \text{IG}_i \;=\; (x_i - x'_i)\int_0^1 \frac{\partial f}{\partial x_i}\big(x' + t\,(x - x')\big)\,dt
+  \]
+
+  \vspace{0.2em}
+  On the path, $x_1 + x_2 = 2t$. For $t < 0.5$ the cap is not hit and $\partial f/\partial x_1 = 1$;
+  for $t > 0.5$ it is 0:
+  \[
+    \text{IG}_1 = (1 - 0)\,\Big(\int_0^{0.5} 1\,dt + \int_{0.5}^{1} 0\,dt\Big) = 0.5,
+    \qquad \text{IG}_2 = 0.5 .
+  \]
+
+  \vspace{0.2em}
+  \keybox{\small $\text{IG}_1 + \text{IG}_2 = 1 = f(1,1) - f(0,0)$. That is not a coincidence: the
+  attributions always add up to the change in the output (\textbf{completeness}). It is the same
+  idea as Shapley values in chapter 5 - split the total change fairly between the inputs.}
+
+  \vspace{0.1em}
+  {\footnotesize Sundararajan, Taly \& Yan (2017).}
+\end{frame}
+
+\begin{frame}{Completeness, checked on ResNet-18}
+  \vspace{0.4em}
+  The integral is approximated with a finite number of steps along the path. With more steps the
+  sum of all 150{,}528 pixel attributions should approach $f(x) - f(\text{black image})$:
+
+  \vspace{0.5em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}rrrr@{}}
+    \toprule
+    steps & sum of attributions & $f(x) - f(\text{black})$ & off by\\
+    \midrule
+    8 & 22.66 & 18.45 & $+23\%$\\
+    32 & 16.86 & 18.45 & $-9\%$\\
+    128 & 18.56 & 18.45 & $+0.6\%$\\
+    512 & 18.455 & 18.450 & $+0.03\%$\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  {\footnotesize The pomegranate photo, score of the class ``pomegranate''. The two-puppies photo
+  behaves the same way ($+0.5\%$ at 512 steps).}
+
+  \vspace{0.2em}
+  \watchbox{\small The \textbf{baseline is a choice} with consequences. With a black baseline, a
+  pixel that is already black has $x_i - x'_i = 0$ and gets \textbf{zero} attribution, however
+  much the network relies on it. A different baseline gives a different map.}
+\end{frame}
+
+% ============================================================ SECTION 2
+\section{Can a heatmap be trusted?}
+\sectiontransition{Can a heatmap be trusted?}{Destroy the network and see if the explanation notices}
+
+\begin{frame}{The sanity check}
+  \vspace{0.5em}
+  An explanation of a model's decision should \textbf{depend on the model}. So:
+
+  \vspace{0.4em}
+  \begin{enumerate}
+    \item compute the heatmap on the trained network;
+    \item replace the weights of the \textbf{top} layer with random numbers, and compute it again;
+    \item randomise the next layer down too, and again - until nothing trained is left.
+  \end{enumerate}
+
+  \vspace{0.6em}
+  \keybox{\small If the heatmap stays the same while the network turns to noise, it was never
+  showing what the network learned. It was showing something about the \emph{photo} - usually its
+  edges.}
+
+  \vspace{0.3em}
+  {\footnotesize Adebayo et al.\ (2018), \emph{Sanity Checks for Saliency Maps}.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vspace{1.0em}
+  Three methods: the plain gradient, integrated gradients, and \textbf{guided backprop} - a popular
+  method that produces especially crisp, photo-like maps (it lets only positive gradients flow
+  back through each ReLU).
+
+  \vspace{1.2em}
+  \begin{center}
+    {\large Randomise only the \textbf{top} of the network - the classifier\\[0.2em]
+    and the last stage, the part that makes the decision.\\[0.6em]
+    Which of the three maps will barely change?}
+  \end{center}
+\end{frame}
+
+\begin{frame}{The result}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.66\textwidth]{fig/vision_sanity.pdf}
+  \end{center}
+  \vspace{-0.9em}
+  {\small Pomegranate photo, network randomised from the top down (fc = the classifier). Under each map: rank
+  correlation with the trained map (1 = same pixel ranking); red = still over 0.5.}
+\end{frame}
+
+\begin{frame}{What that means}
+  \vspace{0.2em}
+  \begin{itemize}
+    \item \textbf{Guided backprop} barely notices: with the classifier and then the whole last
+      stage random, its map still matches the trained one at \textbf{0.97} and \textbf{0.89}. It was
+      drawing the photo's edges, not the decision.
+    \item The \textbf{plain gradient} changes at once (0.50), and is gone when nothing trained is
+      left.
+    \item \textbf{Integrated gradients} changes too, but keeps 0.36 with nothing trained left: it
+      multiplies by the pixel values, so part of every IG map is the photo itself.
+  \end{itemize}
+
+  \vspace{0.3em}
+  \trapbox{\small A heatmap can look sharp, plausible and object-shaped and still depend on
+  \textbf{nothing the model learned}. Crispness is not evidence. The only test is the one from the
+  introduction: \textbf{intervene} - here, on the weights - and see whether the explanation moves.}
+
+  \vspace{0.3em}
+  And even the heatmaps that pass answer only ``\emph{where} in the input''. The rest of this
+  lecture asks the question heatmaps cannot: \textbf{what is the network detecting}, and how is it
+  built?
+\end{frame}
+
+% ============================================================ SECTION 3
+\section{Feature visualisation}
+\sectiontransition{Feature visualisation}{Ask a neuron what it wants to see}
+
+\begin{frame}{The idea}
+  \vspace{0.5em}
+  Saliency fixes the image and asks about the pixels. Turn it around: fix a \textbf{neuron} (one
+  channel of one layer) and \textbf{optimise the image} to make that channel fire as strongly as
+  possible.
+
+  \vspace{0.4em}
+  \[
+    x^{\star} = \arg\max_{x}\; \text{activation}_{\text{channel}}(x)
+  \]
+
+  \vspace{0.3em}
+  Gradient \emph{ascent} on the pixels, with the network frozen. Whatever picture comes out is
+  what that channel is looking for.
+
+  \vspace{0.5em}
+  \keybox{\small It is saliency run backwards. Saliency asks which pixels move the output; this asks
+  which picture moves one \emph{internal} unit - the first question in this lecture about the
+  inside of the network rather than its input.}
+
+  \vspace{0.2em}
+  {\footnotesize Erhan et al.\ (2009); Olah, Mordvintsev \& Schubert (2017), \emph{Feature
+  Visualization}.}
+\end{frame}
+
+\begin{frame}{Naive optimisation gives noise}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \vspace{0.2em}
+      Optimise every pixel freely and the result is busy high-frequency texture - an
+      \textbf{adversarial pattern} that excites the channel but is not a picture of anything.
+
+      \vspace{0.2em}
+      {\footnotesize Right: the same channel (layer3, 43) both ways.}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \vspace{-0.4em}
+      \includegraphics[width=0.86\linewidth]{fig/vision_featviz_naive.pdf}
+    \end{column}
+  \end{columns}
+
+  \vspace{-0.3em}
+  The standard fixes, used for every picture from here on:
+  \begin{itemize}
+    \item optimise a \textbf{smooth} image: its Fourier coefficients, with high frequencies scaled
+      down;
+    \item at every step, \textbf{jitter, rescale and rotate} the image slightly - the picture has
+      to excite the channel from every nearby viewpoint, which noise cannot do.
+  \end{itemize}
+  \watchbox{\small These are \textbf{priors}, chosen by us. A visualisation shows what excites the
+  channel \emph{among smooth, shift-robust images} - not everything that excites it.}
+\end{frame}
+
+\begin{frame}{Four stages, twelve random channels}
+  \begin{columns}[T]
+    \begin{column}{0.57\textwidth}
+      \vspace{-0.5em}
+      \includegraphics[width=\linewidth]{fig/vision_featviz_grid.pdf}
+    \end{column}
+    \begin{column}{0.41\textwidth}
+      \vspace{0.2em}
+      {\small Three channels per stage, \textbf{picked at random} (seeded), not chosen for looking
+      good.}
+
+      \vspace{0.4em}
+      {\small layer1: colour and fine stripes. layer2: repeated textures - swirls, bands. layer3:
+      rounded shapes, scales. layer4: hard to name - with these priors most deep channels do not
+      give a clean picture.}
+
+      \vspace{0.1em}
+      \keybox{\smallaggedright Going deeper, the pictures get bigger and more structured - stripes, then
+      textures, then parts. The deepest ones are the hardest to read.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================ SECTION 4
+\section{From neurons to circuits}
+\sectiontransition{From neurons to circuits}{A curve detector, and what it is built from}
+
+\begin{frame}{The curve detectors}
+  \vspace{0.5em}
+  The most studied neurons in any vision model are the \textbf{curve detectors} of InceptionV1:
+  channels that fire on a curve of one orientation, not on straight lines and not on curves facing
+  the other way. Their circuit was traced by hand, neuron by neuron.
+
+  \vspace{0.6em}
+  \keybox{\small The universality claim from the introduction predicts that other networks trained
+  on images grow curve detectors too. ResNet-18 was never studied that way. Can we find one in it
+  ourselves?}
+
+  \vspace{0.4em}
+  {\footnotesize Cammarata et al.\ (2020), \emph{Curve Detectors}; Olah et al.\ (2020), \emph{Zoom
+  In}.}
+\end{frame}
+
+\begin{frame}{The hunt}
+  \vspace{0.4em}
+  Show every channel of layer1 and layer2 two sets of synthetic images, 16 orientations each:
+
+  \vspace{0.4em}
+  \begin{itemize}
+    \item a \textbf{quarter-circle arc} through the centre, facing each direction;
+    \item a \textbf{straight line} through the centre, at each angle.
+  \end{itemize}
+
+  \vspace{0.4em}
+  Call a channel \textbf{curve-like} if its best arc response is at least twice its best line
+  response, it prefers some orientations clearly over others, and it responds strongly (top
+  quarter of the stage).
+
+  \vspace{0.4em}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lrrl@{}}
+    \toprule
+    stage & channels & curve-like & best one: arc vs line\\
+    \midrule
+    layer1 & 64 & 1 & channel 12: 5.27 vs 2.54\\
+    layer2 & 128 & 6 & channel 23: 4.42 vs 1.15\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.2em}
+  {\small layer1's one candidate barely passes (2.1 times). layer2 has several clear ones.}
+\end{frame}
+
+\begin{frame}{The best candidate}
+  \vspace{-0.3em}
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{fig/vision_curve.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  {\small layer2, channel 23. Its best arc gives \textbf{4.42}, its best straight line
+  \textbf{1.15} - almost four times less. And it is tuned: arcs facing one way (around 45$^\circ$)
+  excite it, arcs facing the opposite way (180-270$^\circ$) barely do. Its feature visualisation is a
+  stack of arcs, all bending the same way.}
+\end{frame}
+
+\begin{frame}{What is it built from?}
+  \vspace{-0.2em}
+  Show the curve detector its preferred arc, then \textbf{switch off one layer1 channel at a time}
+  and measure how much its response falls.
+  \begin{center}
+    \includegraphics[width=0.86\textwidth]{fig/vision_circuit.pdf}
+  \end{center}
+  \vspace{-0.6em}
+  {\small Top: the five layer1 channels it depends on most, with their feature visualisations.
+  Bottom: their responses to straight lines (grey) and arcs (red), by orientation.}
+\end{frame}
+
+\begin{frame}{Edges lying along the curve}
+  \vspace{0.3em}
+  \textbf{No single input carries it.} Removing any one layer1 channel costs at most 11\%; it takes
+  8 of the 64 to remove half the response.
+
+  \vspace{0.5em}
+  \textbf{But the inputs are not random.} All top five are \textbf{edge detectors} - they swing
+  strongly with the angle of a line. Which angles?
+
+  \vspace{0.4em}
+  \begin{itemize}
+    \item The preferred arc faces 45$^\circ$. Along it, the direction of the curve turns from
+      90$^\circ$ to 180$^\circ$ (its tangents).
+    \item Four of the five top inputs prefer lines at \textbf{135$^\circ$ or 157.5$^\circ$} - inside
+      that range. The fifth prefers 67.5$^\circ$, outside it.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \keybox{\small A curve assembled from small edges lying along it - the same recipe found by hand
+  in InceptionV1, here spread over more inputs, with none worth more than 11\%.}
+\end{frame}
+
+\begin{frame}{One neuron, several meanings}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \vspace{-0.4em}
+      \includegraphics[width=\linewidth]{fig/vision_polysemantic.pdf}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      {\small Last-layer channels whose two strongest class votes (read straight off the final
+      weights) fall on both sides of ImageNet's animal / object split: \textbf{107 of 512}
+      pass.}
+
+      \vspace{0.3em}
+      {\small The test is crude: channel 507 passes only because ImageNet files ``spider web'' as
+      an object - it is plainly one concept, spiders. Channels 337 and 254 are genuinely mixed.}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4em}
+  \keybox{\small Some units mean one thing, others several. A network with more concepts than
+  channels has to share channels between concepts - \textbf{superposition}, which comes back in
+  the features lecture.}
+\end{frame}
+
+% ============================================================ RECAP
+\begin{frame}{Recap}
+  \begin{itemize}
+    \item \textbf{Saliency} = the gradient of the class score with respect to the pixels. Noisy;
+      SmoothGrad averages the noise away.
+    \item \textbf{Integrated gradients} averages the gradient along a path from a baseline, and its
+      attributions add up to the change in the output - checked on ResNet-18.
+    \item \textbf{Sanity checks}: guided backprop ignored a randomised top of the network (0.97);
+      a crisp map is not evidence. Integrated gradients keeps part of the photo in every map.
+    \item \textbf{Feature visualisation} asks a channel what it wants to see; the answers grow from
+      edges to parts with depth, under priors we chose.
+    \item \textbf{Circuits}: a curve detector in ResNet-18 (layer2, channel 23), built from edge
+      detectors lying along the arc - but spread over many inputs, none worth more than 11\%.
+  \end{itemize}
+
+  \vspace{0.1em}
+  \takebox{\small Heatmaps say \emph{where}. Neurons and circuits say \emph{what} and \emph{how} -
+  and every claim still has to survive an intervention.}
+\end{frame}
+
+\begin{frame}{Next}
+  \vspace{1.2em}
+  \takebox{\textbf{Next core lecture: opening the box.}\\[0.6em]
+  The same questions, on a language model - where you cannot look at a feature with your own eyes,
+  but where the architecture makes something vision models do not: the whole computation adds up
+  into one stream, exactly.}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+% - Built 2026-09-24 as optional deck 2 of the ch19 extension (EXTENSION_PLAN.md task 5); needs only
+%   xx_mech_interp_intro. Sources: Simonyan, Vedaldi & Zisserman (2013) saliency maps; Smilkov et al.
+%   (2017) SmoothGrad; Sundararajan, Taly & Yan (2017) integrated gradients; Adebayo et al. (2018)
+%   sanity checks; Erhan et al. (2009) activation maximisation; Olah, Mordvintsev & Schubert (2017)
+%   feature visualisation; Cammarata et al. (2020) curve detectors; Olah et al. (2020) Zoom In.
+% - Numbers and figures: py_src/vision_attribution.py -> results/vision_attribution.json (gate G3),
+%   py_src/vision_features.py -> results/vision_features.json (gate G2).
+% - Next deck: xx_opening_the_box.tex (core).

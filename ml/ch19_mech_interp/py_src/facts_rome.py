@@ -1,7 +1,8 @@
 """Gate G6 + figures for the optional deck "Where facts live" (xx_where_facts_live.tex), part 2.
 
-A rank-one fact edit in the style of ROME (Meng et al., 2022), written from scratch for GPT-2 small,
-CPU, 2 threads. The MLP output matrix W_out of one layer is treated as a key -> value memory:
+A rank-one fact edit in the style of ROME (Meng et al., 2022), written from scratch for GPT-2 small. Runs on a GPU when present (committed results: Colab T4,
+DECISIONS #41), else CPU with 2 threads. The MLP output matrix W_out of one layer is treated as a
+key -> value memory:
 
     key   k*  = the MLP's hidden activation at the last token of the subject's name
     value     = what W_out writes for that key
