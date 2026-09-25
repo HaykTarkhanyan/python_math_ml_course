@@ -9,6 +9,64 @@ this file holds the choice and a pointer.
 
 ---
 
+## #44 - The name-inventor comparison shrinks to K x h with a measured noise floor; torch runs on one thread
+
+**Date:** 2026-09-26 · **Status:** active
+
+**Decision.** Section 9 of `ml/11_neural_networks/47_name_inventor_solution.ipynb` varies only
+the context K in {1, 2, 3, 5} and the hidden size h in {32, 128, 512} (6 trainings; it was
+K/d/h/lr in 8), retrains the base config with two more seeds to print a noise floor, and keeps
+the base config (K=3, d=8, h=128) as the final model instead of retraining the leaderboard
+winner. The notebook calls `torch.set_num_threads(1)`.
+
+**Why.** The instructor asked for a smaller demo comparison. K stays because the notebook now
+argues *why* K=3 from the data (P(stop) after ն / ան / յան = 74% / 83% / 99%; validation
+windows with a never-seen context 0% / 3.6% / 16.5% / 44.7% at K = 1 / 2 / 3 / 5), and the
+comparison is the empirical check: K=1 1.904 (bigram 1.948), K=2 1.721, K=3 1.673, K=5 1.673.
+The old leaderboard's winner (lr=1e-3, 1.670) beat the base (1.673) by 0.003, while three
+seeds of one config spread by 0.002 (1.673 / 1.672 / 1.674) - that "winner" was noise and had
+also peaked on the last epoch of its budget. Threads: measured 66 ms/epoch on one thread vs
+130 ms with torch's default 4 on the instructor laptop; under background load, 4-thread
+100-epoch runs took 60-110 s against 10.6 s for 150 epochs single-threaded.
+
+**Alternatives rejected.** *Keep all four knobs* - d and lr add nothing the K and h charts do
+not already show, and lr is [44]'s topic. *A real `wandb.sweep` agent* - more machinery than a
+demo needs; the markdown points to it. *Auto-select the leaderboard winner* - selects noise.
+
+**What would change this.** A much larger name list (thousands), where the knobs stop tying
+and a real sweep has something to find; or a model big enough that threading pays off again.
+
+---
+
+## #43 - The name-inventor notebook draws with plotly and maps the embeddings with UMAP, not PCA
+
+**Date:** 2026-09-26 · **Status:** active (instructor's call)
+
+**Decision.** Every figure in `47_name_inventor_solution.ipynb` is plotly: the bigram count
+heatmap, the learning curves, the loss ladder, the leaderboard, temperature small multiples,
+the memorization chart (two stacked panels, not the old twin-axis plot) and the embedding map.
+The 2-D embedding map uses UMAP (`n_neighbors=8`, cosine, seed 509) instead of PCA.
+
+**Why.** The instructor asked for plotly and for UMAP. Hover earns its keep on a 39 x 39 count
+table and a 39-letter map. The twin-axis memorization plot went because two y-scales on one
+chart invite misreading.
+
+**Costs accepted, measured.** UMAP is slow here: in the pilot its first import took 150 s and
+the first fit of 39 points 78 s (numba compiling), and the notebook cell takes ~166 s. This
+reverses the notebook's earlier reasoning (PCA because UMAP "costs minutes"), which was right
+about the cost. Plotly output is stored as `application/vnd.plotly.v1+json` (~10-40 KB per
+figure; the notebook is ~300 KB): it renders in JupyterLab and VS Code, but **GitHub's notebook
+preview - the "view on GitHub" link on the chapter page - shows the figures blank**.
+
+**Alternatives rejected.** *matplotlib* (the previous version) - static, renders on GitHub.
+*PCA* - instant and linear, what the notebook had.
+
+**What would change this.** If students mostly read the notebook on GitHub, add a static PNG
+fallback (plotly's `png` renderer needs kaleido) or render an HTML copy. If the UMAP wait hurts
+in class, run that cell before the lecture or return to PCA.
+
+---
+
 ## #42 - ch19 causal tracing corrupts with 2x the embedding noise and restores a 3-layer window
 
 **Date:** 2026-09-24 · **Status:** active
