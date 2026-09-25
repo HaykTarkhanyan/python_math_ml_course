@@ -1,4 +1,4 @@
-"""Data prep for the Armenian Name Inventor practical (xx_name_inventor_solution.ipynb).
+"""Data prep for the Armenian Name Inventor practical (47_name_inventor_solution.ipynb).
 
 Fetches every page title from the Armenian Wikipedia category
 "Կատեգորիա:Հայկական ազգանուններ" (Armenian surnames), cleans it, and writes

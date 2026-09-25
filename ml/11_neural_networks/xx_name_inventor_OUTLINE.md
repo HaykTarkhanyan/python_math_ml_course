@@ -26,7 +26,7 @@ invents Armenian surnames. See `REVIEW.md` sections 4-8 for the ideation trail.
   API, filters to the Armenian unicode block, lowercases, dedupes, writes
   `data/surnames_hy.txt` (pinned in the repo so the notebook has no network dependency).
   Logging to `logs/`, fail-loud, seed 509 where relevant.
-- `xx_name_inventor_solution.ipynb` - the walkthrough notebook (plan below).
+- `47_name_inventor_solution.ipynb` - the walkthrough notebook (plan below).
 
 ---
 
