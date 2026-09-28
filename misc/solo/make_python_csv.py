@@ -39,15 +39,15 @@ SEC_PROJ = "Capstone project"
 # (section, item, link, note)
 ROWS = [
     # fundamentals (01-09)
-    (SEC_FUND, "01 Intro", BASE + "01_Intro.html", ""),
-    (SEC_FUND, "02 Conditions", BASE + "02_Conditions.html", ""),
-    (SEC_FUND, "03 Strings, ranges, lists, some functions", BASE + "03_Str_Range_List_some_funcs.html", ""),
+    (SEC_FUND, "01 Intro", BASE + "01_intro.html", ""),
+    (SEC_FUND, "02 Conditions", BASE + "02_conditions.html", ""),
+    (SEC_FUND, "03 Strings, ranges, lists, some functions", BASE + "03_str_range_list_some_funcs.html", ""),
     (SEC_FUND, "04 Loops", BASE + "04_loops.html", ""),
-    (SEC_FUND, "05 List/str methods, one-line if/for", BASE + "05_Lst_str_methods_one_line_if_for.html", ""),
+    (SEC_FUND, "05 List/str methods, one-line if/for", BASE + "05_lst_str_methods_one_line_if_for.html", ""),
     (SEC_FUND, "06 Tuple, set, dictionary", BASE + "06_tuple_set_dictionary.html", ""),
-    (SEC_FUND, "07 Functions (part 1)", BASE + "07_Functions_1.html", ""),
-    (SEC_FUND, "08 Functions (part 2)", BASE + "08_Functions_2.html", ""),
-    (SEC_FUND, "09 Files, packages, terminal", BASE + "09_Files_Packages_Terminal.html", ""),
+    (SEC_FUND, "07 Functions (part 1)", BASE + "07_functions_1.html", ""),
+    (SEC_FUND, "08 Functions (part 2)", BASE + "08_functions_2.html", ""),
+    (SEC_FUND, "09 Files, packages, terminal", BASE + "09_files_packages_terminal.html", ""),
 
     # tooling + exception handling (10-11)
     (SEC_TOOL, "10 Git, conda, PEP8", BASE + "10_git_conda_pep8.html",
@@ -66,7 +66,7 @@ ROWS = [
      "More advanced, but very good to know."),
 
     # OOP (14-17)
-    (SEC_OOP, "14 Classes", BASE + "14_Classes.html", "Mandatory."),
+    (SEC_OOP, "14 Classes", BASE + "14_classes.html", "Mandatory."),
     (SEC_OOP, "15 Inheritance, polymorphism", BASE + "15_inheritance_polymorphism.html",
      "Inheritance will be used a lot. Polymorphism is less crucial, but good to at least watch the lecture video."),
     (SEC_OOP, "16 Encapsulation, abstraction", BASE + "16_encapsulation_abstraction.html", ""),

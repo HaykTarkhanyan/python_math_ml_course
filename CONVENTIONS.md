@@ -4,7 +4,7 @@ Recurring decisions made across this course. Codify here so future-me and Claude
 
 This is course-specific only. Tooling conventions (uv, logging, plot colors, etc.) live in `CLAUDE.md`. Recurring deferrals live in `DEFERRED_TODO.md`.
 
-Last updated: 2026-08-07
+Last updated: 2026-09-28
 
 ---
 
@@ -51,6 +51,35 @@ Last updated: 2026-08-07
 - One per chapter, used in the QMD's Random section.
 - Numbered to match the chapter that references it.
 
+### Page files are lowercase snake_case
+
+- Every file the site renders: `python/01_intro.ipynb`, not `01_Intro.ipynb`. The site builds on
+  Linux, where case matters; Windows hides a mismatch until the live site 404s.
+- Renaming a page that is already live: `git mv` (via a temporary name for case-only changes) and
+  add `aliases: [Old_Name.html]` to its front matter so the old URL redirects (DECISIONS #48).
+
+### Page titles — `"NN Title"`
+
+- Number, space, title. No colon after the number, no em dash (use ` - ` or `: ` inside the title).
+- Numbers follow the order in `_quarto.yml` and never repeat in a sidebar part; a sub-chapter gets a
+  letter (`14b GANs`). Legacy `chNN_` folders show their sidebar number, not their folder number,
+  until they are renamed (DECISIONS #49).
+
+---
+
+## Links on rendered pages
+
+- A link either works or does not exist: no `[..]()` or `[..](ToDo)`. Missing content is plain-text
+  `TBD` (DECISIONS #51).
+- Textbooks link to their file in the course Drive folder, never to `bibliography/` (untracked;
+  DECISIONS #52).
+- GitHub / Colab links into this repo use the exact git path, case included.
+- Templates (`python/00_template.ipynb`, `python_libs/00_template.ipynb`, `math/xx_template.qmd`)
+  mark must-fill targets `NN_topic` / `NN_name` / `VIDEO_ID` / `URL` and keep optional blocks in
+  HTML comments. Fill or delete them in the copy.
+- Before pushing site changes: `./ma/Scripts/python.exe non_essential/check_links.py` (~2 s). Every
+  few weeks: add `--live` for external link rot. Manual, not a CI gate (DECISIONS #53).
+
 ---
 
 ## YouTube link text
@@ -95,7 +124,7 @@ resources:
 <flag-counter HTML>
 ```
 
-If a section's content doesn't exist yet, mark it `TBD` rather than omitting — visible TBDs prevent silent gaps.
+If a section's content doesn't exist yet, mark it `TBD` rather than omitting — visible TBDs prevent silent gaps. Plain text only: never an empty link like `[📺 Video]()` (see Links on rendered pages).
 
 ---
 

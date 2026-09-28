@@ -2,7 +2,33 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-09-06
+Last updated: 2026-09-28
+
+---
+
+## Website: leftovers from the 2026-09-28 link audit
+
+Found by `non_essential/check_links.py --live` and a browser pass; left alone on purpose.
+
+- **8 dead YouTube videos** (instructor: don't touch for now; each needs a replacement upload or
+  the line removed): `python_libs/12_sql` shorts/rH7r85UwJSg ("Random link", removed for ToS);
+  `python/02_conditions` 0UOa7qtqkIw ("ժողովուրդ"); `python/05_lst_str...` 38A1NZEHpxY (Jah Cure);
+  `python/03_str_range...` pKwQlm-wldA (Eric Clapton); `python_libs/13_pydantic` XFUrPRTI2e6
+  ("5am (Ուր էլ գնաս)", not even a valid video id); `math/05` f2UE7tJLsns (Տիգրան Մանսուրյան,
+  Հին Օրերի Երգը); `math/04` shorts/2sphKXkgzqE and `math/05` shorts/Z_Gnf2PA56w ("Random link").
+- **4 dead Profound exercise links** (instructor: dropped). `python/01_intro` "2.1 հեշտ էր չէ",
+  "4.1 թվաբանական պրոգրեսիա", "4.3 ուսանողներ և խնձորներ 2"; `python/02_conditions` "8.6"
+  (Շախմատային ձի). Only 4.1 still exists: `https://profound.academy/hy/python-introduction/SJfuGUiyqwbgxCZevbci`.
+  The other three match none of the 290 exercise titles in Profound's sitemap.
+- **Home page status block is stale**: "(Թարմացված ա 10.02.26-ին)", math "almost done", ML "will
+  start after math". Needs the instructor's wording.
+- **Plain-text ToDo lines still visible** (not links, so not removed): "ToDo" and
+  "Google Forms ToDo" in the 🎦 video cells of the python notebooks, the "(ToDo)" in that
+  cell's heading, the `> Song reference - ToDo` lines.
+- **`ml/11_neural_networks/46_nn_from_scratch.ipynb` is not linked from the chapter page.**
+  Fine if it is not delivered yet; add it with the lecture.
+- **Unverifiable by automation**: 3 Stack Overflow links and 2 i.stack.imgur images show a
+  Cloudflare challenge even to a real browser. Check by hand if ever in doubt.
 
 ---
 

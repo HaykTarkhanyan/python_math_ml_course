@@ -9,6 +9,133 @@ this file holds the choice and a pointer.
 
 ---
 
+## #53 - Link checking is a manual tool, not a CI gate
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** `non_essential/check_links.py` (source mode offline, `--live` crawls the deployed
+site) is run by hand. The publish workflow does not fail on broken links.
+
+**Why.** Instructor's call. Evidence that some check is needed: the 2026-09-25 CI run printed 15
+"Unable to resolve link target" warnings and passed, and a crawl then found 24 dead internal links
+and 9 dead YouTube videos on the live site. External links rot on their own schedule, so a gate on
+them would fail builds for reasons unrelated to the push.
+
+**Alternatives rejected.** *Fail the build on Quarto's link warnings* - cheap, but the instructor
+did not want deploys blocked. *A third-party link-checker action on a schedule* - another
+dependency to maintain for a manual-sized problem.
+
+**What would change this.** Broken links reaching students again despite the tool, e.g. the next
+live crawl finding internal breakage that source mode would have caught before the push.
+
+---
+
+## #52 - Textbooks are linked from the course Drive folder, never from the repo
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** Reading assignments link to each book's file in the public "Դասագրքեր" Drive folder
+(`https://drive.google.com/file/d/<id>/view`). `bibliography/` stays untracked.
+
+**Why.** The 7 links on math/00 and math/01 pointed into `bibliography/`, which was never
+committed, so all 404'd on the site. Committing the four linked books would add ~126 MB to the
+repo permanently. All four were already in the Drive folder the home page links to (checked
+publicly reachable: HTTP 200, no login redirect). Page numbers in the assignments still hold -
+the old Poole link was the pages 1-400 split of the same book.
+
+**Alternatives rejected.** *Commit the PDFs* - repo size, forever. *Link the folder only* -
+students would have to find the book themselves.
+
+**What would change this.** Drive links dying or the folder going private; then Git LFS or a
+release asset.
+
+---
+
+## #51 - No placeholder links on rendered pages; templates use checkable fake targets
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** A link on a rendered page either works or does not exist. 212 placeholder links
+(`[..]()`, `[..](ToDo)`) and 39 headings left empty by their removal were deleted from 50 pages,
+plus 8 empty header-image stubs ("Artist Name" credits). The three templates now use obviously
+fake targets (`NN_topic`, `NN_name`, `VIDEO_ID`, `URL`) that `check_links.py` flags if a copy
+leaves them unfilled, and keep optional blocks (header photo, 🎲 footer) inside HTML comments.
+
+**Why.** Instructor's call after the link audit. The templates were the source: 22 pages carried
+the same `href="ToDo"` Colab badge, 7 a badge to a notebook that never existed. An empty link
+looks clickable and goes nowhere; a fake-but-named target is caught by a check.
+
+**Alternatives rejected.** *Keep them as reminders* - students see them, and nothing flags a
+forgotten one. *Plain-text `TBD`* - still allowed for missing content (CONVENTIONS, QMD
+structure), just not dressed as a link.
+
+**What would change this.** A need for per-page "coming soon" lists, which should then be plain
+text or a tracked TODO file, not links.
+
+---
+
+## #50 - The home page is a welcome page; the sidebar is the table of contents
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** `index.qmd` keeps the welcome callout (key links, status, schedule, questions), the
+"site in progress" note, the links block and the footer - 76 visible lines, down from ~1,140.
+The per-lesson listing is gone (in git history at 5983327); the hidden AI-generated drafts at the
+end stay, commented out.
+
+**Why.** The page said itself it was unmaintained past the Python part, repeated the sidebar,
+showed an "XX Template" block and an internal-notes callout, and an unclosed callout at line 51
+had put 95% of the page inside one note box.
+
+**Alternatives rejected.** *Fix and keep the listing* - two tables of contents to keep in sync,
+and the one nobody updated went stale within a term.
+
+**What would change this.** Wanting per-lesson summaries back; they belong on each lesson's page.
+
+---
+
+## #49 - Sidebar chapter numbers follow `_quarto.yml` order; folder names do not change
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** Page titles read `"NN Title"` (no colon after the number, no em dash). The legacy
+deep-learning chapters display 12-27 in sidebar order (CNN 12 ... Subliminal Learning 26, LLM
+Training 27), GANs keep their sub-chapter letter as `14b`. Math titles 27 and 28 were off by one
+(two "29"s, no "27") and now match their files.
+
+**Why.** The ML sidebar showed 06-11 twice (`ch6_cnn` "06" after "11 Neural Networks"), which
+CONVENTIONS already warned about. Titles change no URL; the `chNN_` folder renames (#22's pending
+pass) stay a separate job.
+
+**Alternatives rejected.** *Drop numbers from legacy titles* - inconsistent with "NN Title".
+*Rename the folders now* - changes URLs and deck paths for 16 chapters; out of scope.
+
+**What would change this.** The `chNN_` folder renumbering: it should adopt these numbers so
+folder and title agree, or update the titles in the same pass.
+
+---
+
+## #48 - Page files are lowercase; renamed pages keep their old URLs via Quarto aliases
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** Eight `python/` notebooks were renamed to lowercase with `git mv` (`01_Intro` ->
+`01_intro`, ...), and each carries `aliases: [<Old>.html]` so the old URL redirects.
+
+**Why.** Windows ignores case, the Linux build does not: mixed-case names caused 8 of the 24 dead
+internal links (e.g. `python/01_intro.ipynb` vs `01_Intro.ipynb`). Two files were even lowercase on
+disk while git stored them capitalized. Old URLs are in circulation (`misc/solo/python_topics.csv`
+and its xlsx, likely YouTube descriptions and Telegram posts), hence the redirects.
+
+**Alternatives rejected.** *Keep the names, rely on a check* - the mismatch would keep recurring.
+
+**Caveat.** A local `quarto render` on Windows writes the alias `01_Intro.html` and the page
+`01_intro.html` to the same file; renders happen only in CI (Linux), where both exist.
+
+**What would change this.** Rendering locally on Windows becoming part of the workflow.
+
+---
+
 ## #44 - The name-inventor comparison shrinks to K x h with a measured noise floor; torch runs on one thread
 
 **Date:** 2026-09-26 · **Status:** active
