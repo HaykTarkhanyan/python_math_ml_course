@@ -192,7 +192,8 @@ def make_link_checker():
         return url, "ok", ""
 
     def fetch(url):
-        for attempt in (1, 2):   # one retry: a network blip once failed 3 unrelated hosts at once
+        for attempt in (1, 2, 3):   # TLS handshakes from this machine drop now and then (SSLEOFError on
+                                    # hosts that answer fine seconds later); one retry was not always enough
             try:
                 return youtube(url) if YOUTUBE.match(url) else http(url)
             except requests.exceptions.SSLError as e:
@@ -208,8 +209,8 @@ def make_link_checker():
                         error = e2
             except requests.RequestException as e:
                 error = e
-            if attempt == 1:
-                time.sleep(3)
+            if attempt < 3:
+                time.sleep(5 * attempt)
         return url, "broken", f"{type(error).__name__}: {str(error)[:120]}"
 
     return session, fetch
