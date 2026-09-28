@@ -37,7 +37,8 @@ Work through these in order and report each as done or skipped (with reason).
      `math/Lectures/stat/00_plan.md`).
 
 5. **Capture knowledge - ask the user explicitly:**
-   - New gotcha discovered? -> `LEARNINGS.md` (dated entry)
+   - New gotcha discovered? -> a new file `_learnings/YYYY-MM-DD-HHMM_slug.md`, one lesson per
+     file (`LEARNINGS.md` is a read-only archive, frozen 2026-08-08)
    - Decision made for the second time? -> `CONVENTIONS.md`
    - Topic cut or postponed? -> `DEFERRED_TODO.md`
    - Was CLAUDE.md contradicted or corrected this session? -> propose the edit.
