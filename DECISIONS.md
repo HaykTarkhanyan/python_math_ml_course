@@ -136,9 +136,61 @@ and its xlsx, likely YouTube descriptions and Telegram posts), hence the redirec
 
 ---
 
+## #47 - The name inventor keeps K=3 and the embedding model, although K=4 and a plain one-hot MLP score better
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** Section 9 of `ml/11_neural_networks/47_name_inventor_solution.ipynb` now trains
+K in {1, 2, 3, 4, 5, 6, 8}, h in {32, 128, 512} and a plain one-hot MLP (10 trainings). The base
+config (embedding, K=3, d=8, h=128) stays the final model, and the notebook says openly that it
+is not the validation-loss winner.
+
+**Why.** Best val loss at seed 509: K=1 1.904, K=2 1.721, K=3 1.673, K=4 1.657, K=5 1.673,
+K=6 1.657, K=8 1.661; plain one-hot MLP (K=3, 20,135 weights) 1.644; noise floor 0.002 (three
+seeds of the base config). Pilot reruns at seeds 510/511 confirmed both wins (K=4 1.655 /
+1.663; plain 1.649 / 1.640). But the gaps are ~1% (K) and ~2% (plain) of the loss, against
+0.231 gained from K=1 to K=3. K=3 is the smallest window that sees the «-յան» suffix
+(P(stop) after ն / ան / յան = 74% / 83% / 99%), and the embedding model is what the notebook
+teaches, what every LM uses, and what bonus 13 inspects. This corrects #44's reading ("K=5 ties
+K=3, more context bought nothing"), which was an artifact of testing only K=5.
+
+**Alternatives rejected.** *Switch the base to K=4* - rewrites every K=3 argument, diagram and
+walkthrough for a 1% gain. *Switch to the plain MLP* - loses the embedding table, the Bengio
+lineage and bonus 13; its edge comes from a 39-letter alphabet where one-hots are cheap.
+
+**What would change this.** A much larger name list where these gaps grow past a few percent,
+or a version of the practical whose point is model selection.
+
+---
+
+## #46 - The name inventor uses one `.` token for padding and end-of-name, and out-of-alphabet input raises
+
+**Date:** 2026-09-28 · **Status:** active
+
+**Decision.** `.` (code 0) stays both the start padding and the end-of-name answer. A new
+`encode()` lowercases its input and raises `ValueError` on any character outside the 38-letter
+alphabet (e.g. ը); steering prefixes and all hand-written contexts go through it.
+
+**Why.** The two roles never collide - checked in the notebook: `.` is the answer exactly 551
+times (once per training name) and appears in contexts only as leading padding, in all 5,208
+windows. A separate padding token would be a 40th class that is never correct, and would spread
+"uniform guessing" over a character that cannot occur. ը never occurs in the 689 surnames;
+dropping it silently would steer with a different prefix than the one typed.
+
+**Alternatives rejected.** *Separate PAD / EOS tokens* - what LLMs do, because they batch texts
+of different lengths and mark document boundaries; neither happens here. *Add ը to the
+vocabulary* - an untrained random row the model never learned to read. *An `<unk>` token* -
+maps every unknown letter to one meaningless code, silently.
+
+**What would change this.** Variable-length batching (an RNN or transformer version of the
+practical) - then a real padding token. A multi-script or user-facing generator - then a
+byte-level vocabulary.
+
+---
+
 ## #44 - The name-inventor comparison shrinks to K x h with a measured noise floor; torch runs on one thread
 
-**Date:** 2026-09-26 · **Status:** active
+**Date:** 2026-09-26 · **Status:** revisited 2026-09-28 by #47 (K range widened to 1-8, plain one-hot MLP added; "K=5 ties K=3" did not generalize)
 
 **Decision.** Section 9 of `ml/11_neural_networks/47_name_inventor_solution.ipynb` varies only
 the context K in {1, 2, 3, 5} and the hidden size h in {32, 128, 512} (6 trainings; it was
