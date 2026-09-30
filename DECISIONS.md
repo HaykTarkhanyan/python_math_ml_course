@@ -9,6 +9,35 @@ this file holds the choice and a pointer.
 
 ---
 
+## #54 - The name inventor splits start padding (`^`) from end-of-name (`.`): 40 symbols in, 39 out
+
+**Date:** 2026-09-30 · **Status:** active (instructor's call) · **Supersedes** the single-token part of #46
+
+**Decision.** In `ml/11_neural_networks/47_name_inventor_solution.ipynb`, `^` (code 39) pads
+contexts and is never a target; `.` (code 0) is the stop answer and never appears in a context.
+The model (renamed `NameMLP` -> `SurnameMLP`) takes `V_in = 40` rows in the embedding table and
+`V_out = 39` outputs in the softmax. #46's other half stays: `encode()` raises on
+out-of-alphabet input such as ը.
+
+**Why.** The instructor asked twice why `.` did two jobs; the explanation did not land, so it
+would not land for students either. With two tokens the roles are visible everywhere - `^^^`
+contexts, and a bigram table with a `^` start row and a `.` end column. The output stays 39
+classes, so uniform guessing is still log 39 = 3.664 and the bigram baseline is unchanged
+(1.948). Cost, stated in section 2 of the notebook: the `.` embedding row is never read, so it
+never trains (8 idle weights of 8,551); and the extra row shifts initialization, so every
+trained number moved and was re-verified.
+
+**Alternatives rejected.** *Keep one `.`* (#46) - correct, but confusing. *One shared
+40-symbol vocabulary* (LLM-style special tokens) - `^` becomes a never-correct 40th output the
+model must learn to push to zero, and uniform guessing becomes log 40. *Separate 39-in / 39-out
+code spaces* - no idle row, but code 0 would mean `^` on input and `.` on output: the same
+double duty, only renamed.
+
+**What would change this.** Variable-length batching (an RNN or transformer version) - then a
+padding token distinct from the start token.
+
+---
+
 ## #53 - Link checking is a manual tool, not a CI gate
 
 **Date:** 2026-09-28 · **Status:** active
@@ -138,7 +167,7 @@ and its xlsx, likely YouTube descriptions and Telegram posts), hence the redirec
 
 ## #47 - The name inventor keeps K=3 and the embedding model, although K=4 and a plain one-hot MLP score better
 
-**Date:** 2026-09-28 · **Status:** active
+**Date:** 2026-09-28 · **Status:** active, revisited 2026-09-30: after the `^`/`.` split (#54) the K ranking changed - K=4 1.663, K=5 1.658, K=6 1.675, K=8 1.682 vs K=3 1.671, with seed noise now 0.007 - so no K beats K=3 by more than ~2 noise floors; the plain MLP still wins (1.646) and h=32 now edges the base (1.655). The keep-K=3-and-embedding call stands, on weaker "better K" evidence than recorded below.
 
 **Decision.** Section 9 of `ml/11_neural_networks/47_name_inventor_solution.ipynb` now trains
 K in {1, 2, 3, 4, 5, 6, 8}, h in {32, 128, 512} and a plain one-hot MLP (10 trainings). The base
@@ -165,7 +194,7 @@ or a version of the practical whose point is model selection.
 
 ## #46 - The name inventor uses one `.` token for padding and end-of-name, and out-of-alphabet input raises
 
-**Date:** 2026-09-28 · **Status:** active
+**Date:** 2026-09-28 · **Status:** superseded by #54 for the token part (`^` start, `.` end); the out-of-alphabet rule is still active
 
 **Decision.** `.` (code 0) stays both the start padding and the end-of-name answer. A new
 `encode()` lowercases its input and raises `ValueError` on any character outside the 38-letter
