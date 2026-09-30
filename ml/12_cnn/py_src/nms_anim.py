@@ -9,11 +9,11 @@ figures cannot drift apart.
 Geometry is fixed across frames (same figsize, same axes rect, no tight bbox) so
 nothing jitters between clicks.
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   nms_anim_0.pdf .. nms_anim_N.pdf   (N reported in the log)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/nms_anim.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/nms_anim.py
 """
 
 import logging

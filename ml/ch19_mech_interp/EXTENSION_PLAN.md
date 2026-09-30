@@ -29,7 +29,7 @@ What the survey found (2026-09-22):
      for Transformer Circuits*) was only cited on a closing frame;
   4. MLPs were almost absent - heads and SAEs only; nothing on where facts are stored;
   5. vision, where the field started (feature visualization, curve detectors), was absent; the
-     course has one Grad-CAM frame in `ch6_cnn/L18`;
+     course has one Grad-CAM frame in `12_cnn/L18`;
   6. 2025-26 work on personas and model diffing was absent (natural link to `ch20`).
 
 ## Locked decisions (instructor interview, 2026-09-22)
@@ -40,7 +40,7 @@ What the survey found (2026-09-22):
 | 2 | Gap topics | **All four**: transformer circuits math, where facts live (MLPs), vision interpretability, personas and model diffing |
 | 3 | Session budget | **Build it all, decide later** what gets taught |
 | 4 | Models | **GPT-2 small on CPU** for the language decks |
-| 5 | Vision model | **ResNet-18** (torchvision ImageNet weights, same model as `ch6_cnn` Grad-CAM; already cached) |
+| 5 | Vision model | **ResNet-18** (torchvision ImageNet weights, same model as `12_cnn` Grad-CAM; already cached) |
 | 6 | Circuits-math models | **GPT-2 small + TransformerLens `attn-only-1l` / `attn-only-2l`** |
 | 7 | Diffing example | **Fine-tune GPT-2 small ourselves** to install a known behaviour (a model organism) |
 | 8 | Edits to L45-L47 | **Moderate**: move the "what is mech interp" frames to the intro, add easier examples and worked frames, split the densest frames, cut only duplicates, keep every measured result |
@@ -173,7 +173,7 @@ frontier model), the two tools (TransformerLens, Neuronpedia). Recap, Next.
 
 ### 2. Vision - "Seeing what a network sees" (~45 frames, new, add-on)
 
-Builds on: intro. Model: ResNet-18. Photo: `ml/ch6_cnn/fig/src_pomegranate.jpg` (the ch6 Grad-CAM
+Builds on: intro. Model: ResNet-18. Photo: `ml/12_cnn/fig/src_pomegranate.jpg` (the ch6 Grad-CAM
 photo) plus one or two more from the repo.
 
 - **Cold open.** Grad-CAM (ch6) and LIME's husky (ch05) are both heatmaps over the input. Neither

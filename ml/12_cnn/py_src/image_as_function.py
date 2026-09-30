@@ -1,13 +1,13 @@
 """Real figure for the L16 CNN Foundations deck (Section 1, image as a function).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   image_as_function.pdf  -- a synthetic grayscale image with three horizontal scan lines
                             and their intensity profiles f(x). Flat regions are constant;
                             edges are jumps; a gradient is a ramp. Sets up "edges = large
                             derivative".
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/image_as_function.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/image_as_function.py
 """
 
 import logging

@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 2, the kernel zoo).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   kernel_zoo.pdf  -- the grayscale astronaut test image + 7 classic 3x3 kernels applied by
                      hand (identity, box blur, Gaussian blur, sharpen, Sobel X, Sobel Y,
                      emboss).
@@ -10,7 +10,7 @@ Part A asks students to write, so the deck figure and the homework share one imp
 
 Uses skimage's public-domain 'astronaut' test image (strong edges for the filters).
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/kernel_zoo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/kernel_zoo.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 """

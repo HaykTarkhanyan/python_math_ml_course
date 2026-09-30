@@ -7,7 +7,7 @@ but the focus is WHY attention had to be invented: variable-length inputs break 
 recurrence fixes that but its gradients vanish, LSTM patches the memory but not the
 bottleneck. Tokenization and variable-length handling get real estate (instructor
 request); forecasting/time-series was dropped as the spine. No homework this chapter.
-Follows the ch6 CNN playbook (`ml/ch6_cnn/CNN_CHAPTER_PLAN.md`); this file only spells
+Follows the ch6 CNN playbook (`ml/12_cnn/CNN_CHAPTER_PLAN.md`); this file only spells
 out what differs. Outlines: `L20_rnn_foundations_OUTLINE.md`,
 `L21_road_to_attention_OUTLINE.md`.
 

@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 1, HSV colour space).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   hsv_space.pdf  -- top row: the astronaut portrait decomposed into H, S, V.
                     bottom row: what the axes buy you - two ways to "darken" in RGB
                     (one shifts hue, one does not) vs moving V, plus a hue rotation.
@@ -12,7 +12,7 @@ The bottom row backs the slide's claim with measured numbers, printed to the log
 Uses skimage's public-domain 'astronaut' test image (NASA), same source image as
 rgb_channels.pdf / kernel_zoo.pdf so the section stays visually consistent. Run with the
 project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/hsv_space.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/hsv_space.py
 """
 
 import logging

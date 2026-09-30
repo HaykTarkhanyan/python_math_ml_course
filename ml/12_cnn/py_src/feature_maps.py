@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 5, what the layers learn).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   feature_maps.pdf  -- the 8 first-layer 3x3 kernels a small CNN learned on Fashion-MNIST
                        (nobody designed them), each above the feature map it produces on a
                        sample image. The "kernels are learned" payoff.
@@ -10,7 +10,7 @@ epochs - a few minutes on CPU. (Same config as cnn_vs_mlp.py, so the learned ker
 here are the same net that wins the payoff figure.)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/feature_maps.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/feature_maps.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 """

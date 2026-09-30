@@ -5,13 +5,13 @@ convolutional layer (conv1: 64 filters, 7x7, RGB) as an 8x8 grid. Each filter is
 min-max normalized on its own so the Gabor-like edge / blob / color detectors are
 visible. NO training - weights are loaded and plotted only.
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   pretrained_filters.pdf
 
 First run downloads the resnet18 weights once (~45 MB, sanctioned).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/pretrained_filters.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/pretrained_filters.py
 """
 
 import logging

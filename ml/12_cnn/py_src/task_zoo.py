@@ -8,11 +8,11 @@ hand-placed for fig/borrowed/pomegranate_market.jpg (1920x1280); no model infere
 Per LEARNINGS: array-alpha on imshow is silently ignored in PDF output, so the
 segmentation overlay is baked into the RGB pixels directly.
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   task_zoo.pdf
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/task_zoo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/task_zoo.py
 """
 
 import logging

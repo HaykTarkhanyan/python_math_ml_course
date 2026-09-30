@@ -15,7 +15,7 @@ MLP baseline; 150M-weight cold open). I do not need to change any numbers.
 
 ### A1. The pomegranate photo (plan open question 5)
 
-`ml/ch6_cnn/fig/src_pomegranate.jpg` does **not exist yet**. Three figures depend on it and
+`ml/12_cnn/fig/src_pomegranate.jpg` does **not exist yet**. Three figures depend on it and
 are written to fail loudly if it's missing: `pixel_shuffle.py`, `kernel_zoo.py` (both L16),
 and `task_zoo.py` (L18). How do you want to proceed?
 
@@ -104,7 +104,7 @@ photo-independent figures first. B1-B3 I'll proceed on my defaults unless you pu
 
 ### A1 - RESOLVED: the photo exists now
 
-`ml/ch6_cnn/fig/src_pomegranate.jpg` was dropped in after you wrote this (1280x960 JPEG,
+`ml/12_cnn/fig/src_pomegranate.jpg` was dropped in after you wrote this (1280x960 JPEG,
 RGB - verified it opens with PIL and inspected it visually: a cracked-open pomegranate
 with exposed arils on a wooden table, sharp, high-contrast). It is very good for L16:
 strong edges for Sobel/emboss, dense aril texture for blur/sharpen. Proceed with your

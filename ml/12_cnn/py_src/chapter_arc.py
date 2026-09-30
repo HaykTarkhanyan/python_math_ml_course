@@ -5,11 +5,11 @@ ribbons: L16 built the layer -> L17 evolved architectures -> L18 taught reuse an
 trust -> L19 structured the output. L19 is highlighted in red ("you are here").
 Each beat carries a small hand-drawn pictogram (matplotlib patches, no images).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   chapter_arc.pdf
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/chapter_arc.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/chapter_arc.py
 """
 
 import logging

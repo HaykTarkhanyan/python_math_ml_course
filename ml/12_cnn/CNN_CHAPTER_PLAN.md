@@ -19,7 +19,7 @@ Outlines live next to this file: `L16_cnn_foundations_OUTLINE.md`,
    L15's "Reverse mode: one sweep, any architecture" frame literally promises conv layers;
    L14 has the why-GPUs frame and the XOR re-coordinatisation frame. The outlines lean on
    these hard.
-4. **New chapter folder** `ml/ch6_cnn/` (instructor request) instead of L16a/b/c inside
+4. **New chapter folder** `ml/12_cnn/` (instructor request) instead of L16a/b/c inside
    `ch5_neural_networks/`. Numbering: plain **L16 / L17 / L18 / L19** (L19 added in the
    2026-07-13 restructure). The old `L16_cnns.tex` / L17 / L18 skeletons no longer exist
    in ch5, so nothing collides - but note L19 takes the number the old RNN design
@@ -96,7 +96,7 @@ Four mechanisms, in order of preference:
    recreates the idea from scratch with our own data/photo. See the figure pipeline.
 3. **COPY-IMG** (exception, needs listing). Copy a specific image file from
    `ml/deep_learning/_reference/lecture_i2dl/slides/<chapter>/figure/` into
-   `ml/ch6_cnn/fig/borrowed/`, embed with `\includegraphics`, and put an attribution
+   `ml/12_cnn/fig/borrowed/`, embed with `\includegraphics`, and put an attribution
    line on the frame: "Source: LMU I2DL (slds-lmu/lecture_i2dl), CC BY 4.0" - or the
    original paper's citation if the image is a paper figure. Reserved for showcase
    images we cannot generate (application photos, paper result collages). Every COPY-IMG
@@ -115,7 +115,7 @@ Four mechanisms, in order of preference:
    pages; do not add others silently.
 6. **WEB-IMG** (added 2026-07-13 after the L16 build; instructor direction). Illustrative
    images and architecture diagrams may be DOWNLOADED from the web into
-   `ml/ch6_cnn/fig/borrowed/` whenever a good one exists and recreating it is costly -
+   `ml/12_cnn/fig/borrowed/` whenever a good one exists and recreating it is costly -
    e.g. LeNet/AlexNet/VGG/Inception/ResNet architecture diagrams, the U-Net diagram, a
    YOLO grid figure. Per the instructor's standing instruction, do NOT add licensing
    caveats or per-image credit lines for assets used this way; the chapter-level LMU
@@ -214,11 +214,11 @@ Non-negotiables, in build order:
    `ml/SLIDE_STYLE.md` (single source of truth), this plan, then the deck's outline.
    The interview and outline stages are done and approved; you are at the build stage.
    Each outline ends with deck-specific build notes - follow them.
-2. **File layout:** decks are `ml/ch6_cnn/L16_cnn_foundations.tex` (etc.),
-   `\documentclass[aspectratio=169]{beamer}` + `\input{../preamble}` (ch6_cnn sits one
-   level under `ml/`, exactly like ch5). Figure scripts in `ml/ch6_cnn/py_src/`, output
-   PDFs in `ml/ch6_cnn/fig/`, borrowed images in `ml/ch6_cnn/fig/borrowed/`. Chapter
-   page `ml/ch6_cnn/cnn.qmd`, registered in `_quarto.yml` with exact-case path.
+2. **File layout:** decks are `ml/12_cnn/L16_cnn_foundations.tex` (etc.),
+   `\documentclass[aspectratio=169]{beamer}` + `\input{../preamble}` (12_cnn sits one
+   level under `ml/`, exactly like ch5). Figure scripts in `ml/12_cnn/py_src/`, output
+   PDFs in `ml/12_cnn/fig/`, borrowed images in `ml/12_cnn/fig/borrowed/`. Chapter
+   page `ml/12_cnn/12_cnn.qmd`, registered in `_quarto.yml` with exact-case path.
 3. **Outline tags translate as:** `[plain]` = plain transition frame (popblue bold title
    + one motivation line); `[predict-first]` = question, `\pause`, reveal on the same
    frame; `[worked-numbers]` = compute with the exact numbers given in the outline (do
@@ -234,7 +234,7 @@ Non-negotiables, in build order:
    (<= 8k train / 2k test), tiny nets, <= 5 epochs, minutes not hours. Anything heavier
    trains in the HW notebooks on Colab; only its saved metrics get plotted locally.
 5. **Compile loop per deck:** `pdflatex -interaction=nonstopmode -halt-on-error` twice
-   -> zero `!` lines in the log -> `./ma/Scripts/python.exe clean_latex.py ml/ch6_cnn`
+   -> zero `!` lines in the log -> `./ma/Scripts/python.exe clean_latex.py ml/12_cnn`
    -> visual overflow check (`beamer-overflow-check`; Beamer clips silently) -> open
    the PDF for instructor review.
 6. **Prose rules:** no em-dashes (use -), no curly quotes; English slide body.
@@ -327,7 +327,7 @@ registered in `_quarto.yml` (exact case). Commit without aux files.
 
 ## Open questions for the instructor
 
-1. **Numbering:** plain L16/L17/L18 in `ml/ch6_cnn/` OK? (Old design said L16a/b/c inside
+1. **Numbering:** plain L16/L17/L18 in `ml/12_cnn/` OK? (Old design said L16a/b/c inside
    ch5; the ch5 skeletons are gone, so plain numbers are free.)
 2. **Folder name:** `ch6_cnn` OK? (Old design once referred to a future `ch6_genai`; GenAI
    would then become ch7.)

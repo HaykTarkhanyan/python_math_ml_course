@@ -211,5 +211,5 @@ are hand-engineered" misconception.
 - `cnn_vs_mlp.py`: the MLP baseline is the ch5 practical architecture (784-128-64-10,
   ~109k params); same subsample, same epochs; one accuracy-vs-epoch chart, both curves
   labeled with final accuracy and parameter count.
-- The pomegranate photo: instructor supplies `ml/ch6_cnn/fig/src_pomegranate.jpg` (plan
+- The pomegranate photo: instructor supplies `ml/12_cnn/fig/src_pomegranate.jpg` (plan
   open question 5); every script that needs it must fail loudly if it is missing.

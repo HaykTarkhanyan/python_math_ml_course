@@ -15,7 +15,7 @@ Generates into ml/ch7_rnn/fig/:
                         2023 Mamba -- Gu & Dao
                         2024 xLSTM -- Beck et al. (Hochreiter, senior author)
 
-No `ml/ch6_cnn/py_src/timeline_ribbon.py` exists in this repo to copy the exact visual
+No `ml/12_cnn/py_src/timeline_ribbon.py` exists in this repo to copy the exact visual
 language from (checked at build time) -- this is a fresh, from-scratch ribbon in the
 same house style (horizontal axis, boxed year/event labels, Armenian-palette colors for
 the three eras: pre-2017 RNN era, the 2017 transformer pivot, the 2023+ comeback).

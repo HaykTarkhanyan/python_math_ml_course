@@ -11,12 +11,12 @@ Re-fetch the 720p video (git-ignored):
 ```bash
 SK=".claude/skills/youtube-reference/scripts"
 bash "$SK/yt_fetch.sh" "https://www.youtube.com/watch?v=KuXjwB4LzSA" \
-  "ml/ch6_cnn/_reference_3b1b_convolution"
+  "ml/12_cnn/_reference_3b1b_convolution"
 ```
 
 ## Why it's here
 
-Fetched to mine against **L16 CNN Foundations** (`ml/ch6_cnn/L16_cnn_foundations.tex`),
+Fetched to mine against **L16 CNN Foundations** (`ml/12_cnn/L16_cnn_foundations.tex`),
 whose Section 2 arc (1D sliding dot product -> moving average -> dice aside -> Fourier
 aside -> 2D by hand -> kernel zoo -> edges) overlaps heavily with this video. Most of
 the video is content L16 already teaches in house style; the genuinely *additive*

@@ -1,11 +1,11 @@
 """Real figure for the L16 CNN Foundations deck (Section 1, a pixel is three numbers).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   rgb_channels.pdf  -- the astronaut portrait + its R, G, B channels (each tinted in its
                        own color). One pixel = (R, G, B), each 0-255.
 
 Uses skimage's public-domain 'astronaut' test image (NASA). Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/rgb_channels.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/rgb_channels.py
 """
 
 import logging

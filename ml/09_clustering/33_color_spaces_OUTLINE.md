@@ -16,7 +16,7 @@ to start in the same slot.
 
 **Instructor decisions taken during the interview:** number it `33` and renumber everything after
 (not `32b`); all four extra topics in (gamma, Lab, YCbCr, colour histograms); Saryan painting
-everywhere, including in the three scripts copied from `ch6_cnn`; leave `L16` alone for now.
+everywhere, including in the three scripts copied from `12_cnn`; leave `L16` alone for now.
 
 ---
 
@@ -32,7 +32,7 @@ Three things in the course currently assume color knowledge that is taught nowhe
 3. The photo-grouping practical's task 1 asks students to cluster a **color histogram** without
    ever defining one.
 
-The material that *does* exist sits in `ml/ch6_cnn/L16_cnn_foundations.tex` Section 1 — roughly
+The material that *does* exist sits in `ml/12_cnn/L16_cnn_foundations.tex` Section 1 — roughly
 three weeks too late in the schedule.
 
 ---
@@ -89,8 +89,8 @@ as bright as 255?*
 | # | Frame | Figure | Source |
 |---|---|---|---|
 | 1 | `[plain]` transition: "A pixel is not a color, it is three numbers" | — | new |
-| 2 | How your eye sees color — S/M/L cones, three numbers per point. Extended with **metamerism**: two different light spectra hitting the same three cone responses look identical, which is *why* three numbers are enough. | `eye_cones.pdf` | **copied** from `ch6_cnn/py_src/eye_cones.py` |
-| 3 | A pixel is three numbers — RGB triples, three stacked grids | `rgb_channels.pdf` | **copied** from `ch6_cnn/py_src/rgb_channels.py` |
+| 2 | How your eye sees color — S/M/L cones, three numbers per point. Extended with **metamerism**: two different light spectra hitting the same three cone responses look identical, which is *why* three numbers are enough. | `eye_cones.pdf` | **copied** from `12_cnn/py_src/eye_cones.py` |
+| 3 | A pixel is three numbers — RGB triples, three stacked grids | `rgb_channels.pdf` | **copied** from `12_cnn/py_src/rgb_channels.py` |
 | 4 | **Predict-first: gamma.** Pixel 128 is **21.6%** of the light of 255, not 50%. Half the light is pixel **188**. The sRGB curve and why it exists (8 bits spent where the eye is sensitive). Second panel: averaging in gamma space darkens gradients, which is why naive image resizing looks wrong. | `gamma_curve.pdf` (new, 2 panels) | new |
 
 Measured, `ma` venv: `lin(128/255) = 0.2159`; `255 * (1.055 * 0.5^(1/2.4) - 0.055) = 187.5`.
@@ -102,7 +102,7 @@ sRGB transfer function verified against the ICC spec: `x/12.92` for `x <= 0.0404
 | # | Frame | Figure | Source |
 |---|---|---|---|
 | 5 | `[plain]` transition: "RGB says how to make the color, not what it is" | — | new |
-| 6 | HSV axes — hue (angle), saturation (radius), value (height). Carries the existing measured argument: subtract a constant in RGB and hue drifts by a measured number of degrees with N% of pixels crushed to black; scale V and hue *provably* cannot move (the script asserts `max gap < 1e-6`). | `hsv_space.pdf` | **copied** from `ch6_cnn/py_src/hsv_space.py` |
+| 6 | HSV axes — hue (angle), saturation (radius), value (height). Carries the existing measured argument: subtract a constant in RGB and hue drifts by a measured number of degrees with N% of pixels crushed to black; scale V and hue *provably* cannot move (the script asserts `max gap < 1e-6`). | `hsv_space.pdf` | **copied** from `12_cnn/py_src/hsv_space.py` |
 | 7 | **The trap: hue is circular.** 0.99 and 0.01 are both red and maximally far apart in Euclidean distance. Hand k-means naive HSV and hue coherence collapses to ~0. The cone encoding `(S·cos 2πH, S·sin 2πH, V)` fixes it completely. | `hue_seam.pdf` (new) | new figure, **numbers ported** from the image-compression practical, section 10 |
 | 8 | When HSV earns its keep — thresholding one object by hue survives a lighting change that breaks an RGB threshold. | `hsv_threshold.pdf` (new) | new |
 
@@ -140,7 +140,7 @@ Ten scripts in `ml/09_clustering/py_src/`, all writing to `../fig/`. Shared help
 **`color_common.py`** (Saryan loader, logging setup, sRGB transfer functions, palette) rather than
 being pasted into each script.
 
-**Copied** from `ml/ch6_cnn/py_src/` (originals stay put; `L16` is untouched and still compiles):
+**Copied** from `ml/12_cnn/py_src/` (originals stay put; `L16` is untouched and still compiles):
 
 | Script | Output | Change from the original |
 |---|---|---|

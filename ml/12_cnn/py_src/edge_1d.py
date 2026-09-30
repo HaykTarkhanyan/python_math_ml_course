@@ -1,13 +1,13 @@
 """Real figure for the L16 CNN Foundations deck (Section 2, edges are derivatives).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   edge_1d.pdf  -- a 1D intensity profile with an edge (top) and its discrete derivative
                   f(x+1)-f(x) (bottom), which spikes exactly at the edge. The point: an
                   edge is a large derivative, and the derivative is a difference of
                   neighbours.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/edge_1d.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/edge_1d.py
 """
 
 import logging

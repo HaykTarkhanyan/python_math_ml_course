@@ -37,7 +37,8 @@ Last updated: 2026-09-28
 - **Watch the transitional ambiguity:** `ml/10_dimensionality_reduction/` (converted) and
   `ml/ch10_diffusion/` (legacy) both read as "10". Until the legacy set is converted, refer to a
   chapter by topic in any student-visible text, not by bare number. Same for
-  `ml/11_neural_networks/` (converted 2026-09-16) and `ml/ch11_rl/` (legacy).
+  `ml/11_neural_networks/` (converted 2026-09-16) and `ml/ch11_rl/` (legacy), and for
+  `ml/12_cnn/` (converted 2026-09-30, DECISIONS #55) and `ml/ch12_vlm/` (legacy).
 - **Two-part lectures** use `NN_1_` / `NN_2_` (first seen 2026-09-16: `41_1_neuron_to_network`,
   `41_2_multilayer_nets` in `ml/11_neural_networks/`).
 

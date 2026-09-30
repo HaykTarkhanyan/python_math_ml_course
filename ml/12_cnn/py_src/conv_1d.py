@@ -1,6 +1,6 @@
 """Real figures for the L16 CNN Foundations deck (Section 2, the 1D case).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   moving_average.pdf  -- a noisy 1D signal and its 5-point moving average (convolution with
                          a box kernel = smoothing).
   dice_conv.pdf       -- P(die A) * P(die B) = P(sum): two uniform dice distributions and
@@ -8,7 +8,7 @@ Generates into ml/ch6_cnn/fig/:
                          not just an image trick - it is how you add two random variables.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/conv_1d.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_1d.py
 """
 
 import logging

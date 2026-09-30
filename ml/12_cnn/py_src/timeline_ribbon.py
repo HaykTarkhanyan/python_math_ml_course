@@ -4,7 +4,7 @@ One thin horizontal 1989-2026 timeline strip per section transition, with the cu
 story position highlighted in red (everything else gray). All six variants share
 identical geometry so the ribbon does not jump between sections.
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   ribbon_1.pdf  -- Section 1 (the benchmark):        highlight 2009 ImageNet
   ribbon_2.pdf  -- Section 2 (the classics):          highlight 1989 / 2012 / 2014
   ribbon_3.pdf  -- Section 3 (degradation + ResNet):  highlight 2015 ResNet
@@ -13,7 +13,7 @@ Generates into ml/ch6_cnn/fig/:
   ribbon_6.pdf  -- Section 6 (epilogue):              highlight 2017..2025 (the frontier)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/timeline_ribbon.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/timeline_ribbon.py
 """
 
 import logging

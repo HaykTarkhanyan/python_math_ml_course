@@ -1,11 +1,11 @@
 """Real figure for the L16 CNN Foundations deck (Section 1, how the eye sees color).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   eye_cones.pdf  -- approximate S/M/L cone sensitivity curves vs wavelength. Three cone
                     types -> three numbers per point -> RGB.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/eye_cones.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/eye_cones.py
 """
 
 import logging

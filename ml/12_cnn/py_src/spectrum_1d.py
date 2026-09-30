@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 2, what a spectrum is).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   spectrum_1d.pdf  -- left: a 1D signal that is the sum of three sine waves (shown faint);
                       right: its Fourier amplitude spectrum - three clean spikes at exactly
                       those three frequencies. The transform "reads off how much of each
@@ -8,7 +8,7 @@ Generates into ml/ch6_cnn/fig/:
                       the same idea in two dimensions.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/spectrum_1d.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/spectrum_1d.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3+ series (red/blue/orange); bars carry value labels.

@@ -1,11 +1,11 @@
 """Real figure for the L16 CNN Foundations deck (Section 4, padding).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   conv_arithmetic.pdf  -- two schematic grids: "valid" (no padding) shrinks a 5x5 input
                           to 3x3 with a 3x3 kernel; "same" (zero-pad 1) keeps it 5x5.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/conv_arithmetic.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_arithmetic.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 """

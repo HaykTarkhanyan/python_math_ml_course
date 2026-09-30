@@ -11,11 +11,11 @@ The locked worked example (LMU cnn2 / Bai 2019 numbers): input 12x12x3, 5x5 filt
 All four numbers are recomputed in code and asserted against the spec before
 plotting - the frame text quotes them exactly. ~23x fewer multiplications.
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   separable_count.pdf
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/separable_count.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/separable_count.py
 """
 
 import logging

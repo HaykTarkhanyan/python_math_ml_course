@@ -1,11 +1,11 @@
 """Payoff figure for the L18 Transfer Learning deck (Section 1).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   transfer_curves.pdf -- from-scratch vs feature-extraction vs fine-tune validation
                          accuracy on small data.
 
 Two modes:
-  1. REAL: if ml/ch6_cnn/py_src/data/hw3_metrics.csv exists (saved by the HW3 Colab
+  1. REAL: if ml/12_cnn/py_src/data/hw3_metrics.csv exists (saved by the HW3 Colab
      notebook), plot those measured curves. Required columns: epoch, from_scratch,
      feature_extraction, fine_tune (val accuracy in [0, 1]). Fails loudly on a
      malformed file.
@@ -15,7 +15,7 @@ Two modes:
      are presented as measurements.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/transfer_curves.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/transfer_curves.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3-color charts.

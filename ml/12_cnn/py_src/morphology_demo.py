@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section: kernel variations).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   morphology_demo.pdf  -- a synthetic binary shape shown three ways: original,
                           after DILATION (3x3 max, grows and fills small holes) and
                           after EROSION (3x3 min, shrinks and breaks thin parts).
@@ -10,7 +10,7 @@ Generates into ml/ch6_cnn/fig/:
                           weighted-sum convolution the rest of the deck uses.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/morphology_demo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/morphology_demo.py
 """
 
 import logging

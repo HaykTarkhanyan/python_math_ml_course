@@ -16,7 +16,7 @@ adds 2d to the receptive field. Standard stack d=1,1,1: 3,5,7. WaveNet-style sta
 d=1,2,4: 3,7,15.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/receptive_field_dilated.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/receptive_field_dilated.py
 """
 
 import logging

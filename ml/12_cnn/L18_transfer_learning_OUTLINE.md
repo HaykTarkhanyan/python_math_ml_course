@@ -151,7 +151,7 @@ predictions, plus three written sentences on what the model attends to.
   loudly if the photo or weights are missing. If an HW3 fine-tuned checkpoint exists,
   prefer it; do not require it.
 - `transfer_curves.py`: training runs in the HW3 notebook on Colab; the notebook saves
-  metrics (csv/json) to `ml/ch6_cnn/py_src/data/`; the local script only plots and must
+  metrics (csv/json) to `ml/12_cnn/py_src/data/`; the local script only plots and must
   fail loudly if the metrics file is missing.
 - BN-gotcha frame: practical rule only (BN layers to eval mode when the trunk is
   frozen); L15 owns the BN formula.

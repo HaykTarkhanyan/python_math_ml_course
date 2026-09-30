@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 2, the frequency aside).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   fourier_view.pdf  -- the grayscale astronaut, its 2D Fourier magnitude spectrum, and two
                        frequency-domain filters reconstructed back to image space:
                          low-pass  (keep the central disk of frequencies)  -> blur
@@ -12,7 +12,7 @@ Generates into ml/ch6_cnn/fig/:
 
 Uses skimage's public-domain 'astronaut' test image (same image as kernel_zoo.py).
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/fourier_view.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/fourier_view.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 """

@@ -1,6 +1,6 @@
 """Real figure for the L17 CNN Architectures deck (cold open / Section 1).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   imagenet_error.pdf            -- ILSVRC top-5 error by year, 2010-2015: labeled bars
                                    (winner + error %), a human-baseline line at ~5.1%.
   imagenet_anim_0.pdf .. _6.pdf -- flip-book: empty axes (frame 0) then one bar revealed
@@ -12,7 +12,7 @@ Recognition Challenge", IJCV 2015) + the winning papers; human baseline ~5.1% fr
 Russakovsky/Karpathy. Numbers web-verified 2026-07-14 (match the canonical CS231n chart).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/imagenet_error.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/imagenet_error.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette, value labels on bars.

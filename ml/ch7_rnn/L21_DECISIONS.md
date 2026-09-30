@@ -136,7 +136,7 @@ instructor's message:
    OWN-TEX nor the Alammar material already showed this specific "unlabeled preview
    of attention" idea without also naming attention.
 
-4. **No `ml/ch6_cnn/py_src/timeline_ribbon.py` exists in this repo** (checked at
+4. **No `ml/12_cnn/py_src/timeline_ribbon.py` exists in this repo** (checked at
    build time via `Glob`) - the outline's "if helpful" pointer to it as a style
    reference could not be followed. `rnn_timeline.py` is a fresh ribbon design in the
    same general house language (horizontal axis, colored circular markers, boxed

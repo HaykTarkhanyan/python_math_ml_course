@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 5, the payoff).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   cnn_vs_mlp.pdf  -- two bars panels comparing the L15 MLP baseline (784-128-64-10,
                      109,386 params) and the chapter's small CNN (9,098 params), trained on
                      the same Fashion-MNIST subsample for the same epochs: final accuracy is
@@ -17,7 +17,7 @@ epochs on Fashion-MNIST (which is small and low-texture). 15k/15 epochs is the h
 config where the CNN leads consistently. Full 10k test set for a stable accuracy estimate.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/cnn_vs_mlp.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/cnn_vs_mlp.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette.

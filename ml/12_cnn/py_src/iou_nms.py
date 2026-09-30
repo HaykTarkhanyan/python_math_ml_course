@@ -10,13 +10,13 @@ survivors (greedy NMS, IoU threshold 0.45). All boxes hard-coded, no model.
 nms_anim.py imports CANDIDATES / greedy_nms / draw_nms_panel from this module so the
 animation's final frame is pixel-identical in content to the right panel here.
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   iou_nms.pdf   (combined two-panel figure)
   iou_only.pdf  (left panel alone - for the IoU frame)
   nms_only.pdf  (right panel alone)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/iou_nms.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/iou_nms.py
 """
 
 import logging

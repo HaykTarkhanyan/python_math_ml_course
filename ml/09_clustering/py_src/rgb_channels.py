@@ -5,7 +5,7 @@ Generates into ml/09_clustering/fig/:
                        colour, plus a zoomed patch with the actual (R, G, B) triples
                        printed on the pixels.
 
-Copied from ml/ch6_cnn/py_src/rgb_channels.py and re-pointed at the Saryan painting, so
+Copied from ml/12_cnn/py_src/rgb_channels.py and re-pointed at the Saryan painting, so
 the deck shows the same pixels the image-compression practical clusters.
 
 Run with the project venv:

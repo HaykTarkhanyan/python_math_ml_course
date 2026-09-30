@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section: kernel variations).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   transposed_conv_demo.pdf  -- transposed convolution as the "opposite" of a normal
                                conv: instead of shrinking the map, it GROWS it. Each
                                input cell stamps a copy of the 3x3 kernel onto the
@@ -9,7 +9,7 @@ Generates into ml/ch6_cnn/fig/:
                                (upsampling). Used in U-Net decoders and GANs (L19).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/transposed_conv_demo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/transposed_conv_demo.py
 """
 
 import logging

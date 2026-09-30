@@ -255,7 +255,7 @@ change to the existing script, and the PNG is reusable on `cnn.qmd`.
 
 ## Assets to fetch (nothing exists yet)
 
-Into **`ml/ch6_cnn/data/`** - not `fig/borrowed/`. Corrected 2026-08-02: `CONVENTIONS.md`
+Into **`ml/12_cnn/data/`** - not `fig/borrowed/`. Corrected 2026-08-02: `CONVENTIONS.md`
 reserves `data/` for "datasets used by this chapter's notebooks", while `fig/` holds deck
 figures produced by `py_src/`. These are notebook inputs, so they belong in `data/`.
 
@@ -445,7 +445,7 @@ Deliberately **given, not blanked**: `_pad`, `convolve2d_rect`, `motion_blur_ker
 HW1c's setup cell (which states it is HW1b's code). These are infrastructure or fiddly
 geometry - blanking them costs time without teaching convolution.
 
-**`cnn.qmd` created and registered** in `_quarto.yml` at `ml/ch6_cnn/cnn.qmd`, between ch5 and
+**`cnn.qmd` created and registered** in `_quarto.yml` at `ml/12_cnn/12_cnn.qmd`, between ch5 and
 ch8. Armenian section headers per `CONVENTIONS.md`, all four deck PDFs linked plus the
 `dl_cnn_conv_math` appendix, both homeworks linked in task + solution form, the chapter-level
 LMU CC BY 4.0 credit line, and HW2-HW4 listed as TBD. This closes the standing gap where
@@ -453,12 +453,12 @@ LMU CC BY 4.0 credit line, and HW2-HW4 listed as TBD. This closes the standing g
 
 Verified: `_quarto.yml` parses and all 80 chapter entries resolve; no broken link targets in
 `cnn.qmd`; no missing blank line before a markdown block element; and
-`quarto render ml/ch6_cnn/cnn.qmd` (Quarto 1.6.41) produces HTML with no errors.
+`quarto render ml/12_cnn/12_cnn.qmd` (Quarto 1.6.41) produces HTML with no errors.
 
 ## Deliverables and file layout
 
 ```
-ml/ch6_cnn/
+ml/12_cnn/
   HW1b_photoshop_PLAN.md          <- this file
   HW1b_photoshop.ipynb            <- student version: tasks, empty cells, all assertions
   NN_HW1b_solution.ipynb          <- solution; NN = playlist number, assigned at delivery
@@ -470,7 +470,7 @@ ml/ch6_cnn/
 Naming follows `CONVENTIONS.md` (`NN_HWX_solution.ipynb`, `NN` = YouTube playlist number
 for that homework's video). `HW1b` marks it as the second homework hanging off L16.
 
-`cnn.qmd` is worth building here regardless of this homework: **`ml/ch6_cnn` is currently
+`cnn.qmd` is worth building here regardless of this homework: **`ml/12_cnn` is currently
 absent from `_quarto.yml` entirely**, so all four compiled decks are invisible on the site.
 The page should link the L16-L19 clean PDFs, the `dl_cnn_conv_math` appendix, both L16
 homeworks, and carry the chapter-level LMU CC BY 4.0 credit line required by

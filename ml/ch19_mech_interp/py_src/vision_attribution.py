@@ -35,7 +35,7 @@ from mi_common import (BLUE, FIG_DIR, GREY, ORANGE, RED, REPO_ROOT, SEED, load_r
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})
 
 PHOTOS = {
-    "pomegranate": REPO_ROOT / "ml" / "ch6_cnn" / "fig" / "src_pomegranate.jpg",
+    "pomegranate": REPO_ROOT / "ml" / "12_cnn" / "fig" / "src_pomegranate.jpg",
     "puppies": REPO_ROOT / "background_photos" / "py_13_two_puppies.jpg",
     "sheep": REPO_ROOT / "background_photos" / "py_05_sheep.jpg",
     "truck": REPO_ROOT / "background_photos" / "py_03_kamaz.jpg",

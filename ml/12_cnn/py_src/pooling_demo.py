@@ -1,12 +1,12 @@
 """Real figure for the L16 CNN Foundations deck (Section 4, pooling).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   pooling_demo.pdf  -- the four 2x2 windows a 4x4 map splits into, laid out in their spatial
                        positions. In each box the max cell is outlined; below each box its
                        max and average. That is all pooling does: one number per box.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/pooling_demo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/pooling_demo.py
 """
 
 import logging

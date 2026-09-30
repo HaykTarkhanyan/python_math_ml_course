@@ -1,13 +1,13 @@
 """Real figures for the L16 CNN Foundations deck (Section 1).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   image_numbers.pdf  -- grayscale pomegranate + a zoomed 8x8 patch with raw 0-255 values,
                         for the "an image is a grid of numbers" frame.
   pixel_shuffle.pdf  -- the grayscale photo vs the same pixels under a fixed permutation,
                         for the "an MLP cannot see structure" frame.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/pixel_shuffle.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/pixel_shuffle.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 The pomegranate photo is required; the script fails loudly if it is missing.

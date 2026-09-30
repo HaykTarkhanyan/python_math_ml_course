@@ -9,6 +9,33 @@ this file holds the choice and a pointer.
 
 ---
 
+## #55 - The CNN chapter moves to `ml/12_cnn/` before it is delivered
+
+**Date:** 2026-09-30 · **Status:** active (instructor's call)
+
+**Decision.** `ml/ch6_cnn/` -> `ml/12_cnn/` and `cnn.qmd` -> `12_cnn.qmd` (`git mv`, history kept),
+following #22. The page carries `aliases: [/ml/ch6_cnn/cnn.html]` (#48); a cross-directory alias
+needs the leading `/` per the Quarto docs. The decks keep their `L16`-`L19` names until they are
+delivered and get their playlist numbers.
+
+**Why.** The sidebar already shows CNN as 12 (#49), so the folder now matches what students see.
+Renaming before delivery means new work lands in the final folder. 69 files were swept
+(`git grep`, the folder is fully tracked). Load-bearing ones: `_quarto.yml`, the raw-GitHub base URL
+in the 5 CNN notebooks (Colab downloads), and `ch19_mech_interp/py_src/vision_attribution.py`
+(reads `fig/src_pomegranate.jpg`). The rest are comments and plans. `check_links.py`: 97 pages,
+0 broken. History (older entries here, `_work_sessions/`, `_learnings/`) keeps the old name.
+
+**Alternatives rejected.** *Rename at delivery, as ch11 was* - the folder name was never tied to
+delivery, only the deck numbers are. *Keep `cnn.qmd`* - breaks the `NN_chapter.qmd` convention
+that `11_neural_networks.qmd` follows.
+
+**What would change this.** Untested: whether the `/`-rooted alias resolves under the
+`/python_math_ml_course/` subpath on GitHub Pages. Check `.../ml/ch6_cnn/cnn.html` after the next
+deploy. Still open: ~15 student-visible "ch6" / "Chapter 6" CNN callbacks in other decks (L20, L22,
+L26, L33, L37, ch19 vision circuits) and in the CNN notebooks.
+
+---
+
 ## #54 - The name inventor splits start padding (`^`) from end-of-name (`.`): 40 symbols in, 39 out
 
 **Date:** 2026-09-30 · **Status:** active (instructor's call) · **Supersedes** the single-token part of #46

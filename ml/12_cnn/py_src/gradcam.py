@@ -1,6 +1,6 @@
 """Real figures for the L18 Transfer Learning deck (Section 2, Grad-CAM).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   gradcam.pdf         -- ImageNet-pretrained resnet18's Grad-CAM heatmap overlaid on the
                          chapter's pomegranate photo (40% alpha), with the model's actual
                          top-1 prediction printed honestly in the panel title.
@@ -16,7 +16,7 @@ nothing trains locally.
 Fails loudly if the photo or the pretrained weights are unavailable.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/gradcam.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/gradcam.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 """

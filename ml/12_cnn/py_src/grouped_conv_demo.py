@@ -1,6 +1,6 @@
 """Real figure for the L17 CNN Architectures deck (wider-zoo section, grouped conv).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   grouped_conv_demo.pdf  -- standard vs grouped convolution as channel connectivity.
                             Standard: every output channel connects to every input
                             channel (dense, C_in*C_out links). Grouped (g=2): channels
@@ -9,7 +9,7 @@ Generates into ml/ch6_cnn/fig/:
                             depthwise conv is g = C (one group per channel).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/grouped_conv_demo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/grouped_conv_demo.py
 """
 
 import logging

@@ -1,6 +1,6 @@
 """Real figures for the L16 CNN Foundations deck (Section 2, convolution animation).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   conv_anim_0.pdf .. conv_anim_8.pdf  -- nine flip-book frames: a 3x3 Gaussian-blur kernel
                      (weights 1,2,4) slides over a 5x5 grayscale patch; each output cell is
                      the weighted sum of the window under it, so the patch gets smoothed.
@@ -11,7 +11,7 @@ All nine frames share identical geometry (fixed axis limits, no tight bbox) so t
 does not jump between clicks.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/conv_anim.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_anim.py
 """
 
 import logging

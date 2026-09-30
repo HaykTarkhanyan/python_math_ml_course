@@ -1,12 +1,12 @@
 """Real figure for the L16 CNN Foundations deck (Section 3, parameter explosion).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   param_explosion.pdf  -- one 100x100x3 image, one layer that keeps the 100x100 output:
                           a dense layer needs 300,000,000 weights; a single 5x5 conv
                           filter needs 75. Log-scale labeled bars.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/param_explosion.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/param_explosion.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette, value labels on bars.

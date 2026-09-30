@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section 2, the Taylor -> Fourier bridge).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   taylor_vs_fourier.pdf  -- side by side, the same idea in two bases:
       left  (Taylor):  cos(x) rebuilt from a sum of POWERS  (1, x^2, x^4, ...), better near 0.
       right (Fourier): a square wave rebuilt from a sum of WAVES (sin x, sin 3x, sin 5x, ...),
@@ -9,7 +9,7 @@ Generates into ml/ch6_cnn/fig/:
   building blocks - blocks labelled by frequency, which is what we later filter.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/taylor_vs_fourier.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/taylor_vs_fourier.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3+ series (red/blue/orange).

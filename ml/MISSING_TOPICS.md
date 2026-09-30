@@ -33,7 +33,7 @@
 > - **SVM (linear + kernel), k-NN, Naive Bayes, LDA/QDA** → `07_classic_methods/28_svm_and_classic_methods.tex`
 > - **PCA / dimensionality reduction** → `10_dimensionality_reduction/35_dimensionality_reduction`
 > - **Nested resampling** → folded into `02_main_concepts/08_hyperparameter_tuning.tex`
-> - **CNNs** → `ch6_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
+> - **CNNs** → `12_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
 > - **RNN / LSTM** → `ch7_rnn/` L20, L21
 > - **Modern optimizers, init, BatchNorm** → `11_neural_networks/44_optimization` + `45_optimization_init_activations`
 > - **Attention** → `ch9_attention/L24` (partial — see "still open")

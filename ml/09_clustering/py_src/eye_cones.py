@@ -5,7 +5,7 @@ Generates into ml/09_clustering/fig/:
                     metamerism panel: two different spectra that excite the three cone
                     types identically, so they are the same colour to a human.
 
-Copied from ml/ch6_cnn/py_src/eye_cones.py (the CNN deck keeps its own copy) and extended
+Copied from ml/12_cnn/py_src/eye_cones.py (the CNN deck keeps its own copy) and extended
 with the metamerism panel, which is the reason three numbers are enough.
 
 Run with the project venv:

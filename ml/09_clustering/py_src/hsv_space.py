@@ -9,7 +9,7 @@ The bottom row backs the slide's claim with measured numbers, printed to the log
   - subtracting a constant in RGB shifts hue by a measurable amount
   - scaling V in HSV is exactly a uniform RGB multiply (asserted, not asserted-by-hope)
 
-Copied from ml/ch6_cnn/py_src/hsv_space.py and re-pointed at the Saryan painting.
+Copied from ml/12_cnn/py_src/hsv_space.py and re-pointed at the Saryan painting.
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/09_clustering/py_src/hsv_space.py

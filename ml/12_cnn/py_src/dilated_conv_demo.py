@@ -1,6 +1,6 @@
 """Real figure for the L16 CNN Foundations deck (Section: kernel variations).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   dilated_conv_demo.pdf  -- one 3x3 kernel shown at dilation d = 1, 2, 3 over a 9x9
                             input. The 9 tapped cells (blue) spread apart as d grows,
                             so the receptive field (orange box) widens to (2d+1)x(2d+1)
@@ -9,7 +9,7 @@ Generates into ml/ch6_cnn/fig/:
                             no lost resolution. Revisited for segmentation in L19.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/dilated_conv_demo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/dilated_conv_demo.py
 """
 
 import logging

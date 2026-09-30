@@ -1,12 +1,12 @@
 """Real figure for the L16 CNN Foundations deck (Section 2, building Sobel).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   sobel_build.pdf  -- the astronaut in grayscale: original; the bare adjacent-difference
                       [-1,0,1] (edges, but noisy); Sobel-X (the same difference, smoothed
                       by a [1,2,1] column); and the full gradient magnitude.
 
 Uses skimage's public-domain 'astronaut' test image. Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/sobel_build.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/sobel_build.py
 """
 
 import logging

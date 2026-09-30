@@ -1,12 +1,12 @@
 """Real figure for the L16 CNN Foundations deck (Section 4, stride).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   stride_demo.pdf  -- same 5x5 input, 3x3 kernel. Stride 1 stops at 9 positions -> 3x3
                       output; stride 2 jumps by two and stops at 4 -> 2x2 output. Stride
                       controls how many stops, hence the output size.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/stride_demo.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/stride_demo.py
 """
 
 import logging

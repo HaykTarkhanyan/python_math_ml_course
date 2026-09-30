@@ -5,11 +5,11 @@ stacked: after 1 layer it sees 3x3, after 2 layers 5x5, after 3 layers 7x7 - the
 reach as a single 7x7 filter, but built from small filters (deeper, cheaper, more
 nonlinearities). Includes the parameter-coefficient comparison (27 C^2 vs 49 C^2).
 
-Generates into ml/ch6_cnn/fig/:
+Generates into ml/12_cnn/fig/:
   receptive_field.pdf
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch6_cnn/py_src/receptive_field.py
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/receptive_field.py
 """
 
 import logging
