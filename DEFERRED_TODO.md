@@ -145,7 +145,7 @@ A **single worked example threaded across L01d / L01d2 / L01e / L01f / L01h** (r
 
 - **Migrate or delete the auto-memory folder.** As of 2026-06-19 we switched to "all persistence in repo files, never write memory." But ~13 pre-existing memory files still live at `~/.claude/projects/C--Users-hayk--OneDrive-Desktop-01-python-math-ml-course/memory/` (user role, feedback rules, pedagogy notes, course completion status, etc.). Decide per file: copy still-useful content into `CLAUDE.md` / `CONVENTIONS.md` / `LEARNINGS.md`, then delete the memory folder. Until done, future sessions may still load those memories as context.
 
-- **Decide the DL-track file naming, then make `CONVENTIONS.md` true.** (Found 2026-08-04.) The convention file says lecture slides are `NN_topic.tex` matching playlist position, and that "No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out." But **nine chapters** use `LNN_topic.tex` inside `chN_name/` folders: `09_clustering`, `10_dimensionality_reduction`, `11_neural_networks`, `ch6_cnn`, `ch7_rnn`, `ch8_autoencoders`, `ch8b_gans`, `ch9_attention`, `ch10_diffusion`. (`07_classic_methods/L12b` was on this list until 2026-08-12, when it was renamed to `28_svm_and_classic_methods` — its playlist number became knowable once the feature-engineering lectures were fixed at 26/27.) Their chapter pages are also bare (`09_clustering.qmd`, `gans.qmd`) rather than the documented `NN_chapter_topic.qmd`. Two honest resolutions: (a) update `CONVENTIONS.md` to describe the real two-track scheme — playlist-numbered `NN_` for the delivered classic-ML track, `LNN_` for the not-yet-scheduled DL track — or (b) renumber the DL track once its playlist order is known. **(a) is cheap now; (b) gets more expensive with every deck.** Note the DL lecture numbers currently *collide* with the classic ones (`24_shap_lime` vs `L24_attention`).
+- **Decide the DL-track file naming, then make `CONVENTIONS.md` true.** (Found 2026-08-04.) The convention file says lecture slides are `NN_topic.tex` matching playlist position, and that "No `L01`, `L01b`, `L01c` style prefixes — those are legacy and being phased out." But **nine chapters** use `LNN_topic.tex` inside `chN_name/` folders: `09_clustering`, `10_dimensionality_reduction`, `11_neural_networks`, `12_cnn`, `ch7_rnn`, `ch8_autoencoders`, `ch8b_gans`, `ch9_attention`, `ch10_diffusion`. (`07_classic_methods/L12b` was on this list until 2026-08-12, when it was renamed to `28_svm_and_classic_methods` — its playlist number became knowable once the feature-engineering lectures were fixed at 26/27.) Their chapter pages are also bare (`09_clustering.qmd`, `gans.qmd`) rather than the documented `NN_chapter_topic.qmd`. Two honest resolutions: (a) update `CONVENTIONS.md` to describe the real two-track scheme — playlist-numbered `NN_` for the delivered classic-ML track, `LNN_` for the not-yet-scheduled DL track — or (b) renumber the DL track once its playlist order is known. **(a) is cheap now; (b) gets more expensive with every deck.** Note the DL lecture numbers currently *collide* with the classic ones (`24_shap_lime` vs `L24_attention`).
 
 - **Resolve the duplicate feature-engineering decks.** (Found 2026-08-04.) `ml/06_feature_engineering/` holds two compiled versions of the same two topics: `26_feature_engineering` + `27_feature_selection` (Jul 2026) and `L01g_feature_engineering` + `L01h_feature_selection` (Jun 2026). Pick the live pair, move the other to an archive folder per the repo-structure tiers. The chapter has no `.qmd`, so neither is on the site yet.
 
@@ -247,7 +247,7 @@ at deck 33. Arguments both ways:
   for the students.
 
 Decide when the CNN chapter is next touched, not before. If it gets trimmed, the astronaut-based
-figures in `ch6_cnn/fig/` can go with it; deck 33's copies are Saryan-based and independent.
+figures in `12_cnn/fig/` can go with it; deck 33's copies are Saryan-based and independent.
 
 ---
 
@@ -309,6 +309,30 @@ Surfaced by the autonomous CNN/RNN review; each needs an instructor call, not mo
 - **`\pause` reveals.** The CNN/RNN decks still use predict-first `\pause`s; on 2026-09-16 the
   instructor said "I usually just open the full frame". Not removed - confirm the preference
   applies to these decks too.
+
+---
+
+## Gesture Snake practical (`ml/12_cnn/gesture_snake/`, 2026-09-30): open items
+
+Built while the instructor was away; everything below needs the instructor or a webcam.
+
+- **Record and run on real data.** `record_gestures.py --user hayk` (2-3 bursts per class, ~3 min),
+  then `build_gesture_snake_nb.py` executes the solution notebook on it. Its prose describes
+  mechanics only - write the result text (flatten vs GAP, 1-NN trap, strangers) from that run, per
+  `_learnings/2026-08-13-2015_write-the-practical-after-measuring-not-before.md`.
+- **Live parts never ran**: the webcam loops of `record_gestures.py` and `play_snake.py`. The
+  drawing, game rules, smoother and model loading are tested headless.
+- **Ship the instructor's recordings as starter data?** Lets students without a webcam train, and
+  gives everyone a second person for the notebook's burst split.
+- **No left/right in the strangers test.** `web_sample/` is HaGRID up / down / nothing. Zenodo
+  record 11077462 has 1,000 thumb-left/right photos (CC BY 4.0, 200 MB, in a car, 3 lighting
+  setups; labelled from the signer's side, so "Lewo" shows the thumb to the image's right) - needs
+  hand crops before it matches the box framing.
+- **Slides still promise HW2 (CIFAR-10), HW3 (Oxford Pets), HW4 (YOLO)**, none built. This
+  practical could replace the HW2/HW3 mentions in L16/L17/L18.
+- **Chapter page and delivery number**: not on `12_cnn.qmd` yet.
+- **Possible L17 slide**: on synthetic thumbs, a GAP head could not even fit its training set
+  where a flattened head learned (DECISIONS #57) - a measured counterweight to "GAP everywhere".
 
 ---
 

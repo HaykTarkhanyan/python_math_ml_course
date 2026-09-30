@@ -9,6 +9,59 @@ this file holds the choice and a pointer.
 
 ---
 
+## #57 - The gesture practical's small CNN keeps a flattened head; L17's global average pool is the counter-example
+
+**Date:** 2026-10-01 · **Status:** active (measured on synthetic data only - revisit on real recordings)
+
+**Decision.** `small_cnn()` in `ml/12_cnn/gesture_snake` ends with Flatten + Linear(64·8·8, 5)
+(44,293 weights), trained 20 epochs, batch 32. The GAP version stays in the notebook as Part 4b,
+so students measure the difference themselves.
+
+**Why.** A known-answer test (1,000 synthetic crops: a disc with a bar in the labelled direction,
+or no bar; 2 fake users x 2 bursts) where ResNet-18 features + logistic regression score 99.6%.
+The first build (GAP head, 12 epochs, batch 64) scored 21% - chance. Diagnosis, no augmentation,
+16 epochs: GAP head train 0.39 / held-out 0.25, flatten head 0.94 / 0.77. With augmentation, the
+flatten head reaches 0.80 held-out at 20 epochs (265 s on 2 threads). The full notebook on the
+same set, with augmentation: flatten 77.2%, GAP 24.6%. The GAP model memorizes 64
+images when asked (loss 0.004), so the loop is sound: the task's answer is *where* the thumb is
+relative to the fist, GAP averages position away, and this net's last features see only ~36 px.
+Same run found an int32-label bug (Windows numpy default) that `augment` had been hiding.
+
+**Alternatives rejected.** *Keep GAP, train longer* - 384 steps, smaller batches and a one-cycle
+schedule all stayed at 20-25%. *Deeper net so GAP works* - untested, and costs student CPU time.
+
+**What would change this.** Real recordings on which the GAP head matches the flatten head.
+
+---
+
+## #56 - The CNN chapter's training practical: steer Snake with your thumb, on your own recordings
+
+**Date:** 2026-09-30 · **Status:** active (task chosen by the instructor; data plan and code built
+while the instructor was away)
+
+**Decision.** `ml/12_cnn/gesture_snake/`: students record five classes (thumb up / down / left /
+right, nothing) with `record_gestures.py`, train on a laptop CPU in `gesture_snake.ipynb`, and play
+Snake live with `play_snake.py`. `gesture_common.py` is the single definition of the classes, box,
+mirror, crop and tensor format; models cross from notebook to game via `torch.export`
+((N, 3, 128, 128) RGB in [0, 1] -> 5 logits). Validation holds out whole **bursts**.
+
+**Why.** A live webcam demo works when training and play use the same camera, so students record
+their own data. Frames 0.1 s apart are near-copies, hence the burst split (the notebook measures a
+pixel 1-NN on random vs burst splits). 90 HaGRID photos (up / down / nothing) test on strangers.
+
+**Alternatives rejected.** *Kaggle ASL alphabet* - one signer, one room, 3,000 consecutive frames
+per letter (the reported 99% is memory), 1.1 GB; Otsu hand segmentation found the hand in 3 of 13
+sampled frames (a skin-coloured skylight frame). *ASL-HG* (2026, 10 signers) - download size
+unverifiable. *Sign Language MNIST* - 28 px, nothing left for CV, saturates. *Doodles, digits,
+faces* - the instructor preferred gestures. *Mashtots letters* - instructor declined. *HaGRID as
+training data* - 41 GB per gesture archive, and the HF row API rate-limits after ~10 calls.
+*Zenodo 11077462 thumb left/right* - in-car photos, not hand crops; deferred (DEFERRED_TODO).
+
+**What would change this.** The self-recorded model cannot play in class -> ship starter data or
+default to the ResNet probe; students cannot run Python locally -> Colab snapshot mode.
+
+---
+
 ## #55 - The CNN chapter moves to `ml/12_cnn/` before it is delivered
 
 **Date:** 2026-09-30 · **Status:** active (instructor's call)
