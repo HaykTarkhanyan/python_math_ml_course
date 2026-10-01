@@ -11,7 +11,7 @@ this file holds the choice and a pointer.
 
 ## #57 - The gesture practical's small CNN keeps a flattened head; L17's global average pool is the counter-example
 
-**Date:** 2026-10-01 · **Status:** active (measured on synthetic data only - revisit on real recordings)
+**Date:** 2026-10-01 · **Status:** active, revisited 2026-10-01 (see the end of this entry)
 
 **Decision.** `small_cnn()` in `ml/12_cnn/gesture_snake` ends with Flatten + Linear(64·8·8, 5)
 (44,293 weights), trained 20 epochs, batch 32. The GAP version stays in the notebook as Part 4b,
@@ -32,15 +32,22 @@ schedule all stayed at 20-25%. *Deeper net so GAP works* - untested, and costs s
 
 **What would change this.** Real recordings on which the GAP head matches the flatten head.
 
+**Revisited 2026-10-01, on the instructor's recordings** (500 crops, 2 bursts per class, train on
+burst 1, validate on burst 2): both heads fail - flatten 27.2% after the last epoch (78.4% at its best
+epoch, the curve swinging 20-78%), GAP 22.0%. A comparison where both lose shows nothing, so Part 4b
+was cut from the notebook (instructor: no more bursts; "the model fails" is the point, and the
+frozen ResNet-18 at 64.4% is the rescue). The flattened head stays, for the synthetic result above.
+
 ---
 
 ## #56 - The CNN chapter's training practical: steer Snake with your thumb, on your own recordings
 
-**Date:** 2026-09-30 · **Status:** active (task chosen by the instructor; data plan and code built
-while the instructor was away)
+**Date:** 2026-09-30 · **Status:** active, revisited 2026-10-01 (task chosen by the instructor; data
+plan and code built while the instructor was away; the stubbed student version was dropped on
+2026-10-01 - instructor: "no need for student version")
 
 **Decision.** `ml/12_cnn/gesture_snake/`: students record five classes (thumb up / down / left /
-right, nothing) with `record_gestures.py`, train on a laptop CPU in `gesture_snake.ipynb`, and play
+right, nothing) with `record_gestures.py`, train on a laptop CPU in `gesture_snake_solution.ipynb`, and play
 Snake live with `play_snake.py`. `gesture_common.py` is the single definition of the classes, box,
 mirror, crop and tensor format; models cross from notebook to game via `torch.export`
 ((N, 3, 128, 128) RGB in [0, 1] -> 5 logits). Validation holds out whole **bursts**.

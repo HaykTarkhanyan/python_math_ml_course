@@ -1,8 +1,8 @@
 """Assemble (and execute) ml/12_cnn/gesture_snake/gesture_snake_solution.ipynb - the CNN
 chapter's training practical: read the direction of your thumb from the webcam, then play Snake.
 
-Solution notebook FIRST (it must run, so every number in the prose is printed by a cell); a
-student version with stubbed functions is derived from it later.
+Every number in the prose is printed by a cell. There is no separate student version
+(instructor, 2026-10-01): students run this notebook as it is.
 
 Structure rule (instructor direction, 2026-08-02): MANY SMALL CELLS - one idea per cell, a
 markdown cell before each code cell saying what is about to happen and why.
@@ -13,8 +13,7 @@ The notebook runs with the gesture_snake/ folder as its working directory, so ge
 and gesture_data/ resolve the same way they do for students.
 
 Run with the project venv (builds, then executes on 2 CPU threads; runtime scales with the
-amount of recorded data - 974 s for 1,000 images, measured 2026-10-01 on the known-answer
-synthetic set, ~100 s of it kernel startup):
+amount of recorded data - 157 s for the instructor's 500 crops, measured 2026-10-01):
     ./ma/Scripts/python.exe ml/12_cnn/py_src/build_gesture_snake_nb.py
     ./ma/Scripts/python.exe ml/12_cnn/py_src/build_gesture_snake_nb.py --no-execute
 """
@@ -49,23 +48,20 @@ def code(src):
 md(r"""
 # Practical - steer Snake with your thumb
 
-> This is the **solution** notebook; the task version is `gesture_snake.ipynb`.
-
 You will train a CNN that reads **which way your thumb points** in a webcam crop - up, down,
 left, right, or nothing - and then play Snake with it (`play_snake.py`).
 
-| Part | | What you do |
-|---|---|---|
-| 1 | 🧀 | look at your own recordings |
-| 2 | 🧀🧀 | split by **burst**, not at random |
-| 3 | 🧀🧀 | an augmentation that **changes the label** |
-| 4 | 🧀🧀 | a small CNN from scratch, and where it fails |
-| 4b | 🧀🧀 | does throwing away *where* matter? (L17's global average pool) |
-| 5 | 🧀🧀🧀 | Grad-CAM: is it looking at your thumb? (L18) |
-| 6 | 🧀🧀 | the random-split trap, measured |
-| 7 | 🧀🧀🧀 | transfer learning: frozen ResNet-18 features + logistic regression (L18) |
-| 8 | 🧀 | other people: does it work on strangers? |
-| 9 | 🧀 | export the model and play |
+| Part | What you do |
+|---|---|
+| 1 | look at your own recordings |
+| 2 | split by **burst**, not at random |
+| 3 | an augmentation that **changes the label** |
+| 4 | a small CNN from scratch, and where it fails |
+| 5 | Grad-CAM: is it looking at your thumb? (L18) |
+| 6 | the random-split trap, measured |
+| 7 | transfer learning: frozen ResNet-18 features + logistic regression (L18) |
+| 8 | other people: does it work on strangers? |
+| 9 | export the model and play |
 
 **Before you start:** record your data (about 3 minutes, two bursts per class):
 
@@ -73,9 +69,12 @@ left, right, or nothing - and then play Snake with it (`play_snake.py`).
 python record_gestures.py --user yourname
 ```
 
-Everything runs on a laptop CPU. Seed `509`. A full run took **16 minutes for 1,000 images on 2
-CPU threads** (measured; most of it is the two CNN trainings in Part 4). More cores make it faster,
-more recordings make it slower.
+Everything runs on a laptop CPU. Seed `509`. A full run takes **about 3 minutes for 500 images on
+2 CPU threads** (measured 157 s on the instructor's recordings). More recordings make it slower,
+more cores faster.
+
+The outputs saved in this notebook come from the **instructor's** recordings: 500 crops, 2 bursts
+per class. The notes after the results describe that run - yours will differ.
 """)
 
 md(r"""
@@ -86,6 +85,7 @@ crop, and the image-to-tensor conversion all come from there, so the three can n
 """)
 
 code(r"""
+# ~12 s: the first import of torch, plotly and sklearn is slow
 import time
 from pathlib import Path
 
@@ -110,7 +110,7 @@ print("classes:", CLASSES, "| crop:", CROP_SIZE, "px | torch", torch.__version__
 
 # ======================================================================================
 md(r"""
-## Part 1 - your data 🧀
+## Part 1 - your data
 
 Every file name carries three facts: `gesture_data/<user>/<class>/<user>_<burst>_<nn>.jpg`.
 The **burst** is one key press in the recorder: 50 frames taken over about 5 seconds.
@@ -147,6 +147,7 @@ recorder, mirrored like a selfie.
 """)
 
 code(r"""
+# ~3 s
 fig, axes = plt.subplots(len(CLASSES), 8, figsize=(11, 7))
 for r, c in enumerate(CLASSES):
     pick = rng.choice(np.where(y == r)[0], 8, replace=False)
@@ -158,7 +159,7 @@ plt.tight_layout(); plt.show()
 
 # ======================================================================================
 md(r"""
-## Part 2 - split by burst 🧀🧀
+## Part 2 - split by burst
 
 Frames inside one burst are a tenth of a second apart: near-copies. If a random split puts one
 frame in training and its neighbour in validation, the validation score measures **memory**, not
@@ -188,7 +189,7 @@ print(f"train {len(tr)} images | validation {len(va)} images (whole bursts)")
 
 # ======================================================================================
 md(r"""
-## Part 3 - an augmentation that changes the label 🧀🧀
+## Part 3 - an augmentation that changes the label
 
 In [43], flipping an image was free extra data: a mirrored cat is still a cat. Here a mirrored
 **left** thumb is a **right** thumb - the flip is still free data, but the label has to flip with
@@ -247,29 +248,25 @@ def augment(xb, yb, pad=8):
 
 # ======================================================================================
 md(r"""
-## Part 4 - a small CNN 🧀🧀
+## Part 4 - a small CNN
 
 The crop is 128 px; a thumb is obvious at 64 px, so the net first **averages 2x2 blocks** (a
 pooling layer with no weights, L16). Then three conv blocks (conv, BatchNorm, ReLU, max-pool), each
 halving the map and doubling the channels, down to 64 maps of 8x8.
 
-The head is a dense layer on the **flattened** 8x8x64 maps, so it knows *where* each feature
-fired. L17 recommended a global average pool instead; Part 4b tests that advice on this task.
+The head is a dense layer on the **flattened** 8x8x64 maps, not L17's global average pool. A
+global average pool keeps only "how much of each feature", and which way a thumb points is a
+question about *where*: which side of the fist the thumb sticks out.
 """)
 
 code(r"""
-def small_cnn(head="flatten"):
+def small_cnn():
     def block(cin, cout):
         return nn.Sequential(nn.Conv2d(cin, cout, 3, padding=1), nn.BatchNorm2d(cout),
                              nn.ReLU(), nn.MaxPool2d(2))
-    body = [nn.AvgPool2d(2), block(3, 16), block(16, 32), block(32, 64)]   # 128 -> 64 -> 32 -> 16 -> 8 px
-    if head == "flatten":      # keeps the 8x8 layout: where each feature fired
-        tail = [nn.Flatten(), nn.Linear(64 * 8 * 8, len(CLASSES))]
-    elif head == "gap":        # L17's global average pool: one number per map, position gone
-        tail = [nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(64, len(CLASSES))]
-    else:
-        raise ValueError(f"head must be 'flatten' or 'gap', got {head!r}")
-    return nn.Sequential(*body, *tail)
+    return nn.Sequential(nn.AvgPool2d(2),                                  # 128 -> 64 px
+                         block(3, 16), block(16, 32), block(32, 64),       # 64 -> 32 -> 16 -> 8 px
+                         nn.Flatten(), nn.Linear(64 * 8 * 8, len(CLASSES)))
 
 print(f"{sum(p.numel() for p in small_cnn().parameters()):,} parameters")
 """)
@@ -326,13 +323,15 @@ Train it.
 """)
 
 code(r"""
-# ~6 min for 500 training crops on 2 CPU threads (measured: 363 s); scales with your data and cores
+# ~1 min for 250 training crops on 2 CPU threads (measured 62 s); more recordings, longer
 torch.manual_seed(SEED)
 cnn = small_cnn()
 t0 = time.perf_counter()
 hist = train(cnn, tr, va, desc="small CNN")
 acc_cnn = hist["val accuracy"].iloc[-1]
-print(f"trained in {time.perf_counter() - t0:.0f} s; final validation accuracy {acc_cnn:.1%}")
+best = hist.loc[hist["val accuracy"].idxmax()]
+print(f"trained in {time.perf_counter() - t0:.0f} s; validation accuracy after the last epoch {acc_cnn:.1%}, "
+      f"best {best['val accuracy']:.1%} (epoch {int(best['epoch'])})")
 """)
 
 md(r"""
@@ -348,6 +347,16 @@ fig.update_layout(height=320, xaxis_title="epoch", yaxis_title="train loss",
                   yaxis2=dict(title="val accuracy", overlaying="y", side="right", range=[0, 1]),
                   margin=dict(t=20))
 fig.show()
+""")
+
+md(r"""
+**On the instructor's recordings.** Training loss drops to almost zero: the net memorized its
+training burst. Validation accuracy jumps around from epoch to epoch - 78.4% at its best, 27.2%
+after the last epoch - so the number after the last epoch is luck.
+
+Why so jumpy: the validation set is 250 crops but only **5 bursts**, and the 50 frames of a burst
+are near-copies, so a whole class flips at once. Keeping the best epoch would mean choosing on the
+validation set, and then the 78.4% is no longer an honest test score - that needs a third burst.
 """)
 
 md(r"""
@@ -382,43 +391,14 @@ if len(show):
     plt.tight_layout(); plt.show()
 """)
 
-md(r"""
-### Part 4b - does throwing away *where* matter? 🧀🧀
-
-L17's global average pool turns each 8x8 map into **one number**: "how much of this feature is
-there", with no trace of *where*. That is exactly right for "is there a cat anywhere in the photo?"
-But which way a thumb points is a question about **where**: which side of the fist the thumb
-sticks out.
-
-Same body, same recipe, GAP head instead of the flattened map:
-""")
-
-code(r"""
-# ~6 min: the same recipe as above
-torch.manual_seed(SEED)
-cnn_gap = small_cnn(head="gap")
-print(f"GAP version: {sum(p.numel() for p in cnn_gap.parameters()):,} parameters")
-hist_gap = train(cnn_gap, tr, va, desc="GAP head")
-print(f"validation accuracy: flatten head {acc_cnn:.1%} | GAP head {hist_gap['val accuracy'].iloc[-1]:.1%}")
-""")
-
-md(r"""
-Validation accuracy per epoch, both heads, against pure guessing (1 in 5):
-""")
-
-code(r"""
-fig = go.Figure()
-fig.add_scatter(x=hist["epoch"], y=hist["val accuracy"], name="flatten head", line_color=ARM_BLUE)
-fig.add_scatter(x=hist_gap["epoch"], y=hist_gap["val accuracy"], name="GAP head", line_color=ARM_ORANGE)
-fig.add_hline(y=1 / len(CLASSES), line_dash="dot", annotation_text="guessing")
-fig.update_layout(height=320, xaxis_title="epoch", yaxis=dict(title="val accuracy", range=[0, 1]),
-                  margin=dict(t=20))
-fig.show()
-""")
-
 # ======================================================================================
 md(r"""
-## Part 5 - Grad-CAM: is it looking at your thumb? 🧀🧀🧀
+**On the instructor's recordings** almost every mistake is "-> nothing", on crops where the thumb
+is plain to see.
+""")
+
+md(r"""
+## Part 5 - Grad-CAM: is it looking at your thumb?
 
 L18's audit, on your model. High accuracy is not the same as right reasons: a model can learn that
 "left" crops happen to show more of your sleeve. Grad-CAM's three steps, as in L18:
@@ -454,6 +434,7 @@ Two held-out crops per class, with the heatmap on top. Red = the evidence the pr
 """)
 
 code(r"""
+# ~3 s
 fig, axes = plt.subplots(2, len(CLASSES), figsize=(11, 4.6))
 for c_idx, c in enumerate(CLASSES):
     for row, i in enumerate(rng.choice(va[y[va] == c_idx], 2, replace=False)):
@@ -466,7 +447,15 @@ plt.tight_layout(); plt.show()
 
 # ======================================================================================
 md(r"""
-## Part 6 - the random-split trap, measured 🧀🧀
+**On the instructor's recordings** the heat sits mostly on the **radiator** at the edge of the box and
+on the **forearm**, not on the thumb. The crops where it does look at the hand are the ones it gets
+right. The first bursts also carried shortcuts planted on purpose - a red sleeve only in "down", a
+dark green one only in "right". The second bursts have neither, the familiar clues are gone, and
+the model falls back to "nothing": right answers on the first burst, for the wrong reasons.
+""")
+
+md(r"""
+## Part 6 - the random-split trap, measured
 
 Take a model with **no understanding at all**: 1-nearest-neighbour on raw pixels (the classic
 methods chapter). It answers with the label of the single most similar training crop - pure
@@ -475,6 +464,7 @@ training), and the burst split from Part 2.
 """)
 
 code(r"""
+# ~7 s
 from sklearn.neighbors import KNeighborsClassifier
 
 pix = F.avg_pool2d(bgr_to_tensor(X), 4).flatten(1).numpy()     # 32 x 32 x 3 = 3,072 numbers per crop
@@ -507,7 +497,13 @@ fig.show()
 
 # ======================================================================================
 md(r"""
-## Part 7 - transfer learning: frozen ResNet-18 features 🧀🧀🧀
+**On the instructor's recordings** pure memory scores 100.0% on the random split and 43.2% on the
+burst split. A random split would have reported a perfect model; the burst split shows what is left
+once the near-copies are gone.
+""")
+
+md(r"""
+## Part 7 - transfer learning: frozen ResNet-18 features
 
 L18's Recipe 1. Freeze an ImageNet ResNet-18, drop its classifier, and use its 512-number output
 as features for **logistic regression** ([11]) - a linear probe.
@@ -517,6 +513,7 @@ inputs are normalized with **ImageNet's** mean and std, not ours.
 """)
 
 code(r"""
+# ~2 s, plus a one-time 47 MB download of the ResNet-18 weights on the first run
 from sklearn.linear_model import LogisticRegression
 from torchvision.models import ResNet18_Weights, resnet18
 
@@ -544,7 +541,7 @@ epoch. The mirror trick still works: features of the flipped crops, with swapped
 """)
 
 code(r"""
-# ~60 s for 1,000 images on 2 CPU threads
+# ~20 s for 500 crops on 2 CPU threads (measured)
 t0 = time.perf_counter()
 F_tr = np.concatenate([features(X[tr]), features(X[tr], flip=True)])
 y_tr = np.concatenate([y[tr], FLIP.numpy()[y[tr]]])
@@ -563,11 +560,19 @@ print(f"ResNet-18 + logistic regression: {acc_probe:.1%} | small CNN: {acc_cnn:.
 """)
 
 md(r"""
+**On the instructor's recordings** the frozen ResNet-18 rescues the task: 64.4% against the small
+CNN's 27.2%. It learned to see from 1.2 million photos, so 250 crops only have to teach one linear
+layer which of its features mean "thumb up" or "thumb left". Still far from perfect - one training
+burst per class is very little - but it is the model that can play.
+""")
+
+md(r"""
 Accuracy is not the only cost in a game: every frame has to be classified before the next one
 arrives. Time one crop through each model:
 """)
 
 code(r"""
+# ~3 s
 x1 = bgr_to_tensor(X[va[:1]])
 def ms_per_frame(f, reps=30):
     with torch.no_grad():
@@ -581,7 +586,7 @@ print(f"small CNN {ms_per_frame(cnn):.1f} ms/frame | ResNet-18 {ms_per_frame(lam
 
 # ======================================================================================
 md(r"""
-## Part 8 - other people 🧀
+## Part 8 - other people
 
 `web_sample/` holds 90 photos from HaGRID (a public gesture dataset): thumbs up, thumbs down,
 and hands doing nothing - strangers, their rooms, and a looser framing than your green box.
@@ -589,6 +594,7 @@ No left or right in this sample.
 """)
 
 code(r"""
+# ~3 s
 web_files = sorted(Path("web_sample").glob("*/*.jpg"))
 Xw = np.stack([imread_u(f) for f in web_files])
 yw = np.array([CLASSES.index(f.parent.name) for f in web_files])
@@ -599,7 +605,13 @@ print(f"strangers ({len(Xw)} photos): small CNN {acc_web_cnn:.1%} | ResNet-18 pr
 
 # ======================================================================================
 md(r"""
-## Part 9 - export and play 🧀
+**On the instructor's recordings** neither model works on strangers: 28.9% and 34.4%, against 20% for
+guessing. Trained on one person in one room, a model knows that person and that room. That is why
+everyone trains on their own recordings.
+""")
+
+md(r"""
+## Part 9 - export and play
 
 `torch.export` saves the model **with its computation graph**, so `play_snake.py` can load it
 without knowing the class you wrote here. The contract (see `gesture_common.py`): a
@@ -625,6 +637,7 @@ plus softmax, [11]) and put ImageNet's normalization inside the model, where the
 """)
 
 code(r"""
+# ~6 s
 class ResNetProbe(nn.Module):
     def __init__(self, trunk, probe):
         super().__init__()
@@ -653,6 +666,7 @@ on the held-out bursts; the other stays available with `python play_snake.py --m
 """)
 
 code(r"""
+# ~20 s: exporting and re-checking both models
 import shutil
 from play_snake import load_model
 

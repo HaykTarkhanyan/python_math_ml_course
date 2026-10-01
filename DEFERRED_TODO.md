@@ -314,16 +314,11 @@ Surfaced by the autonomous CNN/RNN review; each needs an instructor call, not mo
 
 ## Gesture Snake practical (`ml/12_cnn/gesture_snake/`, 2026-09-30): open items
 
-Built while the instructor was away; everything below needs the instructor or a webcam.
+Recorded and run on the instructor's data on 2026-10-01 (500 crops, 2 bursts per class); left open:
 
-- **Record and run on real data.** `record_gestures.py --user hayk` (2-3 bursts per class, ~3 min),
-  then `build_gesture_snake_nb.py` executes the solution notebook on it. Its prose describes
-  mechanics only - write the result text (flatten vs GAP, 1-NN trap, strangers) from that run, per
-  `_learnings/2026-08-13-2015_write-the-practical-after-measuring-not-before.md`.
-- **Live parts never ran**: the webcam loops of `record_gestures.py` and `play_snake.py`. The
-  drawing, game rules, smoother and model loading are tested headless.
-- **Ship the instructor's recordings as starter data?** Lets students without a webcam train, and
-  gives everyone a second person for the notebook's burst split.
+- **Ship the instructor's recordings as starter data?** `gesture_snake/gesture_data/hayk/` (500
+  crops, 2.2 MB) is untracked. Lets students without a webcam train, and gives everyone a second
+  person for the strangers test. Note the planted sleeve shortcut in burst 1 if they are shared.
 - **No left/right in the strangers test.** `web_sample/` is HaGRID up / down / nothing. Zenodo
   record 11077462 has 1,000 thumb-left/right photos (CC BY 4.0, 200 MB, in a car, 3 lighting
   setups; labelled from the signer's side, so "Lewo" shows the thumb to the image's right) - needs
