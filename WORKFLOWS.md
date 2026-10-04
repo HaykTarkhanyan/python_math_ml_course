@@ -70,9 +70,11 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
    3. **Where it wanted a worked example and did not get one.**
    4. **Self-efficacy checklist** - 4-6 deck-specific "could you now actually do X?" items, answered yes / partly / no with what is missing.
    5. **Three exam questions it could now answer, and three it could not** but feels it should.
-   6. **What to cut**, unsentimentally.
+   6. **What to cut because it repeats or confuses**, unsentimentally - never for time (the
+      instructor has full flexibility in the lecture and wants complete decks; see the length
+      bullet in `ml/SLIDE_STYLE.md`).
    7. **Whether the running example helped or was overhead.**
-   8. **Where a 90-minute session should end**, and why there.
+   8. **What is missing**: steps, examples or definitions it needed and did not get.
    9. **The three questions it would bring to office hours.**
 
    Add 1-2 deck-specific probes where the deck does something unusual (e.g. "this lecture teaches a technique that then measurably failed - did that feel like a wasted lecture, or did the failure teach more than a success would?").

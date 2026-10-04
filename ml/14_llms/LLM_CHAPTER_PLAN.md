@@ -1,15 +1,14 @@
-# LLM chapter - plan (draft for approval)
+# 14 LLMs - chapter plan (draft for approval)
 
-Drafted 2026-10-02. **Not approved yet** - the open decisions in section 1 come first.
-Follows the house new-chapter workflow (interview -> outline -> approval -> build), like
-`14_llms/ATTENTION_CHAPTER_PLAN.md` and `ch17_rag/RAG_CHAPTER_PLAN.md`.
+Drafted 2026-10-02; folder, order and map decided 2026-10-04 (DECISIONS #66, #67). **Not approved
+yet** - the open decisions in section 1 come first. Follows the house new-chapter workflow
+(interview -> outline -> approval -> build), like `ATTENTION_CHAPTER_PLAN.md` (this folder, L24-L26)
+and `ch17_rag/RAG_CHAPTER_PLAN.md`.
 
-This file sits at the `ml/` root because the chapter folder does not exist yet. It moves into the
-chapter folder when that is created (decision D7).
-
-**Scope.** Everything a student needs between "you know what the T in GPT is" (end of L26) and the
-already-built application chapters (RAG, agents). Sources are the instructor's 18 `misc/dl4nlp/`
-decks, the 19 `ml/llm_training/slides/` paper decks, and recent material verified on 2026-10-02
+**Scope.** The whole language-model chapter between the RNN chapter and the application chapters
+(RAG, agents): tokenization, the three built attention lectures (L24-L26), and LLM-2 to LLM-10.
+Sources: the instructor's `misc/dl4nlp/` decks and the `ml/llm_training/slides/` paper decks,
+copied into `sources/` (see `sources/README.md`), and recent material verified on 2026-10-02
 (section 9).
 
 ---
@@ -18,23 +17,29 @@ decks, the 19 `ml/llm_training/slides/` paper decks, and recent material verifie
 
 | # | Decision | Recommendation | What would flip it |
 |---|---|---|---|
-| D1 | Sessions for the block (not counting RAG/agents) | **9** (LLM-1 to LLM-9); LLM-10 if time allows | A hard course end date. See section 8 for the 6-session cut |
+| D1 | Sessions for the chapter (not counting RAG/agents) | **12**: L24-L26 (built) + LLM-1 to LLM-9; LLM-10 if time allows | A hard course end date. See section 8 for the 9-session cut |
 | D2 | Where GANs go | **Resolved 2026-10-03:** AE -> VAE -> GAN -> diffusion, after this block (DECISIONS #63) | - |
 | D3 | How deep alignment goes here | **Idea level in LLM-5**; the math stays in L32f/L32g, which depend on PPO from L32d | Moving the whole RL chapter right after this block (+7 lectures before RAG) |
 | D4 | Local runtime for the hands-on parts | **Ollama** for the first contact (one installer, Windows-friendly); **llama.cpp tools** for the quantization measurements (`llama-quantize`, `llama-perplexity`, `llama-bench` have no Ollama equivalent) | Most students on Macs -> LM Studio or MLX deserve the demo slot |
 | D5 | Fine-tuning library for the practical | Two real options: **PEFT + TRL** (the standard HF stack, every step visible) or **Unsloth** (fits a free T4 more easily, `save_pretrained_gguf` exports straight to GGUF). Lean: Unsloth for the practical, PEFT shown on a slide | If the goal is "see the mechanics" over "ship a model", PEFT + TRL |
 | D6 | Base model for practicals | **Decide by measurement**, not by name: tokens per Armenian word and Armenian perplexity for 3-4 small open models (e.g. Gemma 4 E2B, a small Qwen3.5) | - |
-| D7 | Chapter folder and number | New folder, per DECISIONS #1 ("split `ch9_attention` rather than absorb"). Number follows the new order (RNN 13, attention 14 -> LLMs 15?) | Doing the full `chNN_` -> `NN_` renumbering pass first |
+| D7 | Chapter folder and number | **Resolved 2026-10-04:** one folder, `ml/14_llms`, for attention and the LLM lectures; RNN is `ml/13_rnns` (DECISIONS #66). Deck files keep `L24`-style names until delivery | - |
+| D8 | Teaching order inside the chapter | **Resolved 2026-10-04:** left to right along the forward pass - tokenization before attention - with a "you are here" map in every session (DECISIONS #67, section 5.0) | - |
 
 ---
 
 ## 2. Where the block sits
 
-**Course order (instructor decision 2026-10-03, DECISIONS #63, superseding #62's order of
-2026-10-02):**
-CNN (L16-L19) -> **RNN** (L20, L21) -> **Attention** (L24-L26) -> **this block** -> RAG (`ch17`,
-L41-L43) -> Agents (`ch18`, L44) -> **Autoencoders** (L22, L23) -> **GANs** (L23b, L23c) ->
-**Diffusion** (L27-L31) -> the rest (RL, VLM, ...).
+**Course order (instructor decisions: DECISIONS #63 on 2026-10-03, superseding #62; the order
+inside this chapter from #67 on 2026-10-04):**
+CNN (L16-L19) -> **RNN** (L20, L21) -> **this chapter, part 1**: LLM-1 tokenization, L24-L26
+attention and the transformer, LLM-2 to LLM-7 -> RAG (`ch17`, L41-L43) -> Agents (`ch18`, L44) ->
+**this chapter, part 2**: LLM-8, LLM-9 (LLM-10) -> **Autoencoders** (L22, L23) -> **GANs** (L23b,
+L23c) -> **Diffusion** (L27-L31) -> the rest (RL, VLM, ...).
+
+RAG and agents sit inside the chapter's run on purpose: LLM-7 ends on "give the model the
+documents" (-> L41), and LLM-9 opens with the ladder "prompt -> RAG -> fine-tune", which needs RAG
+taught. (Until 2026-10-04 this section said "this block -> RAG", which contradicted section 5.)
 
 Two threads, each unbroken: text (RNN -> attention -> LLMs) and generative (AE -> VAE -> GAN ->
 diffusion).
@@ -59,7 +64,10 @@ LLM source decks say "denoising" only about T5/BART span corruption
   it to GANs, then diffusion.
 - `ch8b_gans/L23c_gan_applications.tex:427` - drop "Before it, the attention chapter (L24) picks up
   the other thread".
-- `_quarto.yml` order, qmd title numbers, `ml/00_plan.md`.
+- `_quarto.yml` order, qmd title numbers, `ml/00_plan.md` (instructor 2026-10-04: Quarto later;
+  the rename only fixed the two `_quarto.yml` paths so the site still builds).
+- **Done 2026-10-04 (#67):** L21's closing Next box now points to tokenization first, then
+  attention; L26's closing frame no longer lists tokenization as coming next.
 - Chapter numbers written inside decks ("chapter 8" in `xx_features.tex:263`, "ch8" in `L34`,
   `L39`) - part of the renumbering pass (D7).
 - **No edit needed:** L22's reference to the RNN (RNN now comes first), `HW1_sae_rnn` stays the
@@ -69,9 +77,10 @@ LLM source decks say "denoising" only about T5/BART span corruption
 
 ---
 
-## 3. What students already have when the block starts
+## 3. What students already have
 
-Do not re-teach these; call back to them.
+Do not re-teach these; call back to them. The L24-L26 rows are this chapter's own sessions 2-4:
+they are already built, and LLM-2 onward builds on them.
 
 | Already taught | Where |
 |---|---|
@@ -97,9 +106,11 @@ Do not re-teach these; call back to them.
 
 ## 4. Design principles
 
-1. **Outside in.** What goes in (tokens) -> what comes out (decoding) -> where the weights come
-   from (pretraining, scale) -> how a base model becomes an assistant -> how you use it -> how you
-   know it is wrong -> how you run and adapt it yourself -> what changed since 2017.
+1. **Left to right along the map** (#67). First one forward pass, in the order data flows through
+   it: tokens -> embeddings and attention -> the block -> the LM head -> decoding. Then the life of
+   a model: where the weights come from (pretraining, scale) -> how a base model becomes an
+   assistant -> how you use it -> how you know it is wrong -> how you run and adapt it yourself.
+   Last, what changed since 2017.
 2. **One home per topic.** The repo holds four overlapping sources; today RLHF/DPO/GRPO each appear
    in 4 decks, FlashAttention in 3-4, speculative decoding and the emergence "mirage" debate in 2.
    Section 7 assigns every source deck a destination.
@@ -117,31 +128,104 @@ Do not re-teach these; call back to them.
 
 ## 5. The lectures
 
-Frame counts are for the source decks as they exist on 2026-10-02.
+### 5.0 Session order and the chapter map
+
+The map is two illustrated frames, one per row (instructor 2026-10-04: "a lot nicer ... not just
+text boxes", two frames for more space):
+
+- **"Where we are: one forward pass"** - GPT-2 small on L24's sentence "The cat sat on the", one
+  row per token, after [Transformer Explainer](https://poloclub.github.io/transformer-explainer/):
+  text -> token chips with real IDs -> embedding vectors (real values) -> a stack of N layers
+  (attention arcs from the last token, one real head; an expand-and-contract MLP per token) -> the
+  last vector -> LM head -> the real top-5 next-token probabilities -> the chosen token, looping
+  back into the text.
+- **"Where we are: the life of a model"** - after Karpathy's "State of GPT" pipeline: seven cards
+  with a small drawing and one fact each (pretrain, scale, post-train, prompt, evaluate, quantize,
+  LoRA), grouped "make it" / "use it" / "run and adapt it".
+
+Each session opens with both frames (its own stages on a blue panel, earlier ones in full colour,
+later ones faded, plus a "Today:" or "Later:" line) and ends with "Next on the map": the next
+session's frame for its row. Figures: `py_src/llm_roadmap.py` (`--gpt2` once ->
+`results/roadmap_gpt2.json`, then the maps) -> `fig/roadmap_<key>_pass.pdf` and
+`fig/roadmap_<key>_life.pdf`, plus `roadmap_overview_*` with nothing lit. Its `SESSIONS` list must
+match the table below.
+
+| # | Session | Map boxes | `roadmap_` key | Status |
+|---|---|---|---|---|
+| 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`) |
+| 2 | L24 Attention | Embedding, Attention | `attention` | built; map frames added 2026-10-04 |
+| 3 | L25 The Transformer block | Attention, MLP | `block` | built; map frames added 2026-10-04 |
+| 4 | L26 Transformers in the world | LM head | `transformers` | built; map frames added 2026-10-04 |
+| 5 | LLM-2 Decoding | Decoding | `decoding` | to build |
+| 6 | LLM-3 Pretraining | Pretrain | `pretraining` | to build |
+| 7 | LLM-4 Scaling and emergence | Scale | `scaling` | to build |
+| 8 | LLM-5 Post-training | Post-train | `post_training` | to build |
+| 9 | LLM-6 Prompting | Prompt | `prompting` | to build |
+| 10 | LLM-7 Evaluation and hallucination | Evaluate | `evaluation` | to build |
+| - | RAG (L41-L43), agents (L44) | (own chapters, no map) | - | built |
+| 11 | LLM-8 Quantization | Quantize | `quantization` | to build |
+| 12 | LLM-9 LoRA and QLoRA | LoRA | `lora` | to build |
+| 13 | LLM-10 Anatomy of a 2026 LLM | Attention, MLP again (KV cache, MLA; MoE) | `anatomy_2026` | optional |
+
+The LLM-n labels are planning names; decks get their `NN_` playlist number on delivery.
+
+Frame counts below are for the source decks as they exist on 2026-10-02.
 
 ### Part A - How an LLM is built
 
 #### LLM-1 Tokenization: from text to token IDs
 
-L21 showed why subwords; now build the tokenizer every LLM actually uses.
+Session 1 of the chapter, the map's first box. L20 fed words in as one-hot vectors over a fixed
+word list ("Tokens, minimally"); what should a token be? Build the tokenizer every LLM actually
+uses. It ends at **token IDs** and hands over to L24, whose first job is "an ID becomes a vector"
+(the embedding primer). It must not lean on attention or embeddings: they come next.
 
-- Unicode code points -> UTF-8 bytes; why an Armenian letter is 2 bytes.
-- BPE: the idea, a worked example, encoding new text, byte-level BPE (GPT-2 onward),
-  pre-tokenization regex, decoding IDs back - including the invalid-UTF-8-mid-character trap
-  (`_learnings/2026-08-21-0140_bpe-merge-halves-are-invalid-utf8-alone.md` is a real instance).
-- WordPiece and Unigram/SentencePiece, one frame each.
-- Pitfalls: numbers split arbitrarily, spelling ("count the r's"), SolidGoldMagikarp and glitch
-  tokens - plus our own `ml/claude_projects/armenian_glitch_token_hunt/`.
-- Special tokens; the vocabulary-size trade-off; vocabularies grew from GPT-2's 50,257 to 200k+
-  (`o200k`) - check per model at build time.
+**Interviewed 2026-10-04** - outline: `LLM1_tokenization_OUTLINE.md` (37 frames; its three open
+decisions answered the same day - ready to build).
+
+- **Cold open:** "How many r's in strawberry?" (instructor's pick over the Armenian-cost hook).
+  Measured: in that question ` strawberry` is **one token** in GPT-2, cl100k and o200k alike.
+- **Unicode / UTF-8:** short, 2-3 frames - code points -> UTF-8 bytes; why an Armenian letter is 2
+  bytes.
+- **BPE: full mechanics** - the idea, a worked example by hand, encoding new text, byte-level BPE
+  (GPT-2 onward), pre-tokenization regex, decoding IDs back - including the
+  invalid-UTF-8-mid-character trap (`_learnings/2026-08-21-0140_bpe-merge-halves-are-invalid-utf8-alone.md`
+  is a real instance; measured: `ա` is 2 tokens in cl100k, `\xd5` + `\xa1`).
+- **WordPiece and Unigram/SentencePiece:** one frame each.
+- **Quirks, all four get a frame**, plus the strawberry explanation: numbers and arithmetic,
+  glitch tokens (SolidGoldMagikarp), code whitespace, special-token leaks.
+- **Armenian: one frame**, "one sentence, two counts" (instructor's pick over the 8-tokenizer
+  chart and a full glitch-hunt section), on both tokenizers: 102 vs 18 (cl100k, one token per
+  byte) and 19 vs 17 (o200k). The glitch-token project stays a pointer.
+- **Glitch tokens: two frames** (the story, then GPT-3's replies).
+- Special tokens; the vocabulary-size trade-off (GPT-2 50,257 -> cl100k 100,277 -> o200k 200,019,
+  measured with tiktoken 2026-10-04).
+- **Not in the slides:** the hands-on part (instructor: "doesn't matter for the slides").
 - **Source:** dl4nlp `03_tokenization.tex` (38 frames), now taught **from scratch** here: L21's
   three tokenization frames (trilemma, subwords on a real tokenizer, the Armenian tax) moved to
   this lecture on 2026-10-03 (DECISIONS #64). Reuse their measured figures
   (`ml/13_rnns/py_src/tokenizer_demo.py` -> `ml/13_rnns/fig/tokenizer_panel1-3.pdf`, cl100k counts)
   and frame text (`git show 6013bcc:ml/ch7_rnn/L21_road_to_attention.tex`). Chat tokens move to
-  LLM-5. Optional 1 frame from llm_training 05 (BPE-dropout).
-- **Hands-on:** train byte-level BPE on Armenian text (~50 lines), compare tokens per word against
-  `o200k` and one open-model tokenizer.
+  LLM-5. Optional 1 frame from llm_training 05 (BPE-dropout). Source copy:
+  `sources/dl4nlp/03_tokenization.tex` (its PDF was 0 bytes; recompiled 2026-10-04).
+- **Built 2026-10-04:** `LLM1_tokenization.tex`, figures from `py_src/tokenization_figs.py` (every
+  split measured; numbers quoted in prose asserted). Self-review + Sonnet student review the same
+  day; after the instructor's "I prefer proper decks" (frame count never matters, see
+  `ml/SLIDE_STYLE.md`) it gained five worked frames: UTF-8 by hand, BPE on the 689 surnames' bytes
+  (finds "-yan" by merge 5), where IDs come from, WordPiece by hand, Unigram by hand. It
+  replaced `13_rnns/py_src/tokenizer_demo.py` instead of moving it: those panels were drawn 13 in
+  wide. The Armenian line stays one shared file, `13_rnns/py_src/data/armenian_line.txt`, read by
+  path. `tokenizer_demo.py` and its three panels are now used by no deck - candidates for
+  `13_rnns/py_src/archive/`. `embedding_2d.py` waits for LLM-3.
+- **Hands-on (not in the deck; format undecided):** train byte-level BPE on Armenian text (~50
+  lines), compare tokens per word against `o200k` and one open-model tokenizer.
+
+#### L24-L26 Attention and the transformer (built; sessions 2-4)
+
+Plan and decisions: `ATTENTION_CHAPTER_PLAN.md`. Since 2026-10-04 each deck opens with "Where we
+are" and closes with "Next on the map" (section 5.0). L24's cold open still restates L21's
+cliffhanger ("Last chapter ended on a cliffhanger"), which now has one lecture (LLM-1) in between;
+its title page says "LLM chapter".
 
 #### LLM-2 Decoding: from logits to text (+ your first local model)
 
@@ -377,6 +461,10 @@ chosen yet).
 
 ## 7. Source map - where every existing deck goes
 
+Copies of every deck this chapter draws on sit in `sources/` (2026-10-04, DECISIONS #66): the
+dl4nlp decks except the three retired ones (12, 14, 18), and the llm_training decks except 01, 02
+and 11, which feed the RL chapter. The originals stay where they were. Port from the copies.
+
 ### `misc/dl4nlp/` (18 decks)
 
 | Deck | Destination |
@@ -423,11 +511,13 @@ They stay as the registered "LLM Training & Alignment" reading list; the lecture
 
 ## 8. Session budget
 
+All options include the three built sessions L24-L26.
+
 | Option | Lectures | Sessions (+ RAG 3, agents 1) |
 |---|---|---|
-| Short | LLM-1, LLM-2, LLM-3+4 merged, LLM-5, LLM-6+7 merged, LLM-8+9 merged (lighter) | 6 (+4) |
-| **Core (recommended)** | LLM-1 to LLM-9 | 9 (+4) |
-| Full | Core + LLM-10 (2 sessions) | 11 (+4) |
+| Short | LLM-1, L24-L26, LLM-2, LLM-3+4 merged, LLM-5, LLM-6+7 merged, LLM-8+9 merged (lighter) | 9 (+4) |
+| **Core (recommended)** | LLM-1, L24-L26, LLM-2 to LLM-9 | 12 (+4) |
+| Full | Core + LLM-10 (2 sessions) | 14 (+4) |
 
 Practicals add 1-2 sessions in any option. Context: `ml/00_plan.md` (Aug 8) gave the LLM topics 5
 sessions and projected a mid-to-late November finish. Counted 2026-10-02: **45 lecture decks are
@@ -486,18 +576,21 @@ SEO aggregator pages. Not in this plan until a primary source confirms them.
 
 ## 10. Known issues found while planning
 
-- **`misc/dl4nlp/03_tokenization.pdf` is 0 bytes**, committed that way in b7424f8 (2026-07-26).
-  The `.tex` (38 frames) is intact; the GitHub PDF link serves an empty file. Recompile.
+- ~~**`misc/dl4nlp/03_tokenization.pdf` is 0 bytes**~~, committed that way in b7424f8
+  (2026-07-26). **Fixed 2026-10-04:** recompiled in `sources/dl4nlp/` (753 KB, 0 errors) and
+  copied back over the original.
 - `ml/00_plan.md` is from 2026-08-08 and predates the reorder and this plan.
 - The dl4nlp decks use `misc/dl4nlp/preamble.tex`; macros differ from `ml/preamble.tex`
   (`13_rnns/RNN_CHAPTER_PLAN.md` lists known deltas: `lightbg`, `-Stealth`).
 
 ## 11. Next steps, after approval
 
-1. Answer D1 and D3-D7 (D2 resolved 2026-10-03).
-2. Reorder edits from section 2 (L23, L23c, `_quarto.yml`, qmd titles, `00_plan.md`).
-3. Create the chapter folder (D7), move this file into it.
-4. Per lecture: outline -> approval -> build (port from the source decks in section 7) ->
-   compile-deck -> student review (opt-in).
+1. Answer D1 and D3-D6 (D2, D7, D8 resolved).
+2. Reorder edits from section 2 (L23, L23c; `_quarto.yml` order, qmd titles and `00_plan.md` when
+   the instructor wants the Quarto pass).
+3. ~~Create the chapter folder, move this file into it~~ - done 2026-10-04 (`ml/14_llms`).
+4. Per lecture, starting with LLM-1 (now the chapter's first session): outline -> approval ->
+   build (port from `sources/`, section 7; "Where we are" / "Next on the map" frames from
+   section 5.0) -> compile-deck -> student review (opt-in).
 5. D6 measurement (Armenian tokens/word + perplexity for 3-4 candidate models) before P1/P2 are
    built.
