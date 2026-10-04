@@ -9,6 +9,15 @@ this file holds the choice and a pointer.
 
 ---
 
+## #69 - The robot-learning course browser is a static page baked from the repo files and published as a subpath of the course site
+
+- **Date:** 2026-10-05 - **Status:** active
+- **Decision:** `learning/robot-learning/browser/` is a hand-written HTML/CSS/JS page that reads one generated `data.js` (built by `learning/robot-learning/scripts/build_browser.py` from the transcripts, `slides.md`, homework and `scripts/browser_content.json`). `publish.yml` copies the folder into `docs/robot-learning/`, so it is served at `https://hayktarkhanyan.github.io/python_math_ml_course/robot-learning/`. Slide frames are committed as 800 px JPEGs (~20 MB); full-size frames stay in the gitignored `_raw/frames/`.
+- **Why:** Hayk asked for a browser for the course files and chose GitHub Pages, the subpath and 800 px frames when offered the options (2026-10-05). A repo has one Pages site, already used by the Quarto book, and `publish.yml` already copies a second mini-site (`docs/data_arms`) the same way. No framework or math library: pandoc turns the slide LaTeX into native MathML at build time (165 equations in week 5 render with none zero-width or overflowing, checked in Playwright), so the page works offline and has no dependencies to keep updated. Building `data.js` locally and committing it keeps CI unchanged except for one `cp` - CI could not rebuild it anyway, because `slides.pdf` and `_raw/` are gitignored.
+- **Contents lists:** 15 of 21 videos have YouTube chapters, used as-is. The 5 lectures without (weeks 1, 3, 8, 9, 11) get a list estimated by aligning slide sections to transcript minutes (TF-IDF + monotonic DP), labelled "estimated" in the UI.
+- **Alternatives rejected:** a separate repo with its own Pages site (zero risk to the course site, but a second repo to keep in sync); full 1280 px frames (41 MB, twice the repo growth for sharper small text); no frames online (loses the original slides on the web); a JS framework or KaTeX/MathJax (more weight, CDN or vendored fonts, nothing gained over MathML for static pages); rendering the pages with Quarto (the book only renders its chapter list, and the browser needs custom interaction: video seeking, transcript following, search).
+- **What would change this:** the copy step ever breaking the course-site deploy (move to a separate repo); frames needing frequent rebuilds (repo growth - switch to a release asset or LFS); browsers dropping MathML Core support (vendor KaTeX).
+
 ## #67 - The LLM chapter runs left to right along the forward pass, with a "you are here" map in every session
 
 **Date:** 2026-10-04 · **Status:** active (instructor, choosing between two options for each).
