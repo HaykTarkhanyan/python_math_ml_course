@@ -41,7 +41,7 @@ length-normalisation components are (3.13) and (3.12) on pages 29-30. Parameter 
   SimCSE, E5, mE5, E5-Mistral, Qwen3-Embedding, ATE). Covers most of what L41's dense-retrieval
   and Armenian sections need; **read that folder alongside this one.**
 - [`ml/llm_training/`](../../llm_training/) - the generation side of the stack.
-- [`ml/ch9_attention/`](../../ch9_attention/) - transformer background the encoders assume.
+- [`ml/14_llms/`](../../14_llms/) - transformer background the encoders assume.
 
 ## Fidelity caveat
 

@@ -90,7 +90,7 @@ so those get priority. Consequences, all applied below:
 - Attribution is a small white-70% node in the bottom-left corner: `Welch Labs (2026)`. Nothing
   else on the slide - no title, no caption, no bullet.
 - Frames land in `ml/ch16_jepa/fig/borrowed/welchlabs/` with descriptive names, matching how
-  `ml/ch9_attention/fig/borrowed/3b1b/` is organised.
+  `ml/14_llms/fig/borrowed/3b1b/` is organised.
 - **This does not displace the Python figures that carry data.** Split recorded in the figure
   table below: borrowed stills for *architecture and narrative*, Python for *every number and
   every measurement*. A Welch Labs still is someone else's explanation; a bar chart of the I-JEPA

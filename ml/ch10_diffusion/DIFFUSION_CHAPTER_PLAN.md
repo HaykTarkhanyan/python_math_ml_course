@@ -17,7 +17,7 @@ make it affordable enough to be real.*
 
 **Prerequisite spine is L22/L23 (autoencoders, VAE, the ELBO, reparameterization), not L24-L26.**
 That independence is why this is its own chapter (root `DECISIONS.md` #1) - and it is now a hard
-requirement, because **L25 and L26 do not exist yet**: `ml/ch9_attention/` contains only L24. See
+requirement, because **L25 and L26 do not exist yet**: `ml/14_llms/` contains only L24. See
 decision 6 below.
 
 ## Interview-locked decisions (2026-08-03)

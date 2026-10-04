@@ -28,7 +28,7 @@ Closes the gap in `ml/MISSING_TOPICS.md:108` (*"Prompting / RAG - coverage: none
 - **Transliterated Armenian.** Instructor call: not interesting enough to spend frames on.
   Removes the one claim in v1 I could not support (that the transliteration collapse justifies
   hybrid retrieval - unverifiable without knowing ArmBench's setup, and probably wrong).
-- **Armenian-vs-English token-count figure.** `ml/ch7_rnn/L21_road_to_attention.tex:259` already
+- **Armenian-vs-English token-count figure.** `ml/13_rnns/L21_road_to_attention.tex:259` already
   has a frame called "The Armenian tax" with real `tiktoken` measurements (`tokenizer_panel3.pdf`).
   Signpost L21 in one line instead of rebuilding it.
 

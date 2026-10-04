@@ -9,7 +9,7 @@ Follows the `slide-style` workflow: interview -> outline -> approval -> build.
 1. **Scope: AE + full VAE derivation.** Plain-autoencoder machinery is the core; the VAE
    half includes the full ELBO / KL / reparameterization derivation in-deck (not deferred
    to GenAI, not intuition-only).
-2. **Placement: standalone mini-chapter after RNN** (`ch8_autoencoders`, after `ch7_rnn`).
+2. **Placement: standalone mini-chapter after RNN** (`ch8_autoencoders`, after `13_rnns`).
    Ends pointing into the future GenAI chapter. Does NOT depend on GenAI being planned yet.
 3. **Running example: MNIST handwritten digits** (updated 2026-07-16 from sklearn 8x8 digits).
    Same KIND of data as the ch4b dim-reduction deck (handwritten digits), now full MNIST 28x28,
@@ -178,7 +178,7 @@ recap, so SAE-for-interpretability lands as application #4. The existing one-fra
 wide-not-narrow + the dictionary, scored results, the sparsity knob, ablation vs control, scale +
 honest limits.
 
-**Superposition ownership.** `ch9_attention/ATTENTION_CHAPTER_PLAN.md` never mentions superposition,
+**Superposition ownership.** `14_llms/ATTENTION_CHAPTER_PLAN.md` never mentions superposition,
 though `fig/borrowed/3b1b/README.md` stages JL-lemma stills "for L26 superposition". It was
 unowned, so ch8 takes the phenomenon and the tool. The geometry is a **callback to
 `math/Lectures/curse_of_dimensionality/cod.tex:125`**, which already teaches near-orthogonality

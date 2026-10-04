@@ -111,7 +111,7 @@ was proposed 2026-08-13 after reading Neel Nanda's current guide (see Sources).
 3. **The grokking deck stays separate.** `misc/grokking/slides/grokking_mechanistic_interpretability.tex`
    (51 frames, compiled, unregistered) is **not** folded in. It gets a callback frame in L46 and a
    link on the chapter page as optional viewing. Boundaries stay clean.
-4. **Placement: immediately after the attention/LLM block**, ~mid-October 2026, after `ch9_attention`
+4. **Placement: immediately after the attention/LLM block**, ~mid-October 2026, after `14_llms`
    L24-L26 and the `llm_training` seminar track. Transformer internals must be fresh; this material
    is very hard to teach cold. Costs 3 sessions and pushes diffusion onward by ~1 week.
 5. **Numbering: `L45`-`L47`, build order** (locked 2026-08-13). The L-number is a build-order id,

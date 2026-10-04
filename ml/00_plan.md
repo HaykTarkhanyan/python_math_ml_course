@@ -128,13 +128,13 @@ Ordered by how soon the date arrives.
 
 ### 1. Attention + LLMs — ~7 sessions of material, first needed **Sep 27**
 
-The largest block in the course and the least built. `ml/ch9_attention/` holds **L24 only**
+The largest block in the course and the least built. `ml/14_llms/` holds **L24 only**
 (53pp); the planned **L25 and L26 do not exist**. `ATTENTION_CHAPTER_PLAN.md` carries the
 approved outline for all three.
 
 The rest of the block would come from **`misc/dl4nlp/`** — 18 decks, ~442 pages, already in the
 house palette — which is currently outside `ml/` and unregistered in `_quarto.yml`. Folding it
-into `ch9_attention` (or a new LLM chapter) is a decision, not a mechanical move: it changes
+into `14_llms` (or a new LLM chapter) is a decision, not a mechanical move: it changes
 chapter boundaries and the numbering.
 
 **Lead time: ~7 weeks from 2026-08-08.**

@@ -11,7 +11,7 @@
 >
 > | Gap | Status | Notes |
 > |---|---|---|
-> | **Transformers — L25, L26** | **the only hole in the built sequence** | `ch9_attention/` holds 1 deck of a planned 3. L24 stops after a single attention head; L30 (diffusion) had to build cross-attention itself because L26 does not exist (`DECISIONS.md` #4). Source largely exists: `misc/dl4nlp/02_transformers.tex`, 28 frames, already in the house palette. Outline drafted in `ch9_attention/ATTENTION_CHAPTER_PLAN.md`. |
+> | **Transformers — L25, L26** | **the only hole in the built sequence** | `14_llms/` holds 1 deck of a planned 3. L24 stops after a single attention head; L30 (diffusion) had to build cross-attention itself because L26 does not exist (`DECISIONS.md` #4). Source largely exists: `misc/dl4nlp/02_transformers.tex`, 28 frames, already in the house palette. Outline drafted in `14_llms/ATTENTION_CHAPTER_PLAN.md`. |
 > | Duplicate decks in `06_feature_engineering` | unresolved | `26_`/`27_` vs legacy `L01g_`/`L01h_` — same two topics, two numbering schemes, all four still present. Decide which pair is live and demote the other. |
 > | **LLM agents / tool use** | **nothing, and the course now points at it** | Verified absent 2026-08-11: the only `agent` hits in `ml/**/*.tex` are RL agents (`ch11_rl`) and JEPA, a different sense. `ch17_rag/L43` mentions "agentic" twice as a teaser and its student review asked what the *"enough to answer?"* stopping check actually is — a question the chapter raises and never answers. Natural sequel to RAG: retrieve-then-generate becomes decide-act-observe-repeat. `ch17_rag/rag_demo.py` is ready-made scaffolding (add a tool registry and a stopping condition). |
 > | Graph neural networks | absent, and disconnected | Zero hits anywhere in `ml/`. A genuine classical gap, but nothing else in the course leads into or out of it, so it would be a standalone island. Lower priority than agents for that reason. |
@@ -34,9 +34,9 @@
 > - **PCA / dimensionality reduction** → `10_dimensionality_reduction/35_dimensionality_reduction`
 > - **Nested resampling** → folded into `02_main_concepts/08_hyperparameter_tuning.tex`
 > - **CNNs** → `12_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
-> - **RNN / LSTM** → `ch7_rnn/` L20, L21
+> - **RNN / LSTM** → `13_rnns/` L20, L21
 > - **Modern optimizers, init, BatchNorm** → `11_neural_networks/44_optimization` + `45_optimization_init_activations`
-> - **Attention** → `ch9_attention/L24` (partial — see "still open")
+> - **Attention** → `14_llms/L24` (partial — see "still open")
 > - **Autoencoders / VAE** → `ch8_autoencoders/` L22, L23
 > - **GANs** → `ch8b_gans/` L23b, L23c
 > - **Diffusion** → `ch10_diffusion/` L27–L31
@@ -57,7 +57,7 @@
 >   pipeline. 182 pages, 52 generated figures, 6 source papers in `ch17_rag/papers/`.
 > - **Chapter pages for the 4 folders** listed as open on 2026-08-04 — all now exist and are
 >   registered in `_quarto.yml`: `06_feature_engineering.qmd`, `07_classic_methods.qmd`,
->   `ch7_rnn/rnn.qmd`, `ch9_attention/attention.qmd`.
+>   `13_rnns/rnn.qmd`, `14_llms/attention.qmd`.
 > - **Reinforcement learning** → `ch11_rl/L32`, plus the alignment track in `llm_training/`
 > - **Vision-language models** → `ch12_vlm/` L33, L34; **audio** → `ch13_audio/` L35, L36
 > - **Tabular foundation models** → `ch14_tabular_fm/L37`; **vision-language-action** →
