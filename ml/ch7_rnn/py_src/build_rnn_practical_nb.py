@@ -94,7 +94,7 @@ lecture, so your code has to reproduce the slide's numbers.
 """)
 
 code(r"""
-WORDS = ["Ես", "այս", "ամենինչ"]          # the first three words of the chapter's line
+WORDS = ["Ես", "այս", "ամենին"]          # the first three words of the chapter's line
 W = np.array([[0.5, -0.5], [1.0, 0.0], [0.0, 1.0]])   # 3x2: row i = word i's vector
 V = np.array([[0.5, -0.5], [1.0, 0.0]])               # 2x2: hidden -> hidden
 b = np.array([0.0, 0.0])

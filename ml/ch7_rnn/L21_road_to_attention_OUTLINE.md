@@ -121,7 +121,7 @@ Target: ~24 frames, one full ~90-min session (runs long by design).
   GenAI chapter). Link on the frame: the tiktokenizer web app - students type
   Armenian live and watch it fragment. `[real fig: tokenizer_demo.pdf, panel 2]`
   `[link: tiktokenizer]`
-- **The Armenian tax.** The chapter's Armenian line - "Ես այս ամենինչ նայում եմ
+- **The Armenian tax.** The chapter's Armenian line - "Ես այս ամենին նայում եմ
   լուռ, և գիտակներ են խոսում իմ մեջ" - vs its English gloss, through the same
   tokenizer: the Armenian version costs several times more tokens -
   English-centric vocabularies fragment other scripts. Why it matters: longer
@@ -155,7 +155,7 @@ Target: ~24 frames, one full ~90-min session (runs long by design).
   (interview-locked): **Պանիր** (Պ-ա-ն-ի-ր) - the course's cheese joke, students
   will get it. Feed Պ-ա-ն-ի, want ա-ն-ի-ր, ~6 clicks. Since Պանիր has no repeated
   character, the "same input char, different prediction" lesson (hello's double l)
-  becomes a ONE-LINE remark instead: ն also appears in ամենինչ, նայում, գիտակներ -
+  becomes a ONE-LINE remark instead: ն also appears in ամենին, նայում, գիտակներ -
   the model's bet after ն depends entirely on what came before it. `[ANIM
   (mandatory): charlm_anim.py, own matplotlib - COPY-SLIDE option dropped; LMU's 4:3
   "hello" pages would break the deck's visual continuity]`
@@ -164,7 +164,7 @@ Target: ~24 frames, one full ~90-min session (runs long by design).
   CLICK (interview-locked ANIM, ~5 clicks: step 0 / 100 / 1k / 5k / final): random
   gibberish -> letter statistics -> Armenian words -> almost-literary lines. The
   final click's sample is seeded with the opening of the chapter's Armenian line
-  ("Ես այս ամենինչ..."), so the model visibly continues it. The most visual proof
+  ("Ես այս ամենին..."), so the model visibly continues it. The most visual proof
   that next-token prediction extracts structure, and the deck's local-touch peak.
   Follow-up frame: the loss curve beside the final sample. Link on the frame:
   Karpathy's "The Unreasonable Effectiveness of RNNs" (this demo is its Armenian

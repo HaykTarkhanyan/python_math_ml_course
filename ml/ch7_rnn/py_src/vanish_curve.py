@@ -50,29 +50,32 @@ def fig_vanish_curve(log):
     log.info(f"0.8^{K_MARK} = {v_mark:.6f}")
     log.info(f"1.25^{K_MARK} = {e_mark:.2f}")
 
-    fig, ax = plt.subplots(figsize=(7.6, 5.0))
-    ax.plot(k, explode, color=RED, lw=2.2, label=f"$V={V_EXPLODE}$ (exploding)")
-    ax.plot(k, vanish, color=BLUE, lw=2.2, label=f"$V={V_VANISH}$ (vanishing)")
+    # drawn near its slot sizes (L20 ~3.2 in, L21 cold open ~2.7 in) so fonts stay >= 6.5 pt
+    fig, ax = plt.subplots(figsize=(3.1, 2.25))
+    ax.plot(k, explode, color=RED, lw=1.6, label=f"$V={V_EXPLODE}$ (exploding)")
+    ax.plot(k, vanish, color=BLUE, lw=1.6, label=f"$V={V_VANISH}$ (vanishing)")
     ax.set_yscale("log")
     ax.axvline(K_MARK, color="gray", lw=1.0, linestyle="--")
 
     ax.annotate(f"{V_EXPLODE}$^{{{K_MARK}}}\\approx${e_mark:.0f}",
-                xy=(K_MARK, e_mark), xytext=(K_MARK - 13, e_mark * 1.6),
-                fontsize=11, color=RED,
+                xy=(K_MARK, e_mark), xytext=(K_MARK - 15, e_mark * 0.9),
+                fontsize=9, va="center", color=RED,
                 arrowprops=dict(arrowstyle="->", color=RED, lw=1.0))
     ax.annotate(f"{V_VANISH}$^{{{K_MARK}}}\\approx${v_mark:.4f}",
-                xy=(K_MARK, v_mark), xytext=(K_MARK - 15, v_mark * 6),
-                fontsize=11, color=BLUE,
+                xy=(K_MARK, v_mark), xytext=(K_MARK - 1, v_mark * 40),
+                fontsize=9, va="center", ha="right", color=BLUE,
                 arrowprops=dict(arrowstyle="->", color=BLUE, lw=1.0))
 
-    ax.set_xlabel("k (steps back)", fontsize=11)
-    ax.set_ylabel("$V^k$ (log scale)", fontsize=11)
-    ax.set_title("One multiplication, repeated: starves or explodes", fontsize=12)
-    ax.legend(fontsize=10, loc="center left")
+    ax.set_xlabel("k (steps back)", fontsize=7.5)
+    ax.set_ylabel("$V^k$ (log scale)", fontsize=7.5)
+    ax.set_title("One multiplication, repeated", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.tick_params(axis="y", labelsize=8.5)   # log axis: exponents are 70% of this
+    ax.legend(fontsize=7, loc="lower left", frameon=False)
     ax.grid(True, which="both", alpha=0.25)
-    fig.tight_layout()
+    fig.tight_layout(pad=0.3)
     out = FIG_DIR / "vanish_curve.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"saved {out}")
 

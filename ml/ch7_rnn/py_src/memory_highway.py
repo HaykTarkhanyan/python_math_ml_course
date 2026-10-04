@@ -209,52 +209,61 @@ def run(log):
 
 def plot(res, log):
     FIG_DIR.mkdir(exist_ok=True)
-    # sized for a 16:9 slide at ~full width, so fonts stay >= ~6 pt after scaling
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.6, 3.1))
+    # Drawn at its slot size (L21: 0.92 x linewidth, ~5.05 in) so fonts are true size.
+    # Redrawn 2026-10-03: the 7.6 in canvas put the legends at ~4 pt. One shared legend
+    # under both panels; bar values sit vertically inside the bars, because at this width
+    # three "100" labels side by side would collide.
+    fig = plt.figure(figsize=(5.05, 2.2))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1, 1.2], left=0.135, right=0.99, top=0.84,
+                          bottom=0.335, wspace=0.42)
+    a1, a2 = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
     style = {"rnn": (RED, "vanilla RNN"),
-             "lstm_fb0": (GREY, "LSTM, gate half-shut (bias 0)"),
+             "lstm_fb0": (GREY, "LSTM, forget bias 0 (PyTorch default)"),
              "lstm_fb1": (ORANGE, "LSTM, bias 1 (Keras default)"),
-             "lstm_fb3": (BLUE, "LSTM, gate open (bias 3)")}
+             "lstm_fb3": (BLUE, "LSTM, bias 3 (gate open)")}
+    handles = {}
     for name, s in res["sensitivity"].items():
         c, lab = style[name]
         s = np.maximum(np.array(s), 1e-20)
-        a1.semilogy(np.arange(len(s)), s, color=c, lw=1.8, label=lab)
+        handles[name], = a1.semilogy(np.arange(len(s)), s, color=c, lw=1.3, label=lab)
     a1.set_ylim(1e-20, 10)
-    a1.set_xlabel("how many steps back the input was", fontsize=8)
-    a1.set_ylabel("effect on the final state (log)", fontsize=8)
-    a1.set_title("Before training: how far back\ndoes the net 'hear'?", fontsize=9)
-    a1.legend(fontsize=6.5, loc="lower left")
+    a1.set_xlabel("steps back", fontsize=7.5)
+    a1.set_ylabel("effect on final state (log)", fontsize=7.5)
+    a1.set_title("Before training: how far\nback does it 'hear'?", fontsize=8)
     a1.tick_params(labelsize=7)
+    a1.tick_params(axis="y", labelsize=8.5)   # log axis: exponents are 70% of this
     a1.grid(alpha=0.3)
 
     span = res["span"]
-    width = 0.26
+    width = 0.27
     names = [n for n in ("rnn", "lstm_fb0", "lstm_fb3") if any(r["model"] == n for r in span)]
     Ts = sorted({r["T"] for r in span})
     x = np.arange(len(Ts))
     for i, name in enumerate(names):
-        c, lab = style[name]
+        c, _ = style[name]
         per_seed = [[r["test_acc"] for r in span if r["model"] == name and r["T"] == T]
                     for T in Ts]
         means = [np.mean(v) for v in per_seed]
         xs = x + (i - 1) * width
-        bars = a2.bar(xs, np.array(means) * 100, width, color=c, alpha=0.85,
-                      label=lab.split(" (")[0])
-        a2.bar_label(bars, fmt="%.0f", fontsize=6.5, padding=1)
+        bars = a2.bar(xs, np.array(means) * 100, width, color=c, alpha=0.85)
+        a2.bar_label(bars, fmt="%.0f", fontsize=7, label_type="center", rotation=90,
+                     color="white", fontweight="bold")
         for xi, v in zip(xs, per_seed):          # every seed as a dot: means hide coin flips
-            a2.scatter([xi] * len(v), np.array(v) * 100, s=9, color="k", zorder=3)
-    a2.axhline(100 / N_KEYS, color="k", ls="--", lw=1)
-    a2.text(x[0] - 0.5, 100 / N_KEYS + 2, "chance", ha="left", fontsize=7)
-    a2.set_xticks(x, [f"T={T}" for T in Ts])
-    a2.set_ylim(0, 112)
-    a2.set_ylabel("test accuracy, %\n(bar = mean, dots = 2 seeds)", fontsize=8)
-    a2.set_title("After training: recall the first\ntoken after T steps", fontsize=9)
+            a2.scatter([xi] * len(v), np.array(v) * 100, s=5, color="k", zorder=3)
+    chance = a2.axhline(100 / N_KEYS, color="k", ls="--", lw=0.9)
+    a2.set_xticks(x, [str(T) for T in Ts])
+    a2.set_xlabel("T (steps to remember)", fontsize=7.5)
+    a2.set_ylim(0, 105)
+    a2.set_ylabel("accuracy, % (bar = mean,\ndots = 2 seeds)", fontsize=7.5)
+    a2.set_title("After training: recall the\nfirst token after T steps", fontsize=8)
     a2.tick_params(labelsize=7)
-    a2.legend(fontsize=6.5, loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=3,
-              frameon=False)
-    fig.tight_layout()
+    order = ["rnn", "lstm_fb0", "lstm_fb1", "lstm_fb3"]
+    fig.legend([handles[n] for n in order] + [chance],
+               [style[n][1] for n in order] + ["chance (25%)"],
+               loc="lower center", ncol=3, fontsize=7, frameon=False,
+               bbox_to_anchor=(0.5, 0.0), handlelength=1.6, columnspacing=1.0)
     out = FIG_DIR / "memory_highway.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"wrote {out}")
 

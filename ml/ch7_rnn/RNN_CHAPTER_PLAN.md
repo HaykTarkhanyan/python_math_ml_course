@@ -56,7 +56,8 @@ truth. **Late scope change (instructor, mid-L21-build): no real training runs, n
 dataset/model downloads - concepts explained illustratively.** In practice: the
 char-LSTM demo and Պանիր distributions are hand-crafted and labeled ILLUSTRATIVE on
 the figures; the embeddings map is a hand-placed schematic; the ONLY measured
-artifacts are the tiktoken token counts (Armenian line 104 vs gloss 18 tokens,
+artifacts are the tiktoken token counts (Armenian line 104 vs gloss 18 tokens - 102
+after the 2026-10-03 spelling fix ամենինչ -> ամենին,
 cl100k_base - tiktoken installed trivially, so it stayed real) and the quick-run
 gradient comparison (honest non-dramatic result, reported as such on the frame).
 Remaining chapter work: `rnn.qmd` + `_quarto.yml` registration after both decks are
@@ -166,7 +167,7 @@ WEB-IMG without licensing caveats) PLUS:
 
 **The chapter's Armenian line (instructor-chosen, 2026-07-13):**
 
-> Ես այս ամենինչ նայում եմ լուռ, և գիտակներ են խոսում իմ մեջ
+> Ես այս ամենին նայում եմ լուռ, և գիտակներ են խոսում իմ մեջ
 
 Canonical copy: `ml/ch7_rnn/py_src/data/armenian_line.txt` - scripts read it from
 there so slides, figures, and the demo stay in sync. English gloss to be confirmed

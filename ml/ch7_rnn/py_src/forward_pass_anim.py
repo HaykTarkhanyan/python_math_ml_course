@@ -42,6 +42,7 @@ Run with the project venv:
 
 import logging
 import sys
+import time
 import warnings
 from pathlib import Path
 
@@ -147,60 +148,65 @@ def r2(v):
 
 
 # --- drawing -----------------------------------------------------------------------
-
-SLOT_X = [1.6, 5.4, 9.2]   # x-position of each word slot
-STATE_Y = 1.6
-WORD_Y = -0.9
+# Drawn at the size the figure gets on the slide (L20 embeds it at 0.82\linewidth, about
+# 4.5 in), with the axes spanning the whole figure and data units = inches. Every font
+# size below is therefore its true size on the slide (style guide: 7-10 pt). Redrawn
+# 2026-10-03: the old 12 in canvas was shrunk to ~38% on the slide, leaving ~3 pt text.
+FIG_W, FIG_H = 4.5, 2.45
+SLOT_X = [0.42, 1.27, 2.12]   # x of each word slot
+STATE_Y = 1.18                 # y of the state circles
+WORD_Y = 0.30                  # y of the word boxes
+R_STATE = 0.24                 # state circle radius
+LEG_X, LEG_Y = 2.72, 0.80      # top-left of the numeric legend
+ARROW = dict(arrowstyle="-|>", mutation_scale=7)
 
 
 def draw_legend(ax, active_idx, show_readout):
-    """Persistent small numeric legend: W (rows = vocab words), V, b, and, once the
-    readout has appeared, U and c. The active word's row of W is highlighted -- this
-    is the "one-hot selects a row of W" visual."""
-    x0, y0 = 10.9, 4.9
-    ax.text(x0, y0, "W (rows = words)", fontsize=7.5, color="black", fontweight="bold")
+    """Persistent numeric legend: W (rows = vocab words), V, b and, once the readout has
+    appeared, U and c. The active word's row of W is highlighted - the "one-hot selects a
+    row of W" visual."""
+    ax.text(LEG_X, LEG_Y, "W (rows = words)", fontsize=7, fontweight="bold", va="center")
     for i, word in enumerate(VOCAB):
-        y = y0 - 0.36 * (i + 1)
-        row = W[i]
+        y = LEG_Y - 0.14 * (i + 1)
         active = (i == active_idx)
         if active:
-            ax.add_patch(Rectangle((x0 - 0.08, y - 0.16), 3.35, 0.32,
-                                    fc=GREEN + "30", ec=GREEN, lw=1.1))
-        ax.text(x0, y, word, fontsize=7.2, fontfamily=ARM_FONT,
-                color="black" if active else GRAY)
-        ax.text(x0 + 1.15, y, f"[{row[0]:+.2f}, {row[1]:+.2f}]", fontsize=7.2,
-                family="monospace", color="black" if active else GRAY)
-    y = y0 - 0.36 * 4 - 0.12
-    ax.text(x0, y, f"V = [[{V[0,0]:+.1f},{V[0,1]:+.1f}], [{V[1,0]:+.1f},{V[1,1]:+.1f}]]"
-            f"   b = [0, 0]", fontsize=6.8, family="monospace", color="black")
-    if show_readout:
-        y2 = y - 0.32
-        ax.text(x0, y2, f"U = [{U[0]:+.1f}, {U[1]:+.1f}]   c = 0", fontsize=6.8,
-                family="monospace", color="black")
+            ax.add_patch(Rectangle((LEG_X - 0.03, y - 0.065), 1.42, 0.13,
+                                    fc=GREEN + "30", ec=GREEN, lw=0.8))
+        col = "black" if active else GRAY
+        ax.text(LEG_X, y, word, fontsize=7, fontfamily=ARM_FONT, color=col, va="center")
+        ax.text(LEG_X + 0.52, y, f"[{W[i, 0]:+.2f}, {W[i, 1]:+.2f}]", fontsize=7,
+                family="monospace", color=col, va="center")
+    y = LEG_Y - 0.14 * 4
+    ax.text(LEG_X, y, f"V = [[{V[0, 0]:+.1f},{V[0, 1]:+.1f}],[{V[1, 0]:+.1f},{V[1, 1]:+.1f}]]",
+            fontsize=7, family="monospace", va="center")
+    tail = f"  U = [{U[0]:+.0f},{U[1]:+.0f}]  c = 0" if show_readout else ""
+    ax.text(LEG_X, y - 0.14, "b = [0,0]" + tail, fontsize=7, family="monospace", va="center")
 
 
 def draw_word_slot(ax, cx, word, active, is_current):
-    box_w = max(1.3, 0.24 * len(word) + 0.35)
+    box_w = max(0.46, 0.085 * len(word) + 0.14)
     fc = (BLUE + "22") if active else "#F2F2F2"
-    ax.add_patch(Rectangle((cx - box_w / 2, WORD_Y - 0.3), box_w, 0.6, ec=BLUE, fc=fc,
-                            lw=1.3 if is_current else 1.0))
-    ax.text(cx, WORD_Y, word, ha="center", va="center", fontsize=10, fontfamily=ARM_FONT,
+    ax.add_patch(Rectangle((cx - box_w / 2, WORD_Y - 0.11), box_w, 0.22, ec=BLUE, fc=fc,
+                            lw=1.1 if is_current else 0.8))
+    ax.text(cx, WORD_Y, word, ha="center", va="center", fontsize=8.5, fontfamily=ARM_FONT,
             color="black" if active else GRAY)
 
 
 def draw_state_circle(ax, cx, z, active, is_current, label):
     fc = GREEN + "33" if is_current else (GREEN + "18" if active else "#F2F2F2")
     ec = GREEN if is_current else (BLUE if active else "#CCCCCC")
-    ax.add_patch(Circle((cx, STATE_Y), 0.68, ec=ec, fc=fc, lw=2.2 if is_current else 1.2))
+    ax.add_patch(Circle((cx, STATE_Y), R_STATE, ec=ec, fc=fc, lw=1.6 if is_current else 0.9))
     if active:
         zr = r2(z)
-        ax.text(cx, STATE_Y + 0.08, f"[{zr[0]:.2f},", ha="center", va="center",
-                fontsize=8.5, fontweight="bold" if is_current else "normal")
-        ax.text(cx, STATE_Y - 0.18, f" {zr[1]:.2f}]", ha="center", va="center",
-                fontsize=8.5, fontweight="bold" if is_current else "normal")
+        fw = "bold" if is_current else "normal"
+        ax.text(cx, STATE_Y + 0.065, f"[{zr[0]:.2f},", ha="center", va="center",
+                fontsize=7, fontweight=fw)
+        ax.text(cx, STATE_Y - 0.075, f" {zr[1]:.2f}]", ha="center", va="center",
+                fontsize=7, fontweight=fw)
     else:
-        ax.text(cx, STATE_Y, "?", ha="center", va="center", fontsize=13, color=GRAY)
-    ax.text(cx, STATE_Y + 1.0, label, ha="center", fontsize=8, color=GRAY)
+        ax.text(cx, STATE_Y, "?", ha="center", va="center", fontsize=9, color=GRAY)
+    ax.text(cx, STATE_Y + R_STATE + 0.04, label, ha="center", va="bottom", fontsize=9,
+            color=GRAY)
 
 
 def draw_chain(ax, steps, upto):
@@ -208,118 +214,137 @@ def draw_chain(ax, steps, upto):
     for i in range(3):
         active = i <= upto
         is_current = (i == upto)
-        word = steps[i]["word"] if active else "?"
-        draw_word_slot(ax, SLOT_X[i], word, active, is_current)
-        z = steps[i]["z"] if active else None
-        draw_state_circle(ax, SLOT_X[i], z, active, is_current, f"$z^{{[{i+1}]}}$")
-        # W arrow (word -> state)
-        arrow_color = BLUE if active else "#DDDDDD"
-        ax.add_patch(FancyArrowPatch((SLOT_X[i], WORD_Y + 0.32), (SLOT_X[i], STATE_Y - 0.72),
-                                      arrowstyle="-|>", mutation_scale=12,
-                                      color=arrow_color, lw=1.4 if active else 1.0))
+        x = SLOT_X[i]
+        draw_word_slot(ax, x, steps[i]["word"] if active else "?", active, is_current)
+        draw_state_circle(ax, x, steps[i]["z"] if active else None, active, is_current,
+                          f"$z^{{[{i + 1}]}}$")
+        ax.add_patch(FancyArrowPatch((x, WORD_Y + 0.12), (x, STATE_Y - R_STATE - 0.01),
+                                      color=BLUE if active else "#DDDDDD",
+                                      lw=1.0 if active else 0.7, **ARROW))
         if active:
-            ax.text(SLOT_X[i] + 0.32, (WORD_Y + STATE_Y) / 2, "W", fontsize=9, color=BLUE)
-        # V arrow (previous state -> this state)
+            ax.text(x + 0.05, (WORD_Y + STATE_Y) / 2, "W", fontsize=7.5, color=BLUE,
+                    va="center")
         if i > 0:
-            recurrent_active = i <= upto
-            ax.add_patch(FancyArrowPatch((SLOT_X[i - 1] + 0.72, STATE_Y),
-                                          (SLOT_X[i] - 0.72, STATE_Y),
-                                          arrowstyle="-|>", mutation_scale=12,
-                                          color=GREEN if recurrent_active else "#DDDDDD",
-                                          lw=1.7 if recurrent_active else 1.0))
-            if recurrent_active:
-                ax.text((SLOT_X[i - 1] + SLOT_X[i]) / 2, STATE_Y + 0.35, "V", fontsize=9,
-                        color=GREEN)
-    ax.text(SLOT_X[2] - 1.0, STATE_Y - 1.6, "tanh applied at every state", fontsize=7.5,
-            color=GRAY, style="italic")
+            a, b = SLOT_X[i - 1] + R_STATE + 0.01, x - R_STATE - 0.01
+            ax.add_patch(FancyArrowPatch((a, STATE_Y), (b, STATE_Y),
+                                          color=GREEN if active else "#DDDDDD",
+                                          lw=1.2 if active else 0.7, **ARROW))
+            if active:
+                ax.text((a + b) / 2, STATE_Y + 0.04, "V", ha="center", va="bottom",
+                        fontsize=7.5, color=GREEN)
+    ax.text(SLOT_X[1] + 0.25, 0.04, "tanh applied at every state", ha="center",
+            va="bottom", fontsize=7, color=GRAY, style="italic")
 
 
-def draw_readout(ax, steps, raw, score, stage):
+def draw_readout(ax, raw, score, stage):
     """stage: 'raw' shows only U -> raw box; 'score' also shows sigmoid -> final score."""
-    z3 = steps[2]["z"]
-    ux, uy = SLOT_X[2] + 1.55, STATE_Y
-    ax.add_patch(FancyArrowPatch((SLOT_X[2] + 0.72, STATE_Y), (ux - 0.55, STATE_Y),
-                                  arrowstyle="-|>", mutation_scale=12, color=RED, lw=1.6))
-    ax.text((SLOT_X[2] + ux) / 2, STATE_Y + 0.32, "U", fontsize=9, color=RED)
-    ax.add_patch(FancyBboxPatch((ux - 0.55, STATE_Y - 0.3), 1.1, 0.6,
-                                 boxstyle="round,pad=0.03", ec=RED, fc=RED + "18", lw=1.3))
-    ax.text(ux, STATE_Y, f"{raw:.2f}", ha="center", va="center", fontsize=9)
-    ax.text(ux, STATE_Y + 0.55, "raw", ha="center", fontsize=7.5, color=GRAY)
-
+    x3 = SLOT_X[2]
+    ux = x3 + 0.70                       # centre of the raw box
+    a = x3 + R_STATE + 0.01
+    ax.add_patch(FancyArrowPatch((a, STATE_Y), (ux - 0.19, STATE_Y), color=RED, lw=1.1,
+                                  **ARROW))
+    ax.text((a + ux - 0.19) / 2, STATE_Y + 0.04, "U", ha="center", va="bottom",
+            fontsize=7.5, color=RED)
+    ax.add_patch(FancyBboxPatch((ux - 0.18, STATE_Y - 0.10), 0.36, 0.20,
+                                 boxstyle="round,pad=0.01", ec=RED, fc=RED + "18", lw=0.9))
+    ax.text(ux, STATE_Y, f"{raw:.2f}", ha="center", va="center", fontsize=7.5)
+    ax.text(ux, STATE_Y + 0.13, "raw", ha="center", va="bottom", fontsize=7, color=GRAY)
     if stage == "score":
-        sx = ux + 1.75
-        ax.add_patch(FancyArrowPatch((ux + 0.55, STATE_Y), (sx - 0.6, STATE_Y),
-                                      arrowstyle="-|>", mutation_scale=12, color=RED, lw=1.6))
-        ax.text((ux + sx) / 2, STATE_Y + 0.32, "sigmoid", fontsize=8, color=RED)
-        ax.add_patch(Circle((sx, STATE_Y), 0.62, ec=RED, fc=RED + "22", lw=2.0))
-        ax.text(sx, STATE_Y, f"{score:.2f}", ha="center", va="center", fontsize=10,
+        sx = ux + 0.86                   # centre of the score circle
+        ax.add_patch(FancyArrowPatch((ux + 0.19, STATE_Y), (sx - 0.22, STATE_Y), color=RED,
+                                      lw=1.1, **ARROW))
+        ax.text((ux + sx) / 2, STATE_Y + 0.04, "sigmoid", ha="center", va="bottom",
+                fontsize=7, color=RED)
+        ax.add_patch(Circle((sx, STATE_Y), 0.21, ec=RED, fc=RED + "22", lw=1.4))
+        ax.text(sx, STATE_Y, f"{score:.2f}", ha="center", va="center", fontsize=8,
                 fontweight="bold")
-        ax.text(sx, STATE_Y + 0.85, "score $\\in(0,1)$", ha="center", fontsize=7.5,
+        ax.text(sx, STATE_Y + 0.25, "score in (0, 1)", ha="center", va="bottom", fontsize=7,
                 color=GRAY)
 
 
+def header(ax, lines, boxed_last=False, size=7.5, **kw):
+    """Left-aligned lines from the top of the figure; optionally box the last one."""
+    for k, line in enumerate(lines):
+        box = dict(boxstyle="round,pad=0.15", fc=GREEN + "12", ec=GREEN, lw=0.8)
+        ax.text(0.05, FIG_H - 0.13 - 0.18 * k, line, ha="left", va="center", fontsize=size,
+                fontfamily=ARM_FONT, bbox=box if (boxed_last and k == len(lines) - 1) else None,
+                **kw)
+
+
 def draw_frame(step, steps, raw, score, log):
-    fig, ax = plt.subplots(figsize=(12.0, 6.2))
-    ax.set_position([0, 0, 1, 1])
-    ax.set_xlim(-1.0, 15.0)
-    ax.set_ylim(-2.6, 5.4)
+    fig = plt.figure(figsize=(FIG_W, FIG_H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, FIG_W)
+    ax.set_ylim(0, FIG_H)
     ax.axis("off")
 
     if step == 0:
         draw_chain(ax, steps, upto=-1)
         draw_legend(ax, active_idx=None, show_readout=False)
-        ax.text(6.0, 4.4, "Toy net ready: 3-word vocab, 2-d state, $z^{[0]}=[0,0]$",
-                ha="center", fontsize=12, color=BLUE, fontweight="bold")
+        ax.text(0.05, FIG_H - 0.13, "Toy net ready: 3-word vocabulary, 2-d state, "
+                "$z^{[0]}=[0, 0]$", ha="left", va="center", fontsize=8, color=BLUE,
+                fontweight="bold")
     elif step in (1, 2, 3):
         i = step - 1
         s = steps[i]
         draw_chain(ax, steps, upto=i)
         draw_legend(ax, active_idx=i, show_readout=False)
         wr = r2(s["w_term"]); vr = r2(s["v_term"]); pr = r2(s["pre"]); zr = r2(s["z"])
-        # Plain text only (no mathtext "$...$") -- mixing mathtext with an embedded
-        # Armenian word silently drops the Armenian portion instead of erroring, so
-        # these annotations use the same plain arithmetic notation as unroll_anim.py.
-        lines = [
-            f"x[{i+1}] = one-hot({s['word']}) -> W^T x = row of W = "
-            f"[{wr[0]:.2f}, {wr[1]:.2f}]",
-        ]
+        # Plain text only (no mathtext "$...$"): mixing mathtext with an embedded Armenian
+        # word silently drops the Armenian part instead of erroring.
+        lines = [f"x[{i + 1}] = one-hot({s['word']})  ->  W^T x = row of W = "
+                 f"[{wr[0]:.2f}, {wr[1]:.2f}]"]
         if i > 0:
             lines.append(f"+ V^T z[{i}] = [{vr[0]:.2f}, {vr[1]:.2f}]   + b = [0, 0]")
         else:
-            lines.append("+ V^T z[0] = [0.00, 0.00]  (state starts at zero)  + b = [0, 0]")
+            lines.append("+ V^T z[0] = [0.00, 0.00] (state starts at zero)   + b = [0, 0]")
         lines.append(f"pre = [{pr[0]:.2f}, {pr[1]:.2f}]  ->  tanh  ->  "
-                      f"z[{i+1}] = [{zr[0]:.2f}, {zr[1]:.2f}]")
-        for k, line in enumerate(lines):
-            ax.text(6.0, 4.55 - 0.42 * k, line, ha="center", fontsize=11.5,
-                    fontfamily=ARM_FONT,
-                    bbox=dict(boxstyle="round", fc=GREEN + "12", ec=GREEN) if k == 2 else None)
+                     f"z[{i + 1}] = [{zr[0]:.2f}, {zr[1]:.2f}]")
+        header(ax, lines, boxed_last=True)
     elif step == 4:
         draw_chain(ax, steps, upto=2)
         draw_legend(ax, active_idx=None, show_readout=True)
-        draw_readout(ax, steps, raw, score, stage="raw")
-        ax.text(6.0, 4.4, "After the last word: readout $U^\\top z^{[3]} + c$"
-                " (happens once, not every step)", ha="center", fontsize=11.5, color=RED)
+        draw_readout(ax, raw, score, stage="raw")
+        ax.text(0.05, FIG_H - 0.13, "After the last word: readout $U^\\top z^{[3]} + c$",
+                ha="left", va="center", fontsize=8, color=RED, fontweight="bold")
+        ax.text(0.05, FIG_H - 0.31, "(it happens once, not at every step)", ha="left",
+                va="center", fontsize=7.5, color=RED)
     elif step == 5:
         draw_chain(ax, steps, upto=2)
         draw_legend(ax, active_idx=None, show_readout=True)
-        draw_readout(ax, steps, raw, score, stage="score")
-        ax.text(6.0, 4.4, f"sigmoid({raw:.2f}) = {score:.2f} - one pass, one score",
-                ha="center", fontsize=12, fontweight="bold", color="black")
+        draw_readout(ax, raw, score, stage="score")
+        ax.text(0.05, FIG_H - 0.13, f"sigmoid({raw:.2f}) = {score:.2f}: one pass, one score",
+                ha="left", va="center", fontsize=8, fontweight="bold")
     elif step == 6:
         draw_chain(ax, steps, upto=2)
         draw_legend(ax, active_idx=0, show_readout=True)
-        draw_readout(ax, steps, raw, score, stage="score")
-        ax.add_patch(Rectangle((SLOT_X[0] - 0.9, WORD_Y - 0.5), 1.8, 3.0, fill=False,
-                                ec=ORANGE, lw=2.0, linestyle="--"))
-        ax.text(6.0, 4.4, "one-hot x W selects ONE row of W - that row IS "
-                f"{steps[0]['word']}'s own vector", ha="center", fontsize=11.5,
-                color=ORANGE, fontweight="bold", fontfamily=ARM_FONT)
-        ax.text(6.0, -2.3, "Next lecture: this row/column gets a name - an embedding.",
-                ha="center", fontsize=10, color=GRAY, style="italic")
+        draw_readout(ax, raw, score, stage="score")
+        ax.add_patch(Rectangle((SLOT_X[0] - 0.37, WORD_Y - 0.16), 0.74,
+                                STATE_Y + R_STATE + 0.24 - (WORD_Y - 0.16), fill=False,
+                                ec=ORANGE, lw=1.4, linestyle="--"))
+        header(ax, [f"one-hot x W selects ONE row of W: that row IS "
+                    f"{steps[0]['word']}'s own vector"], size=8, color=ORANGE,
+               fontweight="bold")
+        ax.text(0.05, FIG_H - 0.31, "The attention chapter gives this row a name: an "
+                "embedding.", ha="left", va="center", fontsize=7.5, color=GRAY,
+                style="italic")
 
-    ax.text(6.0, 5.1, f"step {step + 1} of 7", ha="center", fontsize=10, color=GRAY)
+    ax.text(FIG_W - 0.04, FIG_H - 0.04, f"step {step + 1} of 7", ha="right", va="top",
+            fontsize=7, color=GRAY)
     out = FIG_DIR / f"forward_pass_{step}.pdf"
-    fig.savefig(out)
+    # Writing seven PDFs back to back hits a transient Windows lock (OSError errno 22) on
+    # one of them in most runs; see _learnings/2026-09-28-2313_errno22-on-write-is-a-
+    # transient-lock.md. Bounded retry, then fail loudly.
+    for attempt in range(1, 6):
+        try:
+            fig.savefig(out)
+            break
+        except OSError as e:
+            if e.errno != 22 or attempt == 5:
+                log.error(f"could not write {out} after {attempt} attempts: {e}")
+                raise
+            log.warning(f"write of {out} failed (errno 22), retry {attempt}/4 in 1 s")
+            time.sleep(1)
     plt.close(fig)
     log.info(f"saved {out}")
 

@@ -9,6 +9,108 @@ this file holds the choice and a pointer.
 
 ---
 
+## #64 - The RNN chapter stays a quick lecture: tokenization, temperature and embeddings move to the LLM chapter; its language-model demo becomes real
+
+**Date:** 2026-10-03 · **Status:** active (instructor, item by item, on a list of proposals)
+
+**Decision.** L21 loses its tokenization section (trilemma, subwords on a real tokenizer, the
+Armenian tax), its embeddings frame and the temperature knob; they move to the LLM chapter
+(`ml/LLM_CHAPTER_PLAN.md`, LLM-1 / LLM-2, embeddings with attention and LLM-3). "One-hot and its
+poverty" stays, moved to L20. The epilogue on recurrence in 2026 shrinks to a teaser (detail ->
+LLM-10). L21's three illustrative char-LSTM frames are replaced by a real GRU trained on the ch11
+surnames (`ml/ch7_rnn/py_src/surname_gru.py`). L21 gains a word-alignment grid after the
+bottleneck; L20 gains an on-ramp from [29]'s exponential smoothing.
+
+**Why.** Instructor: "RNNs are supposed to be more of a quick lecture", and topics that belong to
+language models should be taught there, once. The alignment grid was kept because it makes the
+point attention answers: the bottleneck is not only that C is small, but that every decoder step
+gets the same C while each needs a different part of the input (the capacity argument alone leads
+to "make C bigger"). Measured numbers for the real demo, reproduced from the chapter practical:
+GRU best validation loss 1.605 at epoch 30 vs 1.673 for the ch11 3-letter-window MLP; on the
+validation name բեկյան, P(ա | բեկյ) = 0.97 and P(ն | բեկյա) = 0.99; 660 of 689 surnames end in
+-յան; 0 of 10 samples at the best epoch are copied from the training list.
+
+**Alternatives rejected** (proposed, declined by the instructor): a "design challenge" cliffhanger
+naming cosine similarity, softmax and KNN as the tools; a frame on the hidden state as a
+contextual embedding; a "keep this test" plant on the shuffle-test frame; an embeddings callback
+to the ch11 `nn.Embedding`; lag features as a third fixed-window example.
+
+**Reopens.** `RNN_CHAPTER_PLAN.md`'s locked "tokenization: in scope, with emphasis" (July, made
+when no LLM chapter existed to hold it), and L21's July "no real training runs" scope, for the
+three language-model frames only (already reopened once for the memory frame, #39).
+
+**What would change this.** If the LLM chapter is cut or shrunk below LLM-1, tokenization has no
+home: restore the L21 section from `git show 6013bcc:ml/ch7_rnn/L21_road_to_attention.tex`.
+
+---
+
+## #63 - The language-model block comes before the autoencoders
+
+**Date:** 2026-10-03 · **Status:** active (instructor decision). Supersedes #62. (Written as #61;
+renumbered the same day after a parallel session also used #60/#61.)
+
+**Decision.** After the CNN chapter: RNN (L20, L21) -> attention (L24-L26) -> the language-model
+chapter (`ml/LLM_CHAPTER_PLAN.md`) -> RAG -> agents -> autoencoders (L22, L23) -> GANs (L23b,
+L23c) -> diffusion (L27-L31).
+
+**Why.** #62's order (autoencoders first) kept the text thread unbroken but left the VAE's closing
+cliffhanger ("VAE samples are blurry", answered by GANs and then diffusion) waiting ~15 lectures
+behind the LLM block. This order keeps both threads unbroken: text (RNN -> attention -> LLMs) and
+generative (AE -> VAE -> GAN -> diffusion). It is also the cheapest to adopt: L22's reference to
+the RNN, `HW1_sae_rnn` and L23c's callback to L21 all work as written; only `L23_vae.tex:473` and
+`L23c_gan_applications.tex:427` need rewording.
+
+**Checked before deciding** (instructor asked whether the LLM block needs autoencoders): zero
+references to autoencoders / VAE / L22 / L23 in `ch9_attention`, `ch17_rag` and `ch18_agents`; the
+LLM source decks mention "denoising" only for T5/BART span corruption. The chapters that do depend
+on autoencoders - mech interp (sparse autoencoders, `xx_features.tex:261`), VLM (VQ-VAE,
+`L34_vlm_drawing.tex:86`), JEPA (`L39_jepa_objective.tex:76`), diffusion (latent diffusion) - all
+come after L22/L23 in this order and must stay there.
+
+**Alternatives rejected.** *#62's order (AE -> RNN -> attention -> LLMs)* - the VAE cliffhanger gap
+above. *The original order (RNN -> AE -> GANs -> attention)* - four lectures between L21's
+cliffhanger and L24's payoff.
+
+**Cost accepted.** Autoencoders and the generative block move toward the end of the course, where
+cuts are likeliest (45 built decks remain after L16). Autoencoder-flavoured ideas inside the LLM
+block (masked LM as denoising, MLA's low-rank KV bottleneck) are taught without the autoencoder
+callback, using PCA (ch10) instead. Mech interp cannot be scheduled before L22.
+
+**What would change this.** A decision to cut the generative block for time - then move L22/L23
+back up behind CNN (#62's order) so they still get taught.
+
+---
+
+## #62 - After CNN: autoencoders, then RNN, then attention, then a language-model chapter
+
+**Date:** 2026-10-02 · **Status:** superseded by #63 (2026-10-03). (Written as #60; renumbered
+2026-10-03 after a parallel session also used #60/#61.) The language-model chapter's
+contents are a draft awaiting approval: `ml/LLM_CHAPTER_PLAN.md`, open decisions D1-D7.
+
+**Decision.** The deep-learning order after the CNN chapter becomes autoencoders (L22, L23) -> RNN
+(L20, L21) -> attention (L24-L26) -> a new language-model chapter -> RAG (L41-L43) -> agents
+(L44). Before, RNN came before autoencoders, and the two GAN decks sat between the autoencoders and
+attention.
+
+**Why.** Instructor's call. Two gains found while checking the cross-references: L21's cliffhanger
+("what if the decoder could look back at all the encoder states?") now lands in the very next
+lecture - L24 already opens with "Last chapter ended on a cliffhanger", which the old order made
+false by putting four lectures in between. And `HW1_sae_rnn` (a sparse autoencoder reading a GRU's
+hidden state) needs both chapters, so it becomes the homework of the RNN chapter, which had none.
+
+**Alternatives rejected.** *Keep RNN before autoencoders* (`AE_CHAPTER_PLAN.md` decision 2) - its
+only advantage was that L22's sparse-autoencoder section could treat the RNN as already taught.
+
+**Cost accepted.** `L22_autoencoders.tex:672` and `L23_vae.tex:473` need rewording;
+`HW1_sae_rnn` moves to the RNN chapter; `_quarto.yml`, the qmd title numbers and `ml/00_plan.md`
+change. Where the GANs go is still open (plan D2).
+
+**What would change this.** Students reaching L22's sparse-autoencoder section and not being able
+to follow it without RNN background - then move that section into the RNN chapter rather than
+revert the order.
+
+---
+
 ## #57 - The gesture practical's small CNN keeps a flattened head; L17's global average pool is the counter-example
 
 **Date:** 2026-10-01 · **Status:** active, revisited 2026-10-01 (see the end of this entry)

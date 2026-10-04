@@ -53,31 +53,38 @@ def tokenize_bow(sentence: str) -> list[str]:
     return re.findall(r"[a-zA-Z']+", sentence.lower())
 
 
+# Drawn at the size the figure gets on the slide (L20 shuffle frame: 0.70 column, ~3.85 in).
+# The sentence rows use an axes whose data units are inches, so the word boxes are sized
+# from the true 7.5 pt monospace character width. Redrawn 2026-10-03: the old 9.6 in canvas
+# left ~4 pt text.
+FIG_W, FIG_H = 3.85, 2.55
+SENT_BOTTOM = 0.60                      # sentence axes: top 40% of the figure
+MONO_PT = 7.5
+CHAR_IN = 0.6 * MONO_PT / 72            # monospace advance width, inches
+
+
 def box_width(word: str) -> float:
-    """Monospace-ish width estimate (data units) sized to fit the word plus padding."""
-    return 0.34 * len(word) + 0.55
+    """Box width in inches: the word at MONO_PT monospace plus padding."""
+    return CHAR_IN * len(word) + 0.10
 
 
-def draw_sentence_row(ax, words, title, highlight_order, log):
-    widths = [box_width(w) for w in words]
-    gap = 0.18
-    centers, x = [], 0.0
-    for w in widths:
-        centers.append(x + w / 2)
-        x += w + gap
-    total = x - gap
-    ax.set_xlim(-0.3, total + 0.3)
-    ax.set_ylim(0, 1)
-    for cx, w, word in zip(centers, widths, words):
-        ax.add_patch(plt.Rectangle((cx - w / 2, 0.15), w, 0.7, ec=BLUE,
-                                    fc="#0033A0" + "1A", lw=1.4))
-        ax.text(cx, 0.5, word, ha="center", va="center", fontsize=11, family="monospace")
-    for i, cx in enumerate(centers):
-        ax.text(cx, 0.03, str(highlight_order[i] + 1), ha="center", va="top",
-                fontsize=8, color="#888")
-    ax.set_title(title, fontsize=12)
-    ax.axis("off")
-    log.info(f"{title}: {' '.join(words)}")
+def draw_sentence_row(ax, y, words, label, origin, log):
+    """One sentence as word boxes at height y (inches). origin[i] = the word's position in
+    the original sentence (1-based), printed under each box when given."""
+    x = 0.68
+    ax.text(0.05, y, label, ha="left", va="center", fontsize=7, color="#666666")
+    for i, word in enumerate(words):
+        w = box_width(word)
+        ax.add_patch(plt.Rectangle((x, y - 0.12), w, 0.24, ec=BLUE, fc=BLUE + "1A", lw=0.9))
+        ax.text(x + w / 2, y, word, ha="center", va="center", fontsize=MONO_PT,
+                family="monospace")
+        if origin is not None:
+            ax.text(x + w / 2, y - 0.17, f"was {origin[i]}", ha="center", va="top",
+                    fontsize=7, color="#888888")
+        x += w + 0.05
+    if x > FIG_W:
+        raise ValueError(f"{label} row is {x:.2f} in wide, figure is {FIG_W} in")
+    log.info(f"{label}: {' '.join(words)}")
 
 
 def fig_word_shuffle(log):
@@ -94,29 +101,38 @@ def fig_word_shuffle(log):
     counts_shuf = [bow_shuf.count(v) for v in vocab]
     assert counts_orig == counts_shuf, "bag-of-words counts must be identical by construction"
 
-    fig, axes = plt.subplots(2, 2, figsize=(9.6, 5.6),
-                              gridspec_kw={"height_ratios": [1, 1.6]})
+    fig = plt.figure(figsize=(FIG_W, FIG_H))
+    sent_h = FIG_H * (1 - SENT_BOTTOM)
+    ax_s = fig.add_axes([0, SENT_BOTTOM, 1, 1 - SENT_BOTTOM])
+    ax_s.set_xlim(0, FIG_W)
+    ax_s.set_ylim(0, sent_h)
+    ax_s.axis("off")
+    ax_s.text(FIG_W / 2, sent_h - 0.03, "Same words, all meaning gone - identical histograms",
+              ha="center", va="top", fontsize=8, fontweight="bold")
+    draw_sentence_row(ax_s, sent_h - 0.33, words, "original", None, log)
+    draw_sentence_row(ax_s, sent_h - 0.68, shuffled_words, "shuffled",
+                      [int(i) + 1 for i in perm], log)
 
-    draw_sentence_row(axes[0, 0], words, "Original review", np.arange(n), log)
-    draw_sentence_row(axes[0, 1], shuffled_words, "Same words, one fixed shuffle",
-                       perm, log)
-
-    for ax, counts, title, color in [
-        (axes[1, 0], counts_orig, "Bag-of-words histogram", BLUE),
-        (axes[1, 1], counts_shuf, "Bag-of-words histogram", RED),
-    ]:
+    for k, (counts, title, color) in enumerate([
+        (counts_orig, "original: bag of words", BLUE),
+        (counts_shuf, "shuffled: bag of words", RED),
+    ]):
+        ax = fig.add_axes([0.10 + k * 0.50, 0.255, 0.38, 0.27])
         bars = ax.bar(vocab, counts, color=color)
-        ax.bar_label(bars, fontsize=9)
-        ax.set_ylim(0, max(counts_orig) + 1)
-        ax.set_title(title, fontsize=11)
-        ax.tick_params(axis="x", rotation=45, labelsize=8.5)
-        ax.set_yticks(range(0, max(counts_orig) + 2))
+        ax.bar_label(bars, fontsize=7, padding=1)
+        ax.set_ylim(0, max(counts_orig) + 0.6)
+        ax.set_title(title, fontsize=7.5, pad=3)
+        ax.tick_params(axis="x", rotation=45, labelsize=7)
+        ax.tick_params(axis="y", labelsize=7)
+        for t in ax.get_xticklabels():
+            t.set_ha("right")
+            t.set_rotation_mode("anchor")
+        ax.set_yticks(range(0, max(counts_orig) + 1))
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
 
-    fig.suptitle("Every word identical. All meaning gone. Histograms: pixel-identical.",
-                 fontsize=12, y=1.01)
-    fig.tight_layout()
     out = FIG_DIR / "word_shuffle.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"saved {out}")
 

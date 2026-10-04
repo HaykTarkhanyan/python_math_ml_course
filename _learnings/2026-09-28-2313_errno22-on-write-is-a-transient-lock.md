@@ -16,6 +16,16 @@ scanning it. OneDrive sync is off on this machine, so it is not that.
 `git diff --numstat` unchanged); a plain rerun succeeded; a bounded retry (5 attempts, 1 s apart)
 succeeded on its first attempt.
 
+**More evidence, 2026-10-03/04** (redrawing the RNN figures): six failures in one evening, on
+matplotlib PDF writes (`forward_pass_1/4/5.pdf`, `memory_highway.pdf`) and once on a `.tex` file.
+Every time the file had been read by pdflatex or pdftoppm within the previous few minutes, and
+the script was writing several files back to back. A `wb` open of the same file seconds later
+succeeded. A retry loop logged the lock lasting about 4 s (attempts 1-4 failed one second apart,
+attempt 5 worked). Still consistent with an on-access scan; still not proven. The failed `open`
+never truncated the file (`.tex` checked: same byte count and frame count before the retry).
+`ml/ch7_rnn/py_src/forward_pass_anim.py` now retries a failed `savefig` up to 5 times, 1 s apart,
+then raises.
+
 **Consequences.**
 
 - Batch writers: make the script idempotent, so a rerun only redoes what is left, and verify

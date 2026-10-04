@@ -125,117 +125,116 @@ def r2(v):
     return np.round(v, 2)
 
 
-def draw_chain(ax, states, active_idx, x0, title, title_color, raw, score):
+# Drawn at the size the figure gets on the slide (L20 embeds it at 0.86\linewidth, about
+# 4.7 in), axes spanning the figure, data units = inches, so font sizes are true slide
+# sizes (style guide: 7-10 pt). Redrawn 2026-10-03: the old 11 in canvas left ~3 pt text.
+FIG_W, FIG_H = 4.7, 2.3
+SLOT_X = [0.45, 1.35, 2.25]
+STATE_Y, WORD_Y, R_STATE = 1.02, 0.28, 0.24
+ARROW = dict(arrowstyle="-|>", mutation_scale=7)
+
+
+def draw_chain(ax, states, active_idx, raw, score):
     """Draw a 3-step unrolled chain; steps > active_idx are shown empty/gray. Once
     active_idx reaches the last word (2), the U -> sigmoid -> score readout appears."""
-    dx = 2.8
     for i, s in enumerate(states):
         word, z = s["word"], s["z"]
-        cx = x0 + i * dx
+        cx = SLOT_X[i]
         active = i <= active_idx
         is_cur = i == active_idx
 
-        box_w = max(1.1, 0.26 * len(word) + 0.4)
-        ax.add_patch(Rectangle((cx - box_w / 2, -0.4), box_w, 0.6, ec=BLUE,
-                                fc=(BLUE + "22") if active else "#F2F2F2", lw=1.3))
-        ax.text(cx, -0.1, word, ha="center", va="center", fontsize=9,
+        box_w = max(0.46, 0.085 * len(word) + 0.14)
+        ax.add_patch(Rectangle((cx - box_w / 2, WORD_Y - 0.11), box_w, 0.22, ec=BLUE,
+                                fc=(BLUE + "22") if active else "#F2F2F2", lw=0.9))
+        ax.text(cx, WORD_Y, word, ha="center", va="center", fontsize=8.5,
                 fontfamily=ARM_FONT, color="black" if active else GRAY)
 
         fc = GREEN + "33" if is_cur else (GREEN + "18" if active else "#F2F2F2")
         ec = GREEN if is_cur else (BLUE if active else "#CCCCCC")
-        ax.add_patch(Circle((cx, 1.6), 0.62, ec=ec, fc=fc, lw=2.2 if is_cur else 1.2))
+        ax.add_patch(Circle((cx, STATE_Y), R_STATE, ec=ec, fc=fc, lw=1.6 if is_cur else 0.9))
         if active:
             zr = r2(z)
-            ax.text(cx, 1.72, f"[{zr[0]:.2f},", ha="center", va="center", fontsize=8,
-                    fontweight="bold" if is_cur else "normal")
-            ax.text(cx, 1.46, f" {zr[1]:.2f}]", ha="center", va="center", fontsize=8,
-                    fontweight="bold" if is_cur else "normal")
+            fw = "bold" if is_cur else "normal"
+            ax.text(cx, STATE_Y + 0.065, f"[{zr[0]:.2f},", ha="center", va="center",
+                    fontsize=7, fontweight=fw)
+            ax.text(cx, STATE_Y - 0.075, f" {zr[1]:.2f}]", ha="center", va="center",
+                    fontsize=7, fontweight=fw)
+            ax.add_patch(FancyArrowPatch((cx, WORD_Y + 0.12), (cx, STATE_Y - R_STATE - 0.01),
+                                          color=BLUE, lw=1.0, **ARROW))
+            ax.text(cx + 0.05, (WORD_Y + STATE_Y) / 2, "W", fontsize=7.5, color=BLUE,
+                    va="center")
         else:
-            ax.text(cx, 1.6, "?", ha="center", va="center", fontsize=11, color=GRAY)
-
-        if active:
-            ax.add_patch(FancyArrowPatch((cx, 0.25), (cx, 0.94), arrowstyle="-|>",
-                                          mutation_scale=12, color=BLUE, lw=1.3))
-            ax.text(cx + 0.3, 0.55, "W", fontsize=8, color=BLUE)
+            ax.text(cx, STATE_Y, "?", ha="center", va="center", fontsize=9, color=GRAY)
 
         if i > 0:
-            prev_cx = x0 + (i - 1) * dx
-            recurrent_active = i <= active_idx
-            ax.add_patch(FancyArrowPatch((prev_cx + 0.62, 1.6), (cx - 0.62, 1.6),
-                                          arrowstyle="-|>", mutation_scale=12,
-                                          color=GREEN if recurrent_active else "#DDDDDD",
-                                          lw=1.6 if recurrent_active else 1.0))
-            if recurrent_active:
-                ax.text((prev_cx + cx) / 2, 1.88, "V", fontsize=8, color=GREEN)
-
-    ax.text(x0 + dx, 2.7, title, ha="center", fontsize=12, color=title_color,
-            fontweight="bold")
+            a, b = SLOT_X[i - 1] + R_STATE + 0.01, cx - R_STATE - 0.01
+            ax.add_patch(FancyArrowPatch((a, STATE_Y), (b, STATE_Y),
+                                          color=GREEN if active else "#DDDDDD",
+                                          lw=1.2 if active else 0.7, **ARROW))
+            if active:
+                ax.text((a + b) / 2, STATE_Y + 0.04, "V", ha="center", va="bottom",
+                        fontsize=7.5, color=GREEN)
 
     if active_idx == 2:
-        last_cx = x0 + 2 * dx
-        ux = last_cx + 1.5
-        ax.add_patch(FancyArrowPatch((last_cx + 0.62, 1.6), (ux - 0.5, 1.6),
-                                      arrowstyle="-|>", mutation_scale=12, color=RED,
-                                      lw=1.5))
-        ax.text((last_cx + ux) / 2, 1.9, "U", fontsize=8, color=RED)
-        ax.add_patch(FancyBboxPatch((ux - 0.5, 1.35), 1.0, 0.5, boxstyle="round,pad=0.03",
-                                     ec=RED, fc=RED + "18", lw=1.2))
-        ax.text(ux, 1.6, f"{raw:.2f}", ha="center", va="center", fontsize=8.5)
-        sx = ux + 2.2
-        ax.add_patch(FancyArrowPatch((ux + 0.5, 1.6), (sx - 0.55, 1.6), arrowstyle="-|>",
-                                      mutation_scale=12, color=RED, lw=1.5))
-        ax.text(ux + 0.85, 1.9, "sigmoid", fontsize=7, color=RED)
-        ax.add_patch(Circle((sx, 1.6), 0.55, ec=RED, fc=RED + "22", lw=2.0))
-        ax.text(sx, 1.6, f"{score:.2f}", ha="center", va="center", fontsize=9,
+        x3 = SLOT_X[2]
+        ux = x3 + 0.72
+        a = x3 + R_STATE + 0.01
+        ax.add_patch(FancyArrowPatch((a, STATE_Y), (ux - 0.19, STATE_Y), color=RED, lw=1.1,
+                                      **ARROW))
+        ax.text((a + ux - 0.19) / 2, STATE_Y + 0.04, "U", ha="center", va="bottom",
+                fontsize=7.5, color=RED)
+        ax.add_patch(FancyBboxPatch((ux - 0.18, STATE_Y - 0.10), 0.36, 0.20,
+                                     boxstyle="round,pad=0.01", ec=RED, fc=RED + "18", lw=0.9))
+        ax.text(ux, STATE_Y, f"{raw:.2f}", ha="center", va="center", fontsize=7.5)
+        sx = ux + 0.88
+        ax.add_patch(FancyArrowPatch((ux + 0.19, STATE_Y), (sx - 0.22, STATE_Y), color=RED,
+                                      lw=1.1, **ARROW))
+        ax.text((ux + sx) / 2, STATE_Y + 0.04, "sigmoid", ha="center", va="bottom",
+                fontsize=7, color=RED)
+        ax.add_patch(Circle((sx, STATE_Y), 0.21, ec=RED, fc=RED + "22", lw=1.4))
+        ax.text(sx, STATE_Y, f"{score:.2f}", ha="center", va="center", fontsize=8,
                 fontweight="bold")
-        ax.text(sx, 2.35, "score", ha="center", fontsize=7.5, color=GRAY)
+        ax.text(sx, STATE_Y + 0.25, "score", ha="center", va="bottom", fontsize=7,
+                color=GRAY)
 
 
 def draw_frame(step, fwd_states, rev_states, fwd_raw, fwd_score, rev_raw, rev_score, log):
-    fig, ax = plt.subplots(figsize=(11.0, 5.6))
-    ax.set_position([0, 0, 1, 1])
-
-    if step <= 2:
-        draw_chain(ax, fwd_states, active_idx=step, x0=1.0,
-                   title=f"Forward: {fwd_states[0]['word']} -> {fwd_states[1]['word']} "
-                         f"-> {fwd_states[2]['word']}",
-                   title_color=BLUE, raw=fwd_raw, score=fwd_score)
-        z = r2(fwd_states[step]["z"])
-        if step == 0:
-            ax.text(6.0, 4.2, f"z[1] = tanh(W^T x) = [{z[0]:.2f}, {z[1]:.2f}]",
-                    ha="center", fontsize=12)
-        else:
-            ax.text(6.0, 4.2,
-                    f"z[{step+1}] = tanh(V^T z[{step}] + W^T x + b) = [{z[0]:.2f}, {z[1]:.2f}]",
-                    ha="center", fontsize=12)
-        if step == 2:
-            ax.text(6.0, 4.7, f"forward score = {fwd_score:.2f}", ha="center",
-                    fontsize=12, fontweight="bold", color=BLUE)
-    else:
-        r = step - 3
-        draw_chain(ax, rev_states, active_idx=r, x0=1.0,
-                   title=f"Reversed: {rev_states[0]['word']} -> {rev_states[1]['word']} "
-                         f"-> {rev_states[2]['word']}",
-                   title_color=RED, raw=rev_raw, score=rev_score)
-        z = r2(rev_states[r]["z"])
-        if r == 0:
-            ax.text(6.0, 4.2, f"z[1]' = tanh(W^T x) = [{z[0]:.2f}, {z[1]:.2f}]",
-                    ha="center", fontsize=12)
-        else:
-            ax.text(6.0, 4.2,
-                    f"z[{r+1}]' = tanh(V^T z[{r}]' + W^T x + b) = [{z[0]:.2f}, {z[1]:.2f}]",
-                    ha="center", fontsize=12)
-        if r == 2:
-            ax.text(6.0, 4.7, f"reversed score = {rev_score:.2f}", ha="center",
-                    fontsize=12, fontweight="bold", color=RED)
-            ax.text(6.0, 5.15,
-                    f"Same 3 words, different order: {fwd_score:.2f} vs {rev_score:.2f}",
-                    ha="center", fontsize=12, fontweight="bold", color="black")
-
-    ax.text(6.0, -1.1, f"step {step + 1} of 6", ha="center", fontsize=10, color=GRAY)
-    ax.set_xlim(-1.0, 13.0)
-    ax.set_ylim(-1.4, 5.5)
+    fig = plt.figure(figsize=(FIG_W, FIG_H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, FIG_W)
+    ax.set_ylim(0, FIG_H)
     ax.axis("off")
+
+    forward = step <= 2
+    states = fwd_states if forward else rev_states
+    r = step if forward else step - 3
+    raw, score = (fwd_raw, fwd_score) if forward else (rev_raw, rev_score)
+    color = BLUE if forward else RED
+    name = "Forward" if forward else "Reversed"
+    mark = "" if forward else "'"
+    draw_chain(ax, states, active_idx=r, raw=raw, score=score)
+
+    z = r2(states[r]["z"])
+    # (text, size, color, weight) from the top down; Armenian lines use ARM_FONT
+    lines = [(f"{name}: {states[0]['word']} -> {states[1]['word']} -> {states[2]['word']}",
+              8.5, color, "bold")]
+    if r == 0:
+        lines.append((f"z[1]{mark} = tanh(W^T x) = [{z[0]:.2f}, {z[1]:.2f}]", 7.5, "black",
+                      "normal"))
+    else:
+        lines.append((f"z[{r + 1}]{mark} = tanh(V^T z[{r}]{mark} + W^T x + b) = "
+                      f"[{z[0]:.2f}, {z[1]:.2f}]", 7.5, "black", "normal"))
+    if r == 2:
+        lines.append((f"{name.lower()} score = {score:.2f}", 8, color, "bold"))
+    if step == 5:
+        lines.append((f"Same 3 words, different order: {fwd_score:.2f} vs {rev_score:.2f}",
+                      8.5, "black", "bold"))
+    for k, (txt, size, col, weight) in enumerate(lines):
+        ax.text(0.05, FIG_H - 0.13 - 0.18 * k, txt, ha="left", va="center", fontsize=size,
+                color=col, fontweight=weight, fontfamily=ARM_FONT)
+
+    ax.text(FIG_W - 0.04, 0.04, f"step {step + 1} of 6", ha="right", va="bottom",
+            fontsize=7, color=GRAY)
     out = FIG_DIR / f"unroll_{step}.pdf"
     fig.savefig(out)
     plt.close(fig)

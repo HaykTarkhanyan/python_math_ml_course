@@ -122,7 +122,7 @@ visible in two ANIMs. Logged here in the order the task specified.
    (NEW) and `unroll_anim.py` (REWRITTEN) both hard-code the identical
    `W (3x2) / V (2x2) / b / U (2x1) / c` matrices - simple entries in the "0.5, -0.5,
    1, 0" style the instructor asked for. The toy vocabulary IS the Armenian line's
-   first 3 words (Ես / այս / ամենինչ, read from `py_src/data/armenian_line.txt`, never
+   first 3 words (Ես / այս / ամենին, read from `py_src/data/armenian_line.txt`, never
    retyped), so no separate "toy word" fiction was needed - every one-hot index maps
    directly to a real word from the chapter's sentence. Each script's docstring states
    the matrices are locked and shared, and both scripts assert the same rounded
@@ -226,3 +226,12 @@ visible in two ANIMs. Logged here in the order the task specified.
     ANIM, forward-pass summary, activation functions; -1 deleted: "Worked numbers: a
     1-d RNN reads three tokens"), vs. the task's "~25" estimate. Not trimmed further,
     consistent with decision 12 above (no fixed length target).
+
+## Update 2026-10-03 - quick-lecture revision (root DECISIONS.md #64)
+
+Instructor review of a proposal list. Added: "You have already run a recurrence" ([29]'s exponential
+smoothing as the on-ramp; its 0.8 paid off on the fading-number frame). Moved in from L21: "One-hot
+and its poverty". Fixed: CNN references after the move to global numbering ([48], [50], [51]) and the
+fixed-window frame's wrong "L19's 1D convolution along the text" (it is [48], on signals). Declined:
+an nn.Embedding callback, lag features as a third fixed window, a plant on the shuffle frame.
+Details in the deck's Provenance block.

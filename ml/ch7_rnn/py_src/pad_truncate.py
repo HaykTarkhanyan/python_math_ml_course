@@ -54,65 +54,73 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
+# Drawn at the size the figure gets on the slide. Redrawn 2026-10-03: the old 12 in canvas
+# shown at 0.82 x linewidth left ~3 pt text. Now the frame embeds it at the full line width
+# (~5.5 in), the axes span the figure and data units are inches, so token boxes are sized
+# from the true 7 pt monospace character width. Lost words go under their row (there is
+# no room to the right of eight columns at this size).
+FIG_W, FIG_H = 5.5, 1.85
+MONO_PT = 7
+CHAR_IN = 0.6 * MONO_PT / 72            # monospace advance width, inches
+X0 = 0.76                                # left edge of the first token column
+ROW_H = 0.21
+
+
 def box_width(word: str) -> float:
-    """Monospace-ish width estimate (data units) sized to fit the word plus padding."""
-    return 0.30 * len(word) + 0.5
+    """Box width in inches: the word at MONO_PT monospace plus padding."""
+    return CHAR_IN * len(word) + 0.055
 
 
 def column_layout(rows):
     """Shared per-column widths (max needed across the three rows) so the fixed-length
     boundary lines up at the same x for every row."""
-    col_words = []
+    col_widths = []
     for j in range(FIXED_LEN):
-        candidates = []
-        for _, tokens in rows:
-            w = tokens[j] if j < len(tokens) else "<pad>"
-            candidates.append(w)
-        col_words.append(candidates)
-    col_widths = [max(box_width(w) for w in cands) for cands in col_words]
-    gap = 0.12
-    centers, lefts, x = [], [], 0.0
+        cands = [tokens[j] if j < len(tokens) else "<pad>" for _, tokens in rows]
+        col_widths.append(max(box_width(w) for w in cands))
+    gap = 0.022
+    centers, lefts, x = [], [], X0
     for w in col_widths:
         lefts.append(x)
         centers.append(x + w / 2)
         x += w + gap
     boundary = x - gap / 2
+    if boundary > FIG_W:
+        raise ValueError(f"eight columns need {boundary:.2f} in, figure is {FIG_W} in")
     return col_widths, lefts, centers, boundary
 
 
-def draw_row(ax, y, h, label, tokens, col_widths, lefts, centers, boundary, log):
+def draw_row(ax, y, label, tokens, col_widths, lefts, centers, log):
+    """One review as eight fixed slots at height y (row centre, inches). Returns the y of
+    the lowest text it drew."""
     n = len(tokens)
-    kept = tokens[:FIXED_LEN]
-    for j, w in enumerate(kept):
-        ax.add_patch(plt.Rectangle((lefts[j], y), col_widths[j], h, ec=GREEN,
-                                    fc=GREEN + "22", lw=1.4))
-        ax.text(centers[j], y + h / 2, w, ha="center", va="center", fontsize=8.5,
+    for j, w in enumerate(tokens[:FIXED_LEN]):
+        ax.add_patch(plt.Rectangle((lefts[j], y - ROW_H / 2), col_widths[j], ROW_H, ec=GREEN,
+                                    fc=GREEN + "22", lw=0.9))
+        ax.text(centers[j], y, w, ha="center", va="center", fontsize=MONO_PT,
                 family="monospace")
+    ax.text(X0 - 0.07, y, label, ha="right", va="center", fontsize=7, fontweight="bold",
+            linespacing=1.0)
+    lowest = y - ROW_H / 2
     if n < FIXED_LEN:
-        pad_count = FIXED_LEN - n
         for j in range(n, FIXED_LEN):
-            ax.add_patch(plt.Rectangle((lefts[j], y), col_widths[j], h, ec=GRAY,
-                                        fc="#EEEEEE", lw=1.0, linestyle="--"))
-            ax.text(centers[j], y + h / 2, "<pad>", ha="center", va="center", fontsize=7.5,
-                    color=GRAY)
-        log.info(f"{label.splitlines()[0]}: {n} words, kept all {n}, padded {pad_count} "
-                 f"-> {pad_count}/{FIXED_LEN} slots wasted")
+            ax.add_patch(plt.Rectangle((lefts[j], y - ROW_H / 2), col_widths[j], ROW_H,
+                                        ec=GRAY, fc="#EEEEEE", lw=0.7, linestyle="--"))
+            ax.text(centers[j], y, "<pad>", ha="center", va="center", fontsize=MONO_PT,
+                    family="monospace", color=GRAY)
+        log.info(f"{label.splitlines()[0]}: {n} words, padded {FIXED_LEN - n} "
+                 f"-> {FIXED_LEN - n}/{FIXED_LEN} slots wasted")
     else:
         lost = tokens[FIXED_LEN:]
-        wrapped = textwrap.wrap("LOST: " + " ".join(lost), width=58)
-        n_lines = len(wrapped)
-        box_h = max(h, 0.34 * n_lines + 0.14)
-        y_box = y + h / 2 - box_h / 2
-        ax.add_patch(plt.Rectangle((boundary + 0.15, y_box), 8.6, box_h, ec=RED,
-                                    fc=RED + "11", lw=1.2, linestyle=":"))
-        line_h = box_h / (n_lines + 1)
-        for k, line in enumerate(wrapped):
-            ax.text(boundary + 0.35, y_box + box_h - line_h * (k + 1), line, ha="left",
-                    va="center", fontsize=7.5, color=RED, style="italic")
+        lines = textwrap.wrap(f"LOST ({len(lost)} words): " + " ".join(lost), width=92)
+        for k, line in enumerate(lines):
+            lowest = y - ROW_H / 2 - 0.06 - 0.13 * k
+            ax.text(X0, lowest, line, ha="left", va="top", fontsize=7, color=RED,
+                    style="italic")
+        lowest -= 0.12
         log.info(f"{label.splitlines()[0]}: {n} words, kept first {FIXED_LEN}, "
                  f"{len(lost)} words truncated away: {' '.join(lost)}")
-    ax.text(-0.3, y + h / 2, label, ha="right", va="center", fontsize=10, fontweight="bold")
-    return y + h  # row top, for layout bookkeeping
+    return lowest
 
 
 def fig_pad_truncate(log):
@@ -123,25 +131,25 @@ def fig_pad_truncate(log):
     ]
     col_widths, lefts, centers, boundary = column_layout(rows)
 
-    fig, ax = plt.subplots(figsize=(12.0, 5.4))
-    h = 0.8
-    row_gap = 1.5
-    y_positions = [3.0, 3.0 - row_gap, 3.0 - 2 * row_gap]
-    for (label, tokens), y in zip(rows, y_positions):
-        draw_row(ax, y, h, label, tokens, col_widths, lefts, centers, boundary, log)
-
-    ax.axvline(boundary, color="black", lw=1.0, linestyle="-")
-    ax.text(boundary, y_positions[0] + h + 0.35, f"fixed length = {FIXED_LEN}",
-            ha="center", fontsize=10)
-
-    ax.set_xlim(-3.4, boundary + 9.2)
-    ax.set_ylim(y_positions[-1] - 0.5, y_positions[0] + h + 0.8)
+    fig = plt.figure(figsize=(FIG_W, FIG_H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, FIG_W)
+    ax.set_ylim(0, FIG_H)
     ax.axis("off")
-    fig.suptitle("Pad + truncate to a fixed length: waste on the short one, "
-                 "amputation on the long one", fontsize=12)
-    fig.tight_layout()
+    ax.text(0.03, FIG_H - 0.04, "Pad + truncate to a fixed length: waste on the short one, "
+            "amputation on the long one", ha="left", va="top", fontsize=8, fontweight="bold")
+    y = FIG_H - 0.48
+    top = y + ROW_H / 2
+    for label, tokens in rows:
+        lowest = draw_row(ax, y, label, tokens, col_widths, lefts, centers, log)
+        y = lowest - 0.06 - ROW_H / 2
+    ax.plot([boundary, boundary], [lowest + 0.1, top + 0.08], color="black", lw=0.9)
+    ax.text(boundary - 0.03, top + 0.1, f"fixed length = {FIXED_LEN}", ha="right", va="bottom",
+            fontsize=7)
+    if lowest < 0:
+        raise ValueError(f"rows run {-lowest:.2f} in below the figure")
     out = FIG_DIR / "pad_truncate.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"saved {out}")
 

@@ -69,7 +69,8 @@ instructor's message:
    trivially cheap, so this stayed in scope per the instructor's condition. All three
    panels use real `cl100k_base` (co-owned by GPT-3.5/GPT-4) measurements: the review
    sentence needs 41 characters / 7 words / 10 subword tokens; the Armenian line
-   measures 104 tokens vs. 18 for its English gloss (5.8x). Numbers are logged and
+   measures 104 tokens vs. 18 for its English gloss (5.8x; 102 vs. 18 after the
+   2026-10-03 spelling fix ամենինչ -> ամենին, which also corrected the data file). Numbers are logged and
    asserted-by-construction (`ax.bar_label` reads directly off the measured arrays,
    never a hand-typed number).
 5. **`gradient_flow.py` - quick re-run only, honest negative-ish result reported.**
@@ -254,3 +255,13 @@ and DECISIONS.md #39, which records that this frame reopens the July "no real tr
 scope for one bounded, checkpointed ~15-minute CPU run. The frame is split into "Does it work?
 Measured" and "The price, and one gotcha" (Keras opens the forget gate by default, PyTorch does
 not).
+
+## Update 2026-10-03 - quick-lecture revision (root DECISIONS.md #64)
+
+Tokenization section and embeddings frame moved to the LLM chapter (`ml/LLM_CHAPTER_PLAN.md`); one-hot
+frame moved to L20; temperature removed; epilogue cut to a teaser. The three illustrative char-LM
+frames (open question 3 above) are now REAL: `py_src/surname_gru.py`, the practical's GRU on the ch11
+surnames (1.605 vs the window MLP's 1.673, both asserted against the practical). New alignment-grid
+frame after the bottleneck (`py_src/alignment_grid.py`; the alignment is hand-made and needs a native
+speaker's check). The cliffhanger lock holds: attention is still not named. Details in the deck's
+Provenance block.

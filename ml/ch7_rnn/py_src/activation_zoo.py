@@ -51,10 +51,11 @@ def relu(x):
 def fig_activation_zoo(log):
     x = np.linspace(-4, 4, 400)
 
-    fig, ax = plt.subplots(figsize=(7.4, 4.8))
-    ax.plot(x, relu(x), color=ORANGE, lw=1.8, label="ReLU (unbounded)")
-    ax.plot(x, sigmoid(x), color=RED, lw=1.8, label="sigmoid (bounded 0 to 1)")
-    ax.plot(x, np.tanh(x), color=BLUE, lw=3.0, label="tanh (bounded -1 to 1) - RNN default")
+    # drawn at its slot size (L20: 0.52 column x 0.92 = ~2.65 in) so fonts are true size
+    fig, ax = plt.subplots(figsize=(2.65, 2.15))
+    ax.plot(x, relu(x), color=ORANGE, lw=1.3, label="ReLU: unbounded")
+    ax.plot(x, sigmoid(x), color=RED, lw=1.3, label="sigmoid: (0, 1)")
+    ax.plot(x, np.tanh(x), color=BLUE, lw=2.2, label="tanh: (-1, 1), RNN default")
 
     ax.axhline(1.0, color=BLUE, lw=0.8, linestyle=":", alpha=0.6)
     ax.axhline(-1.0, color=BLUE, lw=0.8, linestyle=":", alpha=0.6)
@@ -63,14 +64,15 @@ def fig_activation_zoo(log):
 
     ax.set_xlim(-4, 4)
     ax.set_ylim(-1.6, 4)
-    ax.set_xlabel("pre-activation", fontsize=11)
-    ax.set_ylabel("activation output", fontsize=11)
-    ax.set_title("tanh stays bounded and zero-centered; ReLU does not", fontsize=12)
-    ax.legend(fontsize=9.5, loc="upper left")
+    ax.set_xlabel("pre-activation", fontsize=7.5)
+    ax.set_ylabel("output", fontsize=7.5)
+    ax.set_title("tanh: bounded and zero-centered", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.legend(fontsize=7, loc="upper left", frameon=False)
     ax.grid(True, alpha=0.25)
-    fig.tight_layout()
+    fig.tight_layout(pad=0.3)
     out = FIG_DIR / "activation_zoo.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"saved {out}")
 

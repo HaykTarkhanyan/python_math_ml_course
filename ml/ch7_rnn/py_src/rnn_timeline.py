@@ -59,54 +59,52 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
-# (year, label, era, above) -- era in {"rnn", "pivot", "comeback"}; web-verified at
-# build. `above` is assigned by hand (not alternated by index) so tightly-spaced pairs
-# (2014/2017, 2023/2024) land on opposite sides of the axis instead of colliding.
+# (year, label, era, side, level) -- era in {"rnn", "pivot", "comeback"}; facts web-verified
+# at build (2026-07-13, 2026-09-06, 2026-09-22). Redrawn 2026-10-03 at the slot size (L21:
+# 0.86 x linewidth, ~4.7 in) with short labels: at that width one year is ~0.11 in, so the
+# old two-line captions could not be read. side +1 = above the axis, -1 = below; level 2
+# sits further out, for pairs a year or two apart. 2025: Qwen3-Next (Sept 2025), the first
+# of the hybrid LLMs whose layers are mostly a fixed-size recurrent state (Gated DeltaNet)
+# - the claim the epilogue teaser makes.
 EVENTS = [
-    (1990, '"Finding Structure in Time"\n(Elman)', "rnn", True),
-    (1991, "vanishing gradients diagnosed\n(Hochreiter's thesis)", "rnn", False),
-    (1997, "LSTM\n(Hochreiter & Schmidhuber)", "rnn", True),
-    (2014, "seq2seq (Sutskever et al.)\nGRU (Cho et al.)", "rnn", False),
-    (2017, '"Attention Is All\nYou Need" (Vaswani et al.)', "pivot", True),
-    (2023, "Mamba (Gu & Dao)\nstate-space models return", "comeback", False),
-    (2024, "xLSTM (Beck et al.)\nHochreiter, senior author", "comeback", True),
+    (1990, "Elman RNN", "rnn", +1, 1, "center"),
+    (1991, "vanishing gradients\ndiagnosed", "rnn", -1, 1, "left"),
+    (1997, "LSTM", "rnn", +1, 1, "center"),
+    (2014, "seq2seq, GRU", "rnn", -1, 1, "center"),
+    (2017, "Attention Is All\nYou Need", "pivot", +1, 1, "center"),
+    (2023, "Mamba", "comeback", -1, 1, "center"),
+    (2024, "xLSTM", "comeback", +1, 1, "center"),
+    (2025, "recurrent layers\ninside LLMs", "comeback", -1, 2, "right"),
 ]
+# label anchor offset in years for edge labels, so they grow inward instead of off the page
+HA_SHIFT = {"center": 0.0, "left": -1.6, "right": 1.6}
 ERA_COLOR = {"rnn": ARMBLUE, "pivot": ARMRED, "comeback": ARMORANGE}
-YEAR_MIN, YEAR_MAX = 1987, 2026.5
+YEAR_MIN, YEAR_MAX = 1987.5, 2027.5
 
 
 def fig_timeline(log):
-    fig, ax = plt.subplots(figsize=(12.2, 4.6))
-    ax.plot([YEAR_MIN, YEAR_MAX], [0, 0], color="#CCCCCC", lw=2.0, zorder=0)
+    fig, ax = plt.subplots(figsize=(4.7, 1.75))
+    ax.set_position([0.01, 0.02, 0.98, 0.96])
+    ax.plot([YEAR_MIN, YEAR_MAX], [0, 0], color="#CCCCCC", lw=1.5, zorder=0)
 
-    for year, label, era, above in EVENTS:
+    for year, label, era, side, level, ha in EVENTS:
         color = ERA_COLOR[era]
-        ax.plot([year], [0], marker="o", markersize=13, color=color, zorder=3,
-                markeredgecolor="black", markeredgewidth=0.6)
-        y_text = 0.62 if above else -0.62
-        va = "bottom" if above else "top"
-        ax.plot([year, year], [0, y_text * 0.82], color=color, lw=1.2, zorder=1)
-        ax.text(year, y_text, f"{year}", ha="center", va=va, fontsize=12,
+        ax.plot([year], [0], marker="o", markersize=6, color=color, zorder=3,
+                markeredgecolor="black", markeredgewidth=0.4)
+        reach = 0.32 if level == 1 else 0.95
+        va = "bottom" if side > 0 else "top"
+        ax.plot([year, year], [0, side * reach], color=color, lw=0.8, zorder=1)
+        ax.text(year, side * (reach + 0.04), f"{year}", ha="center", va=va, fontsize=7.5,
                 fontweight="bold", color=color)
-        y_label = y_text + (0.16 if above else -0.16)
-        ax.text(year, y_label, label, ha="center", va=va, fontsize=8.7, color="black")
+        ax.text(year + HA_SHIFT[ha], side * (reach + 0.30), label, ha=ha, va=va, fontsize=7,
+                color="black", linespacing=1.05)
         log.info(f"{year} [{era}]: {label.splitlines()[0]}")
 
-    ax.text(2026, 0.95, "2026: RNNs still earn their keep in streaming/edge\n"
-            "and small-data settings", ha="center", va="bottom", fontsize=9,
-            color=GRAY, style="italic")
-
     ax.set_xlim(YEAR_MIN, YEAR_MAX)
-    ax.set_ylim(-1.15, 1.15)
-    ax.set_yticks([])
-    ax.set_xlabel("")
-    for spine in ["top", "right", "left"]:
-        ax.spines[spine].set_visible(False)
-    ax.spines["bottom"].set_color("#CCCCCC")
-    ax.set_title("Recurrence, retirement, and a comeback: 1990-2026", fontsize=13)
-    fig.tight_layout()
+    ax.set_ylim(-2.05, 1.45)
+    ax.axis("off")
     out = FIG_DIR / "rnn_timeline.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"saved {out}")
 

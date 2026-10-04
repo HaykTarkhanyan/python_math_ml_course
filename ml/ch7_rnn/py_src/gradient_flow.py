@@ -30,10 +30,13 @@ seconds), ~1200 steps for the quick comparison re-run (still CPU seconds -- roug
 4x, not an "extended" run of the kind the instructor ruled out).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch7_rnn/py_src/gradient_flow.py
+    ./ma/Scripts/python.exe ml/ch7_rnn/py_src/gradient_flow.py               # ~90 s, L21 comparison only
+    ./ma/Scripts/python.exe ml/ch7_rnn/py_src/gradient_flow.py --l20-figures # ~25 s, redraws
+        L20's two figures after checking the rerun reproduces the July 2026-07-13 17:48 norms
 """
 
 import logging
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -142,38 +145,41 @@ def train_and_measure(cell_type: str, rng: torch.Generator, log: logging.Logger,
 def fig_gradient_flow(norms_rnn, norms_lstm, log):
     t = np.arange(SEQ_LEN)
 
-    # variant 1: vanilla-only (L20)
-    fig, ax = plt.subplots(figsize=(7.4, 4.8))
-    ax.plot(t, norms_rnn, color=BLUE, lw=2.2, marker="o", markersize=3,
+    # variant 1: vanilla-only (L20). Drawn at its slot size (0.68 column, ~3.75 in) so the
+    # fonts are their true size on the slide (redrawn 2026-10-03; the 7.4 in canvas left ~5 pt).
+    fig, ax = plt.subplots(figsize=(3.75, 2.45))
+    ax.plot(t, norms_rnn, color=BLUE, lw=1.5, marker="o", markersize=2.5,
             label="vanilla RNN")
     ax.set_yscale("log")
-    ax.set_xlabel("time step (0 = earliest token, 29 = last, where the loss sits)",
-                  fontsize=10)
-    ax.set_ylabel(r"$\|\partial \mathcal{L} / \partial h_t\|$ (log scale)", fontsize=11)
-    ax.set_title("Gradient norm per time-step: dead within ~15 steps", fontsize=12)
-    ax.legend(fontsize=10)
+    ax.set_xlabel("time step (0 = first token; the loss sits at 29)", fontsize=7.5)
+    ax.set_ylabel(r"$\|\partial \mathcal{L} / \partial h_t\|$ (log scale)", fontsize=7.5)
+    ax.set_title("Gradient norm per time-step: dead within ~15 steps", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.tick_params(axis="y", labelsize=8.5)   # log axis: exponents are 70% of this
+    ax.legend(fontsize=7, frameon=False)
     ax.grid(True, which="both", alpha=0.25)
-    fig.tight_layout()
+    fig.tight_layout(pad=0.3)
     out1 = FIG_DIR / "gradient_flow_vanilla.pdf"
-    fig.savefig(out1, bbox_inches="tight")
+    fig.savefig(out1)
     plt.close(fig)
     log.info(f"saved {out1}")
 
-    # variant 2: vanilla + LSTM (L21 payoff)
-    fig, ax = plt.subplots(figsize=(7.4, 4.8))
-    ax.plot(t, norms_rnn, color=BLUE, lw=2.2, marker="o", markersize=3,
+    # variant 2: vanilla + LSTM (not embedded in any deck since 2026-09-22; same size)
+    fig, ax = plt.subplots(figsize=(3.75, 2.45))
+    ax.plot(t, norms_rnn, color=BLUE, lw=1.5, marker="o", markersize=2.5,
             label="vanilla RNN")
-    ax.plot(t, norms_lstm, color=RED, lw=2.2, marker="s", markersize=3, label="LSTM")
+    ax.plot(t, norms_lstm, color=RED, lw=1.5, marker="s", markersize=2.5, label="LSTM")
     ax.set_yscale("log")
-    ax.set_xlabel("time step (0 = earliest token, 29 = last, where the loss sits)",
-                  fontsize=10)
-    ax.set_ylabel(r"$\|\partial \mathcal{L} / \partial h_t\|$ (log scale)", fontsize=11)
-    ax.set_title("LSTM keeps the gradient alive far longer", fontsize=12)
-    ax.legend(fontsize=10)
+    ax.set_xlabel("time step (0 = first token; the loss sits at 29)", fontsize=7.5)
+    ax.set_ylabel(r"$\|\partial \mathcal{L} / \partial h_t\|$ (log scale)", fontsize=7.5)
+    ax.set_title("LSTM keeps the gradient alive far longer", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.tick_params(axis="y", labelsize=8.5)   # log axis: exponents are 70% of this
+    ax.legend(fontsize=7, frameon=False)
     ax.grid(True, which="both", alpha=0.25)
-    fig.tight_layout()
+    fig.tight_layout(pad=0.3)
     out2 = FIG_DIR / "gradient_flow_vanilla_lstm.pdf"
-    fig.savefig(out2, bbox_inches="tight")
+    fig.savefig(out2)
     plt.close(fig)
     log.info(f"saved {out2}")
 
@@ -214,9 +220,30 @@ def main():
     that would regenerate gradient_flow_vanilla.pdf and gradient_flow_vanilla_lstm.pdf,
     which is a hard "do not overwrite" per the L21 brief (L20's compiled PDF depends on
     the former existing unchanged). Both files already exist from the L20 build and are
-    left untouched. This run only produces the NEW L21 payoff figure."""
+    left untouched. This run only produces the NEW L21 payoff figure.
+
+    --l20-figures (added 2026-10-03, to redraw L20's figure at its slot size): reruns the
+    original 2026-07-13 procedure exactly (git de69f29), checks that the vanilla norms
+    reproduce the logged values L20 quotes, and only then rewrites the two figures. The
+    data on the slide cannot change silently: a mismatch stops the script."""
     log = setup_logging()
     FIG_DIR.mkdir(parents=True, exist_ok=True)
+    if "--l20-figures" in sys.argv[1:]:
+        torch.manual_seed(SEED)
+        rng = torch.Generator().manual_seed(SEED)
+        log.info("[l20] training vanilla RNN (manual unroll, RNNCell) on the toy recall task")
+        norms_rnn = train_and_measure("rnn", rng, log)
+        log.info(f"[l20] vanilla RNN gradient norms per step: {np.round(norms_rnn, 8)}")
+        # logs/gradient_flow.log, 2026-07-13 17:48 - the run behind the slide's 340,000x
+        for t, want in [(0, 1.70e-07), (14, 5.361e-05), (29, 5.820145e-02)]:
+            if not np.isclose(norms_rnn[t], want, rtol=0.01):
+                raise RuntimeError(f"vanilla norm at t={t} is {norms_rnn[t]:.4e}, the July "
+                                   f"run logged {want:.4e} - not redrawing L20's figure")
+        log.info("[l20] training LSTM (manual unroll, LSTMCell) on the toy recall task")
+        norms_lstm = train_and_measure("lstm", rng, log)
+        fig_gradient_flow(norms_rnn, norms_lstm, log)
+        log.info("done (--l20-figures)")
+        return
     for must_exist in ["gradient_flow_vanilla.pdf", "gradient_flow_vanilla_lstm.pdf"]:
         if not (FIG_DIR / must_exist).exists():
             raise FileNotFoundError(

@@ -22,7 +22,7 @@
   \begin{columns}[T]
     \column{0.52\textwidth}
     \small
-    The ch6 classifier grades each pomegranate; the boxes ship worldwide. Now the
+    The [51] classifier grades each pomegranate; the boxes ship worldwide. Now the
     \textbf{reviews} arrive: "Fresh and sweet!" (3 words); an 11-word one naming Yerevan;
     a 42-word complaint; some in Armenian. Ops wants them read, translated, answered.
     \vskip 3pt
@@ -111,7 +111,7 @@
       The bag-of-words histograms are \textbf{pixel-identical}. Any order-blind model
       literally cannot tell the two apart.}}
     \vskip 6pt
-    {\footnotesize Callback: L16 did this to an image's \emph{pixels}. Same demo, new
+    {\footnotesize Callback: [48] did this to an image's \emph{pixels}. Same demo, new
     axis.}
     \column{0.70\textwidth}
     \begin{center}
@@ -123,7 +123,7 @@
 \begin{frame}{The shoehorn hacks}
   How people force variable-length text into a fixed net - and the price of each:
   \begin{center}
-    \includegraphics[width=0.82\linewidth]{pad_truncate.pdf}
+    \includegraphics[width=\linewidth]{pad_truncate.pdf}
   \end{center}
   \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
       \textbf{(2) Bag-of-words averaging} fails the shuffle test by construction - it
@@ -139,7 +139,8 @@
   You have already met two models that read a sequence through a \textbf{fixed window}
   of the last $k$ tokens:
   \begin{itemize}
-    \item L19's \textbf{1D convolution} - a $k$-token kernel sliding along the text;
+    \item the \textbf{1D convolution} from [48] - slide the same kernel along a sentence
+      instead of a signal, and it reads a window of $k$ tokens;
     \item the ch11 \textbf{name inventor} - an MLP that predicts the next letter from the
       last $k$ letters (Bengio et al., 2003).
   \end{itemize}
@@ -156,7 +157,7 @@
   back.
   \vskip 6pt
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small
-    Stacking conv layers widens the window (L17's receptive field), but the width is
+    Stacking conv layers widens the window ([50]'s receptive field), but the width is
     fixed by the architecture before any text arrives. We want a memory that grows
     \emph{with} the text: read one token at a time and carry a summary forward.}}
 \end{frame}
@@ -173,7 +174,7 @@
       \emph{word} instead of a category.}}
     \vskip 6pt
     {\footnotesize The full tokenization story (subwords, vocabulary explosion, the
-    Armenian fact) is L21's.}
+    Armenian fact) comes in the LLM chapter.}
     \column{0.64\textwidth}
     \begin{center}
       \begin{tikzpicture}[font=\scriptsize, >=Latex, node distance=6pt,
@@ -200,6 +201,43 @@
   \end{columns}
 \end{frame}
 
+% 2026-10-03: moved here from L21 (its tokenization section moved to the LLM chapter).
+\begin{frame}{One-hot and its poverty}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+    \small
+    One-hot is all this chapter needs. It has one flaw worth seeing now:
+    \vskip 6pt
+    \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
+      In a 10,000-dimensional one-hot space, \textbf{every pair of words is equally
+      far apart}. "good" is as far from "great" as it is from "plastic" - the
+      geometry carries zero meaning.}}
+    \vskip 6pt
+    {\footnotesize Learned, dense word vectors fix this. They arrive with the attention
+    chapter.}
+    \column{0.58\textwidth}
+    \begin{center}
+      \begin{tikzpicture}[font=\scriptsize, >=Latex]
+        \foreach \x/\w/\hotrow in {0/good/0, 2.0/great/1, 4.0/plastic/2} {
+          \node[font=\tiny] at (\x,2.05) {\w};
+          \foreach \r in {0,1,2,3} {
+            \ifnum\r=\hotrow
+              \node[draw, minimum size=0.34cm, fill=paramgreen!30] at (\x,1.6-\r*0.36) {1};
+            \else
+              \node[draw, minimum size=0.34cm, fill=paramgreen!3] at (\x,1.6-\r*0.36) {0};
+            \fi
+          }
+        }
+        \draw[<->, armred, thick] (0.5,0.4) -- (1.5,0.4)
+          node[midway, below, font=\tiny] {dist $=\sqrt{2}$};
+        \draw[<->, armred, thick] (2.5,0.4) to[bend right=25] (3.5,0.4);
+        \node[armred, font=\tiny] at (3.0,-0.35) {dist $=\sqrt{2}$, \emph{too}};
+        \node[font=\tiny] at (2.0,-1.0) {\emph{same distance, no relationship implied}};
+      \end{tikzpicture}
+    \end{center}
+  \end{columns}
+\end{frame}
+
 % ================================================================
 \section{The recurrence idea}
 
@@ -212,6 +250,38 @@
     \end{minipage}
   \end{center}
   \vfill
+\end{frame}
+
+% 2026-10-03: on-ramp from [29] (instructor-approved). The 0.8 here is paid off in
+% "Predict-first: the fading number". Weights checked: 0.2 * 0.8^k = 0.20, 0.16, 0.128, 0.1024.
+\begin{frame}{You have already run a recurrence}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    \small
+    [29]'s \textbf{exponential smoothing} forecast tomorrow from a running summary of the
+    whole past:
+    \[
+      \hat{y}_{t+1} = \alpha\, y_t + (1-\alpha)\,\hat{y}_t
+    \]
+    New summary $=$ a little of today $+$ most of the old summary. Unroll it and each older
+    reading's weight shrinks by the same factor every step: with $\alpha = 0.2$ the weights
+    are $0.20, 0.16, 0.13, 0.10, \dots$ - each one $0.8$ of the one before.
+    \column{0.53\textwidth}
+    \vskip 2pt
+    \footnotesize
+    \begin{tabular}{@{}lll@{}}
+      & \textbf{smoothing, [29]} & \textbf{RNN, today} \\[2pt]
+      \hline\\[-8pt]
+      summary & one number $\hat{y}_t$ & a vector $\mathbf{z}^{[t]}$ \\[3pt]
+      input & one reading $y_t$ & a word's vector $\mathbf{x}^{[t]}$ \\[3pt]
+      what to keep & fixed: $1-\alpha$ & learned: a matrix $\mathbf{V}$ \\[3pt]
+      nonlinearity & none & $\tanh$ \\
+    \end{tabular}
+    \vskip 10pt
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
+      An RNN is exponential smoothing that \textbf{learns what to keep}. Hold on to that
+      $0.8$: it comes back at the end of this lecture.}}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{One new arrow}
@@ -262,8 +332,8 @@
   \vskip 3pt
   \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\small
     It selects ONE column of $\mathbf{W}^\top$ - equivalently, one row of
-    $\mathbf{W}$. That row/column IS this word's own vector in $\mathbb{R}^2$ - next
-    lecture calls it an \textbf{embedding}.}}
+    $\mathbf{W}$. That row/column IS this word's own vector in $\mathbb{R}^2$ - the
+    attention chapter calls it an \textbf{embedding}.}}
   \vskip 4pt
   \begin{center}
     \resizebox{0.98\linewidth}{!}{%
@@ -387,7 +457,7 @@
     parameters - whether the review is 3 words or 40.
     \vskip 6pt
     \fcolorbox{armblue}{armblue!8}{\parbox{0.95\linewidth}{\small
-      Convolution shares across \textbf{space} (L16); recurrence shares across
+      Convolution shares across \textbf{space} ([48]); recurrence shares across
       \textbf{time}. Same trick, new axis - and it kills hack (3): a pattern learned at
       position 2 works at position 17 for free.}}
     \column{0.5\textwidth}
@@ -476,7 +546,7 @@
     The unrolled RNN is a deep feed-forward net with \textbf{tied weights}. Autograd
     needs nothing new - [42]'s \texttt{loss.backward()} (one backward sweep, any graph),
     kept again. A tied weight collects the \textbf{sum} of its gradients from every step
-    - the same rule as a shared conv kernel (L16).
+    - the same rule as a shared conv kernel ([48]).
     \vskip 6pt
     For seq-to-one sentiment, the loss sits only at the \textbf{final} step - so its
     gradient must travel all the way back through every recurrent connection.
@@ -517,6 +587,9 @@
     \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\small
       $0.8^{29}\approx \mathbf{0.0015}$. And if $V=1.25$? $1.25^{29}\approx\mathbf{646}$.
       One multiplication, repeated, either starves or explodes.}}
+    \vskip 2pt
+    {\footnotesize [29]'s smoothing had the same $0.8$. There, fading is the point; in
+    language it is the disease.}
     \column{0.58\textwidth}
     \begin{center}
       \includegraphics[width=\linewidth]{vanish_curve.pdf}
@@ -804,6 +877,37 @@
 %   memory is a few dozen steps, no better than a wide window (matches memory_highway.json:
 %   RNN at chance on first-token recall by T=80, a coin flip at T=40). Reviewer's proposed
 %   cut of the second click-through (Unrolling) NOT applied: instructor-requested revision.
+%
+%   REVISION 2026-10-03 (instructor review of a proposal list; DECISIONS #64): NEW frame
+%   "You have already run a recurrence" - [29]'s simple exponential smoothing
+%   (y-hat_{t+1} = alpha y_t + (1-alpha) y-hat_t, notation copied from
+%   29_classical_time_series.tex) as the on-ramp to "One new arrow", with a smoothing-vs-RNN
+%   table; the 0.8 is paid off in one footnote on "Predict-first: the fading number" ("fading
+%   is the point in forecasting, the disease in language"). "One-hot and its poverty" MOVED
+%   here from L21 (L21's tokenization section went to the LLM chapter; embeddings are taught
+%   there too, so the frame now points forward instead of to an L21 embeddings frame). Stale
+%   CNN references after the chapter's move to global numbering: ch6 -> [51], L16 -> [48]
+%   (x3), L17 -> [50]. The fixed-window frame's "L19's 1D convolution - a k-token kernel
+%   sliding along the text" was wrong twice (1D convolution is taught in [48], on signals,
+%   not text) - now "[48]'s 1D convolution, slid along a sentence instead of a signal".
+%   Anatomy frame: "next lecture calls it an embedding" -> "the attention chapter".
+%   Declined by the instructor in the same review (RNNs stay a quick lecture): a callback to
+%   the ch11 name inventor's nn.Embedding, lag features as a third fixed window, a "keep this
+%   test" plant on the shuffle frame.
+%
+%   REVISION 2026-10-03/04 (instructor: "the figures have very small text, e.g. page 17"):
+%   every figure redrawn at the size it gets on the slide, fonts 7-10 pt (SLIDE_STYLE.md,
+%   Figures). detect_small_figure_text.py: 18 pages under 5.5 pt before, see the commit after.
+%   forward_pass_anim.py / unroll_anim.py: drawing code rewritten in inch coordinates at
+%   4.5 x 2.45 / 4.7 x 2.3 in (locked matrices, numbers and assertions unchanged); the last
+%   forward-pass frame's footnote now says "The attention chapter gives this row a name".
+%   word_shuffle.py and pad_truncate.py re-laid out at 3.85 / 5.5 in; pad_truncate now fills
+%   the line width (was 0.82) and lists all 34 lost words under the long review.
+%   activation_zoo.py, vanish_curve.py, gradient_flow.py resized; gradient_flow.py gained
+%   --l20-figures, which reruns the July procedure and checks it reproduces the logged norms
+%   before redrawing (1.700e-07 / 5.361e-05 / 5.820e-02 at t = 0 / 14 / 29: reproduced).
+%   SPELLING: the chapter line read "ամենինչ"; it is "ամենին" (instructor). Fixed in
+%   py_src/data/armenian_line.txt, so the forward-pass and unrolling figures show it.
 %
 %   Forward pointer: L21 The Road to Attention - LSTM intuition (memory highway = ResNet
 %   skip, 18 years earlier), tokenization with the Armenian fragmentation fact, the
