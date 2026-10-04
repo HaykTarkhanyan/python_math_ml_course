@@ -9,6 +9,68 @@ this file holds the choice and a pointer.
 
 ---
 
+## #67 - The LLM chapter runs left to right along the forward pass, with a "you are here" map in every session
+
+**Date:** 2026-10-04 · **Status:** active (instructor, choosing between two options for each).
+Revisits the order inside the block from #63.
+
+**Decision.** Order: L21 -> LLM-1 tokenization -> L24 attention -> L25 block -> L26 transformers in
+the world -> LLM-2 decoding -> LLM-3 ... LLM-7 -> RAG -> agents -> LLM-8 quantization -> LLM-9 LoRA
+(-> LLM-10). Every session opens with a two-part map, one frame per part, with its own stages lit
+and earlier ones in full colour, and ends with the next session's frame. Part 1 is one real
+forward pass (GPT-2 small on "The cat sat on the": text, token IDs, embeddings, attention and MLP
+x N, LM head, top-5 probabilities, the chosen token looping back); part 2 is the life of a model
+(pretrain, scale, post-train, prompt, evaluate, quantize, LoRA) as small drawings. Figures:
+`ml/14_llms/py_src/llm_roadmap.py`. The same day's first version, two rows of text boxes on one
+frame, was rejected by the instructor as not nice enough.
+
+**Why.** Instructor: one picture of the whole model, and each session shows "okay, this session we
+are doing this part", for "a nicer story". Teaching along the forward pass makes the map fill in
+from left to right.
+
+**Alternatives rejected.** Attention first (L21 -> L24-L26 -> tokenization), which answers L21's
+cliffhanger in the very next lecture; the instructor chose the strict order and accepted that the
+answer waits one lecture (L24's cold open restates the question). A one-row map (forward pass
+only): pretraining, scaling, post-training, quantization and LoRA would each light the whole model.
+Text boxes on one frame (built first, rejected). Schematic numbers in the forward pass: GPT-2 is
+cached locally and one forward pass is cheap, so the IDs, vectors, attention and probabilities
+are real (`ml/14_llms/results/roadmap_gpt2.json`).
+
+**What would change this.** Students arriving at L24 without L21's alignment question -> move
+LLM-1 behind L26. A session that does not belong to one box -> drop the map from that session
+rather than inventing a box.
+
+---
+
+## #66 - Attention and the LLM lectures share one chapter folder, `ml/14_llms`; the RNN folder becomes `ml/13_rnns`
+
+**Date:** 2026-10-04 · **Status:** active (instructor: "rename the ch7_rnn to 13_rnns and
+ch9_attention to 14_llms and start concentrating all relevant files in that folder")
+
+**Decision.** `git mv` both folders (commit f474f3b: a pure move plus path pointers; history follows
+with `git log --follow`). L24-L26 and LLM-1 to LLM-10 live in `ml/14_llms`, and the chapter plan
+moved in. The source decks are copied, not moved, into `ml/14_llms/sources/`: 15 `misc/dl4nlp`
+decks and 16 `ml/llm_training` paper decks (tracked files only, 202 files, 17.7 MB). Deck files
+keep their `L20`/`L21`/`L24`-`L26` names until delivery, because `NN_` is the playlist position
+(CONVENTIONS).
+
+**Why.** The attention lectures are the first half of the LLM story; one folder holds everything
+the block needs. This resolves the plan's D7, where I had recommended a separate LLM folder and
+cited #1 for it. That citation was half wrong: #1 put attention, transformers and the
+LLM-training track in one ch9 folder, and "split rather than absorb" was only its revisit trigger.
+
+**Alternatives rejected.** A separate LLM folder next to the attention one (plan D7). Moving the
+source decks instead of copying: `ml/llm_training` is still a live site page, and `misc/dl4nlp` is
+the instructor's earlier course. Copying the supporting projects as well (`misc/grokking` 11.3 MB,
+`ml/claude_projects/armenian_glitch_token_hunt`, the LMU slides in `ml/dl4nlp/` 66 MB): each feeds
+a frame or two, so `sources/README.md` points to them instead.
+
+**What would change this.** The copies drifting from originals that keep being edited -> pick one
+home and delete the other. The folder getting unwieldy (13+ decks plus sources) -> move
+`sources/` out.
+
+---
+
 ## #64 - The RNN chapter stays a quick lecture: tokenization, temperature and embeddings move to the LLM chapter; its language-model demo becomes real
 
 **Date:** 2026-10-03 · **Status:** active (instructor, item by item, on a list of proposals)
@@ -47,7 +109,8 @@ home: restore the L21 section from `git show 6013bcc:ml/ch7_rnn/L21_road_to_atte
 ## #63 - The language-model block comes before the autoencoders
 
 **Date:** 2026-10-03 · **Status:** active (instructor decision). Supersedes #62. (Written as #61;
-renumbered the same day after a parallel session also used #60/#61.)
+renumbered the same day after a parallel session also used #60/#61.) Revisited 2026-10-04 by
+#67: inside the block, tokenization (LLM-1) now comes before attention.
 
 **Decision.** After the CNN chapter: RNN (L20, L21) -> attention (L24-L26) -> the language-model
 chapter (`ml/LLM_CHAPTER_PLAN.md`) -> RAG -> agents -> autoencoders (L22, L23) -> GANs (L23b,

@@ -1,0 +1,1446 @@
+\documentclass[aspectratio=169]{beamer}
+\input{preamble}
+
+\title{From N-grams to LSTMs}
+\subtitle{N-grams $\cdot$ Word2Vec $\cdot$ RNNs $\cdot$ LSTMs $\cdot$ Motivation for Attention}
+\date{}
+
+\begin{document}
+
+% ============================================================
+% TITLE
+% ============================================================
+\begin{frame}
+\titlepage
+\end{frame}
+
+% ============================================================
+% OUTLINE
+% ============================================================
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents
+\end{frame}
+
+% ============================================================
+% THE NLP TASK LANDSCAPE
+% ============================================================
+\section{The NLP task landscape}
+\begin{frame}
+\frametitle{What NLP tasks look like}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape,
+  tbox/.style={draw, rounded corners=6pt, text width=5.5cm, align=left, inner sep=7pt, font=\small}
+]
+  \node[tbox, fill=popblue!8, draw=popblue] (a) at (-3.4, 1.7) {
+    \textbf{\textcolor{popblue}{Token labeling}}\\[3pt]
+    one label per word\\
+    {\scriptsize POS tagging, NER, chunking}
+  };
+  \node[tbox, fill=paramgreen!8, draw=paramgreen] (b) at (3.4, 1.7) {
+    \textbf{\textcolor{paramgreen}{Sequence classification}}\\[3pt]
+    one label per text\\
+    {\scriptsize sentiment, topic, NLI, spam}
+  };
+  \node[tbox, fill=violet1!8, draw=violet1] (c) at (-3.4, -1.2) {
+    \textbf{\textcolor{violet1}{Structured prediction}}\\[3pt]
+    predict a structure\\
+    {\scriptsize dependency/constituency parsing, coreference resolution}
+  };
+  \node[tbox, fill=orange1!10, draw=orange1] (d) at (3.4, -1.2) {
+    \textbf{\textcolor{orange1}{Generation (seq2seq)}}\\[3pt]
+    text in $\to$ text out\\
+    {\scriptsize translation, summarization, QA, dialogue}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
+    Classically each task had its own model and output format. Modern LLMs \textbf{unify} them: cast everything as text-to-text (``translate:\,\ldots'', ``sentiment:\,\ldots'') and one model does all of it.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Sequence labeling: the BIO tagging scheme}
+\vspace{-0.15cm}
+{\small Token-labeling tasks (NER, chunking) tag \emph{spans}. The \textbf{BIO} scheme marks each token as \textbf{B}egin, \textbf{I}nside, or \textbf{O}utside a span --- turning span-finding into per-token classification.}
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape, font=\small]
+  \node (t1) at (-5.2, 1) {Aram};
+  \node (t2) at (-3.4, 1) {visited};
+  \node (t3) at (-1.6, 1) {New};
+  \node (t4) at (0.2, 1) {York};
+  \node (t5) at (2.0, 1) {in};
+  \node (t6) at (3.4, 1) {April};
+  \node[draw=sampred, fill=sampred!12, rounded corners=3pt, inner sep=3pt] at (-5.2, 0) {B-PER};
+  \node[draw=gray, fill=gray!8, rounded corners=3pt, inner sep=3pt] at (-3.4, 0) {O};
+  \node[draw=popblue, fill=popblue!12, rounded corners=3pt, inner sep=3pt] at (-1.6, 0) {B-LOC};
+  \node[draw=popblue, fill=popblue!12, rounded corners=3pt, inner sep=3pt] at (0.2, 0) {I-LOC};
+  \node[draw=gray, fill=gray!8, rounded corners=3pt, inner sep=3pt] at (2.0, 0) {O};
+  \node[draw=paramgreen, fill=paramgreen!12, rounded corners=3pt, inner sep=3pt] at (3.4, 0) {B-DATE};
+  \foreach \x in {-5.2,-3.4,-1.6,0.2,2.0,3.4} { \draw[-Stealth, gray] (\x, 0.72) -- (\x, 0.32); }
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}, thick, popblue] (-2.15, -0.5) -- (0.75, -0.5);
+  \node[font=\scriptsize, text=popblue] at (-0.7, -0.98) {one LOC span: ``New York''};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=paramgreen, fill=paramgreen!7, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
+    \textbf{B-} starts a new entity, \textbf{I-} continues it, \textbf{O} is outside any entity. The tag set is $2k{+}1$ tags for $k$ entity types. POS tagging is the same idea with one tag per token (no spans).
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% THE CORE PROBLEM
+% ============================================================
+\section{Statistical language models}
+\begin{frame}
+\frametitle{The core problem}
+
+\begin{center}
+\begin{tikzpicture}
+  % Sentence
+  \node[draw, rounded corners=6pt, fill=lightbg, inner sep=10pt, font=\large] (sent) at (0, 2.5) {
+    ``The cat sat on the mat''
+  };
+
+  % Arrow down
+  \draw[-Stealth, very thick, popblue] (0, 1.6) -- (0, 0.8);
+  \node[font=\Huge, text=popblue] at (0, 0.2) {?};
+
+  % Two sub-problems
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=4.5cm, align=center, inner sep=8pt, font=\small] at (-3.5, -1.5) {
+    \textbf{\textcolor{paramgreen}{Representation}}\\[4pt]
+    How do we turn words into numbers that capture meaning?
+  };
+  \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=4.5cm, align=center, inner sep=8pt, font=\small] at (3.5, -1.5) {
+    \textbf{\textcolor{popblue}{Sequence modeling}}\\[4pt]
+    How do we capture context and word order?
+  };
+
+  % Timeline
+  \draw[thick, -Stealth, gray] (-6, -3.5) -- (6, -3.5);
+  \node[fill=orange1!15, rounded corners=3pt, inner sep=3pt, font=\scriptsize\bfseries] at (-4.5, -3.5) {N-grams (1990s)};
+  \node[fill=paramgreen!15, rounded corners=3pt, inner sep=3pt, font=\scriptsize\bfseries] at (-1.2, -3.5) {Word2Vec (2013)};
+  \node[fill=popblue!15, rounded corners=3pt, inner sep=3pt, font=\scriptsize\bfseries] at (2, -3.5) {RNN/LSTM};
+  \node[fill=sampred!15, rounded corners=3pt, inner sep=3pt, font=\scriptsize\bfseries] at (5, -3.5) {Transformer (2017)};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% N-GRAM LANGUAGE MODELS
+% ============================================================
+\begin{frame}
+\frametitle{N-gram language models}
+
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  % Formula
+  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, inner sep=10pt, text width=10cm, align=center] at (0, 3) {
+    {\large $\displaystyle P(w_t \mid w_{t-n+1}, \ldots, w_{t-1}) \;=\; \frac{\text{count}(w_{t-n+1} \cdots w_t)}{\text{count}(w_{t-n+1} \cdots w_{t-1})}$}
+  };
+
+  % Sentence with sliding window
+  \node[font=\small] (w1) at (-5, 1) {The};
+  \node[font=\small] (w2) at (-3.5, 1) {cat};
+  \node[font=\small] (w3) at (-2, 1) {sat};
+  \node[font=\small] (w4) at (-0.5, 1) {on};
+  \node[font=\small] (w5) at (1, 1) {the};
+  \node[font=\small, text=popblue, font=\small\bfseries] (w6) at (2.5, 1) {???};
+
+  % Bigram window (n=2: conditions on the 1 preceding word "the")
+  \draw[thick, sampred, rounded corners=3pt] (0.45, 0.6) rectangle (1.55, 1.4);
+  \node[font=\scriptsize, text=sampred] at (1.0, 1.75) {bigram context};
+
+  % Trigram window (n=3: conditions on the 2 preceding words "on the")
+  \draw[thick, paramgreen, rounded corners=3pt, dashed] (-1.15, 0.5) rectangle (1.65, 1.5);
+  \node[font=\scriptsize, text=paramgreen] at (-0.1, 0.15) {trigram context};
+
+  % Examples
+  \node[draw, rounded corners=4pt, fill=sampred!8, text width=5cm, align=left, inner sep=6pt, font=\small] at (-3.5, -1.3) {
+    \textbf{\textcolor{sampred}{Bigram:}}\\[3pt]
+    $P(\text{mat} \mid \text{the}) = \frac{\text{count(``the mat'')}}{\text{count(``the'')}}$
+  };
+  \node[draw, rounded corners=4pt, fill=paramgreen!8, text width=5cm, align=left, inner sep=6pt, font=\small] at (3.5, -1.3) {
+    \textbf{\textcolor{paramgreen}{Trigram:}}\\[3pt]
+    $P(\text{mat} \mid \text{on, the}) = \frac{\text{count(``on the mat'')}}{\text{count(``on the'')}}$
+  };
+
+  % Key idea
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=11cm, align=center, inner sep=6pt, font=\small] at (0, -2.8) {
+    \textbf{Idea:} estimate probabilities by counting how often word sequences appear in a large corpus
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% N-GRAM LIMITATIONS
+% ============================================================
+\begin{frame}
+\frametitle{N-gram limitations}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape]
+  % Long sentence
+  \node[font=\small, anchor=west] at (-7, 3.3) {``The \textbf{\textcolor{popblue}{cat}} that sat on the mat near the door by the window \textbf{\textcolor{sampred}{was}} \rule{1cm}{0.4pt}''};
+
+  % Brace showing distance
+  \draw[decorate, decoration={brace, amplitude=6pt, raise=2pt}, thick, warnred] (-6.4, 3.6) -- (4.2, 3.6);
+  \node[font=\scriptsize, text=warnred] at (-1, 4.2) {12 words apart --- trigram window can't see ``cat''};
+
+  % Four limitation boxes
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=5cm, align=left, inner sep=6pt, font=\small] at (-3.5, 1.3) {
+    \textbf{\textcolor{warnred}{1.~Fixed context window}}\\[3pt]
+    A trigram only sees 2 previous words. Long-range dependencies are invisible.
+  };
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=5cm, align=left, inner sep=6pt, font=\small] at (3.5, 1.3) {
+    \textbf{\textcolor{orange1}{2.~Curse of dimensionality}}\\[3pt]
+    Vocabulary $V$\,=\,50k $\Rightarrow$ possible 5-grams: $50\text{k}^5 = 3\times10^{23}$. Most never observed.
+  };
+  \node[draw=violet1, fill=violet1!8, rounded corners=6pt, text width=5cm, align=left, inner sep=6pt, font=\small] at (-3.5, -1.2) {
+    \textbf{\textcolor{violet1}{3.~Data sparsity}}\\[3pt]
+    ``armadillo aardvark'' has count 0 in most corpora. Smoothing helps but doesn't solve it.
+  };
+  \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=5cm, align=left, inner sep=6pt, font=\small] at (3.5, -1.2) {
+    \textbf{\textcolor{popblue}{4.~No generalization}}\\[3pt]
+    Knowing ``dog sat on'' doesn't help predict after ``cat sat on.'' Words are discrete symbols.
+  };
+
+  % Bottom
+  \node[font=\small, text=gray, text width=11cm, align=center] at (0, -3.2) {
+    We need a way to represent words so that similar words share information.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% ONE-HOT ENCODING
+% ============================================================
+\section{Word embeddings}
+\begin{frame}
+\frametitle{One-hot encoding}
+
+\begin{center}
+\begin{tikzpicture}
+  % Vocabulary
+  \node[font=\small\bfseries, text=popblue] at (-5.5, 3) {Vocabulary};
+  \node[font=\small, anchor=west] at (-6.2, 2.3) {1.~cat};
+  \node[font=\small, anchor=west] at (-6.2, 1.7) {2.~dog};
+  \node[font=\small, anchor=west] at (-6.2, 1.1) {3.~sat};
+  \node[font=\small, anchor=west] at (-6.2, 0.5) {4.~the};
+  \node[font=\small, anchor=west] at (-6.2, -0.1) {$\vdots$};
+  \node[font=\small, anchor=west] at (-6.2, -0.7) {50k.~zoo};
+
+  % Arrow
+  \draw[-Stealth, thick, popblue] (-4.5, 1.1) -- (-3, 1.1);
+
+  % One-hot vectors
+  \node[font=\small\bfseries, text=popblue] at (-0.5, 3) {One-hot vectors};
+
+  % cat vector
+  \node[font=\small, text=paramgreen] at (-2.5, 2.3) {cat =};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, fill=paramgreen!40, font=\tiny] at (-1.3, 2.3) {1};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.9, 2.3) {0};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.5, 2.3) {0};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.1, 2.3) {0};
+  \node[font=\tiny] at (0.3, 2.3) {$\cdots$};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (0.7, 2.3) {0};
+
+  % dog vector
+  \node[font=\small, text=sampred] at (-2.5, 1.5) {dog =};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-1.3, 1.5) {0};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, fill=sampred!40, font=\tiny] at (-0.9, 1.5) {1};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.5, 1.5) {0};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.1, 1.5) {0};
+  \node[font=\tiny] at (0.3, 1.5) {$\cdots$};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (0.7, 1.5) {0};
+
+  % sat vector
+  \node[font=\small, text=violet1] at (-2.5, 0.7) {sat =};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-1.3, 0.7) {0};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.9, 0.7) {0};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, fill=violet1!40, font=\tiny] at (-0.5, 0.7) {1};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (-0.1, 0.7) {0};
+  \node[font=\tiny] at (0.3, 0.7) {$\cdots$};
+  \node[draw, minimum width=0.4cm, minimum height=0.4cm, font=\tiny] at (0.7, 0.7) {0};
+
+  % Dimension annotation
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror, raise=2pt}, thick] (-1.5, 0.3) -- (0.9, 0.3);
+  \node[font=\scriptsize] at (-0.3, -0.1) {50,000 dimensions};
+
+  % Problems
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=4.5cm, align=center, inner sep=6pt, font=\small] at (4.5, 2) {
+    \textbf{\textcolor{warnred}{No similarity}}\\[3pt]
+    $\text{cat} \cdot \text{dog} = 0$\\[2pt]
+    $\text{cat} \cdot \text{banana} = 0$\\[2pt]
+    Every pair is equally different!
+  };
+
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=4.5cm, align=center, inner sep=6pt, font=\small] at (4.5, -0.5) {
+    \textbf{\textcolor{orange1}{Huge \& sparse}}\\[3pt]
+    50k-dim vectors with exactly one non-zero entry
+  };
+
+  % Need
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -2) {
+    \textbf{We need:} dense, low-dimensional vectors where similar words have similar representations
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WORD2VEC — DISTRIBUTIONAL HYPOTHESIS
+% ============================================================
+% ============================================================
+% NEURAL PROBABILISTIC LM (BENGIO 2003)
+% ============================================================
+\begin{frame}
+\frametitle{The first neural LM (Bengio et al., 2003)}
+\vspace{-0.15cm}
+{\small One-hot vectors are discrete, so n-grams can't generalize. Bengio's \textbf{Neural Probabilistic Language Model} was the first fix: feed the previous words through \emph{learned} dense embeddings and a neural net.}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape, font=\small,
+  b/.style={draw, rounded corners=4pt, inner sep=5pt}]
+  \node[b, fill=popblue!10] (w1) at (-6, 0.8) {$w_{t-3}$};
+  \node[b, fill=popblue!10] (w2) at (-6, 0) {$w_{t-2}$};
+  \node[b, fill=popblue!10] (w3) at (-6, -0.8) {$w_{t-1}$};
+  \node[b, fill=paramgreen!15, text width=1.6cm, align=center] (emb) at (-3.7, 0) {embed $C$\\{\scriptsize (shared)}};
+  \draw[-Stealth] (w1) -- (emb); \draw[-Stealth] (w2) -- (emb); \draw[-Stealth] (w3) -- (emb);
+  \node[b, fill=paramgreen!8, text width=1.4cm, align=center] (cat) at (-1.5, 0) {concat};
+  \draw[-Stealth] (emb) -- (cat);
+  \node[b, fill=orange1!12, text width=1.5cm, align=center] (hid) at (0.6, 0) {tanh\\hidden};
+  \draw[-Stealth] (cat) -- (hid);
+  \node[b, fill=sampred!12, text width=1.7cm, align=center] (sm) at (2.9, 0) {softmax\\over $V$};
+  \draw[-Stealth] (hid) -- (sm);
+  \node[b, fill=popblue!12] (out) at (5.3, 0) {$P(w_t \mid \text{ctx})$};
+  \draw[-Stealth] (sm) -- (out);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[font=\small]
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=6.1cm, align=left, inner sep=7pt] at (-3.3, 0) {
+    \textbf{\textcolor{paramgreen}{Fixes generalization}}\\[2pt]
+    ``cat'' and ``dog'' get similar vectors, so seeing one helps predict after the other. The embeddings $C$ are learned by the LM.
+  };
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=6.1cm, align=left, inner sep=7pt] at (3.3, 0) {
+    \textbf{\textcolor{warnred}{Still a fixed window}}\\[2pt]
+    It only sees $n{-}1$ previous words, like n-grams. Removing that limit is what motivates RNNs.
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.12cm}
+\begin{center}{\footnotesize\textcolor{gray}{Word2Vec (2013) later keeps just the embeddings --- throwing away the LM --- to learn word vectors cheaply.}}\end{center}
+\end{frame}
+
+% ============================================================
+% WORD2VEC --- DISTRIBUTIONAL HYPOTHESIS
+% ============================================================
+\begin{frame}
+\frametitle{Word2Vec --- the distributional hypothesis}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}
+  % Quote
+  \node[draw=popblue, fill=popblue!5, rounded corners=8pt, inner sep=10pt, text width=12cm, align=center, font=\normalsize] at (0, 3) {
+    ``You shall know a word by the company it keeps''\\[3pt]
+    {\small --- J.\,R.\,Firth, 1957}
+  };
+
+  % Two contexts for "good"
+  \node[font=\small, text=gray] at (0, 1.5) {Words appearing in similar contexts have similar meanings:};
+
+  % Context 1
+  \node[draw, rounded corners=4pt, fill=lightbg, inner sep=6pt, font=\small, text width=10cm, align=center] at (0, 0.5) {
+    ``The movie was \textcolor{popblue}{surprisingly} \textbf{\textcolor{paramgreen}{good}} and \textcolor{popblue}{the audience} loved it''
+  };
+  \node[draw, rounded corners=4pt, fill=lightbg, inner sep=6pt, font=\small, text width=10cm, align=center] at (0, -0.4) {
+    ``The movie was \textcolor{popblue}{surprisingly} \textbf{\textcolor{orange1}{great}} and \textcolor{popblue}{the audience} loved it''
+  };
+  \node[draw, rounded corners=4pt, fill=lightbg, inner sep=6pt, font=\small, text width=10cm, align=center] at (0, -1.3) {
+    ``The movie was \textcolor{popblue}{surprisingly} \textbf{\textcolor{violet1}{excellent}} and \textcolor{popblue}{the audience} loved it''
+  };
+
+  % Arrow to conclusion
+  \draw[-Stealth, thick, popblue] (0, -1.9) -- (0, -2.4);
+
+  % Conclusion
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=11cm, align=center, inner sep=8pt, font=\small] at (0, -2.7) {
+    \textbf{\textcolor{paramgreen}{good}}, \textbf{\textcolor{orange1}{great}}, and \textbf{\textcolor{violet1}{excellent}} share context $\Rightarrow$ their vectors should be close in embedding space
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WORD2VEC — CBOW & SKIP-GRAM
+% ============================================================
+\begin{frame}
+\frametitle{Word2Vec --- CBOW \& Skip-gram}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
+  % ===== CBOW (left) =====
+  \node[font=\normalsize\bfseries, text=popblue] at (-4.5, 3.3) {CBOW};
+  \node[font=\scriptsize, text=gray] at (-4.5, 2.8) {Context $\rightarrow$ Center word};
+
+  % Context inputs
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1.5cm, font=\small] (c1) at (-6.3, 1.5) {the};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1.5cm, font=\small] (c2) at (-6.3, 0.5) {cat};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1.5cm, font=\small] (c3) at (-6.3, -0.5) {on};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1.5cm, font=\small] (c4) at (-6.3, -1.5) {the};
+
+  % Hidden layer
+  \node[draw, rounded corners=3pt, fill=paramgreen!15, minimum width=1.5cm, minimum height=2cm, font=\small, text width=1.3cm, align=center] (h1) at (-4.0, 0) {hidden\\(300d)};
+
+  % Output
+  \node[draw, rounded corners=3pt, fill=sampred!15, minimum width=1.5cm, font=\small\bfseries] (o1) at (-1.8, 0) {sat};
+
+  % Arrows
+  \draw[-Stealth, thick] (c1.east) -- (h1.north west);
+  \draw[-Stealth, thick] (c2.east) -- (h1.west);
+  \draw[-Stealth, thick] (c3.east) -- (h1.west);
+  \draw[-Stealth, thick] (c4.east) -- (h1.south west);
+  \draw[-Stealth, thick] (h1.east) -- (o1.west);
+
+  % ===== Skip-gram (right) =====
+  \node[font=\normalsize\bfseries, text=orange1] at (4.5, 3.3) {Skip-gram};
+  \node[font=\scriptsize, text=gray] at (4.5, 2.8) {Center word $\rightarrow$ Context};
+
+  % Input
+  \node[draw, rounded corners=3pt, fill=sampred!15, minimum width=1.5cm, font=\small\bfseries] (i2) at (2.5, 0) {sat};
+
+  % Hidden layer
+  \node[draw, rounded corners=3pt, fill=paramgreen!15, minimum width=1.5cm, minimum height=2cm, font=\small, text width=1.3cm, align=center] (h2) at (4.5, 0) {hidden\\(300d)};
+
+  % Context outputs
+  \node[draw, rounded corners=3pt, fill=orange1!10, minimum width=1.5cm, font=\small] (o2a) at (6.8, 1.5) {the};
+  \node[draw, rounded corners=3pt, fill=orange1!10, minimum width=1.5cm, font=\small] (o2b) at (6.8, 0.5) {cat};
+  \node[draw, rounded corners=3pt, fill=orange1!10, minimum width=1.5cm, font=\small] (o2c) at (6.8, -0.5) {on};
+  \node[draw, rounded corners=3pt, fill=orange1!10, minimum width=1.5cm, font=\small] (o2d) at (6.8, -1.5) {the};
+
+  % Arrows
+  \draw[-Stealth, thick] (i2.east) -- (h2.west);
+  \draw[-Stealth, thick] (h2.east) -- (o2a.west);
+  \draw[-Stealth, thick] (h2.east) -- (o2b.west);
+  \draw[-Stealth, thick] (h2.east) -- (o2c.west);
+  \draw[-Stealth, thick] (h2.east) -- (o2d.west);
+
+  % Divider
+  \draw[dashed, gray, thick] (0.3, 3.5) -- (0.3, -2.5);
+
+  % Result
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.2) {
+    \textbf{Result:} the hidden layer weights \emph{are} the word embeddings --- dense vectors (100--300 dims)
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WORD2VEC — EMERGENT PROPERTIES
+% ============================================================
+\begin{frame}
+\frametitle{Word2Vec --- emergent properties}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
+  % 2D scatter of words
+  \node[font=\small\bfseries, text=popblue] at (0, 3.5) {Vector arithmetic in embedding space};
+
+  % King, Queen, Man, Woman
+  \fill[popblue] (-3, 2) circle (4pt);
+  \node[font=\small, anchor=west] at (-2.8, 2) {king};
+  \fill[sampred] (-3, 0) circle (4pt);
+  \node[font=\small, anchor=west] at (-2.8, 0) {man};
+  \fill[popblue] (1, 2) circle (4pt);
+  \node[font=\small, anchor=west] at (1.2, 2) {queen};
+  \fill[sampred] (1, 0) circle (4pt);
+  \node[font=\small, anchor=west] at (1.2, 0) {woman};
+
+  % Arrows
+  \draw[-Stealth, thick, paramgreen] (-3, 1.8) -- (-3, 0.2);
+  \node[font=\scriptsize, text=paramgreen, anchor=east] at (-3.2, 1) {$-$ man};
+  \draw[-Stealth, thick, orange1] (-2.8, 0.2) -- (0.8, 0.2);
+  \node[font=\scriptsize, text=orange1] at (-1, -0.2) {$+$ woman};
+  \draw[-Stealth, thick, violet1, dashed] (-2.8, 2) -- (0.8, 2);
+  \node[font=\scriptsize, text=violet1] at (-1, 2.4) {king $-$ man $+$ woman $\approx$ queen};
+
+  % More examples
+  \node[draw, rounded corners=4pt, fill=lightbg, text width=5cm, align=left, inner sep=6pt, font=\small] at (5, 1.5) {
+    \textbf{More analogies:}\\[4pt]
+    Paris $-$ France $+$ Italy $\approx$ Rome\\[2pt]
+    bigger $-$ big $+$ small $\approx$ smaller\\[2pt]
+    walking $-$ walk $+$ swim $\approx$ swimming
+  };
+
+  % Limitation
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=12cm, align=center, inner sep=8pt, font=\small] at (0, -1.8) {
+    \textbf{\textcolor{warnred}{Critical limitation: one vector per word}}\\[4pt]
+    ``I went to the river \textbf{bank}'' \quad vs. \quad ``I deposited money at the \textbf{bank}''\\[2pt]
+    Both map to the \emph{same} vector --- no polysemy, no context-dependence
+  };
+
+  % What we need
+  \node[font=\small, text=gray, text width=11cm, align=center] at (0, -3.3) {
+    We need representations that change based on context. Enter: recurrent neural networks.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% RNNs
+% ============================================================
+\section{Recurrent models}
+\begin{frame}
+\frametitle{Recurrent Neural Networks (RNNs)}
+
+\begin{center}
+\begin{tikzpicture}
+  % Unrolled RNN
+  \node[font=\small\bfseries, text=popblue] at (0, 3.5) {Unrolled RNN across time steps};
+
+  % Input tokens
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1cm, font=\small] (x1) at (-5, -0.5) {$x_1$};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1cm, font=\small] (x2) at (-2.5, -0.5) {$x_2$};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1cm, font=\small] (x3) at (0, -0.5) {$x_3$};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1cm, font=\small] (x4) at (2.5, -0.5) {$x_4$};
+  \node[draw, rounded corners=3pt, fill=popblue!10, minimum width=1cm, font=\small] (x5) at (5, -0.5) {$x_5$};
+
+  % Hidden states
+  \node[draw, circle, fill=paramgreen!20, minimum size=1cm, font=\small] (h1) at (-5, 1.2) {$h_1$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=1cm, font=\small] (h2) at (-2.5, 1.2) {$h_2$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=1cm, font=\small] (h3) at (0, 1.2) {$h_3$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=1cm, font=\small] (h4) at (2.5, 1.2) {$h_4$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=1cm, font=\small] (h5) at (5, 1.2) {$h_5$};
+
+  % Outputs
+  \node[draw, rounded corners=3pt, fill=orange1!15, minimum width=1cm, font=\small] (y1) at (-5, 2.8) {$y_1$};
+  \node[draw, rounded corners=3pt, fill=orange1!15, minimum width=1cm, font=\small] (y2) at (-2.5, 2.8) {$y_2$};
+  \node[draw, rounded corners=3pt, fill=orange1!15, minimum width=1cm, font=\small] (y3) at (0, 2.8) {$y_3$};
+  \node[draw, rounded corners=3pt, fill=orange1!15, minimum width=1cm, font=\small] (y4) at (2.5, 2.8) {$y_4$};
+  \node[draw, rounded corners=3pt, fill=orange1!15, minimum width=1cm, font=\small] (y5) at (5, 2.8) {$y_5$};
+
+  % Vertical arrows
+  \draw[-Stealth, thick] (x1) -- (h1);
+  \draw[-Stealth, thick] (x2) -- (h2);
+  \draw[-Stealth, thick] (x3) -- (h3);
+  \draw[-Stealth, thick] (x4) -- (h4);
+  \draw[-Stealth, thick] (x5) -- (h5);
+  \draw[-Stealth, thick] (h1) -- (y1);
+  \draw[-Stealth, thick] (h2) -- (y2);
+  \draw[-Stealth, thick] (h3) -- (y3);
+  \draw[-Stealth, thick] (h4) -- (y4);
+  \draw[-Stealth, thick] (h5) -- (y5);
+
+  % Recurrent arrows
+  \draw[-Stealth, thick, sampred] (h1.east) -- (h2.west) node[midway, above, font=\scriptsize, text=sampred] {$W_h$};
+  \draw[-Stealth, thick, sampred] (h2.east) -- (h3.west) node[midway, above, font=\scriptsize, text=sampred] {$W_h$};
+  \draw[-Stealth, thick, sampred] (h3.east) -- (h4.west) node[midway, above, font=\scriptsize, text=sampred] {$W_h$};
+  \draw[-Stealth, thick, sampred] (h4.east) -- (h5.west) node[midway, above, font=\scriptsize, text=sampred] {$W_h$};
+
+  % Labels
+  \node[font=\scriptsize, text=gray] at (-5, -1.2) {The};
+  \node[font=\scriptsize, text=gray] at (-2.5, -1.2) {cat};
+  \node[font=\scriptsize, text=gray] at (0, -1.2) {sat};
+  \node[font=\scriptsize, text=gray] at (2.5, -1.2) {on};
+  \node[font=\scriptsize, text=gray] at (5, -1.2) {the};
+
+  % Formula
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, inner sep=6pt, font=\small, text width=7cm, align=center] at (0, -2.2) {
+    $h_t = \tanh\!\big(W_h \cdot h_{t-1} + W_x \cdot x_t + b\big)$
+  };
+
+  % Key insight
+  \node[font=\small, text=paramgreen] at (0, -3.2) {
+    \textbf{Key:} hidden state $h_t$ is a ``memory'' --- no fixed window!
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% VANISHING GRADIENT
+% ============================================================
+\begin{frame}
+\frametitle{The vanishing gradient problem}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  % Unrolled RNN with fading gradients
+  \node[font=\small\bfseries, text=popblue] at (0, 3.5) {Backpropagation through time};
+
+  % Hidden states
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.9cm, font=\small] (h1) at (-5.5, 1.5) {$h_1$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.9cm, font=\small] (h2) at (-3.5, 1.5) {$h_2$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.9cm, font=\small] (h3) at (-1.5, 1.5) {$h_3$};
+  \node[font=\large] at (0.3, 1.5) {$\cdots$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.9cm, font=\small] (h8) at (2, 1.5) {$h_T$};
+
+  % Loss at end
+  \node[draw, rounded corners=3pt, fill=sampred!15, font=\small] (loss) at (4.5, 1.5) {Loss $\mathcal{L}$};
+  \draw[-Stealth, thick] (h8) -- (loss);
+
+  % Forward arrows
+  \draw[-Stealth, thick, sampred] (h1) -- (h2);
+  \draw[-Stealth, thick, sampred] (h2) -- (h3);
+  \draw[-Stealth, thick, sampred] (h3) -- (-0.2, 1.5);
+  \draw[-Stealth, thick, sampred] (0.8, 1.5) -- (h8);
+
+  % Gradient arrows going backward (fading)
+  \draw[-Stealth, very thick, sampred] (loss.south) -- ++(0, -0.8) -- (h8.south);
+  \draw[-Stealth, thick, sampred!70] (h8.south) ++(0, -0.3) -- ++(-1.5, 0);
+  \node[font=\large] at (0.3, 0.2) {$\cdots$};
+  \draw[-Stealth, thick, sampred!30] (h3.south) ++(0, -0.3) -- ++(-1.8, 0);
+  \draw[-Stealth, thick, sampred!15] (h2.south) ++(0, -0.3) -- ++(-1.8, 0);
+
+  % Gradient labels
+  \node[font=\scriptsize, text=sampred] at (3.5, 0.5) {large};
+  \node[font=\scriptsize, text=sampred!30] at (-2.5, 0.5) {tiny};
+  \node[font=\scriptsize, text=sampred!15] at (-4.7, 0.5) {$\approx 0$};
+
+  % Formula
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, inner sep=8pt, text width=10cm, align=center, font=\small] at (0, -0.8) {
+    $\displaystyle \frac{\partial \mathcal{L}}{\partial h_1} = \frac{\partial \mathcal{L}}{\partial h_T} \cdot \prod_{t=2}^{T} \frac{\partial h_t}{\partial h_{t-1}}$ \\[6pt] Product of many values $<1$ $\Rightarrow$ gradient vanishes
+  };
+
+  % Example
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -2.3) {
+    ``\textbf{\textcolor{popblue}{The cat}} that I saw yesterday in the garden near the old oak tree \textbf{\textcolor{sampred}{was}} cute''\\[3pt]
+    The gradient from ``was'' can't reach ``cat'' --- the RNN \emph{forgets} early tokens
+  };
+
+  \node[font=\small, text=gray] at (0, -3.3) {
+    Solution attempt: LSTM (1997) and GRU (2014)
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% EXPLODING GRADIENTS & CLIPPING
+% ============================================================
+\begin{frame}
+\frametitle{The other failure mode: exploding gradients}
+\vspace{-0.15cm}
+{\small The same product of Jacobians that can \emph{vanish} can also \emph{explode}: if the factors are $>1$, the gradient grows exponentially through time --- loss jumps to \texttt{NaN} and training destabilizes.}
+
+\vspace{0.25cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape, font=\small]
+  \draw[thick, -Stealth] (-5.6, -1.2) -- (-5.6, 2.2) node[above, font=\scriptsize] {$\|g\|$};
+  \draw[thick, -Stealth] (-5.6, -1.2) -- (-0.6, -1.2) node[right, font=\scriptsize] {training step};
+  \draw[very thick, sampred] (-5.4,-0.9) -- (-4.7,-0.6) -- (-4.1,-0.8) -- (-3.5,1.9) -- (-3.45,-0.7) -- (-2.7,-0.5) -- (-2.1,-0.7) -- (-1.5,1.6) -- (-1.45,-0.6) -- (-0.9,-0.5);
+  \node[font=\scriptsize, text=sampred] at (-3.5, 2.15) {spike};
+  \draw[dashed, thick, popblue] (-5.6, 0.4) -- (-0.8, 0.4);
+  \node[font=\scriptsize, text=popblue, anchor=west] at (-5.4, 0.68) {threshold $\tau$};
+
+  \node[draw=popblue, fill=popblue!6, rounded corners=6pt, text width=6.2cm, align=center, inner sep=8pt] at (3.3, 0.5) {
+    \textbf{\textcolor{popblue}{Gradient clipping}}\\[5pt]
+    if $\|g\| > \tau$:\quad $g \leftarrow \tau \cdot \dfrac{g}{\|g\|}$\\[5pt]
+    {\scriptsize rescale the gradient back to norm $\tau$; direction is kept}
+  };
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.15cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=paramgreen, fill=paramgreen!7, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
+    \textbf{Vanishing} needs an \emph{architectural} fix (LSTM gates, next). \textbf{Exploding} has a cheap \emph{optimization} fix --- clip the norm. Both come from the same repeated matrix multiplication in backprop-through-time.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% LSTM
+% ============================================================
+\begin{frame}
+\frametitle{LSTM --- Long Short-Term Memory}
+
+\begin{center}
+\begin{tikzpicture}[scale=0.95]
+  % Cell state highway
+  \draw[very thick, popblue, -Stealth] (-6, 3) -- (6, 3);
+  \node[font=\small\bfseries, text=popblue, anchor=east] at (-6.2, 3) {$c_{t-1}$};
+  \node[font=\small\bfseries, text=popblue, anchor=west] at (6.2, 3) {$c_t$};
+  \node[font=\scriptsize, text=popblue] at (0, 3.5) {Cell state (``memory highway'')};
+
+  % Forget gate
+  \node[draw, circle, fill=sampred!20, minimum size=0.9cm, font=\small] (fg) at (-3, 1.5) {$\times$};
+  \node[draw, rounded corners=3pt, fill=sampred!10, font=\scriptsize, text width=1.3cm, align=center] at (-3, 0.3) {Forget gate $f_t$};
+  \draw[-Stealth, thick, sampred] (-3, 2.7) -- (fg);
+
+  % Input gate
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.9cm, font=\small] (ig) at (0, 1.5) {$+$};
+  \node[draw, rounded corners=3pt, fill=paramgreen!10, font=\scriptsize, text width=1.3cm, align=center] at (-0.8, 0.3) {Input gate $i_t$};
+  \node[draw, rounded corners=3pt, fill=paramgreen!10, font=\scriptsize, text width=1.3cm, align=center] at (0.8, 0.3) {Candidate $\tilde{c}_t$};
+  \draw[-Stealth, thick, paramgreen] (0, 2.7) -- (ig);
+
+  % Output gate (gates tanh of the cell state to produce h_t)
+  \node[draw, circle, fill=orange1!20, minimum size=0.9cm, font=\small] (og) at (3, 1.5) {$\times$};
+  \draw[-Stealth, thick, orange1] (3, 2.7) -- (og.north);
+  \node[font=\tiny, text=orange1, anchor=west] at (3.15, 2.3) {$\tanh(c_t)$};
+  \node[draw, rounded corners=3pt, fill=orange1!10, font=\scriptsize, text width=1.3cm, align=center] (ogbox) at (5.0, 1.5) {Output gate $o_t$};
+  \draw[-Stealth, thick, orange1] (ogbox.west) -- (og.east);
+
+  % Hidden state output
+  \draw[-Stealth, very thick, orange1] (og.south) -- (3, -1.4);
+  \node[font=\small\bfseries, text=orange1] at (3, -1.75) {$h_t$};
+
+  % h_{t-1} and x_t inputs
+  \node[draw, rounded corners=3pt, fill=lightbg, font=\small] (ht1) at (-5.5, -1.5) {$h_{t-1}$};
+  \node[draw, rounded corners=3pt, fill=lightbg, font=\small] (xt) at (-2, -1.5) {$x_t$};
+
+  \draw[-Stealth, thick, gray] (ht1.north) -- (-5.5, 0.5) -- (-3.5, 0.5);
+  \draw[-Stealth, thick, gray] (xt.north) -- (-2, 0.5);
+
+  % Key insight boxes
+  \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (-4, -3) {
+    \textbf{\textcolor{popblue}{Cell state}} flows with minimal modification --- gradient highway
+  };
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (3.5, -3) {
+    \textbf{\textcolor{paramgreen}{Gates}} learn what to forget, store, and output at each step
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% LSTM GATE EQUATIONS
+% ============================================================
+\begin{frame}
+\frametitle{LSTM --- gate equations}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.92, transform shape]
+  % Gate equations
+  \node[draw=sampred, fill=sampred!8, rounded corners=6pt, text width=11cm, align=left, inner sep=10pt, font=\normalsize] at (0, 3) {
+    \textbf{\textcolor{sampred}{Forget gate:}} \quad $f_t = \sigma\!\big(W_f \cdot [h_{t-1},\, x_t] + b_f\big)$
+  };
+
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=11cm, align=left, inner sep=10pt, font=\normalsize] at (0, 1.5) {
+    \textbf{\textcolor{paramgreen}{Input gate:}} \quad $i_t = \sigma\!\big(W_i \cdot [h_{t-1},\, x_t] + b_i\big)$ \qquad
+    $\tilde{c}_t = \tanh\!\big(W_c \cdot [h_{t-1},\, x_t] + b_c\big)$
+  };
+
+  \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=11cm, align=left, inner sep=10pt, font=\normalsize] at (0, 0) {
+    \textbf{\textcolor{popblue}{Cell update:}} \quad $c_t = f_t \odot c_{t-1} \;+\; i_t \odot \tilde{c}_t$
+  };
+
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=11cm, align=left, inner sep=10pt, font=\normalsize] at (0, -1.5) {
+    \textbf{\textcolor{orange1}{Output gate:}} \quad $o_t = \sigma\!\big(W_o \cdot [h_{t-1},\, x_t] + b_o\big)$ \qquad
+    $h_t = o_t \odot \tanh(c_t)$
+  };
+
+  % Key insight
+  \node[draw=violet1, fill=violet1!5, rounded corners=6pt, text width=12cm, align=center, inner sep=8pt, font=\small] at (0, -3.2) {
+    \textbf{Why it works:} the cell state update is \textbf{additive} ($c_t = f_t \odot c_{t-1} + \ldots$), not multiplicative like vanilla RNNs.\\[3pt]
+    Gradients flow through the $c_{t-1} \rightarrow c_t$ path with minimal decay --- solving the vanishing gradient problem.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% DEEPER & BIDIRECTIONAL RNNs
+% ============================================================
+\begin{frame}
+\frametitle{Deeper and bidirectional RNNs}
+\vspace{-0.15cm}
+{\small Two standard extensions --- both used by ELMo, next.}
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape, font=\small,
+  n/.style={draw, circle, minimum size=0.5cm, inner sep=0pt}]
+  % ===== Stacked (left) =====
+  \node[font=\small\bfseries, text=popblue] at (-3.5, 2.7) {Stacked (multi-layer)};
+  \foreach \i in {0,1,2,3} {
+    \node[n, fill=paramgreen!20] (l1\i) at (-5.2 + \i*1.1, 0.7) {};
+    \node[n, fill=paramgreen!40] (l2\i) at (-5.2 + \i*1.1, 1.7) {};
+    \draw[-Stealth, gray] (l1\i) -- (l2\i);
+  }
+  \foreach \i/\j in {0/1,1/2,2/3} {
+    \draw[-Stealth, paramgreen] (l1\i) -- (l1\j);
+    \draw[-Stealth, paramgreen!70] (l2\i) -- (l2\j);
+  }
+  \node[font=\scriptsize, text=gray, anchor=east] at (-5.7, 0.7) {layer 1};
+  \node[font=\scriptsize, text=gray, anchor=east] at (-5.7, 1.7) {layer 2};
+  \node[font=\scriptsize, text width=3.7cm, align=center] at (-3.5, -0.45) {higher layers learn more abstract features};
+
+  % ===== Bidirectional (right) =====
+  \node[font=\small\bfseries, text=orange1] at (3.3, 2.7) {Bidirectional};
+  \foreach \i in {0,1,2,3} {
+    \node[n, fill=paramgreen!25] (fw\i) at (1.7 + \i*1.1, 1.5) {};
+    \node[n, fill=sampred!25] (bw\i) at (1.7 + \i*1.1, 0.6) {};
+  }
+  \foreach \i/\j in {0/1,1/2,2/3} {
+    \draw[-Stealth, paramgreen] (fw\i) -- (fw\j);
+    \draw[-Stealth, sampred] (bw\j) -- (bw\i);
+  }
+  \node[font=\scriptsize, text=paramgreen, anchor=west] at (5.1, 1.5) {$\overrightarrow{h}$};
+  \node[font=\scriptsize, text=sampred, anchor=west] at (5.1, 0.6) {$\overleftarrow{h}$};
+  \node[font=\scriptsize, text width=4.0cm, align=center] at (3.3, -0.45) {each position sees \textbf{left and right} context: $[\overrightarrow{h}_t;\, \overleftarrow{h}_t]$};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=warnred, fill=warnred!6, rounded corners=6pt, text width=12.6cm, align=center, inner sep=7pt, font=\small] {
+    Bidirectional RNNs are great for \textbf{encoding / tagging} (the whole sentence is known) but \textbf{not} for autoregressive generation --- you can't peek at future tokens you haven't produced yet.
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% ELMo / CONTEXTUALIZED EMBEDDINGS
+% ============================================================
+\begin{frame}
+\frametitle{ELMo --- context changes meaning}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.82, transform shape]
+  % Title insight
+  \node[font=\small\bfseries, text=popblue] at (0, 3.3) {Peters et al.\ (2018): ``Deep contextualized word representations''};
+
+  % The problem: polysemy
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=5.5cm, align=center, inner sep=5pt, font=\small] at (-4.5, 2.2) {
+    \textbf{\textcolor{warnred}{Problem:}} Word2Vec gives\\
+    ``bank'' \textbf{one} vector, always
+  };
+
+  % The solution
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5.5cm, align=center, inner sep=5pt, font=\small] at (4.5, 2.2) {
+    \textbf{\textcolor{paramgreen}{ELMo:}} run sentence through\\
+    biLSTM $\rightarrow$ \textbf{different} vector each time
+  };
+
+  \draw[-Stealth, very thick, orange1] (-1.3, 2.2) -- (1.3, 2.2);
+
+  % biLSTM architecture
+  \node[font=\small\bfseries, text=popblue] at (-6.7, 1.5) {biLSTM};
+
+  % Input words
+  \foreach \i/\w in {1/the, 2/river, 3/bank, 4/is, 5/steep} {
+    \node[font=\scriptsize] at ({-6.5 + (\i-1)*2.2}, -2.2) {\w};
+  }
+
+  % Character CNN layer
+  \foreach \i in {1,...,5} {
+    \node[draw, fill=orange1!15, rounded corners=2pt, minimum width=1cm, minimum height=0.4cm, font=\tiny] (char\i) at ({-6.5 + (\i-1)*2.2}, -1.5) {charCNN};
+  }
+
+  % Forward LSTM (layer 1)
+  \foreach \i in {1,...,5} {
+    \node[draw, circle, fill=paramgreen!20, minimum size=0.45cm, font=\tiny] (f\i) at ({-6.5 + (\i-1)*2.2}, -0.5) {};
+  }
+  \foreach \i/\j in {1/2, 2/3, 3/4, 4/5} {
+    \draw[-Stealth, thick, paramgreen] (f\i) -- (f\j);
+  }
+  \node[font=\tiny, text=paramgreen] at (-7.8, -0.5) {$\overrightarrow{h}^1$};
+
+  % Backward LSTM (layer 1)
+  \foreach \i in {1,...,5} {
+    \node[draw, circle, fill=sampred!20, minimum size=0.45cm, font=\tiny] (b\i) at ({-6.5 + (\i-1)*2.2}, 0.2) {};
+  }
+  \foreach \i/\j in {2/1, 3/2, 4/3, 5/4} {
+    \draw[-Stealth, thick, sampred] (b\i) -- (b\j);
+  }
+  \node[font=\tiny, text=sampred] at (-7.8, 0.2) {$\overleftarrow{h}^1$};
+
+  % Connections char → forward and backward
+  \foreach \i in {1,...,5} {
+    \draw[-Stealth, thin, gray] (char\i) -- (f\i);
+    \draw[-Stealth, thin, gray] (char\i) -- (b\i);
+  }
+
+  % Forward LSTM (layer 2)
+  \foreach \i in {1,...,5} {
+    \node[draw, circle, fill=paramgreen!35, minimum size=0.45cm, font=\tiny] (f2\i) at ({-6.5 + (\i-1)*2.2}, 0.9) {};
+  }
+  \node[font=\tiny, text=paramgreen] at (-7.8, 0.9) {$\overrightarrow{h}^2$};
+  \foreach \i/\j in {1/2, 2/3, 3/4, 4/5} {
+    \draw[-Stealth, thick, paramgreen!70] (f2\i) -- (f2\j);
+  }
+
+  % Connections layer 1 → layer 2
+  \foreach \i in {1,...,5} {
+    \draw[-Stealth, thin, gray!50] (f\i) -- (f2\i);
+    \draw[-Stealth, thin, gray!50] (b\i) -- (f2\i);
+  }
+
+  % Highlight "bank" column
+  \draw[very thick, violet1, rounded corners=3pt, dashed] ({-6.5 + 2*2.2 - 0.6}, -2.5) rectangle ({-6.5 + 2*2.2 + 0.6}, 1.3);
+
+  % ELMo formula
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=6cm, align=center, inner sep=5pt] at (5, -0.3) {
+    {\small\textbf{ELMo representation:}}\\[4pt]
+    $\displaystyle \text{ELMo}_k = \gamma \sum_{j=0}^{L} s_j \, h_{k,j}$\\[4pt]
+    {\scriptsize Weighted sum of \textbf{all} biLSTM layers}\\
+    {\scriptsize $s_j$ = learned layer weights, $\gamma$ = scale}
+  };
+
+  % Key results
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=6cm, align=left, inner sep=5pt, font=\scriptsize] at (5, -2) {
+    \textbf{\textcolor{orange1}{Impact:}} Pre-train biLSTM on large corpus,\\
+    then \textbf{fine-tune} on downstream task:\\[2pt]
+    \textbullet~SQuAD: +4.7\% F1\\
+    \textbullet~Sentiment, NER, coref: new SOTA across 6 tasks\\[2pt]
+    {\footnotesize\textcolor{violet1}{$\rightarrow$ The \textbf{pre-train + fine-tune} paradigm is born}}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% SEQUENCE-TO-SEQUENCE
+% ============================================================
+\section{Seq2seq \& attention}
+\begin{frame}
+\frametitle{Sequence-to-sequence (Encoder--Decoder)}
+\vspace{-0.4cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.82, transform shape]
+  \node[font=\small\bfseries, text=popblue] at (0, 3.5) {Machine translation with LSTMs (Sutskever et al., 2014)};
+
+  % ===== Encoder =====
+  \node[font=\small\bfseries, text=paramgreen] at (-4.5, 2.7) {Encoder};
+
+  % Encoder hidden states
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e1) at (-6.5, 1.5) {$h_1$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e2) at (-5.2, 1.5) {$h_2$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e3) at (-3.9, 1.5) {$h_3$};
+  \node[draw, circle, fill=paramgreen!30, minimum size=0.7cm, font=\scriptsize] (e4) at (-2.6, 1.5) {$h_4$};
+
+  \draw[-Stealth, thick, paramgreen] (e1) -- (e2);
+  \draw[-Stealth, thick, paramgreen] (e2) -- (e3);
+  \draw[-Stealth, thick, paramgreen] (e3) -- (e4);
+
+  % Encoder inputs
+  \node[font=\scriptsize] at (-6.5, 0.6) {I};
+  \node[font=\scriptsize] at (-5.2, 0.6) {love};
+  \node[font=\scriptsize] at (-3.9, 0.6) {deep};
+  \node[font=\scriptsize] at (-2.6, 0.6) {learning};
+
+  % Context vector (bottleneck!)
+  \node[draw, rounded corners=6pt, fill=sampred!20, minimum width=1cm, minimum height=1.5cm, font=\small, text width=1cm, align=center] (ctx) at (-0.5, 1.5) {\textbf{$c$}};
+  \draw[-Stealth, very thick, sampred] (e4) -- (ctx);
+
+  % Bottleneck annotation
+  \draw[decorate, decoration={brace, amplitude=5pt, raise=2pt}, thick, warnred] (-0.9, 2.5) -- (-0.1, 2.5);
+  \node[font=\scriptsize, text=warnred] at (-0.5, 3.1) {Bottleneck!};
+
+  % ===== Decoder =====
+  \node[font=\small\bfseries, text=orange1] at (3.5, 2.7) {Decoder};
+
+  \node[draw, circle, fill=orange1!20, minimum size=0.7cm, font=\scriptsize] (d1) at (1.5, 1.5) {$s_1$};
+  \node[draw, circle, fill=orange1!20, minimum size=0.7cm, font=\scriptsize] (d2) at (2.8, 1.5) {$s_2$};
+  \node[draw, circle, fill=orange1!20, minimum size=0.7cm, font=\scriptsize] (d3) at (4.1, 1.5) {$s_3$};
+  \node[draw, circle, fill=orange1!20, minimum size=0.7cm, font=\scriptsize] (d4) at (5.4, 1.5) {$s_4$};
+  \node[draw, circle, fill=orange1!20, minimum size=0.7cm, font=\scriptsize] (d5) at (6.7, 1.5) {$s_5$};
+
+  \draw[-Stealth, thick, orange1] (ctx) -- (d1);
+  \draw[-Stealth, thick, orange1] (d1) -- (d2);
+  \draw[-Stealth, thick, orange1] (d2) -- (d3);
+  \draw[-Stealth, thick, orange1] (d3) -- (d4);
+  \draw[-Stealth, thick, orange1] (d4) -- (d5);
+
+  % Decoder outputs
+  \node[font=\scriptsize] at (1.5, 0.6) {J'};
+  \node[font=\scriptsize] at (2.8, 0.6) {adore};
+  \node[font=\scriptsize] at (4.1, 0.6) {le};
+  \node[font=\scriptsize] at (5.4, 0.6) {deep};
+  \node[font=\scriptsize] at (6.7, 0.6) {learning};
+
+  % Problem box
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=12cm, align=center, inner sep=8pt, font=\small] at (0, -1.2) {
+    \textbf{\textcolor{warnred}{The entire input sentence is compressed into a single fixed-size vector $c$!}}\\[4pt]
+    Works for short sentences, but performance degrades for long ones.
+  };
+
+  % BLEU vs length sketch
+  \node[font=\scriptsize\bfseries] at (-4.7, -2.4) {BLEU score};
+  \draw[thick, ->] (-6, -3.6) -- (-2, -3.6) node[right, font=\scriptsize] {Sentence length};
+  \draw[thick, ->] (-6, -3.6) -- (-6, -2.4);
+  \draw[very thick, popblue] (-5.8, -2.6) .. controls (-4.5, -2.7) and (-3.5, -3.0) .. (-2.3, -3.5);
+  \node[font=\scriptsize, text=sampred] at (-3, -2.5) {drops!};
+
+  % Teaser
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (3.5, -3) {
+    What if the decoder could \textbf{look back} at all encoder states, not just $c$?\\[3pt]
+    {\scriptsize $\rightarrow$ This is attention!}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WHY LSTMS ARE NOT ENOUGH — BOTTLENECK
+% ============================================================
+\begin{frame}
+\frametitle{Why LSTMs are not enough --- the bottleneck}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape]
+  % Funnel visualization
+  % Wide input
+  \node[font=\small, text width=10cm, align=center] at (0, 3.5) {
+    ``The quick brown fox jumped over the lazy dog that was sleeping by the fireplace in the old cottage''
+  };
+
+  % Funnel shape
+  \fill[popblue!10] (-5, 2.8) -- (-0.4, 1) -- (0.4, 1) -- (5, 2.8) -- cycle;
+  \draw[thick, popblue] (-5, 2.8) -- (-0.4, 1);
+  \draw[thick, popblue] (5, 2.8) -- (0.4, 1);
+
+  % Bottleneck vector
+  \node[draw=sampred, fill=sampred!20, rounded corners=4pt, minimum width=0.8cm, minimum height=0.6cm, font=\small\bfseries] at (0, 0.7) {$c$};
+  \node[font=\scriptsize, text=sampred] at (0, 0.2) {512 or 1024 dims};
+
+  % What gets lost
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=5cm, align=left, inner sep=6pt, font=\small] at (-3.5, -1.3) {
+    \textbf{\textcolor{warnred}{Information lost:}}\\[3pt]
+    Early tokens get overwritten by later ones as $h_t$ is updated sequentially
+  };
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=5cm, align=left, inner sep=6pt, font=\small] at (3.5, -1.3) {
+    \textbf{\textcolor{orange1}{Fixed capacity:}}\\[3pt]
+    Whether the input is 5 tokens or 500, it must fit in the same vector
+  };
+
+  % Key point
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.2) {
+    \textbf{Fundamental issue:} you can't losslessly compress arbitrary-length sequences into a fixed-size vector
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% BAHDANAU ATTENTION
+% ============================================================
+\begin{frame}
+\frametitle{Attention --- looking back at the source}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
+  \node[font=\small\bfseries, text=popblue] at (0, 3.3) {Bahdanau et al.\ (2015): ``Jointly Learning to Align and Translate''};
+
+  % Encoder states
+  \node[font=\small\bfseries, text=paramgreen] at (-4.5, 2.5) {Encoder};
+
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e1) at (-6, 1.5) {$h_1$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e2) at (-4.8, 1.5) {$h_2$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e3) at (-3.6, 1.5) {$h_3$};
+  \node[draw, circle, fill=paramgreen!20, minimum size=0.7cm, font=\scriptsize] (e4) at (-2.4, 1.5) {$h_4$};
+
+  \draw[-Stealth, thick, paramgreen] (e1) -- (e2);
+  \draw[-Stealth, thick, paramgreen] (e2) -- (e3);
+  \draw[-Stealth, thick, paramgreen] (e3) -- (e4);
+
+  % Input words
+  \node[font=\scriptsize] at (-6, 0.8) {I};
+  \node[font=\scriptsize] at (-4.8, 0.8) {love};
+  \node[font=\scriptsize] at (-3.6, 0.8) {deep};
+  \node[font=\scriptsize] at (-2.4, 0.8) {learning};
+
+  % Decoder
+  \node[font=\small\bfseries, text=orange1] at (4.6, 2.5) {Decoder step $t$};
+  \node[draw, circle, fill=orange1!20, minimum size=0.9cm, font=\scriptsize] (dt) at (4.6, 1.5) {$s_t$};
+
+  % Context vector = weighted sum of the encoder states (sits between encoder and decoder)
+  \node[draw=sampred, fill=sampred!15, rounded corners=4pt, minimum size=0.7cm, font=\small] (cvec) at (1.5, 2.3) {$c_t$};
+  \node[font=\scriptsize, text=sampred] at (1.5, 2.9) {weighted sum};
+
+  % Attention arrows: each encoder state -> context vector, thickness ~ weight
+  \draw[-Stealth, thin, sampred!30] (e1) -- (cvec);
+  \draw[-Stealth, sampred!55] (e2) -- (cvec);
+  \draw[-Stealth, thick, sampred!80] (e3) -- (cvec);
+  \draw[-Stealth, very thick, sampred] (e4) -- (cvec);
+
+  % Attention weights on their arrows
+  \node[font=\tiny, text=sampred] at (-4.0, 1.75) {$\alpha_1\!=\!.05$};
+  \node[font=\tiny, text=sampred] at (-2.8, 1.9) {$\alpha_2\!=\!.10$};
+  \node[font=\tiny, text=sampred] at (-1.5, 2.05) {$\alpha_3\!=\!.40$};
+  \node[font=\tiny, text=sampred] at (-0.3, 2.2) {$\alpha_4\!=\!.45$};
+
+  % Context feeds the decoder
+  \draw[-Stealth, thick, orange1] (cvec) -- (dt) node[midway, above, font=\scriptsize, text=orange1] {feeds decoder};
+
+  % Formula
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, inner sep=6pt, text width=12cm, align=center, font=\small] at (0, -0.5) {
+    $e_{ti} = v_a^\top \tanh\!\big(W_a\, s_{t-1} + U_a\, h_i\big)$ \qquad
+    $\alpha_{ti} = \mathrm{softmax}(e_{ti})$ \qquad
+    $c_t = \sum_i \alpha_{ti} \, h_i$
+  };
+
+  % Two key insight boxes
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5.2cm, align=center, inner sep=5pt, font=\small] at (-3.5, -2) {
+    \textbf{\textcolor{paramgreen}{No more bottleneck!}}\\[2pt]
+    Each decoder step gets a \textbf{different} weighted view of all encoder states
+  };
+
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=5.2cm, align=center, inner sep=5pt, font=\small] at (3.5, -2) {
+    \textbf{\textcolor{orange1}{Alignment is learned}}\\[2pt]
+    The model learns which source words to focus on for each output word
+  };
+
+  % Bridge to Transformer
+  \node[font=\small, text=gray, text width=12cm, align=center] at (0, -3.4) {
+    What if we applied this idea to \emph{every} token attending to \emph{all other} tokens? $\rightarrow$ \textbf{Self-attention}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WHY LSTMS ARE NOT ENOUGH — SEQUENTIAL
+% ============================================================
+\begin{frame}
+\frametitle{Why LSTMs are not enough --- sequential processing}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}
+  % Sequential timeline
+  \node[font=\small\bfseries, text=popblue] at (0, 3.3) {LSTM: must process tokens one at a time};
+
+  % Timeline
+  \draw[thick, -Stealth, gray] (-6.5, 2.2) -- (6.5, 2.2);
+  \node[font=\scriptsize] at (-6.5, 1.8) {$t=1$};
+  \node[font=\scriptsize] at (6, 1.8) {$t=T$};
+
+  % Sequential boxes
+  \node[draw, rounded corners=3pt, fill=popblue!15, minimum width=1.2cm, font=\scriptsize] at (-5.5, 2.2) {Token 1};
+  \draw[-Stealth, thick, sampred] (-4.7, 2.2) -- (-4.1, 2.2);
+  \node[draw, rounded corners=3pt, fill=popblue!15, minimum width=1.2cm, font=\scriptsize] at (-3.5, 2.2) {Token 2};
+  \draw[-Stealth, thick, sampred] (-2.7, 2.2) -- (-2.1, 2.2);
+  \node[draw, rounded corners=3pt, fill=popblue!15, minimum width=1.2cm, font=\scriptsize] at (-1.5, 2.2) {Token 3};
+  \draw[-Stealth, thick, sampred] (-0.7, 2.2) -- (-0.1, 2.2);
+  \node[font=\normalsize] at (0.5, 2.2) {$\cdots$};
+  \draw[-Stealth, thick, sampred] (1.1, 2.2) -- (1.7, 2.2);
+  \node[draw, rounded corners=3pt, fill=popblue!15, minimum width=1.2cm, font=\scriptsize] at (2.5, 2.2) {Token $T$};
+
+  % Wait annotation
+  \node[font=\scriptsize, text=warnred] at (-1.5, 1.2) {Each step \textbf{waits} for the previous one};
+
+  % Parallel alternative
+  \node[font=\small\bfseries, text=paramgreen] at (0, 0.2) {What if we could process all tokens in parallel?};
+
+  % Parallel boxes
+  \node[draw, rounded corners=3pt, fill=paramgreen!15, minimum width=1.2cm, font=\scriptsize] at (-5.5, -0.8) {Token 1};
+  \node[draw, rounded corners=3pt, fill=paramgreen!15, minimum width=1.2cm, font=\scriptsize] at (-3.5, -0.8) {Token 2};
+  \node[draw, rounded corners=3pt, fill=paramgreen!15, minimum width=1.2cm, font=\scriptsize] at (-1.5, -0.8) {Token 3};
+  \node[font=\normalsize] at (0.5, -0.8) {$\cdots$};
+  \node[draw, rounded corners=3pt, fill=paramgreen!15, minimum width=1.2cm, font=\scriptsize] at (2.5, -0.8) {Token $T$};
+
+  % All at once annotation
+  \draw[thick, paramgreen] (-6.2, -1.3) -- (3.2, -1.3);
+  \node[font=\scriptsize, text=paramgreen] at (-1.5, -1.7) {All processed \textbf{simultaneously} on GPU};
+
+  % Comparison
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (-3.5, -3) {
+    \textbf{\textcolor{warnred}{LSTM:}} $O(T)$ sequential steps\\
+    Can't utilize GPU parallelism\\
+    Training is \emph{slow}
+  };
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (3.5, -3) {
+    \textbf{\textcolor{paramgreen}{Transformer:}} $O(1)$ parallel steps\\
+    Fully utilizes GPU cores\\
+    Training is \emph{fast}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WHY LSTMS ARE NOT ENOUGH — LONG-RANGE
+% ============================================================
+\begin{frame}
+\frametitle{Why LSTMs are not enough --- long-range dependencies}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, transform shape]
+  % Example sentence
+  \node[font=\small, text width=14cm, align=center] at (0, 3) {
+    ``The \textbf{\textcolor{popblue}{trophy}} didn't fit in the \textbf{\textcolor{orange1}{suitcase}} because \textbf{\textcolor{sampred}{it}} was too \rule{1.5cm}{0.4pt}''
+  };
+
+  % Two interpretations
+  \node[draw, rounded corners=6pt, fill=popblue!10, text width=5cm, align=center, inner sep=8pt, font=\small] at (-3.5, 1.2) {
+    If \textbf{\textcolor{sampred}{it}} = \textbf{\textcolor{popblue}{trophy}}:\\[3pt]
+    ``it was too \textbf{big}''
+  };
+  \node[draw, rounded corners=6pt, fill=orange1!10, text width=5cm, align=center, inner sep=8pt, font=\small] at (3.5, 1.2) {
+    If \textbf{\textcolor{sampred}{it}} = \textbf{\textcolor{orange1}{suitcase}}:\\[3pt]
+    ``it was too \textbf{small}''
+  };
+
+  % Path length comparison
+  \node[font=\small\bfseries, text=popblue] at (0, -0.3) {Path length from ``it'' to its referent:};
+
+  % LSTM path
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (-3.5, -1.8) {
+    \textbf{\textcolor{warnred}{LSTM: $O(n)$ steps}}\\[3pt]
+    Information must pass through every intermediate hidden state\\[2pt]
+    {\scriptsize Signal degrades over distance}
+  };
+
+  % Transformer path
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=5cm, align=center, inner sep=6pt, font=\small] at (3.5, -1.8) {
+    \textbf{\textcolor{paramgreen}{Attention: $O(1)$ steps}}\\[3pt]
+    Direct connection between any two tokens\\[2pt]
+    {\scriptsize No degradation over distance}
+  };
+
+  % Bottom teaser
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, text width=12cm, align=center, inner sep=6pt, font=\small] at (0, -3.5) {
+    \textbf{Attention:} ``let me directly look at any token I need'' --- regardless of distance
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% THE STAGE IS SET
+% ============================================================
+\begin{frame}
+\frametitle{The stage is set}
+\vspace{-0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, transform shape]
+  % Four columns summarizing the journey
+  \node[draw=orange1, fill=orange1!8, rounded corners=8pt, minimum height=3.5cm, text width=2.5cm, align=center, inner sep=6pt] at (-5.2, 1.2) {};
+  \node[font=\small\bfseries, text=orange1] at (-5.2, 2.5) {N-grams};
+  \node[font=\small, text width=2.3cm, align=center] at (-5.2, 1) {
+    Fixed window\\[3pt]
+    No generalization\\[3pt]
+    Data sparsity
+  };
+
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=8pt, minimum height=3.5cm, text width=2.5cm, align=center, inner sep=6pt] at (-1.7, 1.2) {};
+  \node[font=\small\bfseries, text=paramgreen] at (-1.7, 2.5) {Word2Vec};
+  \node[font=\small, text width=2.3cm, align=center] at (-1.7, 1) {
+    Good embeddings\\[3pt]
+    But static: one\\vector per word\\[3pt]
+    No sequences
+  };
+
+  \node[draw=popblue, fill=popblue!8, rounded corners=8pt, minimum height=3.5cm, text width=2.5cm, align=center, inner sep=6pt] at (1.7, 1.2) {};
+  \node[font=\small\bfseries, text=popblue] at (1.7, 2.5) {RNN / LSTM};
+  \node[font=\small, text width=2.3cm, align=center] at (1.7, 1) {
+    Sequential\\($\times$ parallel)\\[3pt]
+    Long-range\\deps still hard
+  };
+
+  \node[draw=violet1, fill=violet1!8, rounded corners=8pt, minimum height=3.5cm, text width=2.5cm, align=center, inner sep=6pt] at (5.2, 1.2) {};
+  \node[font=\small\bfseries, text=violet1] at (5.2, 2.5) {Attention};
+  \node[font=\small, text width=2.3cm, align=center] at (5.2, 1) {
+    Fixes bottleneck\\[3pt]
+    But still built\\on top of RNNs\\[3pt]
+    Still sequential
+  };
+
+  % Arrows between columns
+  \draw[-Stealth, thick, gray] (-3.8, 1.2) -- (-3.1, 1.2);
+  \draw[-Stealth, thick, gray] (-0.3, 1.2) -- (0.4, 1.2);
+  \draw[-Stealth, thick, gray] (3.1, 1.2) -- (3.8, 1.2);
+
+  % Arrow down
+  \draw[-Stealth, very thick, sampred] (0, -0.7) -- (0, -1.2);
+
+  % What we need
+  \node[draw=sampred, fill=sampred!10, rounded corners=8pt, text width=12cm, align=center, inner sep=8pt, font=\normalsize] at (0, -2.3) {
+    What if attention is \textbf{all you need}? Drop the RNN entirely.\\[4pt]
+    Parallel processing + direct access to all positions + contextual representations\\[4pt]
+    {\large $\Rightarrow$ \textbf{Self-Attention} and the \textbf{Transformer}} {\small (Vaswani et al., 2017)}
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% WORD2VEC TRAINING
+% ============================================================
+\section{Beyond Word2Vec \& wrap-up}
+\begin{frame}
+\frametitle{Word2Vec --- training tricks}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
+  % Skip-gram objective (compact)
+  \node[draw=popblue, fill=popblue!5, rounded corners=6pt, inner sep=6pt, text width=12cm, align=center] at (0, 3.1) {
+    {\small Skip-gram objective:} \; $\displaystyle \max_\theta \sum_{t=1}^{T} \sum_{\substack{-c \le j \le c \\ j\neq 0}} \log P(w_{t+j} \mid w_t)$
+  };
+
+  % Problem → Solution flow
+  \node[draw=warnred, fill=warnred!8, rounded corners=6pt, text width=4.8cm, align=center, inner sep=5pt, font=\small] at (-3.5, 1.3) {
+    \textbf{\textcolor{warnred}{Problem: full softmax}}\\[2pt]
+    Normalizing over all $V$ words\\per update --- too slow!
+  };
+
+  \draw[-Stealth, very thick, paramgreen] (-0.8, 1.3) -- (0.8, 1.3);
+
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=6pt, text width=4.8cm, align=center, inner sep=5pt, font=\small] at (3.5, 1.3) {
+    \textbf{\textcolor{paramgreen}{Negative sampling}}\\[2pt]
+    Sample $k$ random ``negatives''\\Binary: real context vs.\ noise
+  };
+
+  % NEG formula (compact, not boxed)
+  \node[font=\small, text=gray] at (0, -0.1) {
+    $\log \sigma(v'_{w_O} \!\cdot\! v_{w_I}) + \sum_{i=1}^{k} \mathbb{E}_{w_i \sim P_n}\!\big[\log \sigma(-v'_{w_i} \!\cdot\! v_{w_I})\big]$
+    \quad {\scriptsize $k$\,=\,5--20,\; $P_n \!\propto\! f(w)^{3/4}$}
+  };
+
+  % Other tricks as compact row
+  \node[draw=orange1, fill=orange1!8, rounded corners=6pt, text width=3.5cm, align=center, inner sep=4pt, font=\small] at (-4.5, -1.5) {
+    \textbf{\textcolor{orange1}{Subsampling}}\\[2pt]
+    {\scriptsize Downsample frequent words}\\[-1pt]
+    {\scriptsize (``the'', ``a'', ``is'')}
+  };
+  \node[draw=violet1, fill=violet1!8, rounded corners=6pt, text width=3.5cm, align=center, inner sep=4pt, font=\small] at (0, -1.5) {
+    \textbf{\textcolor{violet1}{Window size}}\\[2pt]
+    {\scriptsize Large $\rightarrow$ semantic similarity}\\[-1pt]
+    {\scriptsize Small $\rightarrow$ syntactic similarity}
+  };
+  \node[draw=popblue, fill=popblue!8, rounded corners=6pt, text width=3.5cm, align=center, inner sep=4pt, font=\small] at (4.5, -1.5) {
+    \textbf{\textcolor{popblue}{Dimensionality}}\\[2pt]
+    {\scriptsize Typical: 100--300 dims}\\[-1pt]
+    {\scriptsize More data $\rightarrow$ more dims}
+  };
+
+  % Key takeaway
+  \node[font=\small, text=gray, text width=12cm, align=center] at (0, -3) {
+    Word2Vec trained on Google News: 3M vocabulary, 300-dim vectors, 100B tokens
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% GLOVE & FASTTEXT
+% ============================================================
+\begin{frame}
+\frametitle{Beyond Word2Vec --- GloVe \& FastText}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
+  % GloVe section
+  \node[draw=popblue, fill=popblue!8, rounded corners=8pt, text width=5.3cm, align=left, inner sep=6pt] at (-3.2, 2.3) {
+    \textbf{\textcolor{popblue}{\normalsize GloVe}} {\small (Pennington et al., 2014)}\\[3pt]
+    Co-occurrence matrix $X_{ij}$ + factorize:\\[2pt]
+    $w_i^T \tilde{w}_j + b_i + \tilde{b}_j = \log X_{ij}$\\[3pt]
+    {\small Global statistics + local context}
+  };
+
+  % FastText section
+  \node[draw=orange1, fill=orange1!8, rounded corners=8pt, text width=5.3cm, align=left, inner sep=6pt] at (3.2, 2.3) {
+    \textbf{\textcolor{orange1}{\normalsize FastText}} {\small (Bojanowski et al., 2017)}\\[3pt]
+    Words as bags of char $n$-grams:\\[2pt]
+    {\scriptsize \texttt{<where>} $\rightarrow$ \texttt{<wh, whe, her, ere, re>}}\\[3pt]
+    {\small Handles OOV words \& morphology}
+  };
+
+  % Table
+  \node[font=\small, text width=13cm, align=center] at (0, -1.0) {
+    \begin{tabular}{l c c c}
+    \hline
+    & \textbf{Word2Vec} & \textbf{GloVe} & \textbf{FastText} \\
+    \hline
+    Training signal & Local context & Global co-occur. & Local + subword \\
+    OOV words & No & No & \textcolor{paramgreen}{Yes} \\
+    Morphology & No & No & \textcolor{paramgreen}{Yes} \\
+    Speed & Fast & Fast & Medium \\
+    \hline
+    \end{tabular}
+  };
+
+  % Bottom note
+  \node[draw=paramgreen, fill=paramgreen!5, rounded corners=6pt, text width=12cm, align=center, inner sep=5pt, font=\small] at (0, -2.95) {
+    \textbf{All three share the same limitation:} static embeddings --- one vector per word regardless of context
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% FURTHER READING
+% ============================================================
+\begin{frame}
+\frametitle{Further reading}
+\vspace{-0.3cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.88, transform shape]
+  % N-grams & Statistical NLP
+  \node[draw=orange1, fill=orange1!8, rounded corners=8pt, text width=13cm, align=left, inner sep=6pt] at (0, 2.9) {
+    \textbf{\textcolor{orange1}{N-grams \& Statistical NLP}}\\[3pt]
+    {\scriptsize
+    \textbullet~Jurafsky \& Martin, \emph{Speech and Language Processing}, Ch.\,3 --- N-gram Language Models\\[1pt]
+    \textbullet~Chen \& Goodman (1999), ``An Empirical Study of Smoothing Techniques''
+    }
+  };
+
+  % Word Embeddings
+  \node[draw=paramgreen, fill=paramgreen!8, rounded corners=8pt, text width=13cm, align=left, inner sep=6pt] at (0, 1.05) {
+    \textbf{\textcolor{paramgreen}{Word Embeddings}}\\[3pt]
+    {\scriptsize
+    \textbullet~Mikolov et al.\ (2013), ``Efficient Estimation of Word Representations in Vector Space''\\[1pt]
+    \textbullet~Mikolov et al.\ (2013), ``Distributed Representations of Words and Phrases'' (neg.\ sampling)\\[1pt]
+    \textbullet~Pennington et al.\ (2014), ``GloVe: Global Vectors for Word Representation''\\[1pt]
+    \textbullet~Bojanowski et al.\ (2017), ``Enriching Word Vectors with Subword Information''
+    }
+  };
+
+  % RNNs & Sequence Models
+  \node[draw=popblue, fill=popblue!8, rounded corners=8pt, text width=13cm, align=left, inner sep=6pt] at (0, -1.85) {
+    \textbf{\textcolor{popblue}{RNNs, Attention \& Sequence Models}}\\[3pt]
+    {\scriptsize
+    \textbullet~Hochreiter \& Schmidhuber (1997), ``Long Short-Term Memory''\\[1pt]
+    \textbullet~Sutskever et al.\ (2014), ``Sequence to Sequence Learning with Neural Networks''\\[1pt]
+    \textbullet~Bahdanau et al.\ (2015), ``Neural Machine Translation by Jointly Learning to Align and Translate''\\[1pt]
+    \textbullet~Luong et al.\ (2015), ``Effective Approaches to Attention-based Neural Machine Translation''\\[1pt]
+    \textbullet~Peters et al.\ (2018), ``Deep contextualized word representations'' (ELMo)
+    }
+  };
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+% ============================================================
+% QUESTIONS
+% ============================================================
+\begin{frame}
+\begin{center}
+\vspace{2cm}
+{\Huge \textcolor{popblue}{Questions?}}
+
+\vspace{1cm}
+{\large Next: The Transformer Architecture}
+\end{center}
+\end{frame}
+
+\end{document}
