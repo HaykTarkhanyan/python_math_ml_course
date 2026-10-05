@@ -18,10 +18,43 @@ this file holds the choice and a pointer.
 - **Alternatives rejected:** a separate repo with its own Pages site (zero risk to the course site, but a second repo to keep in sync); full 1280 px frames (41 MB, twice the repo growth for sharper small text); no frames online (loses the original slides on the web); a JS framework or KaTeX/MathJax (more weight, CDN or vendored fonts, nothing gained over MathML for static pages); rendering the pages with Quarto (the book only renders its chapter list, and the browser needs custom interaction: video seeking, transcript following, search).
 - **What would change this:** the copy step ever breaking the course-site deploy (move to a separate repo); frames needing frequent rebuilds (repo growth - switch to a release asset or LFS); browsers dropping MathML Core support (vendor KaTeX).
 
+## #68 - Embeddings and position get their own session (the new LLM-2), between tokenization and attention
+
+**Date:** 2026-10-04 · **Status:** active (instructor: "id like positional encodings to be there,
+were going left to right"; the rest picked from options). Revisits #67's order and #64's home for
+the embedding primer.
+
+**Decision.** A new session, LLM-2 "From IDs to vectors: embeddings and position", sits between
+LLM-1 tokenization and L24 attention. Every later LLM-n label shifts by one (decoding is now LLM-3,
+... the optional anatomy deck LLM-11). It takes L24's three-frame embedding primer and L25's
+five-frame Position section, and all of position from the anatomy deck: learned tables (GPT-2),
+sinusoids, RoPE, and a short intuition-only tail on long context (why RoPE breaks past its training
+length, stretching the clock, ALiBi and NoPE). L24 and L25 are treated as reference material to be
+reworked later, not as decks to keep in sync now. word2vec stays in LLM-4 pretraining. The map gets
+its own Position stage between Embedding and Attention.
+
+**Why.** The forward pass is `wte[id] + wpe[pos]`, then the blocks: position comes before attention,
+and the chapter teaches along the forward pass (#67). Before this, position was five frames inside
+the block lecture and RoPE was parked in an optional deck at the end of the chapter.
+
+**Alternatives rejected.** Copying the frames and leaving L24/L25 untouched (students see the same
+material twice). Moving only position (LLM-2 would be a position deck with the embedding table
+still in L24). Position inside the Embedding stage of the map (less redrawing, but position never
+gets its own box). One frame for the long-context tail, or the full formulas (PI, NTK, YaRN): the
+instructor wants the time on the important ideas, not the technical variants.
+
+**What would change this.** Position does not land without attention: the reason to add it is that
+attention ignores order, and attention comes one session later. If students cannot follow the
+forward reference ("the next layer weighs vectors by their content, and a weighted sum ignores
+order"), move LLM-2's position half after L24 and keep the embedding half where it is.
+
+---
+
 ## #67 - The LLM chapter runs left to right along the forward pass, with a "you are here" map in every session
 
 **Date:** 2026-10-04 · **Status:** active (instructor, choosing between two options for each).
-Revisits the order inside the block from #63.
+Revisits the order inside the block from #63. Revisited 2026-10-04 by #68: embeddings and position
+became their own session (LLM-2) before attention; later labels shifted by one.
 
 **Decision.** Order: L21 -> LLM-1 tokenization -> L24 attention -> L25 block -> L26 transformers in
 the world -> LLM-2 decoding -> LLM-3 ... LLM-7 -> RAG -> agents -> LLM-8 quantization -> LLM-9 LoRA
@@ -82,7 +115,8 @@ home and delete the other. The folder getting unwieldy (13+ decks plus sources) 
 
 ## #64 - The RNN chapter stays a quick lecture: tokenization, temperature and embeddings move to the LLM chapter; its language-model demo becomes real
 
-**Date:** 2026-10-03 · **Status:** active (instructor, item by item, on a list of proposals)
+**Date:** 2026-10-03 · **Status:** active (instructor, item by item, on a list of proposals).
+Revisited 2026-10-04 by #68: the embedding primer moves from L24 to the new LLM-2.
 
 **Decision.** L21 loses its tokenization section (trilemma, subwords on a real tokenizer, the
 Armenian tax), its embeddings frame and the temperature knob; they move to the LLM chapter

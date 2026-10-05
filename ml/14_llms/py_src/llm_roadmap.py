@@ -3,7 +3,7 @@
 Frame "pass" - one forward pass of a real model (GPT-2 small) on L24's sentence "The cat sat on the",
 drawn the way Transformer Explainer (poloclub.github.io/transformer-explainer) does it: one row per
 token, flowing left to right. Text -> token chips with their real IDs -> embedding vectors (real
-values) -> a stack of N layers (attention arcs from the last token, real weights of one head; an
+values) -> + position vectors (real values; own stage since DECISIONS #68) -> a stack of N layers (attention arcs from the last token, real weights of one head; an
 expand-and-contract MLP per token) -> the last token's vector -> LM head -> the real top-5
 next-token probabilities -> the chosen token, looping back to the input.
 
@@ -13,7 +13,7 @@ as "make it" / "use it" / "run and adapt it".
 
 Each session lights its stages: this session = full colour on a blue panel, earlier sessions =
 full colour, later ones = faded. SESSIONS is the teaching order and must match
-ml/14_llms/LLM_CHAPTER_PLAN.md, section 5.0 (DECISIONS #67).
+ml/14_llms/LLM_CHAPTER_PLAN.md, section 5.0 (DECISIONS #67, #68).
 
 Drawn at the size it gets on the slide (5.5 x 2.5 in, include at width=\\linewidth), so 7-8 pt
 text stays 7-8 pt.
@@ -59,8 +59,8 @@ INK, GREY, FAINT = "#222222", "#777777", 0.32
 CHIP_TINTS = ["#F9D2D5", "#CFD8EE", "#FCE9B8"]   # Armenian flag colours, light
 CMAP = colormaps["RdBu_r"]
 
-PASS_STAGES = [("tok", "Tokenizer"), ("emb", "Embedding"), ("attn", "Attention"), ("mlp", "MLP"),
-               ("head", "LM head"), ("dec", "Decoding")]
+PASS_STAGES = [("tok", "Tokenizer"), ("emb", "Embedding"), ("pos", "Position"), ("attn", "Attention"),
+               ("mlp", "MLP"), ("head", "LM head"), ("dec", "Decoding")]
 LIFE_STAGES = [("pre", "Pretrain"), ("scale", "Scale"), ("post", "Post-train"), ("prompt", "Prompt"),
                ("eval", "Evaluate"), ("quant", "Quantize"), ("lora", "LoRA")]
 
@@ -68,18 +68,19 @@ LIFE_STAGES = [("pre", "Pretrain"), ("scale", "Scale"), ("post", "Post-train"), 
 # "evaluation" and "quantization".
 SESSIONS = [
     ("tokenization", "LLM-1", {"tok"}),
-    ("attention", "L24", {"emb", "attn"}),
+    ("embeddings", "LLM-2", {"emb", "pos"}),
+    ("attention", "L24", {"attn"}),
     ("block", "L25", {"attn", "mlp"}),
     ("transformers", "L26", {"head"}),
-    ("decoding", "LLM-2", {"dec"}),
-    ("pretraining", "LLM-3", {"pre"}),
-    ("scaling", "LLM-4", {"scale"}),
-    ("post_training", "LLM-5", {"post"}),
-    ("prompting", "LLM-6", {"prompt"}),
-    ("evaluation", "LLM-7", {"eval"}),
-    ("quantization", "LLM-8", {"quant"}),
-    ("lora", "LLM-9", {"lora"}),
-    ("anatomy_2026", "LLM-10", {"attn", "mlp"}),
+    ("decoding", "LLM-3", {"dec"}),
+    ("pretraining", "LLM-4", {"pre"}),
+    ("scaling", "LLM-5", {"scale"}),
+    ("post_training", "LLM-6", {"post"}),
+    ("prompting", "LLM-7", {"prompt"}),
+    ("evaluation", "LLM-8", {"eval"}),
+    ("quantization", "LLM-9", {"quant"}),
+    ("lora", "LLM-10", {"lora"}),
+    ("anatomy_2026", "LLM-11", {"attn", "mlp"}),
 ]
 
 
@@ -132,6 +133,7 @@ def compute_gpt2(log):
         "token_ids": ids[0].tolist(),
         "tokens": [tok.decode([i]) for i in ids[0].tolist()],
         "embedding_dims_0_7": model.transformer.wte.weight[ids[0], :8].tolist(),
+        "position_dims_0_7": model.transformer.wpe.weight[:n, :8].tolist(),
         "attention_layer_head": list(best),
         "attention_head_note": "max over layers/heads of the last token's weight on position 1",
         "attention_from_last": attn,
@@ -200,10 +202,23 @@ def state_of(lit_now, lit_before):
 
 # ----------------------------------------------------------------------------- frame 1: one forward pass
 ROWS_Y = [1.86, 1.58, 1.30, 1.02, 0.74]             # one row per token, top to bottom
-# Stage column extents. Label centres must sit >= ~0.62 in apart: "Embedding" and "Attention"
-# are each ~0.58 in wide at 8 pt.
-X = {"text": (0.03, 0.47), "tok": (0.55, 1.22), "emb": (1.30, 1.78), "attn": (1.88, 2.48),
-     "mlp": (2.50, 3.02), "head": (3.20, 4.80), "dec": (4.88, 5.46)}
+# Stage column extents. Seven stages since #68 (Position between Embedding and Attention); every
+# text's measured extent is checked for overlaps after drawing (assert_no_text_overlap).
+X = {"text": (0.03, 0.45), "tok": (0.52, 1.16), "emb": (1.24, 1.68), "pos": (1.76, 2.30),
+     "attn": (2.38, 2.90), "mlp": (2.92, 3.40), "head": (3.50, 4.88), "dec": (4.95, 5.46)}
+
+
+def assert_no_text_overlap(fig, ax, name):
+    """Fail loudly if two texts overlap or one leaves the canvas (measured, not estimated)."""
+    r = fig.canvas.get_renderer()
+    boxes = [(t.get_text(), t.get_window_extent(r).transformed(fig.dpi_scale_trans.inverted()))
+             for t in ax.texts if t.get_text().strip()]
+    for k, (s, b) in enumerate(boxes):
+        if b.x0 < 0 or b.x1 > W or b.y0 < 0 or b.y1 > H:
+            raise ValueError(f"{name}: {s!r} leaves the canvas ({b.x0:.2f}-{b.x1:.2f} in)")
+        for s2, b2 in boxes[k + 1:]:
+            if b.x0 < b2.x1 - 0.01 and b2.x0 < b.x1 - 0.01 and b.y0 < b2.y1 - 0.01 and b2.y0 < b.y1 - 0.01:
+                raise ValueError(f"{name}: {s!r} overlaps {s2!r}")
 
 
 def draw_pass(g, state):
@@ -224,19 +239,28 @@ def draw_pass(g, state):
                 style="italic", color=INK, alpha=a["tok"], zorder=4)
     ax.text((x0 + x1) / 2, 2.36, "text", ha="center", va="center", fontsize=FS, style="italic",
             color=INK if a["tok"] == 1 else "#AAAAAA")
+    t0 = X["tok"][0]
     for k, (t, i, y) in enumerate(zip(toks, g["token_ids"], ROWS_Y)):
-        arrow(ax, (x1 + 0.01, 1.30), (0.55, y), alpha=a["tok"], lw=0.5, color="#AAAAAA")
-        rbox(ax, 0.56, y - 0.09, 0.34, 0.18, CHIP_TINTS[k % 3], "#999999", lw=0.5, alpha=a["tok"], z=3)
-        ax.text(0.73, y, t, ha="center", va="center", fontsize=FS, color=INK, alpha=a["tok"], zorder=4)
-        ax.text(0.93, y, str(i), ha="left", va="center", fontsize=FS_SMALL, family="monospace",
+        arrow(ax, (x1 + 0.01, 1.30), (t0, y), alpha=a["tok"], lw=0.5, color="#AAAAAA")
+        rbox(ax, t0 + 0.01, y - 0.09, 0.34, 0.18, CHIP_TINTS[k % 3], "#999999", lw=0.5, alpha=a["tok"], z=3)
+        ax.text(t0 + 0.18, y, t, ha="center", va="center", fontsize=FS, color=INK, alpha=a["tok"], zorder=4)
+        ax.text(t0 + 0.38, y, str(i), ha="left", va="center", fontsize=FS_SMALL, family="monospace",
                 color=GREY, alpha=a["tok"], zorder=4)
 
     # Embedding: each ID becomes a vector (first 8 of GPT-2's 768 dimensions, real values).
     emb = np.array(g["embedding_dims_0_7"])
     vmax = np.abs(emb).max()
     for vals, y in zip(emb, ROWS_Y):
-        arrow(ax, (1.21, y), (X["emb"][0] - 0.01, y), alpha=a["emb"], lw=0.5)
-        strip(ax, X["emb"][0], y, vals, cell=0.06, alpha=a["emb"], vmax=vmax)
+        arrow(ax, (X["tok"][1] - 0.01, y), (X["emb"][0] - 0.01, y), alpha=a["emb"], lw=0.5)
+        strip(ax, X["emb"][0], y, vals, cell=0.055, alpha=a["emb"], vmax=vmax)
+
+    # Position: + the slot's own vector (GPT-2's learned table, first 8 dimensions, real values).
+    pos = np.array(g["position_dims_0_7"])
+    pmax = np.abs(pos).max()
+    for vals, y in zip(pos, ROWS_Y):
+        ax.text(X["pos"][0] + 0.005, y, "+", ha="center", va="center", fontsize=FS, color=INK,
+                alpha=a["pos"], zorder=4)
+        strip(ax, X["pos"][0] + 0.08, y, vals, cell=0.05, alpha=a["pos"], vmax=pmax)
 
     # The stack: N layers, each attention (arcs from the last token) then an MLP per token.
     sx0, sx1 = X["attn"][0], X["mlp"][1]
@@ -250,7 +274,7 @@ def draw_pass(g, state):
     dot_x = X["attn"][0] + 0.10
     w_att = np.array(g["attention_from_last"])
     for k, y in enumerate(ROWS_Y):
-        arrow(ax, (X["emb"][1] + 0.01, y), (dot_x - 0.05, y), alpha=a["attn"], lw=0.5)
+        arrow(ax, (X["pos"][1] - 0.04, y), (dot_x - 0.05, y), alpha=a["attn"], lw=0.5)
         ax.plot(dot_x, y, "o", ms=3.2, color=ARMBLUE, alpha=a["attn"], zorder=5)
     for k, (y, wk) in enumerate(zip(ROWS_Y[:-1], w_att[:-1])):   # last token looks back
         ax.add_patch(FancyArrowPatch((dot_x + 0.02, ROWS_Y[-1]), (dot_x + 0.02, y),
@@ -268,13 +292,13 @@ def draw_pass(g, state):
     # LM head: only the last token's vector is read; it becomes a distribution over 50,257 tokens.
     yl = ROWS_Y[-1]
     arrow(ax, (sx1 + 0.01, yl), (X["head"][0] + 0.02, yl), alpha=a["head"], lw=0.6)
-    end = strip(ax, X["head"][0] + 0.04, yl, g["last_hidden_dims_0_7"][:6], alpha=a["head"])
+    end = strip(ax, X["head"][0] + 0.04, yl, g["last_hidden_dims_0_7"][:5], alpha=a["head"])
     hx0 = end + 0.04
     ax.add_patch(Polygon([(hx0, yl - 0.07), (hx0 + 0.16, 0.66), (hx0 + 0.16, 1.96), (hx0, yl + 0.07)],
                          closed=True, facecolor="#CFD8EE", edgecolor=ARMBLUE, lw=0.6,
                          alpha=a["head"], zorder=3))
     top = g["top5"]
-    bx0, bmax = hx0 + 0.62, 0.42
+    bx0, bmax = hx0 + 0.56, 0.30
     for k, (t, p) in enumerate(top):
         y = 1.86 - k * 0.27
         ax.text(bx0 - 0.04, y, t.strip(), ha="right", va="center", fontsize=FS_SMALL, color=INK,
@@ -291,12 +315,14 @@ def draw_pass(g, state):
             fontweight="bold", alpha=a["dec"], zorder=4)
     ax.text(dx, 1.58, "pick one", ha="center", va="center", fontsize=FS_SMALL, color=GREY,
             alpha=a["dec"], zorder=4)
-    loop = [(dx, 1.76), (dx, 0.30), (0.27, 0.30), (0.27, 0.97)]
+    tx = (X["text"][0] + X["text"][1]) / 2
+    loop = [(dx, 1.76), (dx, 0.30), (tx, 0.30), (tx, 0.97)]
     ax.plot([p[0] for p in loop[:-1]], [p[1] for p in loop[:-1]], color=ARMRED, lw=0.8,
             alpha=a["dec"] * 0.8, zorder=2)
     arrow(ax, loop[-2], loop[-1], alpha=a["dec"] * 0.8, color=ARMRED, lw=0.8)
     ax.text(2.6, 0.20, "append it to the text and run again", ha="center", va="center",
             fontsize=FS_SMALL, color=ARMRED, alpha=a["dec"], zorder=4)
+    assert_no_text_overlap(fig, ax, "pass")
     return fig
 
 
@@ -417,6 +443,7 @@ def draw_life(state):
                     fontsize=FS_SMALL, color=GREY if st != "later" else "#BBBBBB", zorder=4)
         if k < 6:
             arrow(ax, (x + CARD_W + 0.01, 1.11), (x + CARD_W + CARD_GAP - 0.01, 1.11), lw=0.7)
+    assert_no_text_overlap(fig, ax, "life")
     return fig
 
 

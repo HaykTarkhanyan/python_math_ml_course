@@ -35,10 +35,10 @@ and README; the video itself is git-ignored and was not copied).
 
 | Where | What | For |
 |---|---|---|
-| `misc/grokking/` | Welch Labs grokking material, extracted (11.3 MB tracked) | LLM-4 |
+| `misc/grokking/` | Welch Labs grokking material, extracted (11.3 MB tracked) | LLM-5 |
 | `ml/claude_projects/armenian_glitch_token_hunt/` | Our own glitch-token project | LLM-1 |
-| `misc/dl4nlp/_reference_welchlabs_mla/` | MLA video frames (git-ignored, local only) | LLM-10 |
+| `misc/dl4nlp/_reference_welchlabs_mla/` | MLA video frames (git-ignored, local only) | LLM-11 |
 | `ml/llm_training/materials/` | The papers and blog posts behind the paper decks | all |
 | `ml/dl4nlp/moodle_s26_course/` | LMU DL4NLP summer 2026 slides and exams (66 MB tracked) | cross-checks |
-| `ml/text_embedding/` | Embedding papers | LLM-3, RAG |
-| `ml/13_rnns/py_src/tokenizer_demo.py`, `embedding_2d.py` | Tokenizer panels, the 2D embedding schematic | LLM-1, LLM-3 (move when LLM-1 is built; see the plan) |
+| `ml/text_embedding/` | Embedding papers | LLM-4, RAG |
+| `ml/13_rnns/py_src/tokenizer_demo.py`, `embedding_2d.py` | Tokenizer panels, the 2D embedding schematic | LLM-1, LLM-4 (move when LLM-1 is built; see the plan) |
