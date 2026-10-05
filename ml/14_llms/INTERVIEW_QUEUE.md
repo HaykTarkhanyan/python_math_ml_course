@@ -92,8 +92,8 @@ LLM-9 -> LLM-10 -> LLM-11 -> (RAG, agents: built) -> LLM-12 -> LLM-13 -> LLM-14 
    **(recommended)**, or the technique list.
 2. **Measure few-shot fragility on the cached GPT-2** (24 orderings x about 50 test sentences, a
    few minutes of CPU): yes **(recommended)** / published numbers only.
-3. **Prompt injection:** the idea and one example here, defences in L44 **(recommended)** / all
-   of it in L44.
+3. **Prompt injection** (L44 has none, checked 2026-10-05): all of it here, direct and indirect
+   **(recommended)** / here the idea, plus one indirect-injection frame added to L44's agent loop.
 4. **Chain of thought:** the why (tokens are compute) plus one line on reasoning models
    **(recommended)** / a full section.
 
@@ -106,6 +106,19 @@ LLM-9 -> LLM-10 -> LLM-11 -> (RAG, agents: built) -> LLM-12 -> LLM-13 -> LLM-14 
 3. **LLM-as-judge live?** Needs a paid API (cost stated first) / published bias numbers only
    **(recommended)**.
 4. **Kalai et al. 2025's guess-vs-abstain toy table:** yes **(recommended)** / no.
+
+## RAG (L41-L43) and agents (L44) - built in August
+
+1. **The layout pass** (52 overflowing frames, 58 pages with text under 5.5 pt, 14 footer
+   collisions - figures drawn too wide): (a) now, one deck at a time, detectors to zero
+   **(recommended** - R: it is mechanical, and silent clipping is invisible until delivery);
+   (b) right before each deck is delivered.
+2. **L42's keyword-extraction stretch** (RAKE, YAKE, KeyBERT, LLM keywords, about 14 frames, ending
+   "not a clean win"): compress to a few frames **(recommended)** / keep as is.
+3. **Judges:** LLM-11 teaches LLM-as-judge in general and L43 keeps only the RAG-specific frames
+   **(recommended)** / L43 stays the judge lecture and LLM-11 calls forward.
+4. **An indirect-injection frame in L44's agent loop** (the agent reads untrusted tool output):
+   yes / no - pairs with LLM-10's question 3.
 
 ## LLM-12 Quantization (includes D4)
 

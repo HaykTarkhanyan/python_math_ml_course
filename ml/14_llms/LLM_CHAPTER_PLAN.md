@@ -846,10 +846,11 @@ everything asserted; no model runs. Questions: `INTERVIEW_QUEUE.md`, section LLM
    of GPT-2 small: a few minutes on CPU, one process - state the cost before running.
 3. **Chain of thought** gets its *why* (tokens are compute: more tokens, more serial steps through
    the 12 layers - LLM-4's stack), then one line on reasoning models (LLM-8 teaser, L32g).
-4. **Prompt injection** overlaps the agents chapter (L44): here the idea and one example (the
-   context is untrusted text), the defences in L44.
-5. **"Context engineering"** needs a concrete frame or goes: e.g. where in a long context a fact
-   is found best (lost-in-the-middle, Liu et al. 2024 - verify) - published numbers, no run.
+4. **Prompt injection:** L44 turns out to have none (checked 2026-10-05), so this deck is its
+   home unless L44 gets a frame (RAG and agents critique, point 4): the idea, direct and indirect,
+   one example (the context is untrusted text), and what helps.
+5. **"Context engineering"** needs a concrete frame or goes. Not lost-in-the-middle: L43 already
+   teaches it ("Where in the prompt matters") - point forward to it instead.
 
 **Build plan:** `prompting_figs.py`; one `--gpt2` measurement run for the ordering spread (asked
 first, with its cost). Questions: `INTERVIEW_QUEUE.md`, section LLM-10.
@@ -892,6 +893,45 @@ for point 2. Questions: `INTERVIEW_QUEUE.md`, section LLM-11.
 
 **Then the built chapters continue the story:** RAG (`ch17`, L41-L43, 3 lectures, far deeper than
 dl4nlp 12) and Agents (`ch18`, L44, replaces dl4nlp 14).
+
+**RAG and agents critique (2026-10-05, instructor: "start criticizing the rest of the lectures you
+didn't do").** The four built decks: L41 retrieval (58 pages), L42 hybrid and reranking (62), L43
+generation and evaluation (62), L44 agents and tools (33). They were built in August, before this
+chapter's order existed; they now come after LLM-11.
+
+1. **Layout debt, the biggest finding.** Measured with the house detectors: **52 frames overflow**
+   (L41 14, L42 9 - up to 27.6 pt - L43 21, L44 8), **58 pages have text under 5.5 pt** (L41 18,
+   L42 19, L43 16, L44 5; down to 3.2 pt), and 14 pages put content in the footer band. The cause is
+   the one LLM-3 to LLM-5 had: figures drawn far wider than their slots (`ch17_rag/py_src`,
+   `ch18_agents/py_src`). The fix is mechanical but large - redraw each figure at slot size, trim
+   the overflowing frames, detectors to zero.
+2. **The students now arrive knowing more.** Embeddings and cosine neighbours (LLM-2), temperature
+   (LLM-6), prompting (LLM-10), judges and hallucination (LLM-11). Two callbacks were stale or
+   missing and are fixed (below). Still to align when LLM-11 is built: L43's three judge frames
+   ("Every one of these needs a judge", "...is suspect", "How to use a judge") overlap LLM-11's
+   LLM-as-judge section - LLM-11 should teach judges and their biases in general and L43 keep the
+   RAG-specific use; L43's "Licensing 'I do not know'" pairs with LLM-11's guess-vs-abstain point
+   (Kalai et al.) - a callback, not a repeat.
+3. **L43 already owns lost-in-the-middle** ("Where in the prompt matters", Liu et al.), so LLM-10
+   points forward to it (LLM-10's critique adjusted).
+4. **Prompt injection is absent from L44** (0 mentions), although LLM-10's plan says indirect
+   injection "sets up the agents chapter". An agent reads tool output - untrusted text - in its
+   loop; that is where indirect injection bites. Either LLM-10 owns injection fully, or L44 gets
+   one frame in "The green box is where the difficulty lives".
+5. **Length:** RAG is three decks and 182 pages. L42's keyword-extraction stretch (RAKE, YAKE,
+   KeyBERT, LLM keywords, about 14 frames) ends with "measured, and it is not a clean win" - a
+   candidate to compress to a few frames.
+6. **Perishable facts in L44** (MCP, Skills, tool-schema token costs; built August 2026):
+   re-verify before delivery.
+
+**Applied without an interview (no-brainers, 2026-10-05):** L41's "In the RNN chapter you saw word
+vectors" -> LLM-2 (word vectors left the RNN chapter with #64); L41's contrastive temperature now
+names LLM-6's sampling temperature (the same division before the exponential); L44's schema `enum`
+line points to LLM-6's masking ("a server can enforce it"). Recompiled: 0 errors; the overflow
+lists are identical to the committed versions (no new overflow).
+
+**Build plan:** a layout pass per deck (point 1) when the instructor wants it; the content items
+(points 2, 4, 5) as questions in `INTERVIEW_QUEUE.md`, section RAG and agents.
 
 ### Part C - Run it and adapt it yourself
 
