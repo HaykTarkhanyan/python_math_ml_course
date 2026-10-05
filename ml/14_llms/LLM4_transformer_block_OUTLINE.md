@@ -19,6 +19,15 @@
   XL; the sink explanation hedged and the "first token" claim narrowed to this sentence;
   attention's share of GPT-2 corrected to 22.8% ("under a quarter", asserted); LN spelled out;
   the real-head titles no longer collide.
+- **Student review (2026-10-05, one Sonnet agent, ~99k tokens, 88 s)**, now 43 pages. Applied: the
+  "attention only blends" overclaim fixed and a new evidence frame ("Why the MLP?": causal
+  tracing, key-value memories, frequency, the Messi link; size is room, not proof); W_O by hand in
+  its own frame; the multi-head parameter count spelled out and asserted; the neuron's row and
+  column as vectors; the GPT-3 still flagged; entropy reference points; why the sink is the first
+  token; why the stream stays unnormalised; LayerNorm tied to the stream; the mask frame
+  highlights the row that changes; why no mask means n passes; why 4x wide. Not applied: cuts of
+  the life map, Outline, MJ stills, kinds-of-head table, modern recipe (house skeleton and
+  interview choices); a deeper superposition section (teaser by design).
 
 Drafted 2026-10-05 after the critique and two interview rounds in `LLM_CHAPTER_PLAN.md` (section
 "LLM-3 to LLM-5 Attention and the transformer", "LLM-4 critique"). Session 4 of the LLM chapter.

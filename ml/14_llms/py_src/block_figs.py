@@ -286,6 +286,11 @@ def load_gpt2():
         raise AssertionError(f"GPT-2 parameter counts {got} != quoted {Q}")
     if block * P["n_layer"] + P["wte"] + P["wpe"] + P["ln_f"] != P["total"]:
         raise AssertionError("the parts do not add up to the total")
+    # Slide "Run it h times": 12 heads x 3 x (768 x 64) = 3 x 768^2 (one wide head's W_Q, W_K, W_V),
+    # plus W_O 768 x 768, plus biases 2,304 + 768 = the attention bar.
+    d, h, dk = 768, 12, 64
+    if (h * 3 * d * dk, d * d, h * 3 * d * dk + d * d + 3 * d + d) != (1_769_472, 589_824, P["attention"]):
+        raise AssertionError("multi-head parameter count does not match the attention bar")
     return G
 
 
@@ -544,13 +549,14 @@ def fig_causal_mask(log):
 
 def fig_neuron(pre, log):
     order = ["blue alone", "fluffy alone", "plain creature", "fluffy blue creature"]
+    shown = ["blue alone", "fluffy alone", "plain creature", "this creature"]
     vals = [pre[k] for k in order]
     fig, ax = plt.subplots(figsize=(2.75, 1.6))
     fig.subplots_adjust(left=0.36, right=0.95, top=0.84, bottom=0.3)
     fig.text(0.02, 0.97, "ReLU sets everything left of the red line to 0", fontsize=FS_TINY,
              color=ARMRED, va="top")
     cols = [GREEN if v > 0 else LIGHT for v in vals]
-    bars = ax.barh(order, vals, color=cols, height=0.6)
+    bars = ax.barh(shown, vals, color=cols, height=0.6)
     ax.bar_label(bars, labels=[f"{v:+.3g}" if v != round(v, 1) else f"{v:+.1f}" for v in vals],
                  fontsize=FS_TINY, padding=2)
     ax.axvline(0, color=ARMRED, lw=0.9)
@@ -628,7 +634,7 @@ def fig_mask_grid(A_unmasked, A_masked, log):
                 else:
                     ax.add_patch(Rectangle((x, y), cw, ch, facecolor=cm(0.08 + 0.5 * A[i][j]), edgecolor="white", lw=0.8))
                     ax.text(x + cw / 2, y + ch / 2, num(A[i][j]), ha="center", va="center", fontsize=FS_TINY)
-        ax.add_patch(Rectangle((x0, top - 3 * ch), 3 * cw, ch, fill=False, edgecolor=ARMRED, lw=1.3, zorder=5))
+        ax.add_patch(Rectangle((x0, top - ch), 3 * cw, ch, fill=False, edgecolor=ARMRED, lw=1.3, zorder=5))
         for j, t in enumerate(TOKENS):
             ax.text(x0 + (j + 0.5) * cw - 0.06, top + 0.05, t, ha="left", va="bottom", fontsize=FS_TINY,
                     rotation=50, rotation_mode="anchor")
@@ -636,7 +642,7 @@ def fig_mask_grid(A_unmasked, A_masked, log):
 
     for i, t in enumerate(TOKENS):
         ax.text(0.55, top - (i + 0.5) * ch, t, ha="right", va="center", fontsize=FS_TINY,
-                color=ARMRED if i == 2 else INK)
+                color=ARMRED if i == 0 else INK)        # fluffy's row: the one the mask changes
     grid(0.62, A_unmasked, False, "LLM-3, no mask")
     grid(1.62, A_masked, True, "with the causal mask")
     save(fig, "blk_mask_grid.pdf", log)

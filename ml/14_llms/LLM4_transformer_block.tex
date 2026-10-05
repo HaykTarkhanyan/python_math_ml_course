@@ -94,15 +94,15 @@
   \vskip 10pt
   No word in these sentences says ``football'' or ``singer''.
   \vskip 8pt
-  Attention (LLM-3) only blends what the token vectors already hold. So the fact is either in a
-  token's own vector from the start (LLM-2's table), or something adds it on the way through the
-  layers.
+  So the fact must come from the \textbf{weights} somewhere: a token's own row of the table
+  (LLM-2), attention's matrices ($W_V$ and $W_O$ can write new directions too), or the other half
+  of each layer, which LLM-3 never touched.
   \vskip 8pt
   And LLM-1 shows up again: ``Lionel Messi'' is 2 tokens, ``Henrikh Mkhitaryan'' is 7 pieces.
   The model has to put the name together before it can look anything up.
   \vskip 12pt
-  \keybox{Today's answer, as far as the evidence goes: mostly in the \textbf{MLP}, the half of
-  each layer that LLM-3 never touched - and the bigger half.}
+  \keybox{Today's answer, as far as the evidence goes: mostly in that other half, the
+  \textbf{MLP} - and it is the bigger half. The evidence comes at the end of the MLP section.}
 \end{frame}
 
 \begin{frame}{Three things stand between one head and GPT-2}
@@ -140,15 +140,27 @@
     \vskip 4pt
     \textbf{Head 2} asks ``what colour?'' (its key reads the blue slot): weights
     $0.11, 0.79, 0.11$; it hands over blueness, $0.79$.
-    \vskip 4pt
-    $W_O$ puts both into the stream: creature gets $(0,\ 0.47,\ 0.79,\ 0)$.
     \column{0.56\textwidth}
     \vskip 6pt
     \includegraphics[width=\linewidth]{blk_two_heads.pdf}
   \end{columns}
-  \vskip 4pt
-  \takebox{Two questions at once; $W_O$ decides where each answer lands. Real heads hand over 64
-  numbers each, not one.}
+  \vskip 6pt
+  \takebox{Two questions at once, and two answers: $0.47$ and $0.79$. Real heads hand over 64
+  numbers each, not one. (A new toy layer, so not LLM-3's result.)}
+\end{frame}
+
+\begin{frame}{By hand: $W_O$ puts the answers in the stream}
+  \vskip 6pt
+  Side by side, the two heads give $(0.47,\ 0.79)$. $W_O$ has one row per slot of the stream
+  [adjective, fluffy, blue, noun] and one column per head's number:
+  \[ W_O \begin{pmatrix}0.47\\0.79\end{pmatrix} =
+     \begin{pmatrix}0&0\\1&0\\0&1\\0&0\end{pmatrix}\!\begin{pmatrix}0.47\\0.79\end{pmatrix}
+     = \begin{pmatrix}0\\0.47\\0.79\\0\end{pmatrix} \]
+  Head 1's number lands in the fluffy slot, head 2's in the blue slot; this update is added to
+  creature's vector.
+  \vskip 8pt
+  \keybox{This toy $W_O$ only routes. A learned $W_O$ mixes: every row can take a little from
+  every head, which is how 12 heads' answers become one 768-number update.}
 \end{frame}
 
 \begin{frame}{Run it $h$ times, in parallel}
@@ -162,16 +174,17 @@
   \end{center}
   \vskip 8pt
   \keybox{\textbf{GPT-2: 12 heads $\times$ 64 numbers $=$ 768}, the size of a token's vector
-  (LLM-3's ``why 64''). All twelve heads' $W_Q, W_K, W_V$ sit in one $768 \times 2{,}304$ matrix;
-  $W_O$ is $768 \times 768$, so every output number can draw on every head. The same budget as
-  one 768-wide head: you \textbf{split} it into 12 views, you do not add any.}
+  (LLM-3's ``why 64''). Count: $12 \times 3 \times (768 \times 64) = 1{,}769{,}472 = 3 \times
+  768^2$ - exactly one 768-wide head's $W_Q, W_K, W_V$, stored as one $768 \times 2{,}304$ matrix.
+  $W_O$ adds $768 \times 768 = 589{,}824$, so every output number can draw on every head. You
+  \textbf{split} the budget into 12 views; you do not add any.}
   \vskip 6pt
   {\small The heads do not talk to each other until the concatenation, so all twelve are one big
   batched matrix product.}
 \end{frame}
 
 \bbbcap{multihead.png}{Multi-head attention: the same mechanism, many times over, each head free
-to learn a different pattern.}
+to learn a different pattern. (3Blue1Brown draws GPT-3: 96 heads per layer. GPT-2 small has 12.)}
 
 \begin{frame}{Do heads actually specialise, or is that a story?}
   \begin{columns}[T]
@@ -182,8 +195,9 @@ to learn a different pattern.}
     \small
     Measured: the real GPT-2, the creature sentence, the 12 heads of layer 5.
     \vskip 4pt
-    \textbf{Attention entropy} $= -\sum_j a_{ij}\log a_{ij}$, averaged over rows: low means a head
-    looks at few tokens, high means it spreads out.
+    \textbf{Attention entropy} $= -\sum_j a_{ij}\log a_{ij}$, averaged over rows. Reference
+    points: 0 = all weight on one token; $\ln 2 = 0.69$ = split evenly over two; the more tokens
+    it spreads over, the higher ($\ln 11 = 2.4$ for all 11).
     \vskip 4pt
     Head 11 scores \textbf{0.0}: every token puts all of its weight on a single token. Which one?
     Next slide.
@@ -210,7 +224,9 @@ to learn a different pattern.}
     88\% in layer 10.
     \vskip 6pt
     The usual explanation: softmax must hand out a total of 1, so a head with nothing useful to
-    look at parks its weight on one token whose value changes little - the first.
+    look at parks its weight somewhere. The first token is the one place every later token can
+    see (the mask), so the model learns to use it as the parking spot, and to keep what it
+    hands over small.
   \end{columns}
   \vskip 6pt
   \watchbox{This is called an \textbf{attention sink} \paper{(Xiao et al., ICLR 2024)}. Real
@@ -298,7 +314,8 @@ of \_\_\_''. Ours was Messi.}
     $W_{\text{up}}$ is one such question, a dot product with one direction; the bias is a
     threshold.
     \vskip 6pt
-    GPT-2 asks \textbf{3{,}072} questions per token: four times its 768 numbers.
+    GPT-2 asks \textbf{3{,}072} questions per token: four times its 768 numbers (the 2017
+    paper's ratio, kept since: more questions per token).
   \end{columns}
 \end{frame}
 
@@ -337,23 +354,23 @@ of \_\_\_''. Ours was Messi.}
   \begin{columns}[T]
     \column{0.5\textwidth}
     \small
-    After LLM-3, creature is $(0,\ 0.47,\ 0.47,\ 2.13)$. Give the toy one more slot,
-    \textbf{cute}, that every word left at 0 - real vectors have 768 slots, most unnamed.
-    \vskip 4pt
-    One neuron: $\mathrm{ReLU}(\text{fluffy} + 0.5\,\text{noun} - 1.2)$.
+    Creature after LLM-3: $(0,\ 0.47,\ 0.47,\ 2.13)$, plus a fifth slot, \textbf{cute}, that every
+    word left at 0 (real vectors: 768 slots, most unnamed).
+    \vskip 3pt
+    Row of $W_{\text{up}}$: $(0, 1, 0, 0.5, 0)$, bias $-1.2$, so the neuron is
+    $\mathrm{ReLU}(\text{fluffy} + 0.5\,\text{noun} - 1.2)$:
     \begin{itemize}
       \item this creature: $0.47 + 1.065 - 1.2 = \mathbf{0.335}$
-      \item a plain creature $(0,0,0,2)$: $-0.2 \to 0$
-      \item fluffy alone: $-0.2 \to 0$; blue alone: $-1.2 \to 0$
+      \item plain creature $(0,0,0,2)$, fluffy alone: $-0.2 \to 0$; blue alone: $-1.2 \to 0$
     \end{itemize}
-    Its column writes $3 \times 0.335 = 1.0$ into cute.
+    Column of $W_{\text{down}}$: $(0, 0, 0, 0, 3)$, so it writes $3 \times 0.335 = 1.0$ into cute.
     \column{0.48\textwidth}
     \includegraphics[width=\linewidth]{blk_neuron.pdf}
   \end{columns}
   \vskip 4pt
-  \takebox{The neuron fires on ``fluffy AND creature''. That only works because attention first
-  brought fluffy into creature's vector (LLM-3) - Michael and Jordan, the same way. Now creature
-  carries a feature no word in the sentence had.}
+  \takebox{It fires on ``fluffy AND creature'' - possible only because attention first brought
+  fluffy into creature's vector (LLM-3), as with Michael and Jordan. Creature now carries a
+  feature no word had.}
 \end{frame}
 
 \bbbcap{ch7_mlp_full.jpg}{The whole MLP: linear, ReLU, linear, then add the result back into the
@@ -365,10 +382,28 @@ stream. The same weights for every token.}
   {\small One GPT-2 block, counted from its weight file: the MLP holds \textbf{66.6\%}. 3Blue1Brown
   counts the same share for GPT-3. Last lecture was about the smaller half.}
   \vskip 6pt
-  \keybox{Evidence that facts sit in these layers: the MLPs behave like key-value memories
-  \paper{(Geva et al., EMNLP 2021)}, and editing one mid-layer MLP can change what GPT-2 XL says
-  about a fact \paper{(Meng et al., NeurIPS 2022)}. And the cold open: models answer worse about
-  people and things that are rare in their training text \paper{(Kandpal et al., ICML 2023)}.}
+  \watchbox{Size is room, not proof: having most of the weights does not show the facts are
+  there. The evidence is next.}
+\end{frame}
+
+\begin{frame}{Why the MLP? The evidence}
+  \vskip 4pt
+  \begin{itemize}
+    \item \textbf{Causal tracing} \paper{(Meng et al., NeurIPS 2022)}: corrupt the subject's
+      tokens, then restore one hidden state at a time and see which restores the right answer.
+      In GPT-2 XL the decisive states are the \textbf{mid-layer MLPs at the subject's last
+      token}; attention later carries the result to where the answer is written. Editing one of
+      those MLPs changes the fact.
+    \item \textbf{Key-value memories} \paper{(Geva et al., EMNLP 2021)}: MLP rows fire on
+      recognisable input patterns, and their columns push the prediction toward related
+      words - rows ask, columns add, as above.
+    \item \textbf{Frequency} \paper{(Kandpal et al., ICML 2023)}: models answer worse about
+      people and things that are rare in their training text.
+  \end{itemize}
+  \vskip 6pt
+  \keybox{Back to the cold open: a neuron that fires on ``Lionel AND Messi'' can add a
+  ``football'' direction - the cute neuron's mechanism. Mkhitaryan, 7 rare pieces, apparently
+  never got one in GPT-2 small.}
 \end{frame}
 
 \begin{frame}{More facts than dimensions?}
@@ -429,8 +464,9 @@ exponentially with the dimension.}
   \end{center}
   \vskip 6pt
   \takebox{The stream itself is never normalised: each sublayer reads a normalised copy and adds
-  a \textbf{correction}. Gradients reach the early layers along the stream - the ResNet argument
-  from [50] - and a token's vector gathers meaning layer by layer.}
+  a \textbf{correction}. If the stream were rescaled after every add, each layer would shrink what
+  earlier layers wrote; left alone, the updates simply add up, and gradients flow straight back
+  along the additions - the ResNet argument from [50].}
   \vskip 6pt
   {\scriptsize\color{gray} GPT-2 moved the norm ``to the input of each sub-block'' (Radford et al.,
   2019). The 2017 paper normalised after the add: $\mathbf{x} \leftarrow
@@ -452,7 +488,8 @@ exponentially with the dimension.}
   \end{center}
   \vskip 8pt
   \keybox{Each token is normalised on its own numbers - not across the batch, as BatchNorm does
-  ([44]). So it works the same for one sentence or a thousand.}
+  ([44]). Attention and the MLP read this copy, $(-0.95, -0.37, -0.37, 1.68)$; the stream keeps
+  $(0, 0.47, 0.47, 2.13)$ and gets their update added.}
 \end{frame}
 
 \begin{frame}{Masking: a decoder must not read the future}
@@ -474,12 +511,12 @@ exponentially with the dimension.}
     \small
     LLM-3's grid (queries read ``noun'', keys read ``adjective''), now with the mask:
     \begin{itemize}
-      \item fluffy sees only itself: $(1, 0, 0)$;
+      \item \textbf{fluffy} (red) sees only itself: $(0.33, 0.33, 0.33) \to (1, 0, 0)$;
       \item blue sees fluffy and itself, scores $0, 0$: $(0.5, 0.5, 0)$;
       \item creature's row does not change: $(0.47, 0.47, 0.06)$.
     \end{itemize}
     \vskip 4pt
-    Its adjectives came first, so the mask took nothing from it.
+    Creature's adjectives came first, so the mask took nothing from it.
     \column{0.52\textwidth}
     \includegraphics[width=\linewidth]{blk_mask_grid.pdf}
   \end{columns}
@@ -490,7 +527,8 @@ exponentially with the dimension.}
 
 \begin{frame}{Why that trick matters more than it looks}
   \vskip 10pt
-  Without masking you would train on one prediction at a time: feed the first $t$ tokens,
+  Without the mask, position $t$ could look at token $t{+}1$ - the very answer it must predict.
+  So each prediction would need its own pass with the future cut off: feed the first $t$ tokens,
   predict token $t{+}1$, repeat.
   \vskip 10pt
   With masking, one forward pass over $n$ tokens gives \textbf{$n$ training signals at once}:
@@ -662,4 +700,18 @@ exponentially with the dimension.}
 %     explanation; "attention is about a fifth of GPT-2" -> "under a quarter (22.8%)", asserted in
 %     block_figs.py; "today's answer" hedged like the evidence frame; LN spelled out; the three
 %     real-head titles split over two lines (they ran into each other).
+%   STUDENT REVIEW 2026-10-05 (one Sonnet agent on the rendered PNGs, ~99k tokens, 88 s). Applied:
+%     "attention only blends what the vectors hold" was an overclaim (W_V and W_O can write new
+%     directions) - rewritten, and a new frame "Why the MLP? The evidence" (causal tracing in GPT-2 XL:
+%     mid-layer MLPs at the subject's last token; key-value memories; frequency) with the Messi link,
+%     while "Two thirds of the weights" now says size is room, not proof; W_O got its own by-hand
+%     frame (the 4 x 2 routing matrix); the multi-head parameter count spelled out (3 x 768^2 + W_O,
+%     asserted against the attention bar); the neuron's W_up row and W_down column written as
+%     vectors, its chart label "this creature"; the 3b1b multi-head still flagged as GPT-3 (96
+%     heads); entropy reference points; the sink's "why the first token" (the one token every later
+%     token can see); why the stream stays unnormalised; LayerNorm tied to the stream; the mask
+%     frame highlights fluffy's row (the one that changes); why no mask means n passes; why 4x
+%     wide. Not applied: cutting the life map, Outline, MJ stills, the kinds-of-head table or the
+%     modern recipe (house skeleton and interview choices); more on superposition (a teaser by
+%     design). 43 pages; all checks clean.
 % ============================================================================

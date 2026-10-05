@@ -158,7 +158,7 @@ match the table below.
 | 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`) |
 | 2 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`) |
 | 3 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`) |
-| 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured 2026-10-05 (`LLM4_transformer_block.tex`, 41 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`); student review pending |
+| 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
 | 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04 |
 | 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71) |
 | 7 | LLM-7 Pretraining | Pretrain | `pretraining` | to build |
