@@ -158,7 +158,7 @@ match the table below.
 | 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`) |
 | 2 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`) |
 | 3 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`) |
-| 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25 (`LLM4_transformer_block.tex`); its Position section moves to LLM-2 (#68) |
+| 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured 2026-10-05 (`LLM4_transformer_block.tex`, 41 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`); student review pending |
 | 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04 |
 | 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71) |
 | 7 | LLM-7 Pretraining | Pretrain | `pretraining` | to build |
@@ -385,6 +385,150 @@ interview.
   the two walls, the July "Donkey" sentence as the shapes frame's example (9 GPT-2 tokens), and
   L21's alignment grid confirmed correct by the instructor.
 
+**LLM-4 critique (2026-10-05, before the interview; instructor: "start criticizing llm 4").** Read
+against LLM-2 (which owns position), the restructured LLM-3 (which ends on one head and points
+here for multi-head, W^O, real heads, the residual connection, masking and "why 64"), and LLM-5.
+The deck is 29 pages from July.
+
+1. **A third of it belongs to LLM-2 now.** The Position section (predict, "No. identical", "Why
+   that had to be true", two sinusoid frames) repeats what LLM-2 owns (#68): LLM-2 ran the shuffle
+   by hand on "dog bites man", and LLM-3 recalls it in a watch box. A predict-first on something
+   students have seen twice predicts nothing. The general proof stays here (decided 2026-10-05),
+   as one frame; the sinusoid frames go (the second also carries the wrong extrapolation claims).
+   Better placement for the proof: the whole **block** is blind to order - attention is
+   permutation-equivariant, the MLP and the norm act on each token alone - so position has to come
+   from outside the stack (LLM-2).
+2. **The opening still lists "attention cannot see order" as one of the three problems.** With
+   position gone, the three are: one head asks one question (-> many heads); tokens talk but never
+   think alone (-> the MLP); one layer is not a network (-> residual stream and norm). Plus the
+   decoder's rule, the causal mask.
+3. **The MLP is the thin half, though it holds two thirds of the weights.** One GPT-2 block:
+   MLP 4,722,432 parameters, attention 2,362,368, norms 3,072 - the MLP is 66.6% (read from the
+   cached `model.safetensors` header, 2026-10-05). The deck gives it one paragraph and a still. In
+   July, 13 3Blue1Brown chapter-7 stills were extracted for exactly this ("L25 MLP cold-open":
+   Michael Jordan plays ___, up-projection rows as questions, ReLU as an AND gate, down-projection
+   columns as directions; `fig/borrowed/3b1b/README.md`) and never wired into any deck.
+4. **No by-hand frame anywhere.** LLM-2 and LLM-3 have them; LLM-4 has formulas, measurements and a
+   table. Candidates on LLM-3's toy: two heads asking two questions, concatenated, then W_O; an MLP
+   neuron that fires on "fluffy AND creature" and writes a new feature; LayerNorm on a 4-number
+   vector; the causal mask on LLM-3's creature grid (creature's row does not change - its
+   adjectives came first - but fluffy loses blue and creature).
+5. **The real heads come from the wrong model.** `py_src/l25_real_attention.py` uses
+   `intfloat/multilingual-e5-small`, an embedding encoder: it attends both ways, which contradicts
+   the deck's own masking frames, and it is neither the map's GPT-2 nor the model behind LLM-3's
+   Transformer Explainer link. The cached GPT-2 can give real heads (a claim about a real model,
+   local, one run).
+6. **The numbers switch models.** The multi-head arithmetic uses the 2017 paper's d = 512, h = 8;
+   LLM-3 just used GPT-2's 768 = 12 x 64 and promised "why 64" here. Use GPT-2's numbers, and say
+   what W_O is for (GPT-2's `c_proj`, 768 x 768: each output number can draw on every head).
+7. **The 2017 order is taught as the main form; GPT-2 normalises first.** The residual-stream frame
+   and `l25_block.pdf` show Norm(x + f(x)), then "modern models move it inside". GPT-2 (2019)
+   already does (`ln_1` before attention, `ln_2` before the MLP in its weight file). The
+   residual-stream reading is cleanest that way - the stream itself is never normalised, each
+   sublayer reads a normalised copy and adds back. Teach x <- x + Attn(LN(x)), x <- x + MLP(LN(x));
+   2017 as a footnote.
+8. **"One pass, n training signals" is taught three times:** here ("Why that trick matters"),
+   LLM-5 ("The objective you have already seen"), and LLM-7's proposed window-by-hand. One home -
+   here, with the mechanism - and callbacks elsewhere.
+9. **GPT-2's 124M are never added up.** LLM-2 said the token table is 31%; LLM-3 counted one head;
+   this deck can close the books: 12 blocks x 7,087,872 = 85,054,464, plus the token table
+   38,597,376, the position table 786,432 and the final norm = 124,439,808.
+10. **The modern-recipe table needs sources or softer words.** "Pre-LN: trains stably, no warmup"
+    (Xiong et al. 2020 show it can train without warmup; most recipes still warm up), "SwiGLU:
+    better quality per parameter" (Shazeer 2020), "the rest is engineering that moved a few percent
+    and then stayed" (unsourced). Keep the frame: LLM-14 is optional, so this is the only place
+    students meet RMSNorm and SwiGLU.
+11. **Two endings** ("Next on the map" and a [plain] "You can now build one"). One. And "you can
+    now build one" with no code: one NumPy block (norm, attention, add, norm, MLP, add) would back
+    it (the deck's one snippet).
+12. **Missing one line: a block maps n x 768 to n x 768** - same shape in, same shape out, which is
+    why it stacks.
+13. **Small:** the subtitle says "position"; notation W^Q -> W_Q to match LLM-3 (rework list);
+    "Now stack it" quotes BERT and GPT-3 depths - use GPT-2's 12.
+
+**Kept:** the multi-head idea (h smaller views, the same parameter budget), the head-entropy
+measurement idea, the suspicious "kinds of head" table, the residual stream as "the real object",
+the causal mask figure, the modern-recipe frame, the stack.
+
+**Interviewed 2026-10-05, round 1:**
+
+- **Scope: restructure** (like LLM-3).
+- **The MLP: a full section on the 3b1b chapter-7 spine** - where facts live, up-projection rows
+  as questions, ReLU as an AND gate, down-projection columns as directions - plus one by-hand
+  neuron on the creature toy and the 66.6% number.
+- **Cold open: a fact completion ("X plays the sport of ___")**, but "a more interesting person"
+  than 3b1b's Michael Jordan. Candidates tested on the cached GPT-2 before round 2, since the slide
+  will state what GPT-2 completes.
+- **By-hand frames: all four** - two heads asking two questions (concatenate, then W_O); an MLP
+  neuron on creature; LayerNorm on a 4-number vector; the causal mask on LLM-3's creature grid.
+
+**Round 2** (after testing fact prompts on the cached GPT-2 small, 2026-10-05; top next word and
+its probability: Tiger Woods -> golf 61.5%, Ronaldo -> football 48.5%, Carlsen -> chess 39.8%,
+Gretzky -> hockey 35.6%, Messi -> football 35.1%, Kasparov -> chess 23.9%, Einstein -> physicist
+23.8%, Agassi -> tennis 11.7%, Michael Jordan -> basketball 13.5%; wrong: Mkhitaryan -> hockey
+9.8% (football 4.9%), Marie Curie -> Nobel Prize in Literature 17.2%, Aronian -> "the",
+Aznavour -> writer):
+
+- **Cold open: a stored fact and a missing one** - picked "Kasparov right, Mkhitaryan wrong", then
+  (instructor, same turn) "I want Elliott instead of Kasparov": **Elliott Smith (the musician)
+  for the stored fact**, Mkhitaryan -> hockey 9.8% (football 4.9%) for the missing one. What GPT-2
+  completes for Elliott Smith is tested before the outline fixes the prompt.
+  **Tested:** GPT-2 does not know Elliott Smith ("was a famous American" -> writer 4.6%, actor
+  3.1%, singer 2.9%; "played the" -> "role" 9.4%, guitar not in the top 5) nor Ella Fitzgerald
+  (instructor's next try: "was a famous American" -> actress 15.4%, writer 6.8%, singer 6.6%).
+  **Final (instructor's pick):** Messi -> football 35.1% (stored); Mkhitaryan -> hockey (missing);
+  Ella Fitzgerald and Elliott Smith as the music pair, both missed but to different degrees
+  (singer 6.6% vs 2.9%): facts are stored, half-stored or missing.
+- **Outline:** `LLM4_transformer_block_OUTLINE.md` (drafted 2026-10-05, 39 frames). Its two open
+  questions were answered the same day: the neuron writes a new fifth slot, "cute"; head 2 asks
+  "what colour?".
+- **Real heads: GPT-2, one local run** (the cached model, the creature sentence); the e5 figures go.
+- **Norm order: GPT-2's** (x <- x + f(LN(x))); the 2017 order as a footnote; the block diagram
+  redrawn.
+- **Extras: GPT-2's 124M added up; the superposition teaser** (3b1b's nearly-perpendicular / JL
+  stills). Not picked: a NumPy block (so the "You can now build one" ending goes, one ending
+  stays); moving the shuffle proof into the block section (it stays one frame, at the end of the
+  many-heads section).
+- **Built 2026-10-05** (41 pages; the outline's "Built" note lists what changed while building).
+  Student review pending (needs the instructor's OK).
+
+**LLM-5 critique (2026-10-05, instructor away: "criticize the rest ... for the stuff that's a
+no-brainer, go ahead and do it yourself").** The July L26, 25 pages: the family (encoder, decoder,
+encoder-decoder, cross-attention), how it learns, why it won and what it costs.
+
+1. **Its map box is the LM head, and the head gets one frame** (a 3b1b still inside "How it
+   learns"). Missing: the head by hand on GPT-2 - final norm, then a dot product of the last vector
+   with every row of the token table (GPT-2 ties the two; LLM-2 taught the tying), 50,257 logits,
+   softmax, and the map's top-5 ("floor" 7.6%, `results/roadmap_gpt2.json`). LLM-6 then picks the
+   distribution up.
+2. **"How it learns" overlaps three decks.** "The objective you have already seen" (next-token
+   cross-entropy; every position a training example) is now LLM-4's mask frame and LLM-7's
+   subject; "Autocomplete is not a chatbot" is LLM-9's opening. Pick homes.
+3. **Three figures render at 4.0-4.6 pt** (cross-attention, three architectures, the quadratic
+   plot): drawn 7-9.6 in wide in `py_src/l25_l26_figs.py`. Redraw at slot size in the
+   restructure, as LLM-4's were.
+4. **The cold open has no hook** - a statement ("who is allowed to look at whom?"), no predict,
+   no example. Candidate: the three masks side by side, "which of these can write text?".
+5. **Two endings** (Next on the map, then a [plain] "That is the T in GPT"), as LLM-4 had.
+6. **Session question.** After the LLM-4 restructure, LLM-5's own material is the family,
+   cross-attention, the LM head and the cost and inductive-bias frames. A full session, or merged
+   (the family and the cost into LLM-4, the head into LLM-6) to buy back a session (section 8:
+   "something gets cut whatever is chosen").
+
+**Applied without an interview (no-brainers, 2026-10-05):** the retrieval-chapter line is now a
+forward pointer (RAG comes after LLM-11); "bolt position on in LLM-4" -> LLM-2; the inductive-bias
+table's stale chapter numbers removed ("CNN (ch6)", "RNN (ch7)" predate the 12_cnn / 13_rnns
+names); in-context learning softened from "small models cannot, past a scale they can" to "small
+models do it badly, large ones well; sudden or gradual is debated (LLM-8)"; GPT-2's own crossover
+added (768 x 4 = 3,072, three times its window); the FlashAttention pointer -> LLM-14; the recap's
+"the difference is the mask, not the block" made exact (the mask, plus cross-attention in the
+decoder); two map captions shortened to one line. Recompiled: 0 errors, 0 overflow (it had 3).
+
+**Build plan (after the interview):** restructure like LLM-3 and LLM-4 - the LM head by hand on
+GPT-2 (the real top-5 is already local), the three July figures redrawn at slot size in a new
+`py_src/head_figs.py`, one ending, "How it learns" placed as decided. Interview questions:
+`INTERVIEW_QUEUE.md`, section LLM-5.
+
 #### LLM-6 Decoding: from logits to text
 
 LLM-5 ended with a distribution over the vocabulary ("the choosing is a separate decision ... later
@@ -482,6 +626,11 @@ supports min-p and grammar-constrained output.
 - **Hands-on: not in the slides** (like LLM-1). D4 stays open; nothing in this deck depends on a
   runtime choice.
 - **Outline:** `LLM6_decoding_OUTLINE.md`. **Built 2026-10-05:** `LLM6_decoding.tex` (53 pages after the student review), figures from `py_src/decoding_figs.py` (toy numbers; GPT-2 only for the cold open, via `--gpt2`).
+- **Open (2026-10-05):** the three student-review suggestions not applied (cut the draft-sources
+  frame; a grammar state table for constrained decoding; a mechanism for self-reinforcing loops)
+  are questions in `INTERVIEW_QUEUE.md`, section LLM-6. After the renumber the deck's labels were
+  checked: its forward pointers (LLM-7 pretraining, LLM-9 chat tokens, LLM-11 hallucination,
+  LLM-14 multi-token prediction) are right.
 
 #### LLM-7 Pretraining: from the internet to a base model
 
@@ -584,6 +733,13 @@ negative sampling if shown; whether the cached GPT-2 recites any duplicated text
 
 **Hands-on:** open (D4, D6, and whether it belongs in the slides at all).
 
+**Interview: not yet held** (it was interrupted on 2026-10-05 when the instructor switched to
+attention). The questions are ready in `INTERVIEW_QUEUE.md`, section LLM-7. One addition from
+building LLM-4: LLM-4 now owns "one pass, n training signals" (the mask frame), so LLM-7's
+"one training step by hand" should count predictions per window and call back, not re-explain the
+mask; and LLM-4's cold open already shows memorised vs missing facts (Messi vs Mkhitaryan), so
+LLM-7's memorisation demo should be the *verbatim* kind (a much-copied text), not facts.
+
 #### LLM-8 Scaling laws and emergence
 
 - Power laws (Kaplan); C ~ 6ND; the training-memory bill (~16 bytes/param with Adam: weights,
@@ -593,8 +749,35 @@ negative sampling if shown; whether the cached GPT-2 recites any duplicated text
 - Emergent abilities, the mirage argument (the metric makes the jump), where the debate stands;
   grokking (`misc/grokking/`, Welch Labs material already extracted).
 - Teaser: test-time compute as the second scaling axis -> L32g.
-- **Sources:** dl4nlp 13 (18) + 17 (18), deduplicated to ~20; llm_training 09.
+- **Sources:** dl4nlp 13 (18 frames) + 17 (18 frames), deduplicated; llm_training 09.
 - **First merge candidate** into LLM-7 if sessions are short.
+
+**Critique (2026-10-05, before an interview).**
+
+1. **Two source decks make a catalogue.** dl4nlp 13 (16 frames: Kaplan, Chinchilla, Gopher, three
+   eras, a playbook) and 17 (16 frames, four of them on emergence in ant colonies, cells and
+   physics). Cut the nature analogies; one question carries the session: *"you have a fixed
+   compute budget - how big a model, how much data?"*
+2. **Everything here is computable on toy or published numbers - no runs needed.** C = 6ND by
+   hand; with Chinchilla's D = 20N, C = 120 N^2, so a 10^21 FLOP budget gives N of about 2.9B and D
+   of about 58B (worked frame). The loss curves come from the published fit L(N, D) = E + A/N^alpha
+   + B/D^beta (Hoffmann et al. 2022; constants to verify), drawn by our script. Over-training as a
+   ratio: Llama 3's 8B model on about 15T tokens is roughly 1,900 tokens per parameter against
+   Chinchilla's 20 (the local Llama 3 paper; verify the 8B's token count).
+3. **The mirage argument has a perfect toy:** per-token accuracy p improving smoothly, while
+   exact match on a 5-token answer is p^5 - flat, then a "jump". By hand, then the debate (Schaeffer
+   et al. 2023 vs the cases that stay sharp). No model needed.
+4. **The 16 bytes per parameter** (bf16 weights 2 + grads 2 + fp32 master 4 + Adam's two moments
+   8) is a by-hand frame that LLM-13 calls back; for GPT-2 small: 124M x 16 = about 2 GB.
+5. **Grokking** is about training dynamics (late generalisation), not scale; one frame as "another
+   kind of sudden" or cut. The Welch Labs material is local (`misc/grokking/`).
+6. **Homes:** GPT-3's "few-shot improves with size" plot lives here (LLM-7's critique point 8);
+   test-time compute is a one-frame teaser here, the craft in LLM-10, the maths in L32g.
+7. **"Three eras of compute allocation"** (source frame) is a framing without a source; drop it
+   or source it.
+
+**Build plan:** a small `scaling_figs.py` (the Chinchilla fit, the p^5 toy, the 6ND budget split),
+everything asserted; no model runs. Questions: `INTERVIEW_QUEUE.md`, section LLM-8.
 
 #### LLM-9 Post-training: from base model to assistant
 
@@ -610,6 +793,28 @@ negative sampling if shown; whether the cached GPT-2 recites any duplicated text
   (InstructGPT), 08 (Qwen3); distillation frames from dl4nlp 11.
 - LoRA/QLoRA are **not** here any more - they get their own lecture (LLM-13).
 
+**Critique (2026-10-05, before an interview).**
+
+1. **Ten topics, one per paper** (SFT, chat templates, FLAN, LIMA, reward model, RLHF, reward
+   hacking, DPO, verifiable rewards, distillation): a paper tour. Proposed spine - three ways to
+   change what a base model prefers: **imitate** (SFT; distillation is imitating a bigger model),
+   **compare** (preferences: reward model, RLHF, DPO), **check** (verifiable rewards). FLAN, LIMA,
+   InstructGPT become evidence inside the spine, not stops on a tour.
+2. **The cold open can be measured locally.** LLM-5 asserts that a base model answers a question
+   with more questions; one run of the cached GPT-2 on "How do I reset my password?" shows what it
+   really writes. Then the same prompt inside a chat template: the "Assistant:" turn.
+3. **Chat templates need a real one.** GPT-2 has none; quote a published template (ChatML or a
+   current model's) from its documentation, verified at build - and LLM-1's special tokens get
+   their payoff.
+4. **Bradley-Terry is one line and a toy:** two answers, rewards 2.0 and 0.5, P(first preferred) =
+   sigma(1.5) = 0.82. By hand. Reward hacking with one sourced example.
+5. **D3 stands:** idea level here, the maths in L32f/L32g (RL comes after this chapter).
+6. **Overlaps:** system prompts (LLM-10), SFT in practice with LoRA (LLM-13), reasoning models
+   (LLM-8 teaser, L32g). This deck owns "why a base model is not a chatbot".
+
+**Build plan:** `posttrain_figs.py` (Bradley-Terry toy, the three-verb pipeline figure); one
+`--gpt2` run for the cold open. Questions: `INTERVIEW_QUEUE.md`, section LLM-9.
+
 ### Part B - Using it, and knowing when it is wrong
 
 #### LLM-10 Prompting and in-context learning
@@ -620,10 +825,34 @@ negative sampling if shown; whether the cached GPT-2 recites any duplicated text
 - System prompts; structured output (callback: constrained decoding, LLM-6); context engineering -
   what goes into the window and in what order.
 - Prompt injection, direct and indirect (indirect injection sets up the agents chapter).
-- **Sources:** dl4nlp 08 (22 -> ~17; Tree of Thoughts cut, ReAct -> L44); llm_training 14 (CoT
+- **Sources:** dl4nlp 08 (22 frames; Tree of Thoughts cut, ReAct -> L44); llm_training 14 (CoT
   half).
-- **Hands-on:** few-shot fragility on the local model from LLM-6 - permute example order and
-  labels, measure the accuracy swing.
+- **Hands-on:** few-shot fragility - permute example order and labels, measure the accuracy
+  swing. *(Fixed 2026-10-05: this said "on the local model from LLM-6", but LLM-6's hands-on was
+  "not in the slides", so no local model exists yet; it depends on D4/D6, or on the cached GPT-2,
+  see the critique.)*
+
+**Critique (2026-10-05, before an interview).**
+
+1. **The source is a 2022-23 technique list** (zero-shot, few-shot, CoT, zero-shot CoT,
+   self-consistency, ToT, ReAct, best practices, system prompts, structured output, injection).
+   Much of that craft aged: instruction tuning and reasoning models made "let's think step by step"
+   matter far less. Proposed spine: **the prompt is the context, and the context shapes the
+   distribution** (LLM-6): what you put in (examples, instructions, documents), in what order, and
+   what an attacker can put in.
+2. **Few-shot fragility can be measured on the cached GPT-2** - a claim about real models, local:
+   a 4-example sentiment prompt, all 24 orderings, the accuracy spread (the setting of Zhao et al.
+   2021, "Calibrate before use", which used GPT-2 and GPT-3; verify). About 24 x 50 forward passes
+   of GPT-2 small: a few minutes on CPU, one process - state the cost before running.
+3. **Chain of thought** gets its *why* (tokens are compute: more tokens, more serial steps through
+   the 12 layers - LLM-4's stack), then one line on reasoning models (LLM-8 teaser, L32g).
+4. **Prompt injection** overlaps the agents chapter (L44): here the idea and one example (the
+   context is untrusted text), the defences in L44.
+5. **"Context engineering"** needs a concrete frame or goes: e.g. where in a long context a fact
+   is found best (lost-in-the-middle, Liu et al. 2024 - verify) - published numbers, no run.
+
+**Build plan:** `prompting_figs.py`; one `--gpt2` measurement run for the ordering spread (asked
+first, with its cost). Questions: `INTERVIEW_QUEUE.md`, section LLM-10.
 
 #### LLM-11 Evaluation and hallucination
 
@@ -635,8 +864,31 @@ negative sampling if shown; whether the cached GPT-2 recites any duplicated text
   2025: training and evaluation reward guessing over "I don't know" (arXiv 2509.04664); detection
   (SelfCheckGPT, semantic entropy); mitigation overview.
 - **Cliffhanger:** give the model the documents -> RAG (L41).
-- **Sources:** dl4nlp 05 (27 -> ~16; perplexity -> LLM-7, MAP/nDCG -> L43 owns them) and 09
-  (26 -> ~14; RAG mitigation -> ch17, duplicate self-consistency dropped).
+- **Sources:** dl4nlp 05 (27 frames; perplexity -> LLM-7, MAP/nDCG -> L43 owns them) and 09
+  (26 frames; RAG mitigation -> ch17, duplicate self-consistency dropped).
+
+**Critique (2026-10-05, before an interview).**
+
+1. **Two source decks of metrics and methods** (BLEU, ROUGE, BERTScore, judges, benchmarks,
+   contamination; a hallucination taxonomy, SelfCheckGPT, semantic entropy, CoVe, citation
+   systems). Proposed spine - **how do you know an answer is right?** Compare it with a reference
+   (BLEU/ROUGE, by hand on two toy sentences, and why that fails for open answers); ask another
+   model (judges and their biases); use a test set (benchmarks, and contamination - LLM-7's
+   memorisation again); and when the model is confidently wrong (hallucination).
+2. **The best demo is already half-built:** LLM-4's cold open. Sample GPT-2 ten times at
+   temperature 1 (LLM-6) on "Lionel Messi plays the sport of" and on the Mkhitaryan prompt: if the
+   answers agree for the stored fact and scatter for the missing one, that is the intuition behind
+   SelfCheckGPT and semantic entropy, on a model the students know. Local, a few seconds; measure,
+   then claim.
+3. **Kalai et al. (2025, arXiv 2509.04664)** - benchmarks that score "I don't know" as wrong reward
+   guessing - is the session's strongest idea: a toy scoring table by hand (guess vs abstain under
+   0/1 grading vs a penalty for wrong answers). Verify the paper's framing before building.
+4. **LLM-as-judge needs a paid API** for a live demo - ask before any spend; published bias numbers
+   are the default.
+5. **Frame counts** were targets ("27 -> ~16"); removed (frame count is never a constraint).
+
+**Build plan:** `eval_figs.py` (the BLEU toy, the guess-vs-abstain table); one `--gpt2` sampling run
+for point 2. Questions: `INTERVIEW_QUEUE.md`, section LLM-11.
 
 **Then the built chapters continue the story:** RAG (`ch17`, L41-L43, 3 lectures, far deeper than
 dl4nlp 12) and Agents (`ch18`, L44, replaces dl4nlp 14).
@@ -678,6 +930,29 @@ An 8B model is 16 GB in BF16. The laptop has 16 GB in total. Make it ~5 GB and l
 - **Sources:** dl4nlp 11 (memory arithmetic + the ~7 quantization frames), llm_training 12 (block
   quantization, NF4), 19 (float anatomy), 17 (FP8).
 - **Homework:** the quantization ladder on your own laptop - table + one plot.
+
+**Critique (2026-10-05, before an interview).**
+
+1. **The most concrete plan in the chapter, and the most tool-bound.** llama.cpp, Ollama, GGUF
+   quant names and the local-stack table are perishable and wait on D4. Teach the ideas first
+   (bytes, formats, blocks, outliers, rounding vs error correction, training-aware), the tools in
+   one dated frame.
+2. **The measured ladder needs downloads** (a small model's GGUF levels, gigabytes) and minutes of
+   CPU - against the no-download default, though here the real measurement *is* the point. A
+   no-download alternative with the same lesson: **quantize GPT-2 small's own weights in NumPy**
+   (absmax, then block-wise, at 8/4/3 bits) and measure its perplexity on a fixed text with the
+   cached model, before and after. Real, local, seconds to minutes.
+3. **By-hand frames are easy on toys:** absmax on four numbers; one outlier ruining per-tensor
+   scaling and block-wise rescuing it; tokens/s <= bandwidth / bytes per token with this laptop's
+   memory bandwidth (measure or look up - verify).
+4. **Memory arithmetic on GPT-2's real config:** 124,439,808 x 4 bytes = 498 MB in fp32; KV cache
+   2 x 12 layers x 768 x 2 bytes = 36,864 bytes per token in fp16, so 37.7 MB for a full 1,024
+   window. Then the same formula on one current model's config (verify).
+5. **Homes:** KV-cache *memory* here; KV-cache *design* (MQA, GQA, MLA) in LLM-14; NF4 here as a
+   format and in LLM-13 as QLoRA's storage.
+
+**Build plan:** `quant_figs.py` (the toys, GPT-2's memory numbers, and - if picked - the GPT-2
+quantization perplexity run). Questions: `INTERVIEW_QUEUE.md`, section LLM-12 (includes D4).
 
 The local stack, as of 2026-10-02 (section 9 has the sources):
 
@@ -721,6 +996,26 @@ parameters; QLoRA keeps the frozen base in 4 bits. Result: a free Colab T4.
 - **Sources:** llm_training 03 (LoRA, 19 frames) and 12 (QLoRA, 21 frames); dl4nlp 07 sec "PEFT"
   (4 frames); dl4nlp 11's QLoRA frame is a duplicate - dropped.
 
+**Critique (2026-10-05, before an interview).**
+
+1. **D5 is still open** (PEFT + TRL vs Unsloth), and every code frame and the practical depend on
+   it. The instructor's call; the deck can teach LoRA itself library-free and keep the library to
+   one recipe frame.
+2. **The parameter count by hand, on GPT-2's real shapes:** one layer's `c_attn` is 768 x 2,304 =
+   1,769,472 numbers; a rank-8 LoRA on it is 8 x (768 + 2,304) = 24,576, 1.4%. Across all 12
+   layers' attention and MLP matrices the share stays near 1% (compute at build).
+3. **A local LoRA demo is possible:** a few hundred steps of rank-8 LoRA on the cached GPT-2 on
+   CPU (for example, teaching it a fixed answer format) - minutes, one process. It makes "B = 0 at
+   start, so step 0 is the base model" visible. The Colab practical (P2) stays the real
+   fine-tune. Ask before running.
+4. **Perishable claims:** Ollama's adapter support (verified 2026-10-02: gone on `main`), the
+   Unsloth export call, library default targets - re-verify at build.
+5. **Keep "should you fine-tune at all?" first** - the ladder prompt -> RAG -> fine-tune is the
+   decision students will actually face.
+
+**Build plan:** `lora_figs.py` (the BA picture at GPT-2's shapes, the parameter table); the local
+demo only if picked. Questions: `INTERVIEW_QUEUE.md`, section LLM-13 (includes D5, D6).
+
 ### Part D - What changed since 2017
 
 #### LLM-14 Anatomy of a 2026 LLM (likely 2 sessions)
@@ -752,10 +1047,27 @@ compute at inference time.
 - **What did not change:** residual stream, attention, next-token training. Raschka's conclusion
   from the Jan-Feb 2026 releases: performance comes mostly from data and training recipes, not
   architecture.
-- **Sources:** dl4nlp 11 (KV cache, MQA/GQA, FlashAttention, speculative decoding, continuous
-  batching, ~12 frames), 10 (MoE, 20 -> ~6), 16 (long context, 22 -> ~6); llm_training 13 (MoE),
-  15 (FlashAttention), 16 (RoPE), 17 (DeepSeek-V3: MLA, MTP); `misc/dl4nlp/_reference_welchlabs_mla/`
+- **Sources:** dl4nlp 11 (KV cache, MQA/GQA, FlashAttention, continuous batching), 10 (MoE, 20
+  frames), 16 (long context, 22 frames; its position frames went to LLM-2); llm_training 13 (MoE),
+  15 (FlashAttention), 17 (DeepSeek-V3: MLA, MTP); `misc/dl4nlp/_reference_welchlabs_mla/`
   (MLA video frames); Raschka's LLM Architecture Gallery for figures to redraw.
+
+**Critique (2026-10-05, before an interview).**
+
+1. **Optional and two sessions - so ask what is lost if it never runs.** MoE is in nearly every
+   current large model, and the KV cache explains why long chats are expensive. If LLM-14 is cut,
+   one MoE frame and one KV-cache frame need a home elsewhere (LLM-4's "modern block recipe" and
+   LLM-12's memory arithmetic are the natural ones).
+2. **A dozen techniques is a catalogue** unless each one gets its bill by hand - the spine is right
+   ("every change saves memory or compute at inference"): KV bytes per token for MHA vs GQA vs MLA
+   from one real config each; MoE total vs active parameters from a real model card; FlashAttention
+   as "the same numbers, fewer trips to slow memory".
+3. **Every model fact here is perishable** (verified 2026-10-02): re-verify all before delivery,
+   preferring `config.json` files over announcements (as LLM-2 did).
+4. **Already moved out:** position (LLM-2), speculative decoding (LLM-6). Callbacks only.
+5. **Frame counts** were targets ("20 -> ~6"); removed.
+
+**Build plan:** decide after D1. Questions: `INTERVIEW_QUEUE.md`, section LLM-14.
 
 ---
 
