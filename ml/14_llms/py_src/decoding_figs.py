@@ -1,4 +1,4 @@
-"""Figures for LLM-3 "Decoding: from probabilities to text" (ml/14_llms/LLM3_decoding.tex).
+"""Figures for LLM-6 "Decoding: from probabilities to text" (ml/14_llms/LLM6_decoding.tex).
 
 Toy, demonstrative numbers by default (ml/SLIDE_STYLE.md, 2026-10-05). Two real inputs only:
   - the cold open: GPT-2's greedy continuation of COLD_PROMPT (the cached GPT-2, no download),

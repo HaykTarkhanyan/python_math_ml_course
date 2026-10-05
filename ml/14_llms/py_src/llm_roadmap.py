@@ -1,6 +1,6 @@
 """The chapter's "you are here" map, as two illustrated frames per session.
 
-Frame "pass" - one forward pass of a real model (GPT-2 small) on L24's sentence "The cat sat on the",
+Frame "pass" - one forward pass of a real model (GPT-2 small) on LLM-3's sentence "The cat sat on the",
 drawn the way Transformer Explainer (poloclub.github.io/transformer-explainer) does it: one row per
 token, flowing left to right. Text -> token chips with their real IDs -> embedding vectors (real
 values) -> + position vectors (real values; own stage since DECISIONS #68) -> a stack of N layers (attention arcs from the last token, real weights of one head; an
@@ -69,18 +69,18 @@ LIFE_STAGES = [("pre", "Pretrain"), ("scale", "Scale"), ("post", "Post-train"), 
 SESSIONS = [
     ("tokenization", "LLM-1", {"tok"}),
     ("embeddings", "LLM-2", {"emb", "pos"}),
-    ("attention", "L24", {"attn"}),
-    ("block", "L25", {"attn", "mlp"}),
-    ("transformers", "L26", {"head"}),
-    ("decoding", "LLM-3", {"dec"}),
-    ("pretraining", "LLM-4", {"pre"}),
-    ("scaling", "LLM-5", {"scale"}),
-    ("post_training", "LLM-6", {"post"}),
-    ("prompting", "LLM-7", {"prompt"}),
-    ("evaluation", "LLM-8", {"eval"}),
-    ("quantization", "LLM-9", {"quant"}),
-    ("lora", "LLM-10", {"lora"}),
-    ("anatomy_2026", "LLM-11", {"attn", "mlp"}),
+    ("attention", "LLM-3", {"attn"}),
+    ("block", "LLM-4", {"attn", "mlp"}),
+    ("transformers", "LLM-5", {"head"}),
+    ("decoding", "LLM-6", {"dec"}),
+    ("pretraining", "LLM-7", {"pre"}),
+    ("scaling", "LLM-8", {"scale"}),
+    ("post_training", "LLM-9", {"post"}),
+    ("prompting", "LLM-10", {"prompt"}),
+    ("evaluation", "LLM-11", {"eval"}),
+    ("quantization", "LLM-12", {"quant"}),
+    ("lora", "LLM-13", {"lora"}),
+    ("anatomy_2026", "LLM-14", {"attn", "mlp"}),
 ]
 
 
@@ -182,7 +182,7 @@ def strip(ax, x, y, vals, cell=0.05, h=0.13, alpha=1.0, vmax=None):
 
 def label(ax, x, y, text, state, size=FS):
     """Stage name. This session's stages: blue with an underline, not bold - bold makes
-    "Embedding" and "Attention" collide when both are lit (L24)."""
+    "Embedding" and "Attention" collide when both are lit (LLM-3)."""
     color = {"now": POPBLUE, "done": INK, "later": "#AAAAAA"}[state]
     ax.text(x, y, text, ha="center", va="center", fontsize=size, color=color, zorder=6)
     if state == "now":

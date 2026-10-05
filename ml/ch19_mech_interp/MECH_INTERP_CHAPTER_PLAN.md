@@ -112,7 +112,7 @@ was proposed 2026-08-13 after reading Neel Nanda's current guide (see Sources).
    (51 frames, compiled, unregistered) is **not** folded in. It gets a callback frame in L46 and a
    link on the chapter page as optional viewing. Boundaries stay clean.
 4. **Placement: immediately after the attention/LLM block**, ~mid-October 2026, after `14_llms`
-   L24-L26 and the `llm_training` seminar track. Transformer internals must be fresh; this material
+   LLM-3 to LLM-5 and the `llm_training` seminar track. Transformer internals must be fresh; this material
    is very hard to teach cold. Costs 3 sessions and pushes diffusion onward by ~1 week.
 5. **Numbering: `L45`-`L47`, build order** (locked 2026-08-13). The L-number is a build-order id,
    not a delivery-order one - that correspondence is already broken elsewhere (L37/L38 are swapped
@@ -183,11 +183,11 @@ headers as usual, not in the model inputs. Do not fake a bilingual demo here.
 
 | New concept | Callback to | Framing |
 |---|---|---|
-| the residual stream as the object of study | `ch9/L25` frame *"The residual stream is the real object"* | "we already told you this. Now we use it." - the single most important handoff in the chapter |
-| reading/writing to the stream, linearity | `ch5` skip connections, `ch9/L25` block | every component reads the stream and adds to it; nothing else communicates |
-| logit lens | `ch9/L26` unembedding, `03_classification` softmax | "apply the unembedding early and see what it would have said" |
+| the residual stream as the object of study | `14_llms/LLM-4` frame *"The residual stream is the real object"* | "we already told you this. Now we use it." - the single most important handoff in the chapter |
+| reading/writing to the stream, linearity | `ch5` skip connections, `14_llms/LLM-4` block | every component reads the stream and adds to it; nothing else communicates |
+| logit lens | `14_llms/LLM-5` unembedding, `03_classification` softmax | "apply the unembedding early and see what it would have said" |
 | linear probes | `05_interpretability/22` glass boxes; `03_classification/11` logreg | a probe *is* logistic regression, trained on activations instead of features |
-| attention head analysis | `ch9/L24` *"A real head, our sentence"*, `ch9/L25` *"Do heads actually specialise?"* | L25 asked whether specialisation is a story. This chapter answers it causally |
+| attention head analysis | `14_llms/LLM-4` *"Do heads actually specialise?"* (LLM-3's *"A real head, our sentence"* is cut in its 2026-10-05 restructure) | LLM-4 asked whether specialisation is a story. This chapter answers it causally |
 | ablation | `05_interpretability/23` PFI | "PFI permutes an input feature. This zeroes an internal component. Same logic, one layer deeper" |
 | activation patching | `05_interpretability/24` counterfactuals | the clean/corrupt pair *is* a counterfactual, run inside the network |
 | attribution patching (gradient approx.) | `ch5` backprop | one backward pass approximates thousands of forward-pass ablations |
@@ -251,7 +251,7 @@ duplicates an L22 frame, cut the L47 one.
 
 ### Section 1 - The residual stream is the object
 
-- Callback frame to `ch9/L25`, restated as an interpretability claim: the stream is a **shared
+- Callback frame to `14_llms/LLM-4`, restated as an interpretability claim: the stream is a **shared
   bus**. Every attention head and MLP *reads* from it and *adds* to it. No component talks to any
   other directly.
 - **The consequence that makes the whole field possible:** because contributions are added, the
@@ -288,7 +288,7 @@ duplicates an L22 frame, cut the L47 one.
 ### Section 4 - Reading attention heads
 
 - What a single head does, restated as an interpretability object: it moves information from one
-  position to another. Callback to `ch9/L24`.
+  position to another. Callback to `14_llms/LLM-3`.
 - Figure: attention pattern heatmaps for several GPT-2-small heads on the IOI sentence, with
   `circuitsvis`-style rendering regenerated in matplotlib.
 - **Induction heads** (Olsson et al., 2022) get their own subsection - the canonical named circuit:

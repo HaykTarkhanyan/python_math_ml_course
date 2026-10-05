@@ -100,6 +100,8 @@ Built up in stages, each stage motivated by a failure of the previous one.
 
 **Starts from what students already have.** Word vectors, cosine similarity and the analogy trick
 were taught in `L21` (word2vec/GloVe) and referenced in `L24`. Signpost, do not re-teach.
+*(2026-10-05: stale since DECISIONS #64/#68/#71. Embeddings, cosine similarity and analogies are now
+in `14_llms` LLM-2 (GPT-2's real vectors); word2vec is planned for LLM-7, pretraining; L24 is LLM-3.)*
 
 - What changes here: the unit is a **chunk**, not a word, and the goal is **retrieval**, not
   similarity in general.

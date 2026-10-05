@@ -1,10 +1,10 @@
-"""Real attention patterns from a real transformer, for L25's multi-head section.
+"""Real attention patterns from a real transformer, for LLM-4's multi-head section.
 
 Rather than borrow a published attention picture, this pulls the actual attention weights out
 of a small pretrained encoder and plots them. Everything on the resulting slides is therefore
 reproducible from this repo.
 
-The sentence is the 3Blue1Brown running example L24 already uses, so the chapter keeps one
+The sentence is the 3Blue1Brown running example LLM-3 already uses, so the chapter keeps one
 example from the single-head derivation through to multi-head.
 
 Run:  USE_TF=0 ./ma/Scripts/python.exe ml/14_llms/py_src/l25_real_attention.py

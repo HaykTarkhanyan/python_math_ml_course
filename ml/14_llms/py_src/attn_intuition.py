@@ -1,4 +1,4 @@
-"""Intuition figures for the attention deck (L24). No model needed (numpy + matplotlib).
+"""Intuition figures for the attention deck (LLM-3). No model needed (numpy + matplotlib).
 
 Generates into ml/14_llms/fig/:
   softmax_scaling.pdf   -- why divide by sqrt(d_k): raw QK^T saturates softmax; scaling fixes it.

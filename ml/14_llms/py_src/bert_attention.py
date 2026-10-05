@@ -2,7 +2,7 @@
 
 Generates into ml/14_llms/fig/:
   bert_attention_donkey.pdf  -- one clear head, CONTENT TOKENS ONLY (tokens x tokens heatmap)
-  bert_heads_grid.pdf        -- content-token attention of every head in a mid layer (for L25)
+  bert_heads_grid.pdf        -- content-token attention of every head in a mid layer (for LLM-4)
 
 BERT heads dump most of their mass on [SEP]/[CLS] (a well-documented artifact), which hides the
 linguistic pattern -- so we drop those tokens and renormalise each query row over content tokens.
@@ -117,7 +117,7 @@ def main():
     plt.close(fig)
     log.info(f"saved {out}")
 
-    # ---- all heads of a mid layer (content tokens), for L25 ----
+    # ---- all heads of a mid layer (content tokens), for LLM-4 ----
     Lg = min(4, n_layers - 1)
     A = atts[Lg][0].numpy()
     ncol = 4

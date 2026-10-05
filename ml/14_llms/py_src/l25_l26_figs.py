@@ -1,4 +1,4 @@
-"""Figures for L25 (the Transformer block) and L26 (the family, training, why it won).
+"""Figures for LLM-4 (the Transformer block) and LLM-5 (the family, training, why it won).
 
 REAL (computed, and the numbers on the slides come from this script's log):
   l25_permutation   self-attention really is permutation-equivariant. The same tokens in two
@@ -79,7 +79,7 @@ def positional_encoding(n_pos, d_model):
     return pe
 
 
-# --- L25: permutation equivariance -----------------------------------------------------
+# --- LLM-4: permutation equivariance -----------------------------------------------------
 def fig_permutation():
     """The predict-first payoff: without position, word order is invisible to attention."""
     rng = np.random.default_rng(SEED)
@@ -134,7 +134,7 @@ def fig_permutation():
     return gap_nope, gap_pe
 
 
-# --- L25: positional encoding ----------------------------------------------------------
+# --- LLM-4: positional encoding ----------------------------------------------------------
 def fig_pe_heatmap(n_pos=60, d_model=64):
     pe = positional_encoding(n_pos, d_model)
     fig, ax = plt.subplots(figsize=(7.2, 3.5))
@@ -167,7 +167,7 @@ def fig_pe_dotprod(n_pos=60, d_model=64):
     save(fig, "l25_pe_dotprod")
 
 
-# --- L25: causal mask ------------------------------------------------------------------
+# --- LLM-4: causal mask ------------------------------------------------------------------
 def fig_causal_mask(n=6):
     rng = np.random.default_rng(SEED)
     scores = rng.normal(size=(n, n))
@@ -195,7 +195,7 @@ def fig_causal_mask(n=6):
     save(fig, "l25_causal_mask")
 
 
-# --- L25: the block --------------------------------------------------------------------
+# --- LLM-4: the block --------------------------------------------------------------------
 def fig_block():
     fig, ax = plt.subplots(figsize=(5.0, 5.4))
     ax.set_xlim(0, 5); ax.set_ylim(0, 5.6); ax.axis("off")
@@ -231,7 +231,7 @@ def fig_block():
     save(fig, "l25_block")
 
 
-# --- L26: the quadratic wall -----------------------------------------------------------
+# --- LLM-5: the quadratic wall -----------------------------------------------------------
 def fig_quadratic(d_model=4096, d_ff_mult=4):
     """Attention is O(n^2 d); the feed-forward is O(n d^2). The crossover is at n = d."""
     n = np.logspace(1, 5.7, 200)
@@ -261,7 +261,7 @@ def fig_quadratic(d_model=4096, d_ff_mult=4):
     return crossover
 
 
-# --- L26: three architectures ----------------------------------------------------------
+# --- LLM-5: three architectures ----------------------------------------------------------
 def fig_three_arch():
     fig, ax = plt.subplots(figsize=(9.6, 3.3))
     ax.set_xlim(0, 9.6); ax.set_ylim(0, 3.3); ax.axis("off")
@@ -306,12 +306,12 @@ if __name__ == "__main__":
     main()
 
 
-# --- L26: cross-attention, worked ------------------------------------------------------
+# --- LLM-5: cross-attention, worked ------------------------------------------------------
 def fig_cross_attention():
     """A decoder token's query against the ENCODER's keys and values, with real numbers.
 
-    Added after the L26 student review: cross-attention was the only genuinely new mechanism
-    in the L24-L26 arc that never got the worked-numbers treatment self-attention had in L24.
+    Added after the LLM-5 student review: cross-attention was the only genuinely new mechanism
+    in the LLM-3 to LLM-5 arc that never got the worked-numbers treatment self-attention had in LLM-3.
     """
     rng = np.random.default_rng(SEED)
     d_model, d_k = 8, 4

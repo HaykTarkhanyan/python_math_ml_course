@@ -9,6 +9,42 @@ this file holds the choice and a pointer.
 
 ---
 
+## #71 - The LLM chapter is numbered in teaching order, LLM-1 to LLM-14: the attention decks L24-L26 become LLM-3 to LLM-5
+
+**Date:** 2026-10-05 · **Status:** active (instructor, in the interview on improving L24: "lets
+rename and improve L24 first", then "Renumber the chapter" over "L24 only" and "topic names, no
+numbers"). Revisits #66 (deck files keep `L24`-style names until delivery) and the labels of #68.
+
+**Decision.** Every deck in `ml/14_llms` carries its teaching position: L24 -> LLM-3 Attention
+(`LLM3_attention.tex`), L25 -> LLM-4 The Transformer block (`LLM4_transformer_block.tex`), L26 ->
+LLM-5 Transformers in the world (`LLM5_transformers_in_the_world.tex`), and every later label moves
+up by 3 (decoding LLM-3 -> LLM-6, `LLM6_decoding.tex`; ... anatomy LLM-11 -> LLM-14). Files moved
+with `git mv`; figure and script names (`l24_*`, `l25_l26_figs.py`) keep their prefixes. One
+scripted pass relabeled the live text: the chapter plan, the six decks' bodies (not their
+provenance blocks), `attention.qmd`, `sources/README.md`, the figure scripts' comments, the
+student-visible callbacks in L21, `rnn.qmd` and L30, pointers in the mech-interp and RAG plans, and
+one comment in L39. Records keep the old names: session logs, older DECISIONS entries,
+`ATTENTION_CHAPTER_PLAN.md` and the 3b1b manifest (each with a header note), the LLM-1/2/6
+outlines, and the audits in the diffusion and AE plans, `MISSING_TOPICS.md`, `00_plan.md` and
+`DEFERRED_TODO.md`. `L23_vae.tex:474` and `L23c_gan_applications.tex:427` still say L24; the
+pending reorder edits remove both lines.
+
+**Why.** After #67 and #68 the chapter ran LLM-1, LLM-2, L24, L25, L26, LLM-3, ...: two numbering
+schemes interleaved, and student-visible callbacks went backwards in name ("Next (L24)" at the end
+of LLM-2, "L26, then LLM-3"). The map teaches one order; the names now follow it.
+
+**Alternatives rejected.** Renaming only L24's title and file (two schemes stay). Topic names with
+no numbers (the order the map teaches disappears from the file list). Keeping `L24`-style names
+until delivery, as #66 said (the instructor chose to renumber now).
+
+**What would change this.** Delivery: decks get their `NN_` playlist number then (`CONVENTIONS.md`)
+and the LLM-n names become planning names. A merge or split of sessions (the 10-session cut in the
+plan's section 8) means another scripted relabel. Known collision, not fixed: the `llm_training`
+paper decks number themselves "LLM-n" too (LLM-4 = LIMA, LLM-10 = InstructGPT); if students meet
+both side by side, rename one of them.
+
+---
+
 ## #70 - The robot-learning browser comes off GitHub Pages and stays a local tool in the repo
 
 - **Date:** 2026-10-05 - **Status:** active (supersedes #69)
@@ -30,7 +66,8 @@ this file holds the choice and a pointer.
 
 **Date:** 2026-10-04 · **Status:** active (instructor: "id like positional encodings to be there,
 were going left to right"; the rest picked from options). Revisits #67's order and #64's home for
-the embedding primer.
+the embedding primer. Revisited 2026-10-05 by #71: the labels below were renumbered again (L24 is
+LLM-3, decoding LLM-6, anatomy LLM-14).
 
 **Decision.** A new session, LLM-2 "From IDs to vectors: embeddings and position", sits between
 LLM-1 tokenization and L24 attention. Every later LLM-n label shifts by one (decoding is now LLM-3,
@@ -95,7 +132,9 @@ rather than inventing a box.
 ## #66 - Attention and the LLM lectures share one chapter folder, `ml/14_llms`; the RNN folder becomes `ml/13_rnns`
 
 **Date:** 2026-10-04 · **Status:** active (instructor: "rename the ch7_rnn to 13_rnns and
-ch9_attention to 14_llms and start concentrating all relevant files in that folder")
+ch9_attention to 14_llms and start concentrating all relevant files in that folder"). Revisited
+2026-10-05 by #71: the deck files no longer keep `L24`-style names; they are numbered in teaching
+order.
 
 **Decision.** `git mv` both folders (commit f474f3b: a pure move plus path pointers; history follows
 with `git log --follow`). L24-L26 and LLM-1 to LLM-10 live in `ml/14_llms`, and the chapter plan
