@@ -10,12 +10,12 @@ Personal study copy of the course materials, in machine-readable form.
 
 ## Browser
 
-**Online: https://hayktarkhanyan.github.io/python_math_ml_course/robot-learning/**
+**Local only.** It was briefly deployed under the course site's GitHub Pages on 2026-10-05 and taken down the same day (DECISIONS #69, #70): this repo's one Pages site belongs to the student course site.
 
 One page per week: summary and key ideas, the lecture and guest talk with a clickable contents list (YouTube chapters, or estimated from the slides for weeks 1, 3, 8, 9, 11) and a transcript that follows the video, slide text with the original frames, transcriber notes, and a personal notes box. Search covers all transcripts and slides.
 
 - Your notes are kept only in your browser's local storage: not in the repo, not online. Use **Export notes** to download them.
-- Rebuild after changing any transcript, `slides.md` or `scripts/browser_content.json` (~1 min): `./ma/Scripts/python.exe learning/robot-learning/scripts/build_browser.py`, then commit `browser/data.js` (and `browser/frames/` if slides changed). Pushing to `main` redeploys via `.github/workflows/publish.yml`.
+- Rebuild after changing any transcript, `slides.md` or `scripts/browser_content.json` (~1 min): `./ma/Scripts/python.exe learning/robot-learning/scripts/build_browser.py`, then commit `browser/data.js` (and `browser/frames/` if slides changed). Nothing deploys it; `publish.yml` no longer copies it.
 - Locally: open `browser/index.html`; for the embedded player run `python -m http.server 8765 -d learning/robot-learning/browser` and open http://localhost:8765 (YouTube refuses `file://` pages).
 - Estimated contents lists were checked on weeks 9 and 11 against the videos: the right slide is on screen at the estimated minute 76-81% of the time, within one slide 93-98%.
 

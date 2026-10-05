@@ -9,9 +9,17 @@ this file holds the choice and a pointer.
 
 ---
 
+## #70 - The robot-learning browser comes off GitHub Pages and stays a local tool in the repo
+
+- **Date:** 2026-10-05 - **Status:** active (supersedes #69)
+- **Decision:** Revert the `publish.yml` copy step and path trigger added by #69, so `/python_math_ml_course/robot-learning/` is no longer deployed. The browser and its data stay committed in `learning/robot-learning/` and work locally (open `browser/index.html`, or serve the folder for the embedded player).
+- **Why:** Hayk had forgotten that this repo's one Pages site is the student course site. Shipping the browser inside it ties every browser update to a full course-site redeploy (and the reverse), and puts it on the student-facing domain. When asked (2026-10-05) he chose "Pages only": take the site down, keep the files in the repo.
+- **Alternatives rejected:** keep the subpath (#69); also untrack `learning/robot-learning/` from git (offered, not chosen, so the files stay visible on github.com, and in history either way); a separate repo with its own Pages site (offered, not chosen for now).
+- **What would change this:** wanting the browser online again. A separate repo with its own Pages site is then the cleaner route than re-adding the subpath, since it deploys independently of the course site.
+
 ## #69 - The robot-learning course browser is a static page baked from the repo files and published as a subpath of the course site
 
-- **Date:** 2026-10-05 - **Status:** active
+- **Date:** 2026-10-05 - **Status:** superseded by #70 (2026-10-05)
 - **Decision:** `learning/robot-learning/browser/` is a hand-written HTML/CSS/JS page that reads one generated `data.js` (built by `learning/robot-learning/scripts/build_browser.py` from the transcripts, `slides.md`, homework and `scripts/browser_content.json`). `publish.yml` copies the folder into `docs/robot-learning/`, so it is served at `https://hayktarkhanyan.github.io/python_math_ml_course/robot-learning/`. Slide frames are committed as 800 px JPEGs (~20 MB); full-size frames stay in the gitignored `_raw/frames/`.
 - **Why:** Hayk asked for a browser for the course files and chose GitHub Pages, the subpath and 800 px frames when offered the options (2026-10-05). A repo has one Pages site, already used by the Quarto book, and `publish.yml` already copies a second mini-site (`docs/data_arms`) the same way. No framework or math library: pandoc turns the slide LaTeX into native MathML at build time (165 equations in week 5 render with none zero-width or overflowing, checked in Playwright), so the page works offline and has no dependencies to keep updated. Building `data.js` locally and committing it keeps CI unchanged except for one `cp` - CI could not rebuild it anyway, because `slides.pdf` and `_raw/` are gitignored.
 - **Contents lists:** 15 of 21 videos have YouTube chapters, used as-is. The 5 lectures without (weeks 1, 3, 8, 9, 11) get a list estimated by aligning slide sections to transcript minutes (TF-IDF + monotonic DP), labelled "estimated" in the UI.
