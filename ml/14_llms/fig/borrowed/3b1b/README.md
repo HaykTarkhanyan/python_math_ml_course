@@ -1,5 +1,12 @@
 # 3Blue1Brown borrowed frames (GenAI chapter)
 
+> **Deck names changed 2026-10-05 (DECISIONS #71):** L24 -> LLM-3 (`LLM3_attention.tex`), L25 ->
+> LLM-4, L26 -> LLM-5. The "used in" notes below keep the old names. Known defect:
+> `fs_creature.jpg` (04:12) is a second grab of the murder-mystery scene, not the creature; the
+> LLM-3 restructure drops it (the frame before it already shows the creature). Likewise
+> `fs_qkspace.jpg` shows the pi creature asking "What does W_Q do to the non-nouns?", not the
+> query/key space; LLM-3 uses `qk_space.png` instead.
+
 Screenshots extracted from two 3Blue1Brown "Deep Learning" videos for the attention/transformer
 decks (L24/L25). Extracted 2026-07-19 with `yt-dlp` (720p) + `ffmpeg` single-frame grabs.
 Transcripts (with timestamps) live in `../../research/`.

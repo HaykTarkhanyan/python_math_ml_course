@@ -9,7 +9,8 @@ The point of the frame: every output word needs a different, small part of the i
 different order (Armenian puts "this all" before the verb, and says "my inside" for "inside me"),
 while seq2seq hands every decoder step the same context vector C.
 
-The alignment below is hand-made (drafted 2026-10-03, to be confirmed by a native speaker).
+The alignment below is hand-made (drafted 2026-10-03; confirmed "correct as is" by the instructor,
+a native speaker, on 2026-10-05).
 Dark cells = the word that carries the meaning; light cells = a weaker link (an auxiliary verb's
 person agreement, a preposition folded into an adverb). "the" is aligned to nothing on purpose.
 
