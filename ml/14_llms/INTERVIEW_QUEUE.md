@@ -129,6 +129,12 @@ prompt injection; chain of thought as "tokens are compute". Student review appli
 
 ## LLM-11 Evaluation and hallucination
 
+**All four done 2026-10-06** (`LLM11_evaluation.tex`): the four-ways spine; the sampling demo
+(Messi: 11 of 20 samples mean football; Mkhitaryan: 16 different words, hockey most common);
+published judge findings (Zheng 2023), no paid API; Kalai et al.'s table (their text's "t = 0.75
+(penalty 2)" disagrees with their formula; the slide says so). Armenian contamination numbers
+(17.4% for FineWeb-2) from arXiv 2609.03350.
+
 1. **Spine: "how do you know an answer is right?"** (reference, judge, test set, confidently
    wrong) **(recommended)**, or metrics first, hallucination second.
 2. **Sampling-consistency demo** on LLM-4's prompts (Messi vs Mkhitaryan, ten samples at T = 1,
@@ -144,10 +150,9 @@ prompt injection; chain of thought as "tokens are compute". Student review appli
    output frame moved, unchanged, to a backup appendix after the recap; 10 frames stay in the flow
    (problem, three families, RAKE worked, KeyBERT's method, the LLM, predict, measured, why,
    takeaways).
-3. **Judges:** LLM-11 teaches LLM-as-judge in general and L43 keeps only the RAG-specific frames
-   **(recommended)** / L43 stays the judge lecture and LLM-11 calls forward. *Deferred on
-   2026-10-06: do it when LLM-11 is built - cutting L43's general judge frames now leaves them
-   no home.*
+3. ~~**Judges**~~ - **done 2026-10-06, recommended option:** "How to use a judge without lying to
+   yourself" moved to LLM-11; L43 keeps its two RAG-specific judge frames, its general frame became
+   "Using these judges" (what the rules mean for RAG), and its judge box points to LLM-11.
 4. ~~An indirect-injection frame in L44~~ - **done 2026-10-06:** "The loop reads text it did not
    write", after the guards (a planted note in a `search_incidents` result; the defences, with the
    MCP specification's own advice).
