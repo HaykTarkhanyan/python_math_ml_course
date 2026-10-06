@@ -98,6 +98,12 @@ shows it with the 2024 replication's refit. Student review applied.
 
 ## LLM-9 Post-training
 
+**All four done 2026-10-06** (`LLM9_post_training.tex`, 24 pages): the imitate / compare / check
+spine; the GPT-2 password cold open (bare: an FAQ page in a loop; in a User / Assistant frame:
+"I'm sorry, but I don't have a password", and it writes the next turn itself); Bradley-Terry by
+hand (0.818); reasoning models as a teaser. No instruct model is cached, so none is shown
+(DECISIONS #78; a download is the instructor's call). Student review applied.
+
 1. **Spine:** imitate (SFT, distillation) / compare (preferences: RLHF, DPO) / check (verifiable
    rewards) **(recommended)**, or the paper-by-paper order of the draft.
 2. **Cold open:** one run of the cached GPT-2 on "How do I reset my password?" (what a base model

@@ -9,6 +9,29 @@ this file holds the choice and a pointer.
 
 ---
 
+## #78 - LLM-9's cold open uses GPT-2 only: bare, and inside a User / Assistant frame
+
+**Date:** 2026-10-06 · **Status:** active (a constraint, not a preference: no instruction-tuned
+model is cached locally, and downloads need the instructor's OK).
+
+**Decision.** LLM-9 opens with two greedy runs of the cached GPT-2 on "How do I reset my
+password?": bare (it writes an FAQ page in a loop) and inside "User: ... Assistant:" (it plays
+the assistant, unhelpfully, and writes the next "Assistant:" turn itself). The chat-template frame
+uses Qwen2.5-0.5B-Instruct's real ChatML, tokenized with its cached `tokenizer.json` (the only
+file of that model in the cache).
+
+**Why.** The queue's recommended cold open was the GPT-2 run; an instruct model's answer beside
+it would need a download. The two GPT-2 runs already separate the two missing pieces: the role
+comes from the prompt, the helpfulness and the end of the turn do not.
+
+**Alternatives rejected.** Downloading Qwen2.5-0.5B-Instruct (~1 GB) for a side-by-side (not
+asked); quoting a published InstructGPT example (a different prompt, not reproducible here).
+
+**What would change this.** The instructor approving a download of a small instruct model: then
+add its answer to the same question as a third panel (same script, one more `--gpt2` step).
+
+---
+
 ## #77 - LLM-8 draws its scaling curves from the 2024 replication's refit, and shows why
 
 **Date:** 2026-10-06 · **Status:** active (made for the instructor while building LLM-8, "do all
