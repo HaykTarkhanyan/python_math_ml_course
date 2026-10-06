@@ -933,6 +933,13 @@ lists are identical to the committed versions (no new overflow).
 **Build plan:** a layout pass per deck (point 1) when the instructor wants it; the content items
 (points 2, 4, 5) as questions in `INTERVIEW_QUEUE.md`, section RAG and agents.
 
+**Point 1 done (layout pass, 2026-10-05/06):** all four decks at zero overflow, zero figure text
+under 5.5 pt and zero footer collisions; every figure redrawn at slot size; every model figure
+rerun on e5-small and identical to its August numbers, with a check that fails if a quoted number
+moves; measured timings frozen in `ch17_rag/results/*.json`. Found on the way: L44's code boxes
+had lost their indentation (a `\quad` after `\\` is discarded), L42's recap said "Later
+interaction". Session log `_work_sessions/2026-10-05-1600_rag-agents-critique-and-layout-pass.toml`.
+
 ### Part C - Run it and adapt it yourself
 
 #### LLM-12 Quantization: an LLM on your laptop

@@ -14,6 +14,7 @@ Run:  USE_TF=0 ./ma/Scripts/python.exe ml/ch17_rag/py_src/l42_worked_extras.py
 
 import logging
 import os
+import time
 from pathlib import Path
 
 os.environ.setdefault("USE_TF", "0")
@@ -42,7 +43,9 @@ logging.basicConfig(
               logging.FileHandler(LOGS / "l42_worked_extras.log", encoding="utf-8")],
 )
 log = logging.getLogger(__name__)
-plt.rcParams.update({"font.size": 11, "axes.spines.top": False,
+plt.rcParams.update({"font.size": 7,  # layout pass 2026-10-05: figures drawn at slot size
+                     "axes.labelsize": 7, "xtick.labelsize": 6.5, "ytick.labelsize": 6.5,
+                     "axes.spines.top": False,
                      "axes.spines.right": False, "figure.dpi": 140})
 
 QUERY = "What pressure should the press run at for Lori cheese?"
@@ -108,6 +111,12 @@ def normalisation_failures(model):
     doc = int(keep[3])
     log.info("A) same chunk, different candidate set: normalised %.3f (all 18) vs %.3f (top 8)",
              full[doc], subset[3])
+    second = np.argsort(-bm)[1]
+    got = (round(float(full[doc]), 3), round(float(subset[3]), 3),
+           round(float(minmax(bm)[second]), 3), round(float(minmax(bm.copy() * np.where(
+               np.arange(len(bm)) == bm.argmax(), 3.0, 1.0))[second]), 3))
+    if got != (0.394, 0.211, 0.672, 0.224):
+        raise ValueError(f"normalisation numbers changed: {got}; the slides quote (0.394, 0.211, 0.672, 0.224)")
 
     # Failure B: one strong outlier squashes everything else.
     inflated = bm.copy()
@@ -122,30 +131,39 @@ def normalisation_failures(model):
              "%.3f, indistinguishable from a genuine weak match",
              zeros, len(bm), float(minmax(bm)[bm == 0][0]) if zeros else float("nan"))
 
-    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.4))
+    fig, axes = plt.subplots(1, 3, figsize=(4.63, 1.5))   # drawn at slot size: 0.84 width
     order = np.argsort(-bm)
 
     axes[0].bar(range(len(bm)), bm[order], color=ARM_ORANGE)
-    axes[0].set_title("BM25, raw\n(zeros mean 'no signal')", fontsize=10)
+    axes[0].set_title("BM25, raw\n(zeros mean 'no signal')", fontsize=6.5)
     axes[0].set_ylabel("score")
 
     axes[1].bar(range(len(cos)), cos[order], color=ARM_BLUE)
     axes[1].set_ylim(0, 1)
-    axes[1].set_title("cosine, raw\n(never zero, narrow band)", fontsize=10)
+    axes[1].set_title("cosine, raw\n(never zero, narrow band)", fontsize=6.5)
 
     mm = minmax(bm)[order]
     colors = [ARM_RED if bm[order][i] == 0 else ARM_ORANGE for i in range(len(mm))]
     axes[2].bar(range(len(mm)), mm, color=colors)
     axes[2].set_title("BM25 after min-max\n(the zeros are now 0.00 too -\nsame number, lost meaning)",
-                      fontsize=10)
+                      fontsize=6.5)
 
     for ax in axes:
         ax.set_xticks([])
         ax.set_xlabel("chunks, best first")
-    fig.tight_layout()
+    fig.tight_layout(w_pad=0.8)
     FIG.mkdir(parents=True, exist_ok=True)
     out = FIG / "l42_18_normalisation.pdf"
-    fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+    for attempt in range(1, 6):        # transient Windows lock (errno 22), see _learnings
+        try:
+            fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+            break
+        except OSError as e:
+            if e.errno != 22 or attempt == 5:
+                log.error("could not write %s: %s", out, e)
+                raise
+            log.warning("errno 22 on %s, retry %d/4", out.name, attempt)
+            time.sleep(1)
     plt.close(fig)
     log.info("wrote %s", out)
 

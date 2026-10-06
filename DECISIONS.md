@@ -9,6 +9,34 @@ this file holds the choice and a pointer.
 
 ---
 
+## #72 - Measured timings in the RAG figures are frozen in results JSON; quoted numbers are checked on every redraw
+
+**Date:** 2026-10-06 · **Status:** active (made during the RAG/agents layout pass the instructor
+asked for: "commit and start the layout pass").
+
+**Decision.** The two figures that time things on this laptop (L42's brute-force scan,
+`l42_index_figs.py`, and the retrieve-then-rerank cascade, `l42_rerank_figs.py`) read their
+timings from `ml/ch17_rag/results/l42_brute_force_timings.json` and
+`results/l42_cascade_timings.json`. The scripts measure only when the file is missing and then
+write it; redrawing a figure never re-times. The files were seeded from the August runs the slides
+quote, with that provenance in a `source` field. Every RAG/agents figure script whose numbers a
+slide quotes now raises if a rerun changes one (a `QUOTED` dict or an inline check).
+
+**Why.** Two August runs of the same cascade measurement differed by 40% (encode 52.3 vs 37.5 ms,
+scan 11.4 vs 8.2 ms per 100k vectors). The layout pass reran each figure script several times; with
+live timing every redraw would have printed milliseconds the slide text no longer matches. The
+global rule is that raw results are saved first and figures derive from them.
+
+**Alternatives rejected.** Re-time on every run and edit the slide to match (the text would drift
+with laptop load). Hard-code the numbers in the plotting code (no provenance, no path back to a
+fresh measurement). Drop the measured milliseconds for round numbers (the slides' point is that the
+numbers were measured here).
+
+**What would change this.** A new machine or a deliberate re-measurement: delete the JSON, rerun,
+and update the slides that quote the numbers (the checks will name them).
+
+---
+
 ## #71 - The LLM chapter is numbered in teaching order, LLM-1 to LLM-14: the attention decks L24-L26 become LLM-3 to LLM-5
 
 **Date:** 2026-10-05 · **Status:** active (instructor, in the interview on improving L24: "lets

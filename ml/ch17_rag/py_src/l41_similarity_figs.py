@@ -11,6 +11,7 @@ Run:  USE_TF=0 ./ma/Scripts/python.exe ml/ch17_rag/py_src/l41_similarity_figs.py
 """
 
 import logging
+import time
 import os
 from pathlib import Path
 
@@ -38,8 +39,14 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-plt.rcParams.update({"font.size": 11, "axes.spines.top": False,
-                     "axes.spines.right": False, "figure.dpi": 140})
+plt.rcParams.update({
+    "font.size": 7,  # layout pass 2026-10-05: figures drawn at slot size
+    "axes.titlesize": 7.5, "axes.labelsize": 7, "legend.fontsize": 6.5,
+    "xtick.labelsize": 6.5, "ytick.labelsize": 6.5, "lines.linewidth": 1.4,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "figure.dpi": 140,
+})
 
 # A passage with three clearly different topics. True boundaries are AFTER index 2 and 5.
 SENTENCES = [
@@ -70,7 +77,16 @@ VCOLORS = {"query": ARM_RED, "short document": ARM_BLUE,
 def save(fig, name):
     FIG.mkdir(parents=True, exist_ok=True)
     out = FIG / f"{name}.pdf"
-    fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+    for attempt in range(1, 6):        # transient Windows lock (errno 22), see _learnings
+        try:
+            fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+            break
+        except OSError as e:
+            if e.errno != 22 or attempt == 5:
+                log.error("could not write %s: %s", out, e)
+                raise
+            log.warning("errno 22 on %s, retry %d/4", out.name, attempt)
+            time.sleep(1)
     plt.close(fig)
     log.info("wrote %s", out)
 
@@ -96,17 +112,21 @@ def fig_cosine_geometry():
     # labels collide if both are placed at the arrow tip.
     label_offset = {
         "query": (0.10, -0.20),
-        "short document": (-0.30, 0.16),
-        "long document": (-0.15, 0.14),
-        "other topic": (-0.42, 0.10),
+        "short document": (0.45, -0.03),
+        "long document": (-1.05, 0.12),
+        "other topic": (-0.42, 0.25),
     }
-    fig, ax = plt.subplots(figsize=(6.4, 4.6))
+    fig, ax = plt.subplots(figsize=(2.87, 1.75))   # drawn at slot size: 0.52 column
+    z = {"long document": 2, "other topic": 3, "short document": 4, "query": 5}
     for name, v in VECS.items():
-        ax.annotate("", xy=v, xytext=(0, 0),
-                    arrowprops=dict(arrowstyle="-|>", color=VCOLORS[name], lw=2.4))
+        ax.annotate("", xy=v, xytext=(0, 0), zorder=z[name],
+                    arrowprops=dict(arrowstyle="-|>", color=VCOLORS[name], lw=1.5,
+                                    mutation_scale=8))
         dx, dy = label_offset[name]
-        ax.text(v[0] + dx, v[1] + dy, name, fontsize=9,
-                color=VCOLORS[name], fontweight="bold")
+        ax.annotate(name, xy=v, xytext=(v[0] + dx, v[1] + dy), fontsize=6.5,
+                    color=VCOLORS[name], fontweight="bold", va="center" if name == "short document" else "baseline",
+                    arrowprops=dict(arrowstyle="-", lw=0.5, color=VCOLORS[name])
+                    if name == "short document" else None)
 
     for name in ("short document", "long document"):
         v = VECS[name]
@@ -114,42 +134,45 @@ def fig_cosine_geometry():
 
     c_same = cosine(q, VECS["short document"])
     c_other = cosine(q, VECS["other topic"])
-    ax.text(1.55, -0.32,
+    ax.text(0.1, -0.08,
             f"cos(query, short) = cos(query, long) = {c_same:.3f}\n"
             f"cos(query, other topic) = {c_other:.3f}",
-            fontsize=9.5, color="#333333")
+            fontsize=6.5, color="#333333", va="top")
 
     ax.set_xlim(-0.8, 3.3)
     ax.set_ylim(-0.55, 1.75)
     ax.axhline(0, color=GREY, lw=0.7)
-    ax.axvline(0, color=GREY, lw=0.7)
+    ax.axvline(0, color=GREY, lw=0.7, ymax=0.8)   # stops below the "other topic" label
     ax.set_aspect("equal")
     ax.set_xticks([]); ax.set_yticks([])
     for s in ax.spines.values():
         s.set_visible(False)
-    ax.set_title("The long document is 3x the short one, and scores identically",
-                 fontsize=10.5)
+    ax.set_title("3x as long, the same cosine", fontsize=7.5)
     save(fig, "16_cosine_geometry")
 
 
 def fig_cosine_normalised():
-    fig, ax = plt.subplots(figsize=(5.0, 5.0))
+    fig, ax = plt.subplots(figsize=(2.31, 1.6))   # drawn at slot size: 0.42 column
     circ = plt.Circle((0, 0), 1.0, fill=False, color=GREY, lw=1.0, ls=":")
     ax.add_patch(circ)
     for name, v in VECS.items():
         u = v / np.linalg.norm(v)
         ax.annotate("", xy=u, xytext=(0, 0),
-                    arrowprops=dict(arrowstyle="-|>", color=VCOLORS[name], lw=2.4))
-        ax.scatter(*u, color=VCOLORS[name], s=45, zorder=4)
-    ax.text(0.72, 0.30, "short and long\nland on the\nsame point", fontsize=8.5,
-            color=ARM_BLUE, fontweight="bold")
-    ax.set_xlim(-1.25, 1.45); ax.set_ylim(-0.35, 1.3)
+                    arrowprops=dict(arrowstyle="-|>", color=VCOLORS[name], lw=1.5,
+                                    mutation_scale=8))
+        ax.scatter(*u, color=VCOLORS[name], s=14, zorder=4)
+    u_short = VECS["short document"] / np.linalg.norm(VECS["short document"])
+    ax.annotate("short and long:\nsame point", xy=u_short, xytext=(1.08, 0.72), fontsize=6.5,
+                color=ARM_BLUE, fontweight="bold",
+                arrowprops=dict(arrowstyle="-", lw=0.5, color=ARM_BLUE))
+    ax.text(1.06, 0.16, "query", fontsize=6.5, color=ARM_RED, fontweight="bold")
+    ax.set_xlim(-1.15, 1.95); ax.set_ylim(-0.35, 1.3)
     ax.set_aspect("equal")
     ax.axhline(0, color=GREY, lw=0.7); ax.axvline(0, color=GREY, lw=0.7)
     ax.set_xticks([]); ax.set_yticks([])
     for s in ax.spines.values():
         s.set_visible(False)
-    ax.set_title("Normalise, and only the angle is left", fontsize=10.5)
+    ax.set_title("Normalise, and only the angle is left", fontsize=7.5)
     save(fig, "17_cosine_normalised")
 
 
@@ -166,36 +189,40 @@ def fig_semantic_chunking(model):
         log.info("  between %d and %d: %.4f%s", i + 1, i + 2, s,
                  "   <- SPLIT" if i in detected else "")
     log.info("  detected %s vs true %s", sorted(detected), sorted(TRUE_BOUNDARIES))
+    # The slides quote the band (0.819 to 0.876) and "both real breaks, plus two invented".
+    got = (round(float(sims.min()), 3), round(float(sims.max()), 3), sorted(detected))
+    if got != (0.819, 0.876, [1, 2, 3, 5]):
+        raise ValueError(f"semantic-chunking numbers changed: {got}, slides quote (0.819, 0.876, [1, 2, 3, 5])")
 
-    fig, ax = plt.subplots(figsize=(8.6, 4.0))
+    fig, ax = plt.subplots(figsize=(4.96, 1.9))   # drawn at slot size: 0.90 width
     x = np.arange(len(sims))
     colors = [ARM_RED if i in detected else ARM_BLUE for i in x]
     bars = ax.bar(x, sims, color=colors, width=0.6)
-    ax.bar_label(bars, fmt="%.3f", fontsize=8.5, padding=2)
+    ax.bar_label(bars, fmt="%.3f", fontsize=6, padding=1.5)
 
-    ax.axhline(threshold, color=ARM_ORANGE, ls="--", lw=1.4)
+    ax.axhline(threshold, color=ARM_ORANGE, ls="--", lw=1.0)
     # Placed in the gap left of the last bar, on white: it previously sat on top of a dark
     # blue bar and was unreadable on a projector (student review, 2026-08-10).
-    ax.text(3.5, threshold + 0.005, "split below here", fontsize=8.5,
-            color="#B07A00", ha="center", fontweight="bold",
-            bbox=dict(facecolor="white", edgecolor="none", pad=1.2))
+    ax.text(1.005, threshold, "split\nbelow", fontsize=6.5, color="#B07A00", va="center",
+            fontweight="bold", transform=ax.get_yaxis_transform())
 
     # Mark where a human would actually put the topic boundaries.
     lo = min(sims) - 0.03
     for i in TRUE_BOUNDARIES:
-        ax.scatter(i, lo + 0.006, marker="^", s=110, color="#2E8B57", zorder=5)
+        ax.scatter(i, lo + 0.006, marker="^", s=30, color="#2E8B57", zorder=5)
     ax.text(0.02, 0.965,
             "green triangle = real topic change" +
             f"   |   red bar = algorithm split ({len(detected)} of them)",
-            transform=ax.transAxes, fontsize=8.5, color="#333333", va="top")
+            transform=ax.transAxes, fontsize=6.5, color="#333333", va="top")
 
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{SHORT[i]}\n|\n{SHORT[i+1]}" for i in x], fontsize=7.2)
+    ax.set_xticks(np.arange(len(SENTENCES)) - 0.5)
+    ax.set_xticklabels([name.replace(" ", "\n", 1) for name in SHORT], fontsize=6)
+    ax.set_xlim(-0.75, len(sims) - 0.25)
     ax.set_ylabel("similarity between\nneighbouring sentences")
     ax.set_ylim(lo, max(sims) + 0.03)
-    ax.set_title("Semantic chunking finds the real breaks, and some imaginary ones",
-                 fontsize=11)
-    ax.tick_params(axis="x", length=0)
+    ax.set_title("Semantic chunking finds the real breaks, and some imaginary ones")
+    ax.tick_params(axis="x", length=3)
+    ax.set_xlabel("each bar: similarity of the two sentences either side of it")
     save(fig, "18_semantic_chunking")
     return detected
 

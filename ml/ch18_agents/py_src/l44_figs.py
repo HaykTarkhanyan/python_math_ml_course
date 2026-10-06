@@ -7,11 +7,12 @@
   04  ILLUSTRATIVE - the agent loop and its stopping condition.
   05  ILLUSTRATIVE - the three ways a loop fails to stop.
 
-Run:  ./ma/Scripts/python.exe ml/ch18_agents/py_src/l44_figs.py
+Run:  ./ma/Scripts/python.exe ml/ch18_agents/py_src/l44_figs.py   (~5 s)
 """
 
 import json
 import logging
+import time
 from pathlib import Path
 
 import matplotlib
@@ -34,7 +35,9 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(), logging.FileHandler(LOGS / "l44_figs.log", encoding="utf-8")],
 )
 log = logging.getLogger(__name__)
-plt.rcParams.update({"font.size": 11, "axes.spines.top": False,
+plt.rcParams.update({"font.size": 7,  # layout pass 2026-10-05: figures drawn at slot size
+                     "axes.titlesize": 7.5, "axes.labelsize": 7, "legend.fontsize": 6.5,
+                     "xtick.labelsize": 6.5, "ytick.labelsize": 6.5, "axes.spines.top": False,
                      "axes.spines.right": False, "figure.dpi": 140})
 
 # A realistic tool definition, in the shape every provider expects.
@@ -85,12 +88,21 @@ SEARCH_TOOL = {
 def save(fig, name):
     FIG.mkdir(parents=True, exist_ok=True)
     out = FIG / f"{name}.pdf"
-    fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+    for attempt in range(1, 6):        # transient Windows lock (errno 22), see _learnings
+        try:
+            fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+            break
+        except OSError as e:
+            if e.errno != 22 or attempt == 5:
+                log.error("could not write %s: %s", out, e)
+                raise
+            log.warning("errno 22 on %s, retry %d/4", out.name, attempt)
+            time.sleep(1)
     plt.close(fig)
     log.info("wrote %s", out)
 
 
-def box(ax, x, y, w, h, label, color, fontsize=9, text_color="white"):
+def box(ax, x, y, w, h, label, color, fontsize=6.5, text_color="white"):
     ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.012",
                                 facecolor=color, edgecolor="none"))
     ax.text(x + w / 2, y + h / 2, label, ha="center", va="center",
@@ -99,37 +111,35 @@ def box(ax, x, y, w, h, label, color, fontsize=9, text_color="white"):
 
 def arrow(ax, x0, y0, x1, y1, color=GREY, style="-|>", ls="-"):
     ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle=style,
-                                 mutation_scale=13, color=color, lw=1.5, linestyle=ls))
+                                 mutation_scale=8, color=color, lw=1.0, linestyle=ls))
 
 
 # --- figure 01 -------------------------------------------------------------------------
 def fig_decide_vs_do():
-    fig, ax = plt.subplots(figsize=(10.6, 3.9))
+    fig, ax = plt.subplots(figsize=(4.85, 1.5))   # drawn at slot size
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=0.88)   # data units span the canvas
     ax.set_xlim(0, 10.6); ax.set_ylim(0, 3.9); ax.axis("off")
 
     ax.add_patch(FancyBboxPatch((0.08, 2.05), 10.4, 1.7, boxstyle="round,pad=0.02",
-                                facecolor="#F2F6FB", edgecolor="#C8D6E8", lw=1.2))
-    ax.text(0.3, 3.52, "THE MODEL DECIDES", fontsize=9.5, color=ARM_BLUE, fontweight="bold")
+                                facecolor="#F2F6FB", edgecolor="#C8D6E8", lw=0.8))
+    ax.text(0.3, 3.45, "THE MODEL DECIDES", fontsize=6.5, color=ARM_BLUE, fontweight="bold")
     ax.add_patch(FancyBboxPatch((0.08, 0.15), 10.4, 1.55, boxstyle="round,pad=0.02",
-                                facecolor="#FDF3F3", edgecolor="#EFCFCF", lw=1.2))
-    ax.text(0.3, 1.5, "YOUR CODE DOES", fontsize=9.5, color=ARM_RED, fontweight="bold")
+                                facecolor="#FDF3F3", edgecolor="#EFCFCF", lw=0.8))
+    ax.text(0.3, 1.45, "YOUR CODE DOES", fontsize=6.5, color=ARM_RED, fontweight="bold")
 
-    box(ax, 0.35, 2.35, 2.0, 0.85, "1. question\n\"rain in Yerevan?\"", ARM_BLUE, fontsize=8)
-    box(ax, 2.75, 2.35, 2.3, 0.85, "2. model asks for\nget_weather(Yerevan)", ARM_BLUE, fontsize=8)
-    box(ax, 7.9, 2.35, 2.3, 0.85, "5. model writes\nthe answer", ARM_BLUE, fontsize=8)
-    box(ax, 3.0, 0.45, 2.2, 0.8, "3. run get_weather\n(hit the API)", ARM_RED, fontsize=8)
-    box(ax, 5.6, 0.45, 2.2, 0.8, "4. return the result\nto the model", ARM_RED, fontsize=8)
+    box(ax, 0.2, 2.35, 2.45, 0.85, "1. question\n\"rain in Yerevan?\"", ARM_BLUE, fontsize=6)
+    box(ax, 2.95, 2.35, 3.1, 0.85, "2. model asks for\nget_weather(Yerevan)", ARM_BLUE, fontsize=6)
+    box(ax, 7.75, 2.35, 2.55, 0.85, "5. model writes\nthe answer", ARM_BLUE, fontsize=6)
+    box(ax, 2.95, 0.45, 2.6, 0.8, "3. run get_weather\n(hit the API)", ARM_RED, fontsize=6)
+    box(ax, 5.85, 0.45, 2.75, 0.8, "4. return the result\nto the model", ARM_RED, fontsize=6)
 
-    arrow(ax, 2.4, 2.77, 2.7, 2.77)
-    arrow(ax, 3.9, 2.3, 4.0, 1.3, color=ARM_RED)
-    arrow(ax, 5.25, 0.85, 5.55, 0.85, color=ARM_RED)
-    arrow(ax, 7.3, 1.3, 8.4, 2.3, color=ARM_BLUE)
-
-    ax.text(5.3, 1.78, "the model never runs anything - it emits a request",
-            fontsize=8.5, color=GREY, style="italic", ha="center")
-    ax.set_title("Every approach in this lecture is a variation on these five steps",
-                 fontsize=11.5, pad=4)
-    ax.text(10.45, 0.02, "schematic", ha="right", fontsize=7.5, color=GREY, style="italic")
+    arrow(ax, 2.68, 2.77, 2.92, 2.77)
+    arrow(ax, 4.3, 2.3, 4.25, 1.3, color=ARM_RED)
+    arrow(ax, 5.58, 0.85, 5.82, 0.85, color=ARM_RED)
+    arrow(ax, 8.2, 1.3, 8.9, 2.3, color=ARM_BLUE)
+    # "the model never runs anything" is the keybox under the figure; not repeated here
+    ax.set_title("Every approach in this lecture is a variation on these five steps", pad=3)
+    ax.text(10.45, 0.02, "schematic", ha="right", fontsize=6, color=GREY, style="italic")
     save(fig, "01_decide_vs_do")
 
 
@@ -141,34 +151,29 @@ def fig_four_approaches():
         ("MCP", "the model", "a separate server", "every schema", ARM_BLUE),
         ("Skills", "the model", "a folder of text", "names only", GREEN),
     ]
-    fig, ax = plt.subplots(figsize=(9.8, 3.5))
-    ax.set_xlim(0, 10); ax.set_ylim(0, 4.4); ax.axis("off")
+    fig, ax = plt.subplots(figsize=(4.63, 1.35))   # drawn at slot size
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)   # data units span the canvas
+    ax.set_xlim(0, 10.2); ax.set_ylim(0, 4.4); ax.axis("off")
 
     heads = ["Who decides\nwhat runs?", "Where does the\ntool live?", "What is loaded\nup front?"]
     for j, h in enumerate(heads):
-        ax.text(3.5 + j * 2.15, 4.05, h, ha="center", fontsize=9, fontweight="bold")
+        ax.text(4.2 + j * 2.4, 4.05, h, ha="center", fontsize=6.5, fontweight="bold")
 
     for i, (name, who, where, loaded, color) in enumerate(rows):
         y = 3.1 - i * 0.78
-        box(ax, 0.1, y, 2.9, 0.62, name, color, fontsize=9)
+        box(ax, 0.1, y, 2.9, 0.62, name, color)
         for j, val in enumerate((who, where, loaded)):
-            ax.text(3.5 + j * 2.15, y + 0.31, val, ha="center", va="center", fontsize=8.5,
+            ax.text(4.2 + j * 2.4, y + 0.31, val, ha="center", va="center", fontsize=6.5,
                     color="#333333")
 
     # The first three rows really are one ladder over "how does a tool get invoked".
     # Skills is not a fourth rung - it answers a different question. A student review
     # (2026-08-11) caught the original "each row changes exactly one thing" claim breaking
     # exactly here, so the figure now shows the break instead of hiding it.
-    ax.plot([0.1, 9.9], [0.86, 0.86], color=GREY, lw=1.0, ls="--")
-    ax.annotate("", xy=(0.05, 1.0), xytext=(0.05, 3.72),
-                arrowprops=dict(arrowstyle="<-", color=GREY, lw=1.2))
-    ax.text(-0.15, 2.35, "one ladder:\nhow a tool gets invoked", rotation=90,
-            va="center", ha="center", fontsize=7.5, color=GREY, style="italic")
-    ax.text(-0.15, 0.45, "different\nquestion", rotation=90,
-            va="center", ha="center", fontsize=7.5, color=GREEN, style="italic")
-    ax.text(9.9, 0.62, "skills add knowledge, not capability", ha="right",
-            fontsize=8, color=GREEN, style="italic")
-    ax.text(9.9, 0.02, "schematic", ha="right", fontsize=7.5, color=GREY, style="italic")
+    ax.plot([0.1, 9.9], [1.46, 1.46], color=GREY, lw=0.7, ls="--")
+    ax.text(9.9, 0.35, "skills add knowledge, not capability", ha="right",
+            fontsize=6, color=GREEN, style="italic")
+    ax.text(9.9, 0.02, "schematic", ha="right", fontsize=6, color=GREY, style="italic")
     save(fig, "02_four_approaches")
 
 
@@ -188,62 +193,62 @@ def fig_tool_schema_cost():
         log.info("  %2d tools -> %5d to %5d tokens of schema (%3.0fx to %3.0fx the question)",
                  n, small * n, big * n, small * n / question, big * n / question)
 
-    fig, ax = plt.subplots(figsize=(7.4, 3.7))
+    fig, ax = plt.subplots(figsize=(4.41, 1.3))   # drawn at slot size: 0.80 width
     x = np.arange(len(counts))
     w = 0.38
     b1 = ax.bar(x - w / 2, [small * c for c in counts], w, color=ARM_BLUE,
-                label=f"simple tool ({small} tokens each)")
+                label=f"simple: get_weather ({small} tokens each)")
     b2 = ax.bar(x + w / 2, [big * c for c in counts], w, color=ARM_RED,
-                label=f"realistic tool ({big} tokens each)")
-    ax.bar_label(b1, fmt="%d", fontsize=7.5, padding=2)
-    ax.bar_label(b2, fmt="%d", fontsize=7.5, fontweight="bold", padding=2)
+                label=f"realistic: search_incidents ({big} tokens each)")
+    ax.bar_label(b1, fmt="%d", fontsize=5.8, padding=1)
+    ax.bar_label(b2, fmt="%d", fontsize=5.8, fontweight="bold", padding=1)
     ax.set_xticks(x)
     ax.set_xticklabels([str(c) for c in counts])
-    ax.legend(frameon=False, fontsize=8.5, loc="upper left")
+    ax.legend(frameon=False, loc="upper left")
     bars = b2
 
     # A rule at y=9 on a 0-6000 axis is indistinguishable from the x-axis, and its label
     # landed on top of the bars. State the baseline in clear space instead.
-    ax.text(0.02, 0.93, f"the question itself: {question} tokens",
-            transform=ax.transAxes, fontsize=9, color=GREEN, fontweight="bold")
-    for i, (c, t) in enumerate(zip(counts, totals)):
-        ax.text(i, -max(totals) * 0.075, f"{t / question:.0f}x", ha="center",
-                fontsize=8, color=GREY)
+    ax.text(0.02, 0.66, f"the question itself: {question} tokens\n"
+            f"{counts[-1]} realistic tools = {totals[-1] / question:,.0f}x that",
+            transform=ax.transAxes, fontsize=6.5, color=GREEN, fontweight="bold", va="top")
 
-    ax.set_xlabel("tools available to the model", labelpad=14)
+    ax.set_xlabel("tools available to the model")
     ax.set_ylabel("tokens of schema,\nsent on every request")
     ax.set_ylim(0, max(totals) * 1.18)
-    ax.set_title("What \"loaded up front\" costs (measured, cl100k_base)", fontsize=11)
+    ax.set_title("What \"loaded up front\" costs (measured, cl100k_base)")
     save(fig, "03_tool_schema_cost")
     return small, big, question
 
 
 # --- figure 04 -------------------------------------------------------------------------
 def fig_agent_loop():
-    fig, ax = plt.subplots(figsize=(9.4, 3.9))
+    fig, ax = plt.subplots(figsize=(5.07, 2.0))   # drawn at slot size: 0.92 width
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=0.9)   # data units span the canvas
     ax.set_xlim(0, 9.4); ax.set_ylim(0, 3.9); ax.axis("off")
 
-    box(ax, 0.15, 1.6, 1.5, 0.8, "question", ARM_BLUE, fontsize=9)
-    box(ax, 2.15, 1.6, 1.7, 0.8, "model plans\nnext step", ARM_BLUE, fontsize=8.5)
-    box(ax, 4.35, 1.6, 1.6, 0.8, "run a tool", ARM_RED, fontsize=9)
-    box(ax, 6.45, 1.6, 1.7, 0.8, "observe\nthe result", ARM_ORANGE, fontsize=8.5)
-    box(ax, 3.05, 0.15, 2.2, 0.7, "enough to answer?", GREEN, fontsize=9)
-    box(ax, 7.75, 2.95, 1.5, 0.7, "answer", GREEN, fontsize=9)
+    box(ax, 0.15, 1.6, 1.5, 0.8, "question", ARM_BLUE)
+    box(ax, 2.15, 1.6, 1.7, 0.8, "model plans\nnext step", ARM_BLUE)
+    box(ax, 4.35, 1.6, 1.6, 0.8, "run a tool", ARM_RED)
+    box(ax, 6.45, 1.6, 1.7, 0.8, "observe\nthe result", ARM_ORANGE)
+    box(ax, 3.05, 0.15, 2.2, 0.7, "enough to answer?", GREEN)
+    box(ax, 7.75, 2.95, 1.5, 0.7, "answer", ARM_BLUE)
 
     arrow(ax, 1.7, 2.0, 2.1, 2.0)
     arrow(ax, 3.9, 2.0, 4.3, 2.0)
     arrow(ax, 6.0, 2.0, 6.4, 2.0)
-    arrow(ax, 7.3, 1.55, 5.3, 0.6, color=GREY)
+    arrow(ax, 7.0, 1.55, 4.6, 0.9, color=GREY)
     arrow(ax, 3.0, 0.6, 2.6, 1.55, color=GREY)
-    ax.text(2.15, 1.05, "no", fontsize=8.5, color=GREY, fontweight="bold")
-    arrow(ax, 5.3, 0.75, 7.9, 2.9, color=GREEN, ls="--")
-    ax.text(6.9, 1.05, "yes", fontsize=8.5, color=GREEN, fontweight="bold")
+    ax.text(2.15, 1.05, "no", fontsize=6.5, color=GREY, fontweight="bold")
+    ax.add_patch(FancyArrowPatch((5.3, 0.5), (8.5, 2.9), connectionstyle="angle,angleA=0,angleB=90,rad=0",
+                                 arrowstyle="-|>", mutation_scale=8, color=GREEN, lw=1.0,
+                                 linestyle="--"))
+    ax.text(6.9, 0.56, "yes", fontsize=6.5, color=GREEN, fontweight="bold", ha="center")
 
-    ax.set_title("An agent is the same five steps, with a decision that sends you back",
-                 fontsize=11.5, pad=4)
-    ax.text(9.3, 0.02, "schematic", ha="right", fontsize=7.5, color=GREY, style="italic")
+    ax.set_title("An agent is the same five steps, with a decision that sends you back", pad=3)
+    ax.text(9.3, 0.02, "schematic", ha="right", fontsize=6, color=GREY, style="italic")
     ax.text(4.7, 3.35, "everything hard about agents is in that green box",
-            ha="center", fontsize=9, color=GREY, style="italic")
+            ha="center", fontsize=6.5, color=GREY, style="italic")
     save(fig, "04_agent_loop")
 
 
@@ -253,20 +258,22 @@ def fig_loop_failures():
     turns = [[1, 1, 1, 1, 1, 1], [1, 2, 1, 2, 1, 2], [1, 2, 3, 4, 5, 6]]
     colors = [ARM_RED, ARM_ORANGE, ARM_BLUE]
 
-    fig, axes = plt.subplots(1, 3, figsize=(10.0, 2.9))
+    fig, axes = plt.subplots(1, 3, figsize=(4.74, 1.35))   # drawn at slot size
     for ax, mode, seq, color in zip(axes, modes, turns, colors):
-        ax.step(range(1, len(seq) + 1), seq, where="mid", color=color, lw=2.4)
-        ax.scatter(range(1, len(seq) + 1), seq, color=color, s=42, zorder=3)
-        ax.set_title(mode, fontsize=9.5, color=color)
+        ax.step(range(1, len(seq) + 1), seq, where="mid", color=color, lw=1.4)
+        ax.scatter(range(1, len(seq) + 1), seq, color=color, s=12, zorder=3)
+        ax.set_title(mode, fontsize=6.5, color=color)
         ax.set_xlabel("turn")
-        ax.set_ylim(0.4, 6.6)
-        ax.set_yticks([])
+        ax.set_ylim(0.4, 7.4)
+        ax.set_yticks(range(1, 7))
+        ax.set_yticklabels([])
         ax.set_xticks(range(1, len(seq) + 1))
-        ax.tick_params(labelsize=8)
-    axes[0].set_ylabel("which tool\nwas called", fontsize=9)
-    axes[2].axvline(6, color=ARM_RED, ls="--", lw=1.4)
-    axes[2].text(5.9, 5.9, "cap", ha="right", fontsize=8.5, color=ARM_RED, fontweight="bold")
-    fig.tight_layout()
+        ax.tick_params(labelsize=6)
+    axes[0].set_yticklabels(list("ABCDEF"), fontsize=6)
+    axes[0].set_ylabel("which tool\nwas called", fontsize=6.5)
+    axes[2].axvline(6, color=ARM_RED, ls="--", lw=0.9)
+    axes[2].text(5.85, 6.9, "cap", ha="right", va="center", fontsize=6.5, color=ARM_RED, fontweight="bold")
+    fig.tight_layout(w_pad=0.8)
     save(fig, "05_loop_failures")
 
 

@@ -10,6 +10,7 @@ Run:  ./ma/Scripts/python.exe ml/ch17_rag/py_src/l41_bm25_figs.py
 """
 
 import logging
+import time
 from pathlib import Path
 
 import matplotlib
@@ -36,7 +37,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 plt.rcParams.update({
-    "font.size": 11,
+    "font.size": 7,  # layout pass 2026-10-05: figures drawn at slot size
+    "axes.titlesize": 7.5, "axes.labelsize": 7, "legend.fontsize": 6.5,
+    "xtick.labelsize": 6.5, "ytick.labelsize": 6.5, "lines.linewidth": 1.4,
     "axes.spines.top": False,
     "axes.spines.right": False,
     "figure.dpi": 140,
@@ -48,7 +51,16 @@ DOC_TAGS = ["D1", "D2", "D3"]
 def save(fig, name):
     FIG.mkdir(parents=True, exist_ok=True)
     out = FIG / f"{name}.pdf"
-    fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+    for attempt in range(1, 6):        # transient Windows lock (errno 22), see _learnings
+        try:
+            fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+            break
+        except OSError as e:
+            if e.errno != 22 or attempt == 5:
+                log.error("could not write %s: %s", out, e)
+                raise
+            log.warning("errno 22 on %s, retry %d/4", out.name, attempt)
+            time.sleep(1)
     plt.close(fig)
     log.info("wrote %s", out)
 
@@ -94,21 +106,21 @@ def score_worked_docs():
 def fig_saturation():
     """tf saturation for several k1, against the linear 'more is proportionally better' line."""
     tf = np.linspace(0, 20, 400)
-    fig, ax = plt.subplots(figsize=(6.4, 3.6))
+    fig, ax = plt.subplots(figsize=(2.85, 1.38))
 
-    ax.plot(tf, tf / tf.max() * 1.0, color=GREY, ls=":", lw=1.6,
+    ax.plot(tf, tf / tf.max() * 1.0, color=GREY, ls=":", lw=1.1,
             label="raw count (scaled)")
     for k1, color in zip([0.5, 1.5, 3.0], [ARM_RED, ARM_BLUE, ARM_ORANGE]):
-        ax.plot(tf, tf / (k1 + tf), color=color, lw=2.2, label=f"$k_1$ = {k1}")
+        ax.plot(tf, tf / (k1 + tf), color=color, lw=1.4, label=f"$k_1$ = {k1}")
 
     ax.axhline(1.0, color=GREY, lw=0.8, alpha=0.5)
-    ax.text(19.5, 1.02, "ceiling", ha="right", fontsize=9, color=GREY)
+    ax.text(0.3, 1.02, "ceiling", ha="left", fontsize=6.5, color=GREY)
     ax.set_xlabel("term frequency in the document  ($tf$)")
     ax.set_ylabel(r"saturation  $tf\,/\,(k_1 + tf)$")
-    ax.set_title("The 10th mention adds almost nothing", fontsize=11)
+    ax.set_title("The 10th mention adds almost nothing")
     ax.set_xlim(0, 20)
     ax.set_ylim(0, 1.15)
-    ax.legend(frameon=False, fontsize=9, loc="lower right")
+    ax.legend(loc="lower right", frameon=True, framealpha=1, facecolor="white", edgecolor="none")
     save(fig, "04_bm25_saturation")
 
 
@@ -116,29 +128,29 @@ def fig_saturation():
 def fig_length_norm():
     """The B factor against relative document length, for several b."""
     ratio = np.linspace(0, 3, 400)
-    fig, ax = plt.subplots(figsize=(6.4, 3.6))
+    fig, ax = plt.subplots(figsize=(2.62, 1.38))
 
     for b, color, style in zip([0.0, 0.5, 0.75, 1.0],
                                [GREY, ARM_ORANGE, ARM_BLUE, ARM_RED],
                                ["--", "-", "-", "-"]):
-        ax.plot(ratio, (1 - b) + b * ratio, color=color, lw=2.2, ls=style,
+        ax.plot(ratio, (1 - b) + b * ratio, color=color, lw=1.4, ls=style,
                 label=f"$b$ = {b}" + ("  (off)" if b == 0 else "  (full)" if b == 1 else ""))
 
-    ax.axvline(1.0, color=GREY, lw=0.8, alpha=0.6)
-    ax.text(1.03, 2.75, "average-length\ndocument", fontsize=8.5, color=GREY)
-    ax.set_xlabel(r"document length relative to average  ($dl\,/\,avdl$)")
+    ax.plot([1.0, 1.0], [0, 1.0], color=GREY, lw=0.8, alpha=0.6)   # up to the crossing, clear of the legend
+    ax.text(1.06, 0.08, "average-length\ndocument", fontsize=6.5, color=GREY, va="bottom")
+    ax.set_xlabel(r"relative length  $dl\,/\,avdl$")
     ax.set_ylabel("penalty factor  $B$")
-    ax.set_title("Longer documents get their term counts discounted", fontsize=11)
+    ax.set_title("Longer documents are discounted")
     ax.set_xlim(0, 3)
     ax.set_ylim(0, 3)
-    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    ax.legend(frameon=False, loc="upper left")
     save(fig, "05_bm25_length_norm")
 
 
 # --- figure 06 -------------------------------------------------------------------------
 def fig_worked_contributions(rows):
     """Per-term BM25 contributions stacked, for the three worked chunks."""
-    fig, ax = plt.subplots(figsize=(7.0, 3.8))
+    fig, ax = plt.subplots(figsize=(3.4, 1.85))
     colors = {"lori": ARM_RED, "press": ARM_BLUE, "bar": ARM_ORANGE}
 
     bottoms = np.zeros(len(rows))
@@ -150,28 +162,28 @@ def fig_worked_contributions(rows):
         for bar, v in zip(bars, vals):
             if v > 0.25:
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + v / 2,
-                        f"{v:.2f}", ha="center", va="center", fontsize=9,
+                        f"{v:.2f}", ha="center", va="center", fontsize=6.5,
                         color="white", fontweight="bold")
         bottoms += vals
 
     for x, r in enumerate(rows):
         ax.text(x, r["total"] + 0.12, f'{r["total"]:.2f}', ha="center",
-                fontsize=10, fontweight="bold")
-        ax.text(x, -0.42, f'{r["dl"]} tokens\nB = {r["B"]:.2f}', ha="center",
-                fontsize=8.5, color=GREY)
+                fontsize=7, fontweight="bold")
+        ax.text(x, -0.12, f'{r["dl"]} tokens\nB = {r["B"]:.2f}', ha="center", va="top",
+                fontsize=6.5, color=GREY)
 
     ax.set_ylabel("BM25 score")
-    ax.set_title('Query: "lori press bar"   -   who wins, and why', fontsize=11)
+    ax.set_title('Query: "lori press bar" - who wins, and why')
     ax.set_ylim(0, max(r["total"] for r in rows) * 1.22)
-    ax.legend(frameon=False, fontsize=9, loc="upper right")
-    ax.tick_params(axis="x", length=0, pad=26)
+    ax.legend(frameon=False, fontsize=6, loc="upper right")
+    ax.tick_params(axis="x", length=0, pad=21)
     save(fig, "06_bm25_worked")
 
 
 # --- figure 07 -------------------------------------------------------------------------
 def fig_count_vs_bm25(rows):
     """Three scorers side by side: counting and tf-idf both rank D2 first. Only BM25 is right."""
-    fig, axes = plt.subplots(1, 3, figsize=(10.6, 3.6))
+    fig, axes = plt.subplots(1, 3, figsize=(4.4, 1.55))
     tags = [r["tag"] for r in rows]
 
     panels = [
@@ -186,17 +198,17 @@ def fig_count_vs_bm25(rows):
         color = ARM_BLUE if correct else ARM_RED
         bars = ax.bar(tags, vals, color=[color if i == win else "#BBBBBB"
                                          for i in range(len(rows))])
-        ax.bar_label(bars, fmt=fmt, fontsize=9.5, fontweight="bold", padding=2)
+        ax.bar_label(bars, fmt=fmt, fontsize=6.5, fontweight="bold", padding=1)
         verdict = "gets it right" if correct else "gets it wrong"
-        ax.set_title(f"{title}\n({verdict})", fontsize=9.8,
+        ax.set_title(f"{title}\n({verdict})", fontsize=6.5,
                      color=("#2E8B57" if correct else ARM_RED))
-        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=6.5)
         ax.set_ylim(0, max(vals) * 1.32)
         ax.tick_params(axis="x", length=0)
 
     fig.text(0.5, -0.06,
              "D1 is the chunk that actually answers the question.",
-             ha="center", fontsize=9.5, color=GREY)
+             ha="center", fontsize=6.5, color=GREY)
     fig.tight_layout()
     save(fig, "07_count_vs_bm25")
 

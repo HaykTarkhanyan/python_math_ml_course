@@ -32,3 +32,12 @@ then raises.
   the failed file before retrying.
 - A bounded retry on `OSError` for writes is fine; after the last attempt it must still fail
   loudly, never skip the file.
+
+**More evidence, 2026-10-05/06** (the RAG/agents layout pass, 17 figure scripts given the same
+5-try retry). The retry fired about ten times, almost always on the **first** PDF a script wrote
+right after pdflatex and pdftoppm had read the figure folder, and usually succeeded on retry 1 or
+2. Once it outlasted all five tries (`ml/ch18_agents/fig/01_decide_vs_do.pdf`, about 5 s) and the
+script raised as designed; a minute later the file was writable. In the same hour pdflatex could
+not write `L44_agents_tools.pdf` ("I can't write on file") for several minutes, with no pdflatex or
+PDF-viewer process running; compiling with `-output-directory` into the scratchpad kept the work
+going until it cleared. Still consistent with an on-access scan, still not proven.

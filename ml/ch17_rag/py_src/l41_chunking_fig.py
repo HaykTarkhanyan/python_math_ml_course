@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-plt.rcParams.update({"font.size": 11, "figure.dpi": 140})
+plt.rcParams.update({"font.size": 7, "figure.dpi": 140})  # layout pass 2026-10-05: slot size
 
 # Two paragraphs, so paragraph-based chunking is a real strategy and not a no-op.
 PARAGRAPHS = [
@@ -118,31 +118,32 @@ def main():
     if splits_answer(strategies[2][1], TEXT, ANSWER):
         raise ValueError("sentence chunking split the answer - unexpected")
 
-    fig, ax = plt.subplots(figsize=(10.0, 4.6))
+    fig, ax = plt.subplots(figsize=(4.7, 2.15))
     a0 = TEXT.index(ANSWER)
     a1 = a0 + len(ANSWER)
 
     ax.axvspan(a0, a1, color="#FFE9A8", zorder=0)
     ax.text((a0 + a1) / 2, len(strategies) - 0.28,
             "the sentence that answers the question",
-            ha="center", fontsize=9, color="#7A5C00")
+            ha="center", fontsize=6.5, color="#7A5C00")
 
     for row, (name, spans, color) in enumerate(strategies):
         y = len(strategies) - 1 - row
         for i, (s, e) in enumerate(spans):
             ax.barh(y, e - s, left=s, height=0.5,
                     color=color, alpha=0.55 if i % 2 else 0.85,
-                    edgecolor="white", linewidth=1.4, zorder=3)
+                    edgecolor="white", linewidth=0.8, zorder=3)
         broke = splits_answer(spans, TEXT, ANSWER)
         ax.text(len(TEXT) + 6, y, "answer split" if broke else "answer intact",
-                va="center", fontsize=8.5, fontweight="bold",
+                va="center", fontsize=6.5, fontweight="bold",
                 color=ARM_RED if broke else "#2E8B57")
 
     ax.set_yticks(range(len(strategies)))
-    ax.set_yticklabels([n for n, _, _ in strategies][::-1], fontsize=9.5)
+    ax.set_yticklabels([n for n, _, _ in strategies][::-1], fontsize=6.5)
     ax.set_xlabel("character position in the paragraph")
     ax.set_xlim(0, len(TEXT) + 78)
-    ax.set_title("Same text, five chunking strategies", fontsize=11)
+    ax.set_ylim(-0.6, len(strategies) + 0.15)
+    ax.set_title("Same text, five chunking strategies", fontsize=7.5)
     ax.tick_params(axis="y", length=0)
     for s in ["top", "right", "left"]:
         ax.spines[s].set_visible(False)

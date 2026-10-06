@@ -56,3 +56,11 @@ decision table, a labelled diagram - the only real check is a reader who does no
 know what the slide was supposed to say. See also
 [2026-08-10-2016_rag-figure-contradicted-its-own-claim.md](2026-08-10-2016_rag-figure-contradicted-its-own-claim.md),
 which is the same failure one step earlier: writing the conclusion before the measurement.
+
+**It happened again, 2026-10-06.** After a layout pass that took L41-L44 to zero on every
+detector, a second round of student reviews found L43's "The cure, actually applied" listing the
+2019 revision at rank 1 while the deck's own measured cold open (and `l43_data.py`) has rev 4 at
+0.874 and rev 2 at 0.872 - a slide undercutting the lecture's opening claim that every retrieval
+number was perfect. The same round found a cross-reference pointing backwards (L44: "the guards
+from the last two slides" - they come three slides later) and a metric used a lecture before it is
+defined (MRR in L42). Every detector had passed all three.

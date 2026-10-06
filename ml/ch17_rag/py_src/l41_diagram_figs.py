@@ -16,6 +16,7 @@ Run:  ./ma/Scripts/python.exe ml/ch17_rag/py_src/l41_diagram_figs.py
 """
 
 import logging
+import time
 from pathlib import Path
 
 import matplotlib
@@ -40,7 +41,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-plt.rcParams.update({"font.size": 11, "figure.dpi": 140})
+plt.rcParams.update({"font.size": 7, "figure.dpi": 140})  # layout pass 2026-10-05: slot size
 
 # ArmBench-TextEmbed, native Armenian. Source: huggingface.co/blog/Metric-AI/ate-2
 ATE2_SCORES = [
@@ -53,12 +54,21 @@ ATE2_SCORES = [
 def save(fig, name):
     FIG.mkdir(parents=True, exist_ok=True)
     out = FIG / f"{name}.pdf"
-    fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+    for attempt in range(1, 6):        # transient Windows lock (errno 22), see _learnings
+        try:
+            fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
+            break
+        except OSError as e:
+            if e.errno != 22 or attempt == 5:
+                log.error("could not write %s: %s", out, e)
+                raise
+            log.warning("errno 22 on %s, retry %d/4", out.name, attempt)
+            time.sleep(1)
     plt.close(fig)
     log.info("wrote %s", out)
 
 
-def box(ax, x, y, w, h, label, color, fontsize=9, text_color="white"):
+def box(ax, x, y, w, h, label, color, fontsize=6.5, text_color="white"):
     ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.012",
                                 facecolor=color, edgecolor="none"))
     ax.text(x + w / 2, y + h / 2, label, ha="center", va="center",
@@ -67,75 +77,76 @@ def box(ax, x, y, w, h, label, color, fontsize=9, text_color="white"):
 
 def arrow(ax, x0, y0, x1, y1, color=GREY):
     ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle="-|>",
-                                 mutation_scale=13, color=color, lw=1.5))
+                                 mutation_scale=7, color=color, lw=0.9))
 
 
 # --- figure 01 -------------------------------------------------------------------------
 def fig_rag_loop():
-    fig, ax = plt.subplots(figsize=(11.0, 4.6))
+    fig, ax = plt.subplots(figsize=(4.4, 1.7))
     ax.set_xlim(0, 11)
     ax.set_ylim(0, 4.6)
     ax.axis("off")
 
     ax.add_patch(FancyBboxPatch((0.1, 2.55), 10.8, 1.85, boxstyle="round,pad=0.02",
                                 facecolor="#F2F6FB", edgecolor="#C8D6E8", lw=1.2))
-    ax.text(0.32, 4.16, "ONCE, OFFLINE  -  when documents change",
-            fontsize=9.5, color=ARM_BLUE, fontweight="bold")
+    ax.text(0.32, 4.06, "ONCE, OFFLINE  -  when documents change",
+            fontsize=6, color=ARM_BLUE, fontweight="bold")
 
     ax.add_patch(FancyBboxPatch((0.1, 0.18), 10.8, 1.85, boxstyle="round,pad=0.02",
                                 facecolor="#FDF3F3", edgecolor="#EFCFCF", lw=1.2))
-    ax.text(0.32, 1.79, "EVERY QUERY  -  in milliseconds",
-            fontsize=9.5, color=ARM_RED, fontweight="bold")
+    ax.text(0.32, 1.69, "EVERY QUERY  -  in milliseconds",
+            fontsize=6, color=ARM_RED, fontweight="bold")
 
     stages = [("4,000\ndocuments", 0.45), ("chunk", 2.5), ("embed", 4.55), ("index", 6.6)]
     for label, x in stages:
-        box(ax, x, 2.95, 1.6, 0.85, label, ARM_BLUE)
+        box(ax, x, 2.95, 1.6, 0.85, label, ARM_BLUE, fontsize=5.8)
     for _, x in stages[:-1]:
         arrow(ax, x + 1.62, 3.37, x + 2.46, 3.37)
     arrow(ax, 8.24, 3.37, 9.05, 3.37)
-    box(ax, 9.05, 2.95, 1.6, 0.85, "vector\nstore", "#0B2A57")
+    box(ax, 9.05, 2.95, 1.6, 0.85, "vector\nstore", "#0B2A57", fontsize=5.8)
 
     q = [("question", 0.45), ("embed", 2.5), ("search", 4.55), ("top-k\nchunks", 6.6)]
     for label, x in q:
-        box(ax, x, 0.58, 1.6, 0.85, label, ARM_RED)
+        box(ax, x, 0.58, 1.6, 0.85, label, ARM_RED, fontsize=5.8)
     for _, x in q[:-1]:
         arrow(ax, x + 1.62, 1.0, x + 2.46, 1.0)
     arrow(ax, 8.24, 1.0, 9.05, 1.0)
-    box(ax, 9.05, 0.58, 1.6, 0.85, "LLM\nanswer", "#7A0A12")
+    box(ax, 9.05, 0.58, 1.6, 0.85, "LLM\nanswer", "#7A0A12", fontsize=5.8)
 
     ax.add_patch(FancyArrowPatch((9.85, 2.9), (5.35, 1.5), arrowstyle="-|>",
-                                 mutation_scale=13, color=GREY, lw=1.5,
+                                 mutation_scale=7, color=GREY, lw=0.9,
                                  linestyle="--", connectionstyle="arc3,rad=0.28"))
-    ax.text(7.9, 2.16, "the index is read, never rebuilt",
-            fontsize=8.5, color=GREY, style="italic", ha="center")
+    ax.text(3.2, 2.2, "the index is read, never rebuilt",
+            fontsize=6, color=GREY, style="italic", ha="center")
 
     ax.set_title("RAG is two pipelines, and only one of them runs when a user asks",
-                 fontsize=11.5, pad=6)
+                 fontsize=7.5, pad=3)
     save(fig, "01_rag_loop")
 
 
 # --- figure 03 -------------------------------------------------------------------------
 def fig_recall_ceiling():
-    stages = ["answer survives\nchunking", "retrieved in\ntop-100", "survives\nreranking",
-              "actually used\nby the LLM"]
+    # Layout pass 2026-10-05: horizontal bars, so the stage names fit the 2.64 in slot.
+    stages = ["survives chunking", "in the top-100", "survives reranking", "used by the LLM"]
     good = [72, 68, 65, 61]
-    fig, ax = plt.subplots(figsize=(8.2, 4.2))
+    fig, ax = plt.subplots(figsize=(2.25, 1.32))   # the y labels add ~0.4 in outside
 
-    bars = ax.bar(stages, good, color=[ARM_RED] + [ARM_BLUE] * 3, width=0.62)
-    # padding=8 keeps each label clear of the dashed ceiling line, which previously
-    # struck through the 68% label (student review, 2026-08-10).
-    ax.bar_label(bars, fmt="%d%%", fontsize=10.5, fontweight="bold", padding=8)
+    bars = ax.barh(stages[::-1], good[::-1], color=([ARM_BLUE] * 3 + [ARM_RED]), height=0.6)
+    ax.bar_label(bars, fmt="%d%%", fontsize=6.5, fontweight="bold", label_type="center",
+                 color="white")   # inside, so the ceiling line never crosses them
 
-    ax.axhline(good[0], color=ARM_RED, ls="--", lw=1.4)
-    ax.text(3.42, good[0] + 2.2, "ceiling set by chunking", fontsize=9,
-            color=ARM_RED, ha="right", fontweight="bold")
+    ax.axvline(good[0], color=ARM_RED, ls="--", lw=0.9)
+    ax.text(good[0] + 1.5, 3.55, "ceiling set\nby chunking", fontsize=6, color=ARM_RED,
+            fontweight="bold", va="center")
 
-    ax.set_ylim(0, 100)
-    ax.set_ylabel("questions still answerable (%)")
-    ax.set_title("No later stage can recover what chunking threw away", fontsize=11)
-    ax.tick_params(axis="x", length=0, labelsize=8.5)
-    fig.text(0.5, -0.055, "Illustrative percentages - the shape is the point, not the values.",
-             ha="center", fontsize=8.5, color=GREY, style="italic")
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("questions still answerable (%)", fontsize=6.5)
+    ax.set_title("Nothing later recovers what chunking lost", fontsize=7)
+    ax.tick_params(axis="y", length=0, labelsize=6.5)
+    ax.tick_params(axis="x", labelsize=6)
+    ax.set_ylim(-0.6, 4.1)
+    fig.text(0.5, -0.2, "Illustrative numbers: the shape is the point.",
+             ha="center", fontsize=6.2, color=GREY, style="italic")
     for s in ["top", "right"]:
         ax.spines[s].set_visible(False)
     save(fig, "03_recall_ceiling")
@@ -143,56 +154,56 @@ def fig_recall_ceiling():
 
 # --- figure 11 -------------------------------------------------------------------------
 def fig_bi_vs_cross():
-    fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.3))
+    fig, axes = plt.subplots(1, 2, figsize=(3.3, 1.45))
 
     ax = axes[0]
-    ax.set_xlim(0, 5); ax.set_ylim(0, 5); ax.axis("off")
-    box(ax, 0.35, 0.35, 1.6, 0.7, "query", ARM_RED)
-    box(ax, 3.05, 0.35, 1.6, 0.7, "chunk", ARM_BLUE)
-    box(ax, 0.35, 1.75, 1.6, 0.8, "encoder", "#555555")
-    box(ax, 3.05, 1.75, 1.6, 0.8, "encoder", "#555555")
+    ax.set_xlim(0, 5); ax.set_ylim(0, 5.9); ax.axis("off")
+    box(ax, 0.35, 0.35, 1.6, 0.7, "query", ARM_RED, fontsize=5.8)
+    box(ax, 3.05, 0.35, 1.6, 0.7, "chunk", ARM_BLUE, fontsize=5.8)
+    box(ax, 0.35, 1.75, 1.6, 0.8, "encoder", "#555555", fontsize=5.5)
+    box(ax, 3.05, 1.75, 1.6, 0.8, "encoder", "#555555", fontsize=5.5)
     arrow(ax, 1.15, 1.1, 1.15, 1.7); arrow(ax, 3.85, 1.1, 3.85, 1.7)
     arrow(ax, 1.15, 2.6, 1.15, 3.15); arrow(ax, 3.85, 2.6, 3.85, 3.15)
-    box(ax, 0.35, 3.15, 1.6, 0.6, "vector", ARM_ORANGE)
-    box(ax, 3.05, 3.15, 1.6, 0.6, "vector", ARM_ORANGE)
+    box(ax, 0.35, 3.15, 1.6, 0.6, "vector", ARM_ORANGE, fontsize=5.8)
+    box(ax, 3.05, 3.15, 1.6, 0.6, "vector", ARM_ORANGE, fontsize=5.8)
     ax.annotate("", xy=(3.0, 3.45), xytext=(2.0, 3.45),
-                arrowprops=dict(arrowstyle="<->", color=GREEN, lw=2))
-    ax.text(2.5, 3.75, "cosine", ha="center", fontsize=9, color=GREEN, fontweight="bold")
-    ax.text(2.5, 4.55, "Bi-encoder", ha="center", fontsize=11.5, fontweight="bold")
-    ax.text(2.5, 4.18, "they never meet - so chunks precompute", ha="center",
-            fontsize=8.5, color=GREY, style="italic")
+                arrowprops=dict(arrowstyle="<->", color=GREEN, lw=1.1))
+    ax.text(2.5, 3.8, "cosine", ha="center", fontsize=6, color=GREEN, fontweight="bold")
+    ax.text(2.5, 5.55, "Bi-encoder", ha="center", fontsize=7.5, fontweight="bold")
+    ax.text(2.5, 5.45, "never meet: chunks\nprecompute", ha="center", va="top",
+            fontsize=5.8, color=GREY, style="italic")
 
     ax = axes[1]
-    ax.set_xlim(0, 5); ax.set_ylim(0, 5); ax.axis("off")
-    box(ax, 0.35, 0.35, 1.6, 0.7, "query", ARM_RED)
-    box(ax, 3.05, 0.35, 1.6, 0.7, "chunk", ARM_BLUE)
-    box(ax, 0.35, 1.85, 4.3, 0.95, "one encoder, full attention\nacross both", "#555555")
+    ax.set_xlim(0, 5); ax.set_ylim(0, 5.9); ax.axis("off")
+    box(ax, 0.35, 0.35, 1.6, 0.7, "query", ARM_RED, fontsize=5.8)
+    box(ax, 3.05, 0.35, 1.6, 0.7, "chunk", ARM_BLUE, fontsize=5.8)
+    box(ax, 0.35, 1.85, 4.3, 0.95, "one encoder,\nfull attention", "#555555", fontsize=5.8)
     arrow(ax, 1.15, 1.1, 1.6, 1.8); arrow(ax, 3.85, 1.1, 3.4, 1.8)
     arrow(ax, 2.5, 2.85, 2.5, 3.35)
-    box(ax, 1.7, 3.35, 1.6, 0.6, "score", GREEN)
-    ax.text(2.5, 4.55, "Cross-encoder", ha="center", fontsize=11.5, fontweight="bold")
-    ax.text(2.5, 4.18, "accurate, but one pass per pair", ha="center",
-            fontsize=8.5, color=GREY, style="italic")
+    box(ax, 1.7, 3.35, 1.6, 0.6, "score", GREEN, fontsize=5.8)
+    ax.text(2.5, 5.55, "Cross-encoder", ha="center", fontsize=7.5, fontweight="bold")
+    ax.text(2.5, 5.45, "accurate, but one\npass per pair", ha="center", va="top",
+            fontsize=5.8, color=GREY, style="italic")
 
     save(fig, "11_bi_vs_cross_encoder")
 
 
 # --- figure 12 -------------------------------------------------------------------------
 def fig_offline_vs_online():
-    fig, ax = plt.subplots(figsize=(8.0, 3.6))
+    fig, ax = plt.subplots(figsize=(3.4, 1.35))
     labels = ["embed 4,000 chunks\n(once, offline)", "embed 1 query\n(per request)"]
     counts = [4000, 1]
     bars = ax.barh(labels, counts, color=[ARM_BLUE, ARM_RED], height=0.5)
     ax.set_xscale("log")
     ax.set_xlim(0.5, 20000)
     for bar, c in zip(bars, counts):
-        ax.text(c * 1.35, bar.get_y() + bar.get_height() / 2,
-                f"{c:,} encoder pass{'es' if c > 1 else ''}",
-                va="center", fontsize=10, fontweight="bold")
+        inside = c > 100                    # the long bar's label goes inside it, in white
+        ax.text(c / 1.3 if inside else c * 1.35, bar.get_y() + bar.get_height() / 2,
+                f"{c:,} encoder pass{'es' if c > 1 else ''}", ha="right" if inside else "left",
+                va="center", fontsize=6.5, fontweight="bold", color="white" if inside else "black")
     ax.set_xlabel("encoder passes (log scale)")
-    ax.set_title("Why a bi-encoder is fast: the expensive half already happened",
-                 fontsize=11)
-    ax.tick_params(axis="y", length=0, labelsize=9)
+    ax.set_title("Why a bi-encoder is fast: the expensive half is done", fontsize=7)
+    ax.tick_params(axis="y", length=0, labelsize=6.5)
     for s in ["top", "right", "left"]:
         ax.spines[s].set_visible(False)
     save(fig, "12_offline_vs_online")
@@ -200,19 +211,20 @@ def fig_offline_vs_online():
 
 # --- figure 14 -------------------------------------------------------------------------
 def fig_ate2_scores():
-    fig, ax = plt.subplots(figsize=(7.4, 4.0))
+    fig, ax = plt.subplots(figsize=(3.3, 1.75))
     names = [n for n, _, _ in ATE2_SCORES]
     vals = [v for _, v, _ in ATE2_SCORES]
     colors = [c for _, _, c in ATE2_SCORES]
 
     bars = ax.bar(names, vals, color=colors, width=0.55)
-    ax.bar_label(bars, fmt="%.3f", fontsize=11, fontweight="bold", padding=3)
+    ax.bar_label(bars, fmt="%.3f", fontsize=7, fontweight="bold", padding=2)
 
     ax.set_ylim(0.70, 0.84)
-    ax.set_ylabel("ArmBench-TextEmbed score\n(native Armenian, higher is better)")
+    ax.set_ylabel("ArmBench-TextEmbed score\n(native Armenian, higher is better)", fontsize=6.5)
     ax.set_title("A 560M open model, tuned on 10,000 synthetic pairs,\n"
-                 "beats the commercial embedder on Armenian", fontsize=11)
-    ax.tick_params(axis="x", length=0, labelsize=9)
+                 "beats the commercial embedder on Armenian", fontsize=7)
+    ax.tick_params(axis="x", length=0, labelsize=6)
+    ax.tick_params(axis="y", labelsize=6)
     for s in ["top", "right"]:
         ax.spines[s].set_visible(False)
     save(fig, "14_ate2_scores")
@@ -220,22 +232,22 @@ def fig_ate2_scores():
 
 # --- figure 15 -------------------------------------------------------------------------
 def fig_ate2_recipe():
-    fig, ax = plt.subplots(figsize=(10.2, 2.5))
+    fig, ax = plt.subplots(figsize=(4.6, 1.13))
     ax.set_xlim(0, 10.2); ax.set_ylim(0, 2.5); ax.axis("off")
 
-    box(ax, 0.15, 0.75, 2.1, 1.0, "mE5\nmultilingual encoder", GREY, fontsize=9)
+    box(ax, 0.15, 0.75, 2.1, 1.0, "mE5\nmultilingual\nencoder", GREY, fontsize=6)
     box(ax, 3.0, 0.75, 2.5, 1.0, "10,000 pairs\ntranslated from\nEnglish Reddit",
-        ARM_ORANGE, fontsize=8.5)
-    box(ax, 6.25, 0.75, 1.9, 1.0, "fine-tune", ARM_BLUE, fontsize=9)
-    box(ax, 8.85, 0.75, 1.2, 1.0, "ATE-2", ARM_RED, fontsize=10)
+        ARM_ORANGE, fontsize=6)
+    box(ax, 6.25, 0.75, 1.9, 1.0, "fine-tune", ARM_BLUE, fontsize=6.5)
+    box(ax, 8.85, 0.75, 1.2, 1.0, "ATE-2", ARM_RED, fontsize=7)
 
     arrow(ax, 2.3, 1.25, 2.95, 1.25)
     arrow(ax, 5.55, 1.25, 6.2, 1.25)
     arrow(ax, 8.2, 1.25, 8.8, 1.25)
 
     ax.text(5.1, 0.32, "noisy synthetic data, not a curated corpus",
-            ha="center", fontsize=9, color=GREY, style="italic")
-    ax.text(5.1, 2.18, "The whole recipe", ha="center", fontsize=11.5, fontweight="bold")
+            ha="center", fontsize=6, color=GREY, style="italic")
+    ax.text(5.1, 2.18, "The whole recipe", ha="center", fontsize=7.5, fontweight="bold")
     save(fig, "15_ate2_recipe")
 
 
