@@ -169,7 +169,7 @@ match the table below.
 | - | RAG (L41-L43), agents (L44) | (own chapters, no map) | - | built |
 | 12 | LLM-12 Quantization | Quantize | `quantization` | built and student-reviewed 2026-10-06 (`LLM12_quantization.tex`, 25 pages; `LLM12_quantization_OUTLINE.md`) |
 | 13 | LLM-13 LoRA and QLoRA | LoRA | `lora` | built and student-reviewed 2026-10-06 (`LLM13_lora.tex`; `LLM13_lora_OUTLINE.md`) |
-| 14 | LLM-14 Anatomy of a 2026 LLM | Attention, MLP again (KV cache, MLA; MoE) | `anatomy_2026` | optional |
+| 14 | LLM-14 Anatomy of a 2026 LLM | Attention, MLP again (KV cache, MLA; MoE) | `anatomy_2026` | built 2026-10-06 (`LLM14_anatomy_2026.tex`), one deck |
 
 The LLM-n labels are planning names; decks get their `NN_` playlist number on delivery.
 

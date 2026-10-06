@@ -213,6 +213,11 @@ Student review applied.
 
 ## LLM-14 Anatomy of a 2026 LLM (includes D1)
 
+**Done 2026-10-06** (`LLM14_anatomy_2026.tex`): D1 answered - built, one deck (#73); each technique
+with its bill by hand from a real config.json (gpt-oss-20b, DeepSeek-V3, Falcon-7B, Qwen3-Next, Llama 3
+8B): KV bytes per token for MHA / MQA / GQA / MLA, the sliding window halving gpt-oss's cache, MoE total
+vs active. Model facts are perishable: re-check the configs before delivery.
+
 1. **D1 - run LLM-14?** (a) yes, two sessions; (b) yes, one session; (c) no, and move one MoE
    frame to LLM-4 and one KV-cache frame to LLM-12 **(recommended** if the course end date is
    fixed - R: section 8 says something gets cut).
@@ -220,6 +225,9 @@ Student review applied.
    landscape survey.
 
 ## Chapter-level
+
+*2026-10-06: item 1 answered (D1, #73). Items 2 and 3 had no recommendation, so they were left as they
+are - yours to decide.*
 
 1. **D1 overall:** 13 sessions (LLM-1 to LLM-13) + RAG/agents, or the 10-session short option
    (merges: LLM-7+8, LLM-10+11, LLM-12+13 lighter). Needs the course end date.
