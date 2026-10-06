@@ -197,6 +197,13 @@ applied.
 
 ## LLM-13 LoRA and QLoRA (includes D5, D6)
 
+**Done 2026-10-06** (`LLM13_lora.tex`, 22 pages): library-free (D5, #75); the local demo - LoRA
+written by hand on the cached GPT-2 (0.24% of the weights; "Good question!" 0 -> 20 of 20 on unseen
+questions; step 0 equals the base exactly; the facts did not improve: a bicycle has "Eight" wheels).
+**D6 still open, and now yours:** measured 2026-10-06, only GPT-2 is fully cached (Qwen2.5-0.5B-Instruct:
+tokenizer only; arm-gemma-e4b: nothing), so choosing the practical's base model needs a download.
+Student review applied.
+
 1. **D5, the library** (yours): PEFT + TRL / Unsloth / teach library-free in the slides, choose
    for the practical later.
 2. **A local LoRA demo on the cached GPT-2** (a few hundred CPU steps, minutes): yes / no

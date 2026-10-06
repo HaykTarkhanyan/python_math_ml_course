@@ -168,7 +168,7 @@ match the table below.
 | 11 | LLM-11 Evaluation and hallucination | Evaluate | `evaluation` | built 2026-10-06 (`LLM11_evaluation.tex`; `LLM11_evaluation_OUTLINE.md`); L43's general judge frame moved here |
 | - | RAG (L41-L43), agents (L44) | (own chapters, no map) | - | built |
 | 12 | LLM-12 Quantization | Quantize | `quantization` | built and student-reviewed 2026-10-06 (`LLM12_quantization.tex`, 25 pages; `LLM12_quantization_OUTLINE.md`) |
-| 13 | LLM-13 LoRA and QLoRA | LoRA | `lora` | to build |
+| 13 | LLM-13 LoRA and QLoRA | LoRA | `lora` | built and student-reviewed 2026-10-06 (`LLM13_lora.tex`; `LLM13_lora_OUTLINE.md`) |
 | 14 | LLM-14 Anatomy of a 2026 LLM | Attention, MLP again (KV cache, MLA; MoE) | `anatomy_2026` | optional |
 
 The LLM-n labels are planning names; decks get their `NN_` playlist number on delivery.
