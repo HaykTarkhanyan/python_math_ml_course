@@ -28,6 +28,11 @@ LLM-9 -> LLM-10 -> LLM-11 -> (RAG, agents: built) -> LLM-12 -> LLM-13 -> LLM-14 
 
 ## LLM-5 Transformers in the world (built in July; restructure proposed)
 
+**All five done 2026-10-06 with the recommended options** (instructor: "do all queue items"): kept
+as its own session; "How it learns" cut; GPT-2's LM head by hand (pipeline, top 8, one logit, "only
+differences matter"); the three-mask cold open; one ending. The three July figures redrawn at slot
+size (`py_src/head_figs.py`). Student review (one Sonnet agent) applied - see the deck's provenance.
+
 1. **Keep LLM-5 as its own session, or merge?** Options: (a) keep, restructure lightly
    **(recommended** - R: the family, cross-attention and the cost frames are a session's worth);
    (b) merge the family and the cost into LLM-4 and the LM head into LLM-6 (buys back a session).
@@ -42,6 +47,10 @@ LLM-9 -> LLM-10 -> LLM-11 -> (RAG, agents: built) -> LLM-12 -> LLM-13 -> LLM-14 
 5. **Endings:** one (Next on the map) **(recommended**, as LLM-4) / keep both.
 
 ## LLM-6 Decoding (built 2026-10-05) - leftovers from its student review
+
+**All three done 2026-10-06 with the recommended options:** the drafts frame kept; "By hand: the
+table a library precomputes" added (a toy grammar, nine toy tokens, every cell checked); no loop
+mechanism slide.
 
 1. **Cut the "where do drafts come from" frame?** yes / no **(recommended: keep** - R: it answers
    the obvious question about speculative decoding).

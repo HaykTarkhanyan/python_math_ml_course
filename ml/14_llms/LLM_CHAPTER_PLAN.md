@@ -19,11 +19,11 @@ copied into `sources/` (see `sources/README.md`), and recent material verified o
 
 | # | Decision | Recommendation | What would flip it |
 |---|---|---|---|
-| D1 | Sessions for the chapter (not counting RAG/agents) | **13**: LLM-1 to LLM-13 (LLM-3 to LLM-5 built in July as L24-L26); LLM-14 if time allows | A hard course end date. See section 8 for the 10-session cut |
+| D1 | Sessions for the chapter (not counting RAG/agents) | **Resolved 2026-10-06 (DECISIONS #73):** no limit - LLM-1 to LLM-14, LLM-8 separate, LLM-14 built | A hard course end date. See section 8 for the 10-session cut |
 | D2 | Where GANs go | **Resolved 2026-10-03:** AE -> VAE -> GAN -> diffusion, after this block (DECISIONS #63) | - |
 | D3 | How deep alignment goes here | **Idea level in LLM-9**; the math stays in L32f/L32g, which depend on PPO from L32d | Moving the whole RL chapter right after this block (+7 lectures before RAG) |
-| D4 | Local runtime for the hands-on parts | **Ollama** for the first contact (one installer, Windows-friendly); **llama.cpp tools** for the quantization measurements (`llama-quantize`, `llama-perplexity`, `llama-bench` have no Ollama equivalent) | Most students on Macs -> LM Studio or MLX deserve the demo slot |
-| D5 | Fine-tuning library for the practical | Two real options: **PEFT + TRL** (the standard HF stack, every step visible) or **Unsloth** (fits a free T4 more easily, `save_pretrained_gguf` exports straight to GGUF). Lean: Unsloth for the practical, PEFT shown on a slide | If the goal is "see the mechanics" over "ship a model", PEFT + TRL |
+| D4 | Local runtime for the hands-on parts | **Resolved 2026-10-06 (DECISIONS #74):** no runtime taught; LLM-12 explains inference engines in general and why they exist. *Earlier recommendation:* **Ollama** for the first contact (one installer, Windows-friendly); **llama.cpp tools** for the quantization measurements (`llama-quantize`, `llama-perplexity`, `llama-bench` have no Ollama equivalent) | Most students on Macs -> LM Studio or MLX deserve the demo slot |
+| D5 | Fine-tuning library for the practical | **Resolved 2026-10-06 (DECISIONS #75):** LLM-13's slides are library-free; the library is chosen with the practical. *Options were:* **PEFT + TRL** (the standard HF stack, every step visible) or **Unsloth** (fits a free T4 more easily, `save_pretrained_gguf` exports straight to GGUF). Lean: Unsloth for the practical, PEFT shown on a slide | If the goal is "see the mechanics" over "ship a model", PEFT + TRL |
 | D6 | Base model for practicals | **Decide by measurement**, not by name: tokens per Armenian word and Armenian perplexity for 3-4 small open models (e.g. Gemma 4 E2B, a small Qwen3.5) | - |
 | D7 | Chapter folder and number | **Resolved 2026-10-04:** one folder, `ml/14_llms`, for attention and the LLM lectures; RNN is `ml/13_rnns` (DECISIONS #66). Deck files kept `L24`-style names until delivery; **revisited 2026-10-05 (#71):** the chapter is numbered in teaching order, LLM-1 to LLM-14 (L24 -> LLM-3, L25 -> LLM-4, L26 -> LLM-5, every later label +3) | - |
 | D8 | Teaching order inside the chapter | **Resolved 2026-10-04:** left to right along the forward pass - tokenization before attention - with a "you are here" map in every session (DECISIONS #67, section 5.0) | - |
@@ -159,8 +159,8 @@ match the table below.
 | 2 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`) |
 | 3 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`) |
 | 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
-| 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04 |
-| 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71) |
+| 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
+| 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71); grammar-table frame added 2026-10-06 |
 | 7 | LLM-7 Pretraining | Pretrain | `pretraining` | to build |
 | 8 | LLM-8 Scaling and emergence | Scale | `scaling` | to build |
 | 9 | LLM-9 Post-training | Post-train | `post_training` | to build |

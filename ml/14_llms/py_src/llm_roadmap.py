@@ -388,7 +388,7 @@ def icon_eval(ax, cx, cy, al):
 def icon_quant(ax, cx, cy, al):
     rng = np.random.default_rng(509)
     w = rng.standard_normal((4, 4))
-    q = np.round(w / np.abs(w).max() * 1.5) / 1.5          # 2 bit: four levels, labelled so
+    q = np.round(w / np.abs(w).max() * 7) / 7              # 4 bit: 15 levels, as "16 -> 5 GB" needs
     for grid, x0, c in ((w / np.abs(w).max(), cx - 0.28, 0.06), (q, cx + 0.06, 0.05)):
         for i in range(4):
             for j in range(4):
@@ -398,7 +398,7 @@ def icon_quant(ax, cx, cy, al):
     arrow(ax, (cx - 0.03, cy + 0.03), (cx + 0.05, cy + 0.03), alpha=al, lw=0.6)
     ax.text(cx - 0.16, cy - 0.17, "16 bit", ha="center", va="center", fontsize=FS_SMALL, color=GREY,
             alpha=al, zorder=4)
-    ax.text(cx + 0.16, cy - 0.17, "2 bit", ha="center", va="center", fontsize=FS_SMALL, color=GREY,
+    ax.text(cx + 0.16, cy - 0.17, "4 bit", ha="center", va="center", fontsize=FS_SMALL, color=GREY,
             alpha=al, zorder=4)
 
 

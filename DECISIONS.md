@@ -9,6 +9,65 @@ this file holds the choice and a pointer.
 
 ---
 
+## #75 - LLM-13 teaches LoRA library-free; the practical's library is chosen when the practical is built
+
+**Date:** 2026-10-06 · **Status:** active (instructor, D5 in the interview queue: "Library-free
+slides, decide later").
+
+**Decision.** LLM-13's slides build LoRA and QLoRA from the matrices up (a small local LoRA on the
+cached GPT-2 where it helps) and name no fine-tuning library; PEFT + TRL vs Unsloth is decided when
+the Colab practical is written.
+
+**Why.** The slides' job is the mechanism (B = 0 at step 0, rank, which matrices get adapters, the
+4-bit base); a library choice ages fast and belongs with the practical that uses it.
+
+**Alternatives rejected.** PEFT + TRL in the slides (the plan's "every step visible" option);
+Unsloth for the practical now (the plan's lean, before the practical exists).
+
+**What would change this.** Writing the practical: then pick, and record the choice here.
+
+---
+
+## #74 - LLM-12 explains inference engines in general; no runtime is taught
+
+**Date:** 2026-10-06 · **Status:** active (instructor, D4: "just overall tell about inference
+engines and why they exist at all"). Replaces D4's recommendation (Ollama + llama.cpp).
+
+**Decision.** LLM-12 keeps its quantization core (measured on GPT-2's own weights in NumPy, no
+downloads) and adds why inference engines exist - what a serving engine does that a plain forward
+loop does not (KV-cache memory, batching, quantized kernels, speculative decoding) - without
+choosing or demonstrating a particular runtime.
+
+**Why.** The instructor wants the concept, not a tool tutorial; tools change faster than the ideas
+under them.
+
+**Alternatives rejected.** Ollama for first contact plus llama.cpp's measuring tools (the plan's
+D4); llama.cpp only; LM Studio.
+
+**What would change this.** A homework or practical that has students run a model locally: it then
+needs one named runtime.
+
+---
+
+## #73 - No session limit for the LLM chapter: LLM-8 stays its own session and LLM-14 is built
+
+**Date:** 2026-10-06 · **Status:** active (instructor, D1: "i dont have a limit on amount").
+Resolves D1 in `ml/14_llms/LLM_CHAPTER_PLAN.md`.
+
+**Decision.** The chapter runs every planned session - LLM-1 to LLM-14 - with no merges: LLM-8
+(scaling) is not folded into LLM-7, and LLM-14 (anatomy of a 2026 LLM) is built, split into two
+decks only if it outgrows one.
+
+**Why.** The 10-session short option and the "no LLM-14" option existed only to fit a course end
+date; there is none.
+
+**Alternatives rejected.** 13 sessions without LLM-14 (one MoE frame to LLM-4, one KV-cache frame to
+LLM-12); the 10-session short option (LLM-7+8, LLM-10+11, LLM-12+13 merged).
+
+**What would change this.** A fixed end date for the course: section 8 of the plan says what to cut.
+
+---
+
 ## #72 - Measured timings in the RAG figures are frozen in results JSON; quoted numbers are checked on every redraw
 
 **Date:** 2026-10-06 · **Status:** active (made during the RAG/agents layout pass the instructor

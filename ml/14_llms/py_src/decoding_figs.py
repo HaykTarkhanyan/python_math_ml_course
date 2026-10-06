@@ -19,6 +19,7 @@ Generates into ml/14_llms/fig/: dec_*.pdf.
 import json
 import logging
 import math
+import re
 import sys
 import time
 import warnings
@@ -502,6 +503,68 @@ def fig_json_mask(R, log):
     save(fig, "dec_json_mask.pdf", log)
 
 
+# A toy grammar with one integer field, {"year": <digits>}, and a toy vocabulary of 9 tokens.
+GRAMMAR_KEY = '{"year":'
+GRAMMAR_TOKENS = ['"', '"year', '":', " 19", "99", "}", '"}', " The", "<end>"]
+GRAMMAR_STATES = ["{", '{"year', '{"year":', '{"year": 19', '{"year": 1999}']
+GRAMMAR_QUOTED = ["110000000", "101000000", "000110000", "000011000", "000000001"]
+
+
+def grammar_complete(text):
+    return re.fullmatch(r'\{"year": ?[0-9]+\}', text) is not None
+
+
+def grammar_viable(text):
+    """Can `text` still grow into {"year": <digits>}?"""
+    k = GRAMMAR_KEY
+    if len(text) <= len(k):
+        return k.startswith(text)
+    if not text.startswith(k):
+        return False
+    m = re.fullmatch(r" ?([0-9]*)(\}?)", text[len(k):])
+    return bool(m) and (m.group(1) != "" or m.group(2) == "")
+
+
+def grammar_row(state):
+    """The whole token's text is checked against the grammar, never just its first character."""
+    return "".join("1" if (grammar_complete(state) if t == "<end>" else
+                           not grammar_complete(state) and grammar_viable(state + t)) else "0"
+                   for t in GRAMMAR_TOKENS)
+
+
+def fig_grammar_table(R, log):
+    rows = [grammar_row(s) for s in GRAMMAR_STATES]
+    if rows != GRAMMAR_QUOTED:
+        raise ValueError(f"grammar table changed: {rows}; the slide reads {GRAMMAR_QUOTED}")
+    if grammar_row('{"year": 1999') != grammar_row('{"year": 19'):     # the keybox: one state, one row
+        raise ValueError("texts in the same grammar state should share a row")
+    R["grammar_table"] = dict(zip(GRAMMAR_STATES, rows))
+    log.info(f"grammar table: {R['grammar_table']}")
+
+    fig, ax = canvas(1.5)
+    x0, cw, rh, top = 1.62, 0.425, 0.215, 1.25
+    ax.text(x0 - 0.1, top + 0.05, "text so far", ha="right", va="bottom", fontsize=FS_TINY,
+            color=GREY, style="italic")
+    for j, t in enumerate(GRAMMAR_TOKENS):
+        ax.text(x0 + (j + 0.5) * cw, top + 0.05, t.replace(" ", "␣"), ha="center", va="bottom",
+                fontsize=FS_SMALL, family=MONO if t != "<end>" else SANS,
+                color=INK if t != "<end>" else GREY)
+    for i, (state, row) in enumerate(zip(GRAMMAR_STATES, rows)):
+        y = top - (i + 1) * rh
+        ax.text(0.05, y + rh / 2, f"{i + 1}", ha="left", va="center", fontsize=FS_TINY, color=GREY)
+        ax.text(x0 - 0.1, y + rh / 2, state, ha="right", va="center", fontsize=FS_SMALL, family=MONO)
+        for j, ok in enumerate(row):
+            ok = ok == "1"
+            ax.add_patch(Rectangle((x0 + j * cw, y), cw, rh, facecolor=TINT_GREEN if ok else "#F4F4F4",
+                                   edgecolor="white", lw=1.2))
+            ax.text(x0 + (j + 0.5) * cw, y + rh / 2, "✓" if ok else "✗", ha="center",
+                    va="center", fontsize=FS, color=GREEN if ok else "#BBBBBB",
+                    fontweight="bold" if ok else "normal")
+    ax.text(W / 2, 0.03, "toy grammar {\"year\": <digits>}, toy vocabulary of 9 tokens; "
+            "✓ = legal next token", ha="center", fontsize=FS_TINY, color=GREY)
+    save(fig, "dec_grammar_table.pdf", log)
+
+
 def fig_speculative(R, log):
     p_big, p_small = 0.3, 0.6
     assert min(1, p_big / p_small) == QUOTED["spec_accept"]
@@ -593,7 +656,7 @@ def main():
     R = {"date": time.strftime("%Y-%m-%d")}
     jobs = [fig_greedy_loop, fig_map_top5, fig_ayb_bytes, lambda R, log: fig_tree(R, log, "greedy"),
             lambda R, log: fig_tree(R, log, "beam"), fig_prob_trap, fig_long_tail, fig_temperature,
-            fig_topk_topp, fig_knob_pipeline, fig_json_mask, fig_speculative, toy_checks, review_toys]
+            fig_topk_topp, fig_knob_pipeline, fig_json_mask, fig_grammar_table, fig_speculative, toy_checks, review_toys]
     for k, job in enumerate(jobs, 1):
         job(R, log)
         el = time.time() - t0
