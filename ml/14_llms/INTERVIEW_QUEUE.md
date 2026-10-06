@@ -82,6 +82,11 @@ funnel, Karpathy's samples); GPT-1 to GPT-3 in one frame; no hands-on. Student r
 
 ## LLM-8 Scaling laws and emergence
 
+**All four done 2026-10-06** (`LLM8_scaling.tex`, 25 pages): kept separate; Chinchilla vs Gopher
+cold open; the mirage toy; one grokking frame (the Welch Labs still). New on the way: the
+Chinchilla paper's published fit puts the optimum at 50-93 tokens/parameter, not 20; a frame
+shows it with the 2024 replication's refit. Student review applied.
+
 1. **Merge into LLM-7?** (a) keep separate **(recommended** if D1 stays at 13 - R: the budget
    arithmetic and the mirage toy need room); (b) merge (the short-option plan).
 2. **Cold open:** (a) Chinchilla vs Gopher - same compute, 4x smaller model, better

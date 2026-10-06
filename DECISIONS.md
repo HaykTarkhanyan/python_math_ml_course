@@ -9,6 +9,32 @@ this file holds the choice and a pointer.
 
 ---
 
+## #77 - LLM-8 draws its scaling curves from the 2024 replication's refit, and shows why
+
+**Date:** 2026-10-06 · **Status:** active (made for the instructor while building LLM-8, "do all
+queue items").
+
+**Decision.** LLM-8's power-law and iso-FLOP figures use Besiroglu et al.'s (2024) refitted
+constants (E 1.8172, A 482.01, B 2085.43, alpha 0.3478, beta 0.3658), not the Chinchilla paper's
+published eq. 10 (E 1.69, A 406.4, B 410.7, alpha 0.34, beta 0.28); one frame shows the
+difference.
+
+**Why.** Measured in `ml/14_llms/py_src/scaling_figs.py` (grid search, asserted): the published
+constants put the compute-optimal split at 50 tokens per parameter at 10^21 FLOPs and 93 at
+Chinchilla's own budget, contradicting the paper's headline (~20) and its own trained model;
+the refit gives 22 and 18. Curves that contradict the rule on the same slide would teach the
+wrong number.
+
+**Alternatives rejected.** The published constants (inconsistent with the 20-tokens rule they
+are quoted for); no fitted curves at all (loses the iso-FLOP valleys, the clearest picture of
+the trade-off).
+
+**What would change this.** A newer fit that both reproduces ~20 tokens/parameter and is the
+accepted reference; or the instructor preferring the published constants with the discrepancy
+as the only lesson.
+
+---
+
 ## #76 - LLM-7 opens on GPT-2 reciting a software licence, and uses all four real data pieces
 
 **Date:** 2026-10-06 · **Status:** active (queue answers taken as recommended, instructor: "do all
