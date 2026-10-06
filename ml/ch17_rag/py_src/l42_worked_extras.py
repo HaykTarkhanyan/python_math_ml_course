@@ -9,7 +9,11 @@
    no numbers "on a deck that otherwise loves showing arithmetic". This measures all three
    on the real corpus.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe ml/ch17_rag/py_src/l42_worked_extras.py
+3. Trying to make BM25 win (added after the 2026-10-06 student review, which never saw hybrid
+   help). Eleven identifier questions on the 18 chunks, then the same corpus plus 19
+   near-identical spare-parts notes (PRS-401 ... PRS-420). Every query tried is logged.
+
+Run:  USE_TF=0 ./ma/Scripts/python.exe ml/ch17_rag/py_src/l42_worked_extras.py   (~20 s)
 """
 
 import logging
@@ -25,9 +29,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from l42_data import RAMBLING
+from l42_data import RAMBLING, bm25_scores, ranks_from_scores, rrf_fuse
 from l42_keywords import _yake_term_scores
-from l41_data import CHUNKS, tokenize
+from l41_data import CHUNK_LABELS, CHUNKS, tokenize
 
 MODEL_NAME = "intfloat/multilingual-e5-small"
 ARM_RED, ARM_BLUE, ARM_ORANGE = "#D90012", "#0033A0", "#F2A800"
@@ -168,11 +172,69 @@ def normalisation_failures(model):
     log.info("wrote %s", out)
 
 
+IDENTIFIER_QUERIES = [  # (as a user might type it, index of the chunk that answers it)
+    ("PRS-410", 16), ("PRS-410 spare parts", 16), ("can I still get parts for the PRS-410?", 16),
+    ("PRS-220", 14), ("is the PRS-220 still in service?", 14),
+    ("PRS-380", 15), ("which cheeses is the PRS-380 for?", 15),
+    ("VAC-400", 17), ("where is the VAC-400?", 17),
+    ("PRS-400", 8), ("what did the PRS-400 replace?", 8),
+]
+PRS410 = 16
+
+
+def ranks_three_ways(model, corpus_vecs, docs, query):
+    bs = bm25_scores(query, docs)
+    qv = model.encode([f"query: {query}"], normalize_embeddings=True, show_progress_bar=False)[0]
+    ds = corpus_vecs @ qv
+    b, d = ranks_from_scores(bs), ranks_from_scores(ds)
+    return b, d, ranks_from_scores(rrf_fuse([b, d])), ds
+
+
+def identifier_attempts(model):
+    """Attempt 1: identifier questions on the 18 chunks. Attempt 2: add near-identical notes."""
+    docs = [tokenize(c) for c in CHUNKS]
+    vecs = model.encode([f"passage: {c}" for c in CHUNKS], normalize_embeddings=True,
+                        show_progress_bar=False)
+    dense_first = 0
+    for q, t in IDENTIFIER_QUERIES:
+        b, d, h, _ = ranks_three_ways(model, vecs, docs, q)
+        dense_first += int(d[t] == 1)
+        log.info("ids  %-40s %-15s bm25 %2d dense %2d rrf %2d", q, CHUNK_LABELS[t], b[t], d[t], h[t])
+        if q == "PRS-220":
+            prs220 = (b[t], d[t])
+
+    extra = [f"Spare parts for the PRS-{n} are no longer stocked by the supplier."
+             for n in range(401, 421) if n != 410]
+    corpus = CHUNKS + extra
+    docs2 = [tokenize(c) for c in corpus]
+    vecs2 = model.encode([f"passage: {c}" for c in corpus], normalize_embeddings=True,
+                         show_progress_bar=False)
+    margins, near_first = [], 0
+    for q in ["PRS-410", "PRS-410 spare parts", "can I still get parts for the PRS-410?"]:
+        b, d, h, ds = ranks_three_ways(model, vecs2, docs2, q)
+        margin = float(ds[PRS410] - max(ds[i] for i in range(len(corpus)) if i != PRS410))
+        margins.append(margin)
+        near_first += int(d[PRS410] == 1)
+        log.info("near %-40s bm25 %2d dense %2d rrf %2d  cosine margin %.4f", q, b[PRS410],
+                 d[PRS410], h[PRS410], margin)
+
+    # The frame "We tried to make BM25 win" quotes these.
+    got = (len(IDENTIFIER_QUERIES), dense_first, prs220, len(extra), near_first,
+           round(min(margins), 3), round(max(margins), 3))
+    if got != (11, 10, (2, 2), 19, 3, 0.009, 0.018):
+        raise ValueError(f"identifier numbers changed: {got}; the frame quotes "
+                         "(11, 10, (2, 2), 19, 3, 0.009, 0.018)")
+    log.info("identifier attempts checked: dense first on 10 of 11, then 3 of 3 against 19 "
+             "near-identical notes by 0.009-0.018")
+
+
 def main():
     yake_by_hand()
     log.info("")
     model = SentenceTransformer(MODEL_NAME)
     normalisation_failures(model)
+    log.info("")
+    identifier_attempts(model)
 
 
 if __name__ == "__main__":

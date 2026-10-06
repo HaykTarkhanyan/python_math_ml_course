@@ -90,7 +90,8 @@ def fig_win_scatter(model, chunk_vecs, docs_tok):
 
     counts = Counter(pts)
     log.info("01 win scatter: %s", dict(counts))
-    if counts[(1, 1)] != 12 or counts[(17, 4)] != 1:
+    dense_first = sum(n for (_bx, dy), n in counts.items() if dy == 1)   # L42 quotes "14 of the 16"
+    if counts[(1, 1)] != 12 or counts[(17, 4)] != 1 or dense_first != 14:
         raise ValueError(f"win scatter changed: {dict(counts)}; the frame quotes 12 at (1, 1) and one at (17, 4)")
 
     fig, ax = plt.subplots(figsize=(2.53, 2.25))   # drawn at slot size: 0.46 column

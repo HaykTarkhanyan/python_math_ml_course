@@ -210,13 +210,14 @@ def fig_answer_relevance(model):
     for tag, color, off in (("good answer", ARM_BLUE, -0.18), ("vague answer", ARM_ORANGE, 0.18)):
         m = float(out[tag].mean())
         ax.axhline(m, color=color, ls="--", lw=0.9)
-        ax.text(1.005, m, f"mean\n{m:.3f}", color=color, fontsize=6.5, va="center",
+        ax.text(1.005, m, f"mean {m:.3f}", color=color, fontsize=6.5, va="center",
                 fontweight="bold", transform=ax.get_yaxis_transform())
     ax.set_xticks(x)
-    ax.set_xticklabels(["reconstruction 1", "reconstruction 2", "reconstruction 3"])
-    ax.set_ylim(0.6, 1.16)
+    ax.set_xticklabels(["1", "2", "3"])
+    ax.set_xlabel("reconstructed question")
+    ax.set_ylim(0, 1.05)   # from zero: a vague answer still scores 0.79 (student review)
     ax.set_ylabel("cosine to the question")
-    ax.legend(frameon=False, loc="upper left", ncol=2)
+    ax.legend(frameon=False, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2)
     fig.tight_layout()
     save(fig, "l43_10_answer_relevance")
 

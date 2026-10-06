@@ -110,43 +110,39 @@ LLM-9 -> LLM-10 -> LLM-11 -> (RAG, agents: built) -> LLM-12 -> LLM-13 -> LLM-14 
 ## RAG (L41-L43) and agents (L44) - built in August
 
 1. ~~The layout pass~~ - **done 2026-10-05/06** (all four decks at zero on every detector).
-2. **L42's keyword-extraction stretch** (RAKE, YAKE, KeyBERT, LLM keywords, about 14 frames, ending
-   "not a clean win"): compress to a few frames **(recommended)** / keep as is. *Student review
-   2026-10-06 agrees: "the main problem ... pick one, or a one-slide comparison".*
+2. ~~L42's keyword-extraction stretch~~ - **done 2026-10-06:** YAKE's four frames and KeyBERT's
+   output frame moved, unchanged, to a backup appendix after the recap; 10 frames stay in the flow
+   (problem, three families, RAKE worked, KeyBERT's method, the LLM, predict, measured, why,
+   takeaways).
 3. **Judges:** LLM-11 teaches LLM-as-judge in general and L43 keeps only the RAG-specific frames
-   **(recommended)** / L43 stays the judge lecture and LLM-11 calls forward.
-4. **An indirect-injection frame in L44's agent loop** (the agent reads untrusted tool output):
-   yes / no - pairs with LLM-10's question 3. *The L44 student review asked for it unprompted
-   ("a security slide ... prompt injection from a tool result").*
+   **(recommended)** / L43 stays the judge lecture and LLM-11 calls forward. *Deferred on
+   2026-10-06: do it when LLM-11 is built - cutting L43's general judge frames now leaves them
+   no home.*
+4. ~~An indirect-injection frame in L44~~ - **done 2026-10-06:** "The loop reads text it did not
+   write", after the guards (a planted note in a `search_incidents` result; the defences, with the
+   MCP specification's own advice).
 
-*From the student reviews of 2026-10-06 (one Sonnet reader per deck, PNGs only; verified
-findings and figure fixes already applied - these are the ones that change content):*
+*From the student reviews of 2026-10-06 - all done the same day ("do all"), recommended options:*
 
-5. **L41 p27, the BM25 formula arrives assembled** (the reviewer's "stop here for five minutes"):
-   add one by-hand term, D1 "press": tf 1, B 0.70, 1/(1.5 x 0.70 + 1) = 0.49, x idf 2.25 = 1.10
-   **(recommended**, the by-hand rule) / leave to the board.
-6. **L42 shows the reranker's bill, never its product:** measure a real cross-encoder on the 16
-   questions (needs a model choice and download, roughly 90 MB for a MiniLM cross-encoder - your
-   call, D-type) / say on the slide that the cost is measured and the gain is not
-   **(recommended for now)**.
-7. **L42 never shows hybrid winning:** add one toy part-number query where BM25 rescues what
-   embeddings miss **(recommended**, measured on the 18 chunks) / keep the four conditions as text.
-8. **L43 uses both "context precision" and "context relevance"** (pp. 34, 39, 40, 42, 45, 62):
-   name the rank-aware one context precision and call the sentence-level one its original variant,
-   consistently **(recommended)** / keep both names.
-9. **L43 p9, lost in the middle:** the cited result says start or end; the advice says highest
-   first. Add "and the next best last" **(recommended)** / keep "first" only.
-10. **L43, which number to trust:** one closing line - recall@k on real questions for retrieval,
-    faithfulness for use of the context, nothing for whether the corpus is right
-    **(recommended)** / leave it spread across pp. 32, 44, 45.
-11. **L44 mechanisms the reviewer could not reconstruct:** how MCP tools reach the model (and
-    whether their schemas count in p16's cost), and how a skill's body enters the context. One
-    frame each **(recommended)** / leave to the lecturer.
-12. **L44's loop has guards in words only:** add the guarded loop as code, or one concrete
-    turn-by-turn trace of the Tbilisi question **(recommended: the trace)** / neither.
-13. **Truncated y-axes on bar charts** (L41 p45 at 0.80, p54 at 0.70; L43 p38 at 0.6): they
-    exaggerate small gaps, which the reviewers noticed. Start at zero where the claim is "the gap is
-    small" **(recommended for L41 p45 and L43 p38)** / keep all three.
+5. ~~L41 by-hand BM25 term~~ - **done:** "One chunk, scored by hand" (D1 = 4.203, every printed
+   number checked by `l41_bm25_figs.py`).
+6. ~~L42 reranker's gain~~ - **done, text option:** the cost frame says the gain is not measured,
+   and why (embeddings already put 14 of 16 answers first; checked by `l42_retrieval_figs.py`).
+   Measuring a real cross-encoder stays open (a model choice and a download: yours).
+7. ~~L42 hybrid winning~~ - **done differently, because the measurement said no:** on the 18 chunks
+   the embedder found the right chunk first on 10 of 11 identifier questions (the 11th tied BM25),
+   and still first against 19 near-identical part-number notes, by 0.009-0.018 cosine. New frame
+   "We tried to make BM25 win" reports both (`l42_worked_extras.py`, checked).
+8. ~~context precision / relevance~~ - **done:** the overview box, the original-form frame and the
+   current-form frame now say how the two names relate.
+9. ~~lost in the middle~~ - **done:** "Best chunk first, next best last".
+10. ~~which number to trust~~ - **done:** the recap's closing box.
+11. ~~L44 mechanisms~~ - **done:** "What actually travels" (MCP `tools/list`, `tools/call`; MCP
+    schemas count like any schema) and "How the body gets in" (Agent Skills' three levels), both
+    checked against the MCP specification 2025-06-18 and Anthropic's Agent Skills docs on
+    2026-10-06.
+12. ~~L44 loop trace~~ - **done:** "One run, turn by turn" (the Tbilisi question, schematic).
+13. ~~Truncated y-axes~~ - **done for L41 p45 and L43 p38** (now from zero); L41's ATE2 chart kept.
 
 ## LLM-12 Quantization (includes D4)
 

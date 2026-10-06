@@ -207,9 +207,9 @@ def fig_semantic_chunking(model):
             fontweight="bold", transform=ax.get_yaxis_transform())
 
     # Mark where a human would actually put the topic boundaries.
-    lo = min(sims) - 0.03
+    lo = 0.0   # from zero: the next slide's point is how narrow the band is (student review)
     for i in TRUE_BOUNDARIES:
-        ax.scatter(i, lo + 0.006, marker="^", s=30, color="#2E8B57", zorder=5)
+        ax.scatter(i, lo + 0.04, marker="^", s=30, color="#2E8B57", zorder=5)
     ax.text(0.02, 0.965,
             "green triangle = real topic change" +
             f"   |   red bar = algorithm split ({len(detected)} of them)",
@@ -219,7 +219,7 @@ def fig_semantic_chunking(model):
     ax.set_xticklabels([name.replace(" ", "\n", 1) for name in SHORT], fontsize=6)
     ax.set_xlim(-0.75, len(sims) - 0.25)
     ax.set_ylabel("similarity between\nneighbouring sentences")
-    ax.set_ylim(lo, max(sims) + 0.03)
+    ax.set_ylim(lo, 1.08)
     ax.set_title("Semantic chunking finds the real breaks, and some imaginary ones")
     ax.tick_params(axis="x", length=3)
     ax.set_xlabel("each bar: similarity of the two sentences either side of it")

@@ -234,6 +234,23 @@ def main():
     if raw_rank[0] == "D1":
         raise ValueError("worked example pointless: raw counting already ranks D1 first")
 
+    # "One chunk, scored by hand" prints these, rounded as on the slide. Check the printed
+    # arithmetic too: 0.4878 x the 3-decimal idf must round to the printed contribution.
+    d1 = rows[0]
+    sat = 1 / (K1 * length_norm(d1["dl"]) + 1)
+    printed = {"lori": 1.694, "press": 1.099, "bar": 1.410}
+    got = {"B": round(length_norm(d1["dl"]), 2), "sat": round(sat, 4), "total": round(d1["total"], 3)}
+    if got != {"B": 0.70, "sat": 0.4878, "total": 4.203} or d1["dl"] != 12:
+        raise ValueError(f"by-hand frame numbers changed: {got}, dl {d1['dl']}")
+    for term, value in printed.items():
+        if d1["tf"][term] != 1:
+            raise ValueError(f"by-hand frame assumes tf = 1 for {term}")
+        if round(sat * idf(term), 3) != value or round(0.4878 * round(idf(term), 3), 3) != value:
+            raise ValueError(f"by-hand frame: {term} contribution no longer prints as {value}")
+    if round(sum(printed.values()), 3) != 4.203:
+        raise ValueError("by-hand frame: the printed contributions do not add up to 4.203")
+    log.info("by-hand frame checked: B 0.70, saturation 0.4878, D1 = 4.203")
+
     fig_saturation()
     fig_length_norm()
     fig_worked_contributions(rows)
