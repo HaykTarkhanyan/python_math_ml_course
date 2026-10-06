@@ -164,7 +164,7 @@ match the table below.
 | 7 | LLM-7 Pretraining | Pretrain | `pretraining` | built and student-reviewed 2026-10-06 (`LLM7_pretraining.tex`, 35 pages; `LLM7_pretraining_OUTLINE.md`) |
 | 8 | LLM-8 Scaling and emergence | Scale | `scaling` | built and student-reviewed 2026-10-06 (`LLM8_scaling.tex`, 25 pages; `LLM8_scaling_OUTLINE.md`) |
 | 9 | LLM-9 Post-training | Post-train | `post_training` | built and student-reviewed 2026-10-06 (`LLM9_post_training.tex`, 24 pages; `LLM9_post_training_OUTLINE.md`) |
-| 10 | LLM-10 Prompting | Prompt | `prompting` | to build |
+| 10 | LLM-10 Prompting | Prompt | `prompting` | built and student-reviewed 2026-10-06 (`LLM10_prompting.tex`, 23 pages; `LLM10_prompting_OUTLINE.md`) |
 | 11 | LLM-11 Evaluation and hallucination | Evaluate | `evaluation` | to build |
 | - | RAG (L41-L43), agents (L44) | (own chapters, no map) | - | built |
 | 12 | LLM-12 Quantization | Quantize | `quantization` | to build |

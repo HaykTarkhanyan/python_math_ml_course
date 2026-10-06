@@ -113,6 +113,11 @@ hand (0.818); reasoning models as a teaser. No instruct model is cached, so none
 
 ## LLM-10 Prompting
 
+**All four done 2026-10-06** (`LLM10_prompting.tex`, 23 pages): "the prompt is the context";
+few-shot fragility measured on the cached GPT-2 (24 orderings x 48 reviews written for the deck +
+zero-shot, 450 s): 50% to 85%, zero-shot 69%, and the reverse of Zhao et al.'s recency bias; all of
+prompt injection; chain of thought as "tokens are compute". Student review applied.
+
 1. **Spine: "the prompt is the context"** (what goes in, in what order, what an attacker puts in)
    **(recommended)**, or the technique list.
 2. **Measure few-shot fragility on the cached GPT-2** (24 orderings x about 50 test sentences, a
