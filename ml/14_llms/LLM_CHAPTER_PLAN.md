@@ -161,7 +161,7 @@ match the table below.
 | 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
 | 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
 | 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71); grammar-table frame added 2026-10-06 |
-| 7 | LLM-7 Pretraining | Pretrain | `pretraining` | to build |
+| 7 | LLM-7 Pretraining | Pretrain | `pretraining` | built and student-reviewed 2026-10-06 (`LLM7_pretraining.tex`, 35 pages; `LLM7_pretraining_OUTLINE.md`) |
 | 8 | LLM-8 Scaling and emergence | Scale | `scaling` | to build |
 | 9 | LLM-9 Post-training | Post-train | `post_training` | to build |
 | 10 | LLM-10 Prompting | Prompt | `prompting` | to build |

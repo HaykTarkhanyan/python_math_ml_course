@@ -62,6 +62,11 @@ mechanism slide.
 
 ## LLM-7 Pretraining (critique written; this is the interview that was interrupted)
 
+**All five done 2026-10-06** (`LLM7_pretraining.tex`, 35 pages; DECISIONS #76): data-led spine; the
+cold open is GPT-2 reciting the MIT licence (34 of 34 words) and not the Gettysburg Address (0);
+real pieces - no recommendation, all four taken (the recitation run, the Armenian share, FineWeb's
+funnel, Karpathy's samples); GPT-1 to GPT-3 in one frame; no hands-on. Student review applied.
+
 1. **What should it lead with?** (a) data-led spine - objective family in one mask figure (with
    word2vec's two frames) -> one training step by hand -> the data funnel -> what comes out
    **(recommended)**; (b) history-led, as the July draft; (c) data only, history as an appendix.

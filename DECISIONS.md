@@ -9,6 +9,33 @@ this file holds the choice and a pointer.
 
 ---
 
+## #76 - LLM-7 opens on GPT-2 reciting a software licence, and uses all four real data pieces
+
+**Date:** 2026-10-06 · **Status:** active (queue answers taken as recommended, instructor: "do all
+queue items"; the real-pieces question had no recommendation, so all four were taken - a choice
+made for the instructor).
+
+**Decision.** LLM-7 (pretraining) is data-led (objective family -> one step by hand -> the data
+funnel -> what comes out), opens on the cached GPT-2 reciting the MIT licence, and uses all four
+real pieces: the recitation run, the Armenian share of the web, FineWeb's funnel, and samples
+during training (Karpathy's run, from the local transcript).
+
+**Why.** One greedy run decided the cold open (2026-10-06, 48 new tokens): MIT licence and Apache
+licence recited verbatim, the Gettysburg Address, the Declaration of Independence and lorem ipsum
+not at all. Famous is not frequent - the point the data section then explains (Carlini et al.
+2022: memorisation grows with duplicates; Lee et al. 2022: dedup cuts it 10x). Each real piece
+has a checked source (`ml/14_llms/LLM7_pretraining_OUTLINE.md`, "Facts checked").
+
+**Alternatives rejected.** The July draft's history-led spine (a catalogue of eight models); the
+other cold opens (the Armenian share, "15T tokens is N lifetimes", a raw web page) - the share is
+kept as a frame, not the hook; a perplexity hands-on (no hands-on in the slides, as LLM-1 and
+LLM-6).
+
+**What would change this.** A different cached model that does not recite the licence (re-run
+`pretraining_figs.py --gpt2` and re-check), or the instructor preferring the Armenian-share hook.
+
+---
+
 ## #75 - LLM-13 teaches LoRA library-free; the practical's library is chosen when the practical is built
 
 **Date:** 2026-10-06 · **Status:** active (instructor, D5 in the interview queue: "Library-free
