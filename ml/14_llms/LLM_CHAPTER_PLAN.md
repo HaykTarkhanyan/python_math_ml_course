@@ -167,7 +167,7 @@ match the table below.
 | 10 | LLM-10 Prompting | Prompt | `prompting` | built and student-reviewed 2026-10-06 (`LLM10_prompting.tex`, 23 pages; `LLM10_prompting_OUTLINE.md`) |
 | 11 | LLM-11 Evaluation and hallucination | Evaluate | `evaluation` | built 2026-10-06 (`LLM11_evaluation.tex`; `LLM11_evaluation_OUTLINE.md`); L43's general judge frame moved here |
 | - | RAG (L41-L43), agents (L44) | (own chapters, no map) | - | built |
-| 12 | LLM-12 Quantization | Quantize | `quantization` | to build |
+| 12 | LLM-12 Quantization | Quantize | `quantization` | built and student-reviewed 2026-10-06 (`LLM12_quantization.tex`, 25 pages; `LLM12_quantization_OUTLINE.md`) |
 | 13 | LLM-13 LoRA and QLoRA | LoRA | `lora` | to build |
 | 14 | LLM-14 Anatomy of a 2026 LLM | Attention, MLP again (KV cache, MLA; MoE) | `anatomy_2026` | optional |
 

@@ -181,6 +181,12 @@ published judge findings (Zheng 2023), no paid API; Kalai et al.'s table (their 
 
 ## LLM-12 Quantization (includes D4)
 
+**Done 2026-10-06** (`LLM12_quantization.tex`, 25 pages): D4 answered - inference engines in
+general, no runtime (#74); the ladder (a) - GPT-2's own weights quantized in NumPy, perplexity on
+cached wikitext: fp32 32.65, int4 with one scale per matrix 7,946, int4 in blocks of 32 35.9;
+the laptop's copy bandwidth 15.7 GB/s; homework skipped (no recommendation). Student review
+applied.
+
 1. **D4, the runtime** (a technology choice - yours): Ollama for first contact + llama.cpp tools
    for measuring (the plan's recommendation) / llama.cpp only / LM Studio / decide later.
 2. **The measured ladder:** (a) quantize GPT-2's own weights in NumPy and measure perplexity with
