@@ -17,6 +17,9 @@ d=1,2,4: 3,7,15.
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/receptive_field_dilated.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.45, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -25,6 +28,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 from matplotlib.patches import Rectangle
 
 SEED = 509
@@ -65,22 +69,22 @@ def draw_grid(ax, n, rf_specs, title):
     for i in range(n):
         for j in range(n):
             ax.add_patch(Rectangle((j, i), 1, 1, fc="#f2f2f2", ec="#dddddd",
-                                   lw=0.7))
+                                   lw=0.47))
     c = n // 2
-    ax.add_patch(Rectangle((c, c), 1, 1, fc="#cccccc", ec="#999999", lw=0.7))
+    ax.add_patch(Rectangle((c, c), 1, 1, fc="#cccccc", ec="#999999", lw=0.47))
     for size, color, _ in rf_specs:
         half = size // 2
         ax.add_patch(Rectangle((c - half, c - half), size, size, fill=False,
-                               ec=color, lw=2.8))
+                               ec=color, lw=1.88))
     ax.set_xlim(-0.3, n + 0.3)
-    ax.set_ylim(-3.1, n + 0.3)
+    ax.set_ylim(-4.8, n + 0.3)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.set_title(title, fontsize=12.5)
+    ax.set_title(title, fontsize=8.5, pad=2)
     for idx, (size, color, label) in enumerate(rf_specs):
-        y = -0.75 - idx * 0.78
-        ax.plot([0.2, 1.0], [y, y], color=color, lw=2.8)
-        ax.text(1.25, y, label, color=color, fontsize=10.5, va="center")
+        y = -0.9 - idx * 1.45
+        ax.plot([0.2, 1.0], [y, y], color=color, lw=1.6)
+        ax.text(1.25, y, label, color=color, fontsize=7.5, va="center")
 
 
 def make_static(log):
@@ -90,19 +94,19 @@ def make_static(log):
     if rf_std != [3, 5, 7] or rf_wav != [3, 7, 15]:
         raise AssertionError("receptive-field arithmetic drifted from the spec")
 
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(10.4, 5.0))
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(4.68, 2.25))
     n = 15
     colors = [ARM_RED, ARM_BLUE, ARM_ORANGE]
     draw_grid(axL, n,
               [(s, c, f"layer {k + 1} (d=1): {s}x{s}")
                for k, (s, c) in enumerate(zip(rf_std, colors))],
-              "3 standard 3x3 layers\nreceptive field grows linearly")
+              "standard: grows linearly")
     draw_grid(axR, n,
               [(s, c, f"layer {k + 1} (d={d}): {s}x{s}")
                for k, (s, c, d) in enumerate(zip(rf_wav, colors, dil_wav))],
-              "3 dilated 3x3 layers (d = 1, 2, 4)\nreceptive field grows exponentially")
-    fig.text(0.5, 0.015, "same cost either way: 9 weights per layer",
-             ha="center", fontsize=12, fontweight="bold", color=ARM_BLUE)
+              "dilated: grows exponentially")
+    fig.text(0.5, 0.0, "same cost either way: 9 weights per layer",
+             ha="center", fontsize=8, fontweight="bold", color=ARM_BLUE)
     out = FIG_DIR / "receptive_field_dilated.pdf"
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
@@ -113,26 +117,25 @@ def make_anim(log):
     n = 11
     c = n // 2
     for idx, d in enumerate([1, 2, 4]):
-        fig = plt.figure(figsize=(5.6, 5.6))
+        fig = plt.figure(figsize=(2.52, 2.52))
         ax = fig.add_axes([0.03, 0.10, 0.94, 0.80])  # fixed rect - no jitter
         for i in range(n):
             for j in range(n):
                 ax.add_patch(Rectangle((j, i), 1, 1, fc="#f2f2f2",
-                                       ec="#dddddd", lw=0.7))
+                                       ec="#dddddd", lw=0.47))
         span = 2 * d + 1
         half = span // 2
         ax.add_patch(Rectangle((c - half, c - half), span, span, fill=False,
-                               ec=ARM_ORANGE, lw=2.6))
+                               ec=ARM_ORANGE, lw=1.74))
         for di in (-d, 0, d):
             for dj in (-d, 0, d):
                 ax.add_patch(Rectangle((c + dj, c + di), 1, 1, fc=ARM_BLUE,
-                                       ec="#1e3a7a", lw=0.8))
+                                       ec="#1e3a7a", lw=0.54))
         ax.set_xlim(-0.3, n + 0.3)
         ax.set_ylim(-0.3, n + 0.3)
         ax.set_aspect("equal")
         ax.axis("off")
-        ax.set_title(f"dilation d = {d}: the same 9 weights span "
-                     f"{span}x{span}", fontsize=13)
+        ax.set_title(f"d = {d}: 9 weights span {span}x{span}", fontsize=8.5, pad=2)
         out = FIG_DIR / f"dilation_anim_{idx}.pdf"
         fig.savefig(out)  # deliberately NOT tight: fixed geometry across frames
         plt.close(fig)

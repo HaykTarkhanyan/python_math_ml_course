@@ -13,6 +13,9 @@ Run with the project venv:
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3+ series (red/blue/orange).
+
+2026-10-01: redrawn at its slide size (figsize x 0.48, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -22,6 +25,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 
 SEED = 509
@@ -64,44 +68,41 @@ def fourier_square(x, n_harmonics):
 
 def fig_taylor(ax, log):
     x = np.linspace(-4.2, 4.2, 600)
-    ax.plot(x, np.cos(x), color="black", lw=2.6, label=r"$\cos x$ (target)")
+    ax.plot(x, np.cos(x), color="black", lw=1.8, label=r"$\cos x$ (target)")
     for deg, col in [(2, ARM_RED), (4, ARM_ORANGE), (8, ARM_BLUE)]:
-        ax.plot(x, taylor_cos(x, deg), color=col, lw=1.8, label=f"degree {deg}")
+        ax.plot(x, taylor_cos(x, deg), color=col, lw=1.25, label=f"degree {deg}")
     ax.set_ylim(-2.2, 1.8)
-    ax.set_title("Taylor: sum of POWERS  $1, x^2, x^4, \\ldots$", fontsize=12)
-    ax.axhline(0, color="0.7", lw=0.6); ax.axvline(0, color="0.7", lw=0.6)
-    ax.legend(loc="lower center", fontsize=8, ncol=2)
+    ax.set_title("Taylor: powers $1, x^2, x^4, \\ldots$", fontsize=8, pad=2)
+    ax.axhline(0, color="0.7", lw=0.42); ax.axvline(0, color="0.7", lw=0.42)
+    ax.legend(loc="lower center", fontsize=7, ncol=2)
     ax.grid(alpha=0.2)
-    ax.text(0.5, -0.14, "great near a point, drifts off far away",
-            transform=ax.transAxes, ha="center", fontsize=9, color="0.35")
+    # (the old caption "great near a point, drifts off far away" now lives on the slide)
     log.info("drew Taylor panel")
 
 
 def fig_fourier(ax, log):
     x = np.linspace(-np.pi, np.pi, 1200)
     square = np.sign(np.sin(x))
-    ax.plot(x, square, color="black", lw=2.6, label="square wave (target)")
+    ax.plot(x, square, color="black", lw=1.8, label="square wave (target)")
     for n, col in [(1, ARM_RED), (3, ARM_ORANGE), (12, ARM_BLUE)]:
         lab = "1 wave" if n == 1 else f"{n} waves"
-        ax.plot(x, fourier_square(x, n), color=col, lw=1.6, label=lab)
+        ax.plot(x, fourier_square(x, n), color=col, lw=1.11, label=lab)
     ax.set_ylim(-1.6, 1.6)
-    ax.set_title("Fourier: sum of WAVES  $\\sin x, \\sin 3x, \\ldots$", fontsize=12)
-    ax.axhline(0, color="0.7", lw=0.6); ax.axvline(0, color="0.7", lw=0.6)
-    ax.legend(loc="lower center", fontsize=8, ncol=2)
+    ax.set_title("Fourier: waves $\\sin x, \\sin 3x, \\ldots$", fontsize=8, pad=2)
+    ax.axhline(0, color="0.7", lw=0.42); ax.axvline(0, color="0.7", lw=0.42)
+    ax.legend(loc="lower center", fontsize=7, ncol=2)
     ax.grid(alpha=0.2)
-    ax.text(0.5, -0.14, "more waves = better fit, everywhere",
-            transform=ax.transAxes, ha="center", fontsize=9, color="0.35")
+    # (the old caption "more waves = better fit, everywhere" now lives on the slide)
     log.info("drew Fourier panel")
 
 
 def main():
     log = setup_logging()
     FIG_DIR.mkdir(exist_ok=True)
-    fig, axes = plt.subplots(1, 2, figsize=(10.6, 4.0))
+    fig, axes = plt.subplots(1, 2, figsize=(5.09, 1.92))
     fig_taylor(axes[0], log)
     fig_fourier(axes[1], log)
-    fig.suptitle("Same idea, different building blocks: break a function into simple pieces",
-                 fontsize=12)
+    # (suptitle removed 2026-10-01: the slide says it)
     fig.tight_layout()
     out = FIG_DIR / "taylor_vs_fourier.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)

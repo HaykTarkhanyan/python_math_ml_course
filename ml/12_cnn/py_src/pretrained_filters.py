@@ -69,9 +69,8 @@ def main():
         ax.set_xticks([]); ax.set_yticks([])
         for s in ax.spines.values():
             s.set_visible(False)
-    fig.suptitle("ResNet-18 first-layer filters, learned on ImageNet (64 x 7x7 RGB)",
-                 fontsize=12, y=0.98)
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.94, bottom=0.02,
+    # 2026-10-01: no suptitle - at slide size it rendered at 4.8 pt; the caption is on the slide
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02,
                         wspace=0.12, hspace=0.12)
     out = FIG_DIR / "pretrained_filters.pdf"
     fig.savefig(out, bbox_inches="tight")

@@ -15,6 +15,9 @@ Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/fourier_view.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
+
+2026-10-01: redrawn at its slide size (figsize x 0.34, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -23,6 +26,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 from PIL import Image
 from skimage import data
@@ -85,15 +89,18 @@ def main():
     high = filter_in_frequency(gray, radial_mask(gray.shape, R_HIGH, inside=False))
     log.info(f"low-pass radius {R_LOW}px, high-pass radius {R_HIGH}px")
 
-    fig, axes = plt.subplots(1, 4, figsize=(11.4, 3.2))
+    # 2 x 2 so each panel is big enough to see on the slide (a 1 x 4 row left them ~0.5 in wide)
+    fig, axes = plt.subplots(2, 2, figsize=(2.75, 2.75))
+    axes = axes.ravel()
     axes[0].imshow(gray, cmap="gray", vmin=0, vmax=255)
-    axes[0].set_title("image  $f$", fontsize=12)
+    axes[0].set_title("image", fontsize=8, pad=2)
     axes[1].imshow(spectrum, cmap="magma")
-    axes[1].set_title(r"its spectrum  $\mathcal{F}\{f\}$", fontsize=12)
+    axes[1].set_title("spectrum", fontsize=8, pad=2)
     axes[2].imshow(np.clip(low, 0, 255), cmap="gray")
-    axes[2].set_title("keep low freq  $\\to$  blur", fontsize=12)
-    axes[3].imshow(np.abs(high), cmap="gray")
-    axes[3].set_title("keep high freq  $\\to$  edges", fontsize=12)
+    axes[2].set_title("keep low: blur", fontsize=8, pad=2)
+    edges = np.abs(high)
+    axes[3].imshow(edges, cmap="gray", vmax=np.percentile(edges, 99))   # faint edges visible
+    axes[3].set_title("keep high: edges", fontsize=8, pad=2)
     for ax in axes:
         ax.axis("off")
     fig.tight_layout()

@@ -1,4 +1,4 @@
-"""Assemble (and execute) ml/12_cnn/gesture_snake/gesture_snake_solution.ipynb - the CNN
+"""Assemble (and execute) ml/12_cnn/gesture_snake/52_gesture_snake_solution.ipynb - the CNN
 chapter's training practical: read the direction of your thumb from the webcam, then play Snake.
 
 Every number in the prose is printed by a cell. There is no separate student version
@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve()
 CH = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
 WORK = CH / "gesture_snake"
-OUT = WORK / "gesture_snake_solution.ipynb"
+OUT = WORK / "52_gesture_snake_solution.ipynb"
 LOGS_DIR = REPO_ROOT / "logs"
 CELLS = []
 
@@ -57,9 +57,9 @@ left, right, or nothing - and then play Snake with it (`play_snake.py`).
 | 2 | split by **burst**, not at random |
 | 3 | an augmentation that **changes the label** |
 | 4 | a small CNN from scratch, and where it fails |
-| 5 | Grad-CAM: is it looking at your thumb? (L18) |
+| 5 | Grad-CAM: is it looking at your thumb? ([50]) |
 | 6 | the random-split trap, measured |
-| 7 | transfer learning: frozen ResNet-18 features + logistic regression (L18) |
+| 7 | transfer learning: frozen ResNet-18 features + logistic regression ([50]) |
 | 8 | other people: does it work on strangers? |
 | 9 | export the model and play |
 
@@ -251,10 +251,10 @@ md(r"""
 ## Part 4 - a small CNN
 
 The crop is 128 px; a thumb is obvious at 64 px, so the net first **averages 2x2 blocks** (a
-pooling layer with no weights, L16). Then three conv blocks (conv, BatchNorm, ReLU, max-pool), each
+pooling layer with no weights, [48]). Then three conv blocks (conv, BatchNorm, ReLU, max-pool), each
 halving the map and doubling the channels, down to 64 maps of 8x8.
 
-The head is a dense layer on the **flattened** 8x8x64 maps, not L17's global average pool. A
+The head is a dense layer on the **flattened** 8x8x64 maps, not [49]'s global average pool. A
 global average pool keeps only "how much of each feature", and which way a thumb points is a
 question about *where*: which side of the fist the thumb sticks out.
 """)
@@ -272,7 +272,7 @@ print(f"{sum(p.numel() for p in small_cnn().parameters()):,} parameters")
 """)
 
 md(r"""
-Check that count with L16's formula, $k \cdot k \cdot C_{in} \cdot C_{out} + C_{out}$ per conv, plus
+Check that count with [48]'s formula, $k \cdot k \cdot C_{in} \cdot C_{out} + C_{out}$ per conv, plus
 $2 C$ per BatchNorm ($\gamma$, $\beta$) and $64 \cdot 8 \cdot 8 \cdot 5 + 5$ for the head:
 """)
 
@@ -400,8 +400,8 @@ is plain to see.
 md(r"""
 ## Part 5 - Grad-CAM: is it looking at your thumb?
 
-L18's audit, on your model. High accuracy is not the same as right reasons: a model can learn that
-"left" crops happen to show more of your sleeve. Grad-CAM's three steps, as in L18:
+[50]'s audit, on your model. High accuracy is not the same as right reasons: a model can learn that
+"left" crops happen to show more of your sleeve. Grad-CAM's three steps, as in [50]:
 
 1. take the feature maps of the **last conv block** (here 64 maps of 16x16, before the last pool);
 2. weight each map by the **average gradient** of the predicted class score with respect to it;
@@ -505,10 +505,10 @@ once the near-copies are gone.
 md(r"""
 ## Part 7 - transfer learning: frozen ResNet-18 features
 
-L18's Recipe 1. Freeze an ImageNet ResNet-18, drop its classifier, and use its 512-number output
+[50]'s Recipe 1. Freeze an ImageNet ResNet-18, drop its classifier, and use its 512-number output
 as features for **logistic regression** ([11]) - a linear probe.
 
-Two details from L18 matter here: the trunk stays in `eval()` mode (the BatchNorm gotcha), and
+Two details from [50] matter here: the trunk stays in `eval()` mode (the BatchNorm gotcha), and
 inputs are normalized with **ImageNet's** mean and std, not ours.
 """)
 

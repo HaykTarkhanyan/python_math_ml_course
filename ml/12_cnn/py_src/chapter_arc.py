@@ -10,6 +10,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/chapter_arc.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.43, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -19,6 +22,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 from matplotlib.patches import Circle, FancyArrow, FancyBboxPatch, Rectangle
 
 SEED = 509
@@ -32,11 +36,13 @@ REPO_ROOT = HERE.parents[3]
 FIG_DIR = CH_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"
 
+# 2026-10-13: badges show the global deck numbers the slides cite ([48], [49]-[51]); the old
+# L16-L19 names are gone from the decks since the rename.
 BEATS = [
-    ("L16", "the layer", "one neuron, reused\nat every pixel"),
-    ("L17", "the architectures", "the ImageNet decade:\nLeNet to ResNet"),
-    ("L18", "reuse + trust", "transfer a trunk,\naudit with Grad-CAM"),
-    ("L19", "structured outputs", "boxes, masks -\nthe task is the output"),
+    ("[48]", "the layer", "one neuron, reused\nat every pixel"),
+    ("[49]", "the architectures", "the ImageNet decade:\nLeNet to ResNet"),
+    ("[50]", "reuse + trust", "transfer a trunk,\naudit with Grad-CAM"),
+    ("[51]", "structured outputs", "boxes, masks -\nthe task is the output"),
 ]
 
 
@@ -59,7 +65,7 @@ def picto_layer(ax, cx, cy, color):
     for i in range(3):
         for j in range(3):
             ax.add_patch(Rectangle((cx - 0.75 + j * s, cy - 0.42 + i * s), s, s,
-                                   fc="#dde4f0", ec=color, lw=1.1))
+                                   fc="#dde4f0", ec=color, lw=0.72))
     ax.add_patch(FancyArrow(cx + 0.18, cy, 0.42, 0, width=0.015,
                             head_width=0.10, head_length=0.10, fc=color,
                             ec=color))
@@ -71,22 +77,22 @@ def picto_architectures(ax, cx, cy, color):
     heights = [0.30, 0.52, 0.74, 0.96]
     for k, h in enumerate(heights):
         ax.add_patch(Rectangle((cx - 0.86 + k * 0.47, cy - 0.48), 0.34, h,
-                               fc="#dde4f0", ec=color, lw=1.2))
+                               fc="#dde4f0", ec=color, lw=0.79))
 
 
 def picto_transfer(ax, cx, cy, color):
     """L18: frozen trunk blocks + one training head block."""
     for k in range(3):
         ax.add_patch(Rectangle((cx - 0.95 + k * 0.47, cy - 0.24), 0.36, 0.55,
-                               fc="#dcdcdc", ec="#9a9a9a", lw=1.2))
+                               fc="#dcdcdc", ec="#9a9a9a", lw=0.79))
     ax.add_patch(Rectangle((cx + 0.46, cy - 0.24), 0.36, 0.55,
-                           fc="#bfe3cf", ec="#008C46", lw=1.4))
+                           fc="#bfe3cf", ec="#008C46", lw=0.92))
 
 
 def picto_outputs(ax, cx, cy, color):
     """L19: a detection box + a segmentation blob."""
     ax.add_patch(Rectangle((cx - 0.95, cy - 0.40), 0.85, 0.85, fill=False,
-                           ec=color, lw=2.0))
+                           ec=color, lw=1.31))
     ax.add_patch(Circle((cx - 0.525, cy + 0.025), 0.30, fc="#f6c8cb",
                         ec="none"))
     theta = np.linspace(0, 2 * np.pi, 60)
@@ -103,15 +109,17 @@ def main():
     np.random.seed(SEED)
     FIG_DIR.mkdir(exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(12.6, 3.1))
+    fig, ax = plt.subplots(figsize=(5.42, 1.33))
     fig.subplots_adjust(left=0.005, right=0.995, top=0.99, bottom=0.01)
     ax.set_xlim(0, 12.6)
     ax.set_ylim(0, 3.1)
     ax.set_aspect("equal")
     ax.axis("off")
 
-    panel_w, gap = 2.86, 0.36
-    x = 0.12
+    # 4 panels + 3 gaps must end inside xlim 12.6: 0.06 + 4*2.86 + 3*0.34 = 12.52
+    # (was 0.12 + 3*0.36 -> 12.64, which cut off the L19 panel's right edge)
+    panel_w, gap = 2.86, 0.34
+    x = 0.06
     for k, ((lnum, title, sub), picto) in enumerate(zip(BEATS, PICTOS)):
         hot = (k == 3)
         accent = ARM_RED if hot else ARM_BLUE
@@ -119,15 +127,15 @@ def main():
             (x, 0.22), panel_w, 2.66,
             boxstyle="round,pad=0.02,rounding_size=0.10",
             fc="#fdf4f4" if hot else "#fafbfd",
-            ec=accent, lw=2.2 if hot else 1.4))
-        ax.text(x + 0.16, 2.62, lnum, fontsize=15, fontweight="bold",
+            ec=accent, lw=1.44 if hot else 1.4))
+        ax.text(x + 0.16, 2.62, lnum, fontsize=8.5, fontweight="bold",
                 color="white", va="center", ha="left",
-                bbox=dict(boxstyle="square,pad=0.25", fc=accent, ec="none"))
-        ax.text(x + 0.78, 2.62, title, fontsize=13.5, fontweight="bold",
-                color=DARK, va="center", ha="left")
-        picto(ax, x + panel_w / 2, 1.62, accent)
-        ax.text(x + panel_w / 2, 0.66, sub, fontsize=10.5, color=DARK,
-                ha="center", va="center", linespacing=1.25)
+                bbox=dict(boxstyle="square,pad=0.2", fc=accent, ec="none"))
+        ax.text(x + panel_w / 2, 2.12, title, fontsize=8, fontweight="bold",
+                color=DARK, va="center", ha="center")
+        picto(ax, x + panel_w / 2, 1.35, accent)
+        ax.text(x + panel_w / 2, 0.5, sub, fontsize=7, color=DARK,
+                ha="center", va="center", linespacing=1.1)
         if k < 3:
             ax.add_patch(FancyArrow(x + panel_w + 0.05, 1.55, gap - 0.16, 0,
                                     width=0.02, head_width=0.16,

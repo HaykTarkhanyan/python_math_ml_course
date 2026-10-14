@@ -1,11 +1,69 @@
 # Course plan
 
-Last updated: 2026-08-08
+Last updated: 2026-10-15 (the "Next sessions" section only; everything below it is as of 2026-08-08)
 
 **Cadence: Wednesday / Friday / Sunday**, three sessions a week (changed from the earlier
 Tuesday/Thursday pattern). Times on the "Metric" Google Calendar.
 
 **Projected finish: mid-to-late November 2026** — see [Projected finish](#projected-finish).
+**Stale as of 2026-10-14:** that projection had LLMs on Sep 27 - Oct 14; they now start Oct 21.
+
+---
+
+## Next sessions (set 2026-10-14, renumbered 2026-10-15)
+
+Every session is 20:00-22:00 Yerevan time (18:00-20:00 Munich), per the "Metric" calendar
+(recurring event "MA"). Playlist numbers after [51] are projected, not assigned yet. On
+2026-10-15 the CNN decks moved down one number to match the playlist (DECISIONS #83): [48]
+foundations, [49] architectures, [50] transfer learning, [51] vision tasks.
+
+| Date | Day | # | Session | Material | State |
+|---|---|---|---|---|---|
+| ~~**Oct 14**~~ | Wed | [50] + [51] | ✅ Transfer learning + Vision tasks - **delivered**, notes exported | `12_cnn/50_transfer_learning` (32 frames) · `12_cnn/51_vision_tasks` (49 frames) | Clean PDFs recompiled 2026-10-15; both notes PDFs linked on the chapter page |
+| **Oct 16** | Fri | [52] | *Practical* - Gesture Snake | `12_cnn/gesture_snake/52_gesture_snake_solution.ipynb` · `STUDENT_GUIDE.md` | Built and executed 2026-10-01 |
+| **Oct 18** | Sun | [53] + [54] | RNN foundations + The road to attention | `13_rnns/L20_rnn_foundations` (30 frames) · `13_rnns/L21_road_to_attention` (25 frames) | Built, last edited Oct 3-5, on GitHub. Rename to `53_`/`54_` at delivery |
+| **Oct 21** | Wed | [55] | LLMs, session 1 | `14_llms/LLM1_tokenization` (40 frames), if the chapter order holds - see risk 5 | Built 2026-10-04, not student-reviewed (LLM-3 to LLM-5 were) |
+
+### Risks and open questions (critique of this plan)
+
+1. **Oct 14 was the heaviest session yet** (81 frames in 120 minutes; [48] alone was 73).
+   Delivered. The notes PDFs show where the lecture actually got to - worth checking before
+   planning the next double session.
+2. ~~**The CNN chapter students see online is still L16-L19.**~~ Resolved 2026-10-15: the
+   chapter (decks, notes PDFs, notebooks, chapter page) committed and pushed.
+3. **Friday's risk is setup, not content.** Each student needs a webcam, torch + opencv from
+   `requirements.txt`, and 500 recorded crops before any training (training is ~3 min on CPU).
+   Send the STUDENT_GUIDE install section ahead and ask everyone to run `record_gestures.py`
+   once before Friday. Still open in `DEFERRED_TODO.md`: ship the instructor's 500 crops
+   (2.2 MB) as starter data for students without a webcam (burst 1 has the planted sleeve
+   shortcut). The order is right: Grad-CAM and the frozen ResNet-18 come from [50] two days
+   earlier.
+4. **Sunday: two decks fit, the RNN practical does not.** 55 frames is lighter than Oct 14. But
+   `13_rnns/xx_rnn_memory` ("How far back can a network remember?") gets no slot in this plan:
+   cut it, make it homework, or give it a session. The RNN decks have not had the kind of
+   instructor review the CNN decks got this week (13 change requests for [51] alone). If they
+   need one, do it Thursday or Saturday, not on Sunday.
+5. **"Wednesday we do transformers" conflicts with the chapter as built.** The LLM chapter runs
+   in forward-pass order: LLM-1 tokenization, LLM-2 embeddings and position, LLM-3 attention,
+   LLM-4 the transformer block (DECISIONS #67). L21's closing Next box promises tokenization
+   next, and LLM-3 builds on LLM-2's embeddings. Starting at attention means skipping LLM-1/2 or
+   reversing #67. Recommended: Oct 21 = LLM-1 tokenization, as L21 promises.
+6. **There is no course end date, and the old one is gone.** The LLM chapter is 14 decks
+   (DECISIONS #73 removed the session cap), plus RAG (L41-L43) and agents (L44): 18 decks. At one
+   deck per session and no practicals, LLM-14 lands on Fri Nov 20 and agents on Sun Nov 29.
+   Still unscheduled after that, from the 08-08 plan: diffusion, RL, VLM, audio, VLA, tabular
+   FMs (~12-15 sessions), which pushes past mid-December. If there is a hard end date, section 8
+   of `14_llms/LLM_CHAPTER_PLAN.md` has a 10-session cut.
+7. **Autoencoders and GANs dropped out of the order.** The 08-08 plan put them between RNN and
+   LLMs; this plan goes straight from RNN to LLMs. Cut, or after LLMs? Their decks assume RNN
+   came right before (`L23_vae`'s Next box and `L23c`'s king-queen callback point at L21), and
+   [51]'s last frame teases GANs.
+8. **The class moves to 21:00 Yerevan on Sun Oct 25.** The recurring "MA" event is pinned to
+   Europe/Berlin at 18:00. Europe leaves summer time on Oct 25 and Armenia does not, so the
+   calendar shows Oct 23 at 20:00+04 and Oct 25 at 21:00+04. If the class should stay at 20:00
+   in Yerevan, change the event's time zone to Asia/Yerevan (then it is 17:00 in Munich).
+9. **Small:** `[49]` (architectures) has no `_notes.pdf` on disk, so its chapter-page line has
+   no notes link. Export it if it exists.
 
 ---
 

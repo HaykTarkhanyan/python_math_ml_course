@@ -8,6 +8,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/image_as_function.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.5, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -16,6 +19,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 
 SEED = 509
@@ -56,23 +60,25 @@ def main():
     lines = [30, 59, 90]
     colors = [ARM_RED, ARM_BLUE, ARM_ORANGE]
 
-    fig = plt.figure(figsize=(9.4, 3.8))
-    gs = fig.add_gridspec(3, 2, width_ratios=[1.0, 1.35], hspace=0.35, wspace=0.15)
+    fig = plt.figure(figsize=(3.75, 1.95))
+    gs = fig.add_gridspec(3, 2, width_ratios=[1.0, 1.35], hspace=0.35, wspace=0.32,
+                          left=0.01, right=0.99, top=0.9, bottom=0.17)
     axim = fig.add_subplot(gs[:, 0])
     axim.imshow(img, cmap="gray", vmin=0, vmax=255)
     for y, c in zip(lines, colors):
-        axim.axhline(y, color=c, lw=1.8)
-    axim.set_title("image", fontsize=12); axim.axis("off")
+        axim.axhline(y, color=c, lw=1.27)
+    axim.set_title("image, 3 scan lines", fontsize=8); axim.axis("off")
 
     for k, (y, c) in enumerate(zip(lines, colors)):
         ax = fig.add_subplot(gs[k, 1])
-        ax.plot(img[y, :], color=c, lw=1.8)
-        ax.set_ylim(0, 255); ax.set_ylabel(f"y={y}", fontsize=9)
+        ax.plot(img[y, :], color=c, lw=1.27)
+        ax.set_ylim(0, 255); ax.set_yticks([0, 255]); ax.tick_params(labelsize=7)
+        ax.text(1.02, 0.5, f"y={y}", transform=ax.transAxes, fontsize=7, color=c, va="center")
         ax.grid(alpha=0.15)
         if k < 2:
             ax.set_xticks([])
-    ax.set_xlabel("x (pixel)")
-    fig.suptitle("An image is a function: intensity f(x) along each scan line", fontsize=12)
+    ax.set_xlabel("x (pixel)", fontsize=7.5, labelpad=1)
+    # (title on the slide: "An image is a function")
     out = FIG_DIR / "image_as_function.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     log.info(f"saved {out}")

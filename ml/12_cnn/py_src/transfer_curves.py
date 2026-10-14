@@ -11,8 +11,9 @@ Two modes:
      malformed file.
   2. SCHEMATIC (fallback while the HW3 notebook does not exist yet): draw the three
      canonical curve SHAPES with unlabeled axes and a printed disclaimer
-     "schematic - typical shapes, real curves come with HW3". No invented numbers
-     are presented as measurements.
+     "schematic - typical shapes, not measured". No invented numbers are presented
+     as measurements. (2026-10-01: HW3 was dropped for the Gesture Snake practical,
+     DECISIONS #58, so the disclaimer no longer promises it.)
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/transfer_curves.py
@@ -109,29 +110,30 @@ def plot_schematic(log):
     feat = 0.15 + 0.63 * (1 - np.exp(-x / 2.5))
     fine = 0.15 + 0.73 * (1 - np.exp(-x / 5.0))
 
-    fig, ax = plt.subplots(figsize=(7.6, 4.4))
-    ax.plot(x, scratch, color=COL_SCRATCH, lw=2.4)
-    ax.plot(x, feat, color=COL_FEAT, lw=2.4)
-    ax.plot(x, fine, color=COL_FINETUNE, lw=2.4)
+    fig, ax = plt.subplots(figsize=(3.3, 2.15))      # its size on the slide (2026-10-01)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.1)
+    ax.plot(x, scratch, color=COL_SCRATCH, lw=1.6)
+    ax.plot(x, feat, color=COL_FEAT, lw=1.6)
+    ax.plot(x, fine, color=COL_FINETUNE, lw=1.6)
     ax.text(30.5, scratch[-1], "from scratch:\nslow, plateaus low",
-            color=COL_SCRATCH, fontsize=10, va="center")
-    ax.text(30.5, feat[-1] - 0.03, "feature extraction:\nfast, good",
-            color=COL_FEAT, fontsize=10, va="center")
-    ax.text(30.5, fine[-1] + 0.04, "fine-tune:\nbest ceiling",
-            color=COL_FINETUNE, fontsize=10, va="center")
+            color=COL_SCRATCH, fontsize=7.5, va="center")
+    ax.text(30.5, feat[-1] - 0.06, "feature extraction:\nfast, good",
+            color=COL_FEAT, fontsize=7.5, va="center")
+    ax.text(30.5, fine[-1] + 0.07, "fine-tune:\nbest ceiling",
+            color=COL_FINETUNE, fontsize=7.5, va="center")
 
     # deliberately unlabeled axes: shapes, not measurements
     ax.set_xticks([]); ax.set_yticks([])
-    ax.set_xlabel("epochs", fontsize=11)
-    ax.set_ylabel("validation accuracy", fontsize=11)
-    ax.set_xlim(0, 46)
+    ax.set_xlabel("epochs", fontsize=8, labelpad=2)
+    ax.set_ylabel("validation accuracy", fontsize=8, labelpad=2)
+    ax.set_xlim(0, 52)
     ax.set_ylim(0, 1.0)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_title("Same small dataset, three ways to train", fontsize=13)
-    ax.text(0.02, 0.965,
-            "schematic - typical shapes, real curves come with HW3",
-            transform=ax.transAxes, fontsize=9.5, color="gray",
-            style="italic", va="top")
+    ax.set_title("Same small dataset, three ways to train", fontsize=8.5)
+    ax.text(0.98, 0.03,
+            "schematic - typical shapes, not measured",
+            transform=ax.transAxes, fontsize=7, color="gray",
+            style="italic", va="bottom", ha="right")
     return fig
 
 
@@ -146,7 +148,7 @@ def main():
         fig = plot_schematic(log)
 
     out = FIG_DIR / "transfer_curves.pdf"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out)
     plt.close(fig)
     log.info(f"saved {out}")
 

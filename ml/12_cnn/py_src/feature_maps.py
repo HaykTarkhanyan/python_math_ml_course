@@ -9,13 +9,20 @@ Trains the chapter's small CNN (9,098 params) on a 15k Fashion-MNIST subsample f
 epochs - a few minutes on CPU. (Same config as cnn_vs_mlp.py, so the learned kernels shown
 here are the same net that wins the payoff figure.)
 
-Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/feature_maps.py
+Run with the project venv (~2-3 min on 2 CPU threads; --plot-only redraws in ~3 s from the
+saved results/feature_maps.npz, no training):
+    ./ma/Scripts/python.exe ml/12_cnn/py_src/feature_maps.py [--plot-only]
+
+2026-10-01: the run now saves the learned kernels, the sample image and its maps to
+ml/12_cnn/results/feature_maps.npz, and the figure is drawn from that file at its slide size
+(3.6 in wide; its labels rendered at 2.9 pt before). Training runs on 2 threads.
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 """
 
+import argparse
 import logging
+import time
 from pathlib import Path
 
 import matplotlib
@@ -34,6 +41,7 @@ CH_DIR = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
 FIG_DIR = CH_DIR / "fig"
 LOGS_DIR = REPO_ROOT / "logs"
+RESULTS = CH_DIR / "results" / "feature_maps.npz"
 
 
 def setup_logging() -> logging.Logger:
@@ -43,7 +51,8 @@ def setup_logging() -> logging.Logger:
     logger.handlers.clear()
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     sh = logging.StreamHandler(); sh.setFormatter(fmt)
-    fh = logging.FileHandler(LOGS_DIR / "feature_maps.log"); fh.setFormatter(fmt)
+    fh = logging.FileHandler(LOGS_DIR / "feature_maps.log", encoding="utf-8")
+    fh.setFormatter(fmt)
     logger.addHandler(sh); logger.addHandler(fh)
     return logger
 
@@ -95,9 +104,9 @@ def train(model, Xtr, ytr, epochs=5, lr=1e-3, batch=128):
     return model
 
 
-def main():
-    log = setup_logging()
-    FIG_DIR.mkdir(exist_ok=True)
+def run_experiment(log):
+    torch.set_num_threads(2)
+    t0 = time.perf_counter()
     Xtr, ytr, Xte, yte = load_fmnist(n_train=15000)
     log.info(f"data train {tuple(Xtr.shape)} test {tuple(Xte.shape)}")
 
@@ -115,21 +124,44 @@ def main():
     with torch.no_grad():
         act = torch.relu(model.conv1(sample))[0]        # (8, 28, 28)
     kernels = model.conv1.weight.detach()[:, 0]         # (8, 3, 3)
+    RESULTS.parent.mkdir(exist_ok=True)
+    np.savez(RESULTS, kernels=kernels.numpy(), act=act.numpy(), sample=sample[0, 0].numpy(),
+             acc=acc, nparams=nparams, seconds=time.perf_counter() - t0)
+    log.info(f"saved {RESULTS} ({time.perf_counter() - t0:.0f} s)")
 
-    fig, axes = plt.subplots(2, 9, figsize=(11.5, 3.2))
+
+def plot(log):
+    if not RESULTS.exists():
+        raise FileNotFoundError(f"{RESULTS} missing - run without --plot-only first")
+    r = np.load(RESULTS)
+    kernels, act, sample = r["kernels"], r["act"], r["sample"]
+    fig, axes = plt.subplots(2, 9, figsize=(3.6, 1.08))      # its size on the slide
+    fig.subplots_adjust(left=0.0, right=1.0, top=1.0, bottom=0.12, wspace=0.08, hspace=0.08)
     axes[0, 0].axis("off")
-    axes[0, 0].text(0.5, 0.5, "kernel", ha="center", va="center", fontsize=10)
-    axes[1, 0].imshow(sample[0, 0], cmap="gray")
-    axes[1, 0].set_title("input", fontsize=9); axes[1, 0].axis("off")
+    axes[0, 0].text(0.5, 0.5, "kernels", ha="center", va="center", fontsize=7)
+    axes[1, 0].imshow(sample, cmap="gray"); axes[1, 0].axis("off")
     for k in range(8):
         axes[0, k + 1].imshow(kernels[k], cmap="gray"); axes[0, k + 1].axis("off")
         axes[1, k + 1].imshow(act[k], cmap="gray"); axes[1, k + 1].axis("off")
-    fig.suptitle("First-layer kernels a CNN learned on Fashion-MNIST (top) "
-                 "and their feature maps on one image (bottom)", fontsize=11)
-    fig.tight_layout()
+    # bottom-row labels: the first image is the input, the other eight are its feature maps
+    axes[1, 0].text(0.5, -0.08, "input", ha="center", va="top", fontsize=7,
+                    transform=axes[1, 0].transAxes)
+    axes[1, 5].text(0.0, -0.08, "feature maps (one per kernel above)", ha="center", va="top",
+                    fontsize=7, transform=axes[1, 5].transAxes)
     out = FIG_DIR / "feature_maps.pdf"
-    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
-    log.info(f"saved {out}  (test acc {acc:.3f}, params {nparams})")
+    fig.savefig(out, dpi=200); plt.close(fig)
+    log.info(f"saved {out}  (test acc {float(r['acc']):.3f}, params {int(r['nparams'])})")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--plot-only", action="store_true", help="redraw from the saved npz")
+    args = ap.parse_args()
+    log = setup_logging()
+    FIG_DIR.mkdir(exist_ok=True)
+    if not args.plot_only:
+        run_experiment(log)
+    plot(log)
 
 
 if __name__ == "__main__":

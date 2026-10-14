@@ -16,6 +16,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/separable_count.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.42, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -24,6 +27,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 
 SEED = 509
 ARM_RED, ARM_BLUE, ARM_ORANGE = "#D90012", "#0033A0", "#F2A800"
@@ -66,24 +70,23 @@ def main():
     if (standard, depthwise, pointwise, separable) != (1228800, 4800, 49152, 53952):
         raise AssertionError("multiplication counts drifted from the locked spec")
 
-    fig, ax = plt.subplots(figsize=(7.6, 4.4))
+    fig, ax = plt.subplots(figsize=(3.19, 1.85))
     labels = ["standard\n5x5 conv", "depthwise +\npointwise"]
     bars = ax.bar(labels, [standard, separable], width=0.55,
                   color=[ARM_BLUE, ARM_ORANGE])
-    ax.bar_label(bars, labels=[f"{standard:,}", f"{separable:,}"], padding=4,
-                 fontsize=13, fontweight="bold")
+    ax.bar_label(bars, labels=[f"{standard:,}", f"{separable:,}"], padding=2,
+                 fontsize=8.5, fontweight="bold")
+    ax.tick_params(labelsize=7.5)
     ax.set_ylim(0, standard * 1.16)
-    ax.set_ylabel("multiplications (12x12x3 input, 256 out channels)",
-                  fontsize=10.5)
+    ax.set_ylabel("multiplications", fontsize=8)
+    ax.set_yticks([])                      # the bars carry their own values
     ax.grid(axis="y", alpha=0.2)
     ax.set_axisbelow(True)
+    # the depthwise / pointwise split is spelled out in the slide's equations, not here
     ax.annotate(f"~{ratio:.0f}x fewer",
-                xy=(1, separable), xytext=(0.72, standard * 0.55),
-                fontsize=14, fontweight="bold", color=ARM_RED,
-                arrowprops=dict(arrowstyle="->", color=ARM_RED, lw=1.6))
-    ax.text(1, separable + standard * 0.115,
-            f"depthwise {depthwise:,}\n+ pointwise {pointwise:,}",
-            ha="center", va="bottom", fontsize=9.5, color="#555555")
+                xy=(1.0, standard * 0.15), xytext=(1.0, standard * 0.62),
+                ha="center", fontsize=9, fontweight="bold", color=ARM_RED,
+                arrowprops=dict(arrowstyle="->", color=ARM_RED, lw=1.04))
 
     out = FIG_DIR / "separable_count.pdf"
     fig.savefig(out, bbox_inches="tight")

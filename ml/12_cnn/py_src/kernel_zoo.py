@@ -13,6 +13,9 @@ Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/kernel_zoo.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
+
+2026-10-01: redrawn at its slide size (figsize x 0.42, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -21,6 +24,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 from PIL import Image
 from skimage import data
@@ -92,14 +96,14 @@ def main():
     gray = load_gray()
     log.info(f"loaded grayscale {gray.shape}")
 
-    fig, axes = plt.subplots(2, 4, figsize=(9.4, 5.2))
+    fig, axes = plt.subplots(2, 4, figsize=(3.95, 2.18))
     axes = axes.ravel()
     axes[0].imshow(gray, cmap="gray", vmin=0, vmax=255)
-    axes[0].set_title("original", fontsize=12); axes[0].axis("off")
+    axes[0].set_title("original", fontsize=9.1); axes[0].axis("off")
     for ax, (name, ker) in zip(axes[1:], KERNELS.items()):
         result = display_norm(name, conv2d(gray, ker))
         ax.imshow(result, cmap="gray")
-        ax.set_title(name, fontsize=12); ax.axis("off")
+        ax.set_title(name, fontsize=9.1); ax.axis("off")
         log.info(f"applied {name}")
     fig.tight_layout()
     out = FIG_DIR / "kernel_zoo.pdf"

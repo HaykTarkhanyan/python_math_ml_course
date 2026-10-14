@@ -7,6 +7,9 @@ Generates into ml/12_cnn/fig/:
 
 Uses skimage's public-domain 'astronaut' test image. Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/sobel_build.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.3, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -15,6 +18,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 from PIL import Image
 from skimage import data
@@ -65,14 +69,14 @@ def main():
     log.info("computed difference, Sobel X/Y, gradient magnitude")
 
     panels = [(g, "original"),
-              (d, "adjacent diff  [-1 0 1]"),
-              (np.abs(gx), "Sobel X (smoothed)"),
-              (mag, "gradient magnitude")]
-    fig, axes = plt.subplots(1, 4, figsize=(11.2, 3.1))
+              (d, "[-1 0 1]"),
+              (np.abs(gx), "Sobel X"),
+              (mag, "|gradient|")]
+    fig, axes = plt.subplots(1, 4, figsize=(3.36, 1.0))
     for ax, (im, t) in zip(axes, panels):
         ax.imshow(im, cmap="gray")
-        ax.set_title(t, fontsize=11); ax.axis("off")
-    fig.tight_layout()
+        ax.set_title(t, fontsize=8, pad=2); ax.axis("off")
+    fig.subplots_adjust(left=0.005, right=0.995, top=0.83, bottom=0.01, wspace=0.05)
     out = FIG_DIR / "sobel_build.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     log.info(f"saved {out}")

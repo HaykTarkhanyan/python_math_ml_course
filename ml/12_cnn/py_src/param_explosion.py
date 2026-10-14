@@ -10,6 +10,9 @@ Run with the project venv:
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette, value labels on bars.
+
+2026-10-01: redrawn at its slide size (figsize x 0.49, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -18,6 +21,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 
 SEED = 509
 ARM_BLUE, ARM_RED = "#0033A0", "#D90012"
@@ -54,16 +58,17 @@ def main():
     vals = [dense, conv]
     colors = [ARM_RED, ARM_BLUE]
 
-    fig, ax = plt.subplots(figsize=(6.6, 3.9))
+    fig, ax = plt.subplots(figsize=(3.23, 1.91))
     bars = ax.bar(labels, vals, color=colors, width=0.62)
     ax.set_yscale("log")
-    ax.set_ylim(1, 3e9)
-    ax.set_ylabel("parameters (log scale)")
-    ax.bar_label(bars, labels=[f"{v:,}" for v in vals], padding=5, fontsize=12)
-    ax.set_title("100x100x3 image, one layer: dense vs convolution")
+    ax.set_ylim(1, 3e10)
+    ax.set_ylabel("parameters (log scale)", fontsize=7.5)
+    ax.tick_params(labelsize=7.5)
+    ax.bar_label(bars, labels=[f"{v:,}" for v in vals], padding=2, fontsize=8.5)
+    ax.set_title("one layer on a 100x100x3 image", fontsize=8.5)
     ax.grid(axis="y", alpha=0.2)
-    ax.text(0.5, 0.90, f"{dense // conv:,}x fewer", transform=ax.transAxes,
-            ha="center", fontsize=11, color=ARM_BLUE, fontweight="bold")
+    ax.text(0.97, 0.62, f"{dense // conv:,}x\nfewer", transform=ax.transAxes,
+            ha="right", fontsize=8.5, color=ARM_BLUE, fontweight="bold")
     fig.tight_layout()
     out = FIG_DIR / "param_explosion.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)

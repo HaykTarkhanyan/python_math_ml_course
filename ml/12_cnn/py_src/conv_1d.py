@@ -9,6 +9,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_1d.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.34, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -17,6 +20,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 
 SEED = 509
@@ -48,12 +52,13 @@ def fig_moving_average(log):
     k = np.ones(5) / 5.0
     smooth = np.convolve(noisy, k, mode="same")
 
-    fig, ax = plt.subplots(figsize=(6.8, 3.4))
-    ax.plot(x, noisy, color="#b8c4d9", lw=1.2, label="noisy signal")
-    ax.plot(x, smooth, color=ARM_BLUE, lw=2.4, label="5-point moving average")
-    ax.set_xlabel("position"); ax.set_ylabel("value")
-    ax.set_title("Moving average = convolution with a box kernel [1/5, 1/5, 1/5, 1/5, 1/5]")
-    ax.legend(loc="upper right", fontsize=9); ax.grid(alpha=0.2)
+    fig, ax = plt.subplots(figsize=(3.55, 1.75))   # moving average: its own 3.55 in slot
+    ax.plot(x, noisy, color="#b8c4d9", lw=0.7, label="noisy signal")
+    ax.plot(x, smooth, color=ARM_BLUE, lw=1.4, label="5-point moving average")
+    ax.set_xlabel("position", fontsize=7.5, labelpad=1); ax.set_ylabel("value", fontsize=7.5)
+    ax.tick_params(labelsize=7)
+    ax.set_title("box kernel (1/5 each) = moving average", fontsize=8.5, pad=2)
+    ax.legend(loc="upper right", fontsize=7.45); ax.grid(alpha=0.2)
     fig.tight_layout()
     out = FIG_DIR / "moving_average.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
@@ -66,22 +71,24 @@ def fig_dice(log):
     faces = np.arange(1, 7)
     sums = np.arange(2, 13)
 
-    fig, axes = plt.subplots(1, 3, figsize=(10.6, 3.2))
+    fig, axes = plt.subplots(1, 3, figsize=(3.6, 1.6))
     for ax, (xs, ys, t, col) in zip(
         axes,
         [(faces, die, "P(die A)", ARM_RED),
          (faces, die, "P(die B)", ARM_ORANGE),
-         (sums, summ, "P(A + B) = their convolution", ARM_BLUE)],
+         (sums, summ, "P(A + B)", ARM_BLUE)],
     ):
         b = ax.bar(xs, ys, color=col, width=0.7)
-        ax.set_title(t, fontsize=11)
+        ax.set_title(t, fontsize=8, pad=2)
         ax.set_ylim(0, summ.max() * 1.25)
-        ax.set_xticks(xs)
+        ax.set_xticks(xs[::2] if len(xs) > 6 else xs)
+        ax.tick_params(labelsize=7)
         ax.grid(axis="y", alpha=0.2)
-    axes[2].bar_label(axes[2].containers[0],
-                      labels=[f"{v*36:.0f}/36" for v in summ], fontsize=7, padding=1)
-    fig.suptitle("Adding two dice: the sum's distribution is the convolution of the two "
-                 "uniforms (a triangle, peak at 7)", fontsize=11)
+    peak = int(np.argmax(summ))
+    axes[2].text(sums[peak], summ[peak], "6/36", ha="center", va="bottom", fontsize=7)
+    for ax in axes[1:]:
+        ax.set_yticklabels([])
+    # (suptitle removed 2026-10-01: the slide says it)
     fig.tight_layout()
     out = FIG_DIR / "dice_conv.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)

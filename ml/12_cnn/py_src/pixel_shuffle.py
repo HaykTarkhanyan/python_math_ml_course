@@ -11,6 +11,9 @@ Run with the project venv:
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 The pomegranate photo is required; the script fails loudly if it is missing.
+
+2026-10-01: redrawn at its slide size (figsize x 0.4, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -19,6 +22,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 from matplotlib.patches import Rectangle
 import numpy as np
 from PIL import Image
@@ -61,21 +65,21 @@ def load_gray(max_w=320):
 def fig_image_numbers(gray, log):
     """Full grayscale photo with a boxed patch, next to that patch as raw numbers."""
     H, W = gray.shape
-    p = 8
+    p = 6       # 2026-10-01: 8 -> 6 so 3-digit values fit their cells at slide size
     r0, c0 = int(H * 0.60), int(W * 0.50)          # texture-rich arils region
     patch = gray[r0:r0 + p, c0:c0 + p]
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(8.4, 3.9))
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(3.36, 1.56))
     axL.imshow(gray, cmap="gray", vmin=0, vmax=255)
-    axL.add_patch(Rectangle((c0, r0), p, p, ec="#D90012", fc="none", lw=1.8))
-    axL.set_title("A grayscale image", fontsize=12)
+    axL.add_patch(Rectangle((c0, r0), p, p, ec="#D90012", fc="none", lw=1.14))
+    axL.set_title("a grayscale image", fontsize=8, pad=2)
     axL.axis("off")
     axR.imshow(patch, cmap="gray", vmin=0, vmax=255)
     for i in range(p):
         for j in range(p):
             v = int(patch[i, j])
-            axR.text(j, i, str(v), ha="center", va="center", fontsize=7.5,
+            axR.text(j, i, str(v), ha="center", va="center", fontsize=7,
                      color="white" if v < 128 else "black")
-    axR.set_title(f"{p}x{p} patch: just numbers, 0-255", fontsize=12)
+    axR.set_title(f"{p}x{p} patch: numbers 0-255", fontsize=8, pad=2)
     axR.set_xticks([]); axR.set_yticks([])
     fig.tight_layout()
     out = FIG_DIR / "image_numbers.pdf"
@@ -88,12 +92,12 @@ def fig_pixel_shuffle(gray, log):
     rng = np.random.default_rng(SEED)
     flat = gray.ravel()
     shuffled = flat[rng.permutation(flat.size)].reshape(gray.shape)
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(8.4, 3.9))
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(3.36, 1.56))
     axL.imshow(gray, cmap="gray", vmin=0, vmax=255)
-    axL.set_title("Original", fontsize=12); axL.axis("off")
+    axL.set_title("original", fontsize=8, pad=2); axL.axis("off")
     axR.imshow(shuffled, cmap="gray", vmin=0, vmax=255)
-    axR.set_title("Same pixels, one fixed shuffle", fontsize=12); axR.axis("off")
-    fig.suptitle("A flatten-then-MLP sees these two as equally learnable", fontsize=12)
+    axR.set_title("same pixels, shuffled", fontsize=8, pad=2); axR.axis("off")
+    fig.suptitle("an MLP finds both equally easy", fontsize=8)
     fig.tight_layout()
     out = FIG_DIR / "pixel_shuffle.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)

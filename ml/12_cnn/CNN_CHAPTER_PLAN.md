@@ -1,9 +1,9 @@
 # CNN chapter - plan (for approval)
 
 Drafted 2026-07-13. Supersedes the *sourcing and status* sections of
-`ml/ch5_neural_networks/CNN_BLOCK_DESIGN.md` (2026-06-16); keeps its locked decisions.
-Outlines live next to this file: `L16_cnn_foundations_OUTLINE.md`,
-`L17_cnn_architectures_OUTLINE.md`, `L18_cnn_transfer_vision_OUTLINE.md`.
+`ml/11_neural_networks/CNN_BLOCK_DESIGN.md` (2026-06-16); keeps its locked decisions.
+Outlines live next to this file: `48_cnn_foundations_OUTLINE.md`,
+`49_cnn_architectures_OUTLINE.md`, `L18_cnn_transfer_vision_OUTLINE.md`.
 
 ## What changed since the 2026-06-16 design
 
@@ -20,7 +20,7 @@ Outlines live next to this file: `L16_cnn_foundations_OUTLINE.md`,
    L14 has the why-GPUs frame and the XOR re-coordinatisation frame. The outlines lean on
    these hard.
 4. **New chapter folder** `ml/12_cnn/` (instructor request) instead of L16a/b/c inside
-   `ch5_neural_networks/`. Numbering: plain **L16 / L17 / L18 / L19** (L19 added in the
+   `11_neural_networks/`. Numbering: plain **L16 / L17 / L18 / L19** (L19 added in the
    2026-07-13 restructure). The old `L16_cnns.tex` / L17 / L18 skeletons no longer exist
    in ch5, so nothing collides - but note L19 takes the number the old RNN design
    assumed was free; renumber the future RNN block accordingly.
@@ -42,8 +42,8 @@ detection/segmentation, ~22 frames of new vocabulary). Instructor approved the s
 vision tasks moved to a new L19, and the slimmed L18 gained the Grad-CAM / trust frames,
 the BatchNorm fine-tuning gotcha, and the labeling-economics frame. L16 was already in
 build when the split happened and is untouched by it. Outline files:
-`L18_transfer_learning_OUTLINE.md` (replaces `L18_cnn_transfer_vision_OUTLINE.md`) and
-`L19_vision_tasks_OUTLINE.md`.
+`50_transfer_learning_OUTLINE.md` (replaces `L18_cnn_transfer_vision_OUTLINE.md`) and
+`51_vision_tasks_OUTLINE.md`.
 
 **Build status (2026-07-13):** L16 is BUILT (v3, compiled) - its outline file is now
 historical; the deck's `.tex` + Provenance block are the source of truth for L16
@@ -214,7 +214,7 @@ Non-negotiables, in build order:
    `ml/SLIDE_STYLE.md` (single source of truth), this plan, then the deck's outline.
    The interview and outline stages are done and approved; you are at the build stage.
    Each outline ends with deck-specific build notes - follow them.
-2. **File layout:** decks are `ml/12_cnn/L16_cnn_foundations.tex` (etc.),
+2. **File layout:** decks are `ml/12_cnn/48_cnn_foundations.tex` (etc.),
    `\documentclass[aspectratio=169]{beamer}` + `\input{../preamble}` (12_cnn sits one
    level under `ml/`, exactly like ch5). Figure scripts in `ml/12_cnn/py_src/`, output
    PDFs in `ml/12_cnn/fig/`, borrowed images in `ml/12_cnn/fig/borrowed/`. Chapter

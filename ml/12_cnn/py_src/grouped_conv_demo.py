@@ -38,7 +38,8 @@ def setup_logging() -> logging.Logger:
     logger.setLevel(logging.INFO); logger.handlers.clear()
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     sh = logging.StreamHandler(); sh.setFormatter(fmt)
-    fh = logging.FileHandler(LOGS_DIR / "grouped_conv_demo.log"); fh.setFormatter(fmt)
+    fh = logging.FileHandler(LOGS_DIR / "grouped_conv_demo.log", encoding="utf-8")
+    fh.setFormatter(fmt)
     logger.addHandler(sh); logger.addHandler(fh)
     return logger
 
@@ -53,7 +54,7 @@ def y_of(ch, gap):
 
 
 def node(ax, x, y, color):
-    ax.add_patch(Rectangle((x - 0.28, y - 0.28), 0.56, 0.56, fc=color, ec="#222", lw=1.2))
+    ax.add_patch(Rectangle((x - 0.28, y - 0.28), 0.56, 0.56, fc=color, ec="#222", lw=0.7))
 
 
 def panel(ax, grouped, gap, title):
@@ -68,18 +69,18 @@ def panel(ax, grouped, gap, title):
                 continue
             col = incol[i] if grouped else GREY
             ax.plot([xin + 0.28, xout - 0.28], [y_of(i, gap), y_of(o, gap)],
-                    color=col, lw=1.4, alpha=0.75, zorder=1)
+                    color=col, lw=0.9, alpha=0.75, zorder=1)
             links += 1
     for i in range(C):
         node(ax, xin, y_of(i, gap), incol[i])
         node(ax, xout, y_of(i, gap), outcol[i])
-    ax.text(xin, C + 0.35 - (gap if False else 0), "input\nchannels", ha="center",
-            va="bottom", fontsize=10, color="#444")
-    ax.text(xout, C + 0.35, "output\nchannels", ha="center", va="bottom",
-            fontsize=10, color="#444")
+    ax.text(xin, C + 0.35 - (gap if False else 0), "in", ha="center",
+            va="bottom", fontsize=7.5, color="#444")
+    ax.text(xout, C + 0.35, "out", ha="center", va="bottom",
+            fontsize=7.5, color="#444")
     ax.text(1.5, -1.15 - gap, f"{links} connections", ha="center", va="top",
-            fontsize=11, color="#222")
-    ax.set_title(title, fontsize=13, pad=10)
+            fontsize=8.5, color="#222")
+    ax.set_title(title, fontsize=8.5, pad=4)
     ax.set_xlim(-1.0, 4.0); ax.set_ylim(-1.7 - gap, C + 1.1)
     ax.set_aspect("equal"); ax.axis("off")
     return links
@@ -89,15 +90,13 @@ def main():
     log = setup_logging()
     np.random.seed(SEED)
     FIG_DIR.mkdir(exist_ok=True)
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10.4, 4.3))
-    n_std = panel(a1, False, 0.0, "Standard: every output sees every channel")
-    n_grp = panel(a2, True, 0.9, "Grouped (g = 2): each output sees only its group")
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(3.0, 1.9))   # its size on the slide
+    n_std = panel(a1, False, 0.0, "standard")
+    n_grp = panel(a2, True, 0.9, "grouped, g = 2")
     if not (n_std == C * C and n_grp == C * C // 2):
         raise ValueError(f"connection counts off: standard={n_std}, grouped={n_grp}")
     log.info(f"connections  standard={n_std}  grouped(g=2)={n_grp}  (ratio {n_std / n_grp:.0f}x)")
-    fig.suptitle("Grouped convolution: fewer cross-channel connections -> g x fewer weights",
-                 fontsize=12, y=1.01)
-    fig.tight_layout()
+    fig.subplots_adjust(left=0.0, right=1.0, top=0.9, bottom=0.0, wspace=0.05)
     out = FIG_DIR / "grouped_conv_demo.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     log.info(f"saved {out}")

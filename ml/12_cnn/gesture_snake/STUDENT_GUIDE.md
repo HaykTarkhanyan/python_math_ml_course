@@ -77,7 +77,7 @@ Running the recorder again **adds** to what is there. To start over, delete
 
 ## 3. Train a model
 
-The practical notebook (`gesture_snake_solution.ipynb`) trains two models on `gesture_data/` and
+The practical notebook (`52_gesture_snake_solution.ipynb`) trains two models on `gesture_data/` and
 writes `gesture_model.pt2`. You can also train your own, any way you like, as long as the exported
 model keeps this contract:
 

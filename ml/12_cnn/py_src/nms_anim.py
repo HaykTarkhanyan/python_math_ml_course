@@ -14,6 +14,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/nms_anim.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.42, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -23,6 +26,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 
 from iou_nms import CANDIDATES, NMS_THRESHOLD, greedy_nms, draw_nms_panel
 
@@ -49,7 +53,7 @@ def setup_logging() -> logging.Logger:
 
 
 def save_frame(idx: int, log, **panel_kwargs):
-    fig = plt.figure(figsize=(7.6, 5.5))
+    fig = plt.figure(figsize=(3.3, 2.6))
     ax = fig.add_axes([0.02, 0.02, 0.96, 0.88])  # fixed rect - no jitter
     draw_nms_panel(ax, **panel_kwargs)
     out = FIG_DIR / f"nms_anim_{idx}.pdf"
@@ -73,7 +77,7 @@ def main():
 
     # frame 0: the raw flood of candidates
     save_frame(frame, log,
-               title=f"the net proposes {n_cand} boxes for 3 objects")
+               title=f"{n_cand} candidate boxes, 3 objects")
     frame += 1
 
     # one frame per NMS iteration: current keep (bold green) + its drops (red)
@@ -83,8 +87,7 @@ def main():
         save_frame(frame, log,
                    keep=kept, drop=dropped,
                    current=keep_idx, current_drop=drop_idxs,
-                   title=f"keep the best remaining ({score:.2f}), "
-                         f"drop neighbors with IoU > {NMS_THRESHOLD}")
+                   title=f"keep {score:.2f}, drop its neighbors (IoU > {NMS_THRESHOLD})")
         kept.add(keep_idx)
         dropped.update(drop_idxs)
         frame += 1
@@ -92,8 +95,7 @@ def main():
     # final frame: identical state to the iou_nms.pdf right panel
     save_frame(frame, log,
                keep=kept, drop=dropped,
-               title=f"{n_cand} candidates $\\to$ {len(kept)} survivors: "
-                     "one box per object")
+               title=f"{len(kept)} survivors: one box per object")
     log.info(f"emitted {frame + 1} frames (nms_anim_0..{frame})")
 
 

@@ -12,6 +12,9 @@ Run with the project venv:
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3+ series (red/blue/orange); bars carry value labels.
+
+2026-10-01: redrawn at its slide size (figsize x 0.5, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -20,6 +23,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 
 SEED = 509
@@ -64,15 +68,15 @@ def main():
     amp_spec = np.abs(np.fft.rfft(signal)) / (n / 2)      # single-sided amplitude
     freqs = np.fft.rfftfreq(n, d=1.0 / n)                  # -> cycles over the window
 
-    fig, axes = plt.subplots(1, 2, figsize=(10.8, 3.8))
+    fig, axes = plt.subplots(1, 2, figsize=(5.4, 1.9))
 
     ax = axes[0]
     for comp, col in components:
-        ax.plot(t, comp, color=col, lw=1.0, alpha=0.35)
-    ax.plot(t, signal, color="black", lw=2.2, label="signal = sum of the three")
-    ax.set_title("A signal in time", fontsize=12)
+        ax.plot(t, comp, color=col, lw=0.71, alpha=0.35)
+    ax.plot(t, signal, color="black", lw=1.56, label="signal = sum of the three")
+    ax.set_title("A signal in time", fontsize=9.1)
     ax.set_xlabel("time"); ax.set_ylabel("value")
-    ax.legend(loc="upper right", fontsize=8); ax.grid(alpha=0.2)
+    ax.legend(loc="upper right", fontsize=7); ax.grid(alpha=0.2)
 
     ax = axes[1]
     keep = freqs <= 14
@@ -80,15 +84,15 @@ def main():
     for freq, _amp, col in TONES:
         colours[int(round(freq))] = col
     bars = ax.bar(freqs[keep], amp_spec[keep], width=0.35, color=colours)
-    ax.set_title(r"Its spectrum $\mathcal{F}$: how much of each frequency", fontsize=12)
+    ax.set_title(r"Its spectrum $\mathcal{F}$: how much of each frequency", fontsize=9.1)
     ax.set_xlabel("frequency"); ax.set_ylabel("amount")
     ax.set_xticks([f for f, _, _ in TONES])
     for freq, amp, _ in TONES:
-        ax.text(freq, amp + 0.03, f"{amp:.1f}", ha="center", fontsize=9)
+        ax.text(freq, amp + 0.03, f"{amp:.1f}", ha="center", fontsize=7.45)
     ax.set_ylim(0, 1.2); ax.grid(axis="y", alpha=0.2)
 
     fig.suptitle("The Fourier transform reads off the frequencies hiding in a signal",
-                 fontsize=12)
+                 fontsize=9.1)
     fig.tight_layout()
     out = FIG_DIR / "spectrum_1d.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)

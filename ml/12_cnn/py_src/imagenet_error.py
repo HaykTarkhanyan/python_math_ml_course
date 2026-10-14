@@ -11,6 +11,9 @@ Data source: ILSVRC winning entries (Russakovsky et al., "ImageNet Large Scale V
 Recognition Challenge", IJCV 2015) + the winning papers; human baseline ~5.1% from
 Russakovsky/Karpathy. Numbers web-verified 2026-07-14 (match the canonical CS231n chart).
 
+2026-10-01: drawn at its slide size (4.6 x 2.3 in, embedded at native width), so labels are
+7.5-9.5 pt on the slide (they were 3.4-4.3 pt).
+
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/imagenet_error.py
 
@@ -63,14 +66,16 @@ def draw(k, log, out_path):
     """Draw the chart with the first k bars revealed (k in 0..6)."""
     xs = list(range(len(DATA)))
 
-    fig, ax = plt.subplots(figsize=(9.0, 5.0))
+    fig, ax = plt.subplots(figsize=(4.6, 2.3))   # its size on the slide
     # fixed geometry so anim frames do not jump between clicks
-    fig.subplots_adjust(left=0.10, right=0.97, top=0.90, bottom=0.15)
+    fig.subplots_adjust(left=0.10, right=0.985, top=0.90, bottom=0.19)
 
     # human baseline line + label (present in every frame)
-    ax.axhline(HUMAN, color=ARM_ORANGE, lw=2.4, ls="--", zorder=1)
-    ax.text(len(DATA) - 0.5, HUMAN + 0.7, f"human  ~{HUMAN}%", color="#b07d00",
-            ha="right", va="bottom", fontsize=11, fontweight="bold")
+    ax.axhline(HUMAN, color=ARM_ORANGE, lw=1.5, ls="--", zorder=1)
+    # its label sits in the legend block (top right): at slide size an inline label collided
+    # with the 6.7% and 3.57% bar labels
+    ax.text(0.98, 0.785, f"dashed = one human, ~{HUMAN}%", color="#b07d00", fontsize=7.5,
+            fontweight="bold", ha="right", va="top", transform=ax.transAxes)
 
     for i, (year, name, err, era) in enumerate(DATA):
         if i >= k:
@@ -78,28 +83,29 @@ def draw(k, log, out_path):
         color = ARM_RED if era == "classical" else ARM_BLUE
         ax.bar(i, err, width=0.66, color=color, zorder=3)
         ax.text(i, err + 0.6, f"{err:g}%", ha="center", va="bottom",
-                fontsize=12, fontweight="bold", color="#222")
+                fontsize=8.5, fontweight="bold", color="#222")
 
     # winner names live in the tick labels - and only appear once their bar is
     # revealed, so the flip-book does not spoil the story
     ax.set_xticks(xs)
     ax.set_xticklabels(
         [f"{d[0]}\n{d[1]}" if i < k else f"{d[0]}\n " for i, d in enumerate(DATA)],
-        fontsize=11)
+        fontsize=7.5)
     ax.set_xlim(-0.6, len(DATA) - 0.4)
     ax.set_ylim(0, 32)
-    ax.set_ylabel("top-5 error (%)", fontsize=12)
-    ax.set_title("ILSVRC image classification: top-5 error by year", fontsize=14)
+    ax.set_ylabel("top-5 error (%)", fontsize=8)
+    ax.tick_params(axis="y", labelsize=7.5)
+    ax.set_title("ILSVRC image classification: top-5 error by year", fontsize=9.5)
     ax.grid(axis="y", alpha=0.2)
     ax.set_axisbelow(True)
     # legend-ish note distinguishing the two eras (only once both eras exist)
     if k >= 3:
         ax.text(0.98, 0.965, "red = pre-deep-learning winners", color=ARM_RED,
-                fontsize=10, ha="right", va="top", transform=ax.transAxes)
-        ax.text(0.98, 0.905, "blue = deep CNN winners", color=ARM_BLUE,
-                fontsize=10, ha="right", va="top", transform=ax.transAxes)
-    ax.text(0.99, -0.125, "Data: ILSVRC winning entries (Russakovsky et al. 2015).",
-            transform=ax.transAxes, ha="right", va="top", fontsize=8, color="#888")
+                fontsize=7.5, ha="right", va="top", transform=ax.transAxes)
+        ax.text(0.98, 0.875, "blue = deep CNN winners", color=ARM_BLUE,
+                fontsize=7.5, ha="right", va="top", transform=ax.transAxes)
+    ax.text(1.0, -0.2, "Data: ILSVRC winning entries (Russakovsky et al. 2015).",
+            transform=ax.transAxes, ha="right", va="top", fontsize=6.5, color="#888")
 
     fig.savefig(out_path)   # no tight bbox: identical geometry across frames
     plt.close(fig)

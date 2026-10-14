@@ -17,6 +17,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/iou_nms.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.46, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -27,6 +30,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 from matplotlib.patches import Circle, Rectangle
 
 SEED = 509
@@ -109,36 +113,36 @@ def greedy_nms(candidates, threshold):
 def draw_iou_panel(ax):
     """The locked worked example, annotated on the boxes."""
     ax.set_xlim(-0.7, 7.3)
-    ax.set_ylim(-2.6, 5.3)
+    ax.set_ylim(-3.0, 5.3)
     ax.set_aspect("equal")
     ax.axis("off")
     for g in range(0, 7):
-        ax.plot([g, g], [0, 4], color="#e3e3e3", lw=0.7, zorder=0)
+        ax.plot([g, g], [0, 4], color="#e3e3e3", lw=0.47, zorder=0)
     for g in range(0, 5):
-        ax.plot([0, 6], [g, g], color="#e3e3e3", lw=0.7, zorder=0)
+        ax.plot([0, 6], [g, g], color="#e3e3e3", lw=0.47, zorder=0)
 
     # intersection strip (2,0)-(4,4)
     ax.add_patch(Rectangle((2, 0), 2, 4, fc="#b78ccf", ec="none",
                            alpha=0.55, zorder=1))
-    ax.add_patch(Rectangle((0, 0), 4, 4, fill=False, ec=ARM_BLUE, lw=3.2,
+    ax.add_patch(Rectangle((0, 0), 4, 4, fill=False, ec=ARM_BLUE, lw=2.17,
                            zorder=3))
-    ax.add_patch(Rectangle((2, 0), 4, 4, fill=False, ec=ARM_ORANGE, lw=3.2,
+    ax.add_patch(Rectangle((2, 0), 4, 4, fill=False, ec=ARM_ORANGE, lw=2.17,
                            zorder=3))
 
-    ax.text(0.15, 4.12, "A = (0,0)-(4,4)", color=ARM_BLUE, fontsize=12,
+    ax.text(0.0, 4.12, "A = (0,0)-(4,4)", color=ARM_BLUE, fontsize=8,
             fontweight="bold", va="bottom")
-    ax.text(3.6, -0.62, "B = (2,0)-(6,4)", color="#b57900", fontsize=12,
-            fontweight="bold", va="top")
-    ax.text(3.0, 2.0, "8", color="#5a2d7a", fontsize=17, fontweight="bold",
+    ax.text(6.0, -0.2, "B = (2,0)-(6,4)", color="#b57900", fontsize=8,
+            fontweight="bold", va="top", ha="right")
+    ax.text(3.0, 2.0, "8", color="#5a2d7a", fontsize=10, fontweight="bold",
             ha="center", va="center")
-    ax.text(1.0, 2.0, "area 16", color=ARM_BLUE, fontsize=10.5, ha="center")
-    ax.text(5.0, 2.0, "area 16", color="#b57900", fontsize=10.5, ha="center")
+    ax.text(1.0, 2.0, "16", color=ARM_BLUE, fontsize=8, ha="center", va="center")
+    ax.text(5.0, 2.0, "16", color="#b57900", fontsize=8, ha="center", va="center")
 
-    ax.text(3.0, -1.55,
-            "intersection = 8      union = 16 + 16 - 8 = 24\n"
+    ax.text(3.0, -1.9,
+            "intersection 8, union 16 + 16 - 8 = 24\n"
             "IoU = 8 / 24 = 1/3",
-            fontsize=13, ha="center", va="center", linespacing=1.5)
-    ax.set_title("IoU: how much do two boxes agree?", fontsize=13)
+            fontsize=8, ha="center", va="center", linespacing=1.3)
+    ax.set_title("areas: A 16, B 16, overlap 8", fontsize=8, pad=2)
 
 
 def draw_nms_panel(ax, keep=None, drop=None, current=None, current_drop=None,
@@ -159,22 +163,22 @@ def draw_nms_panel(ax, keep=None, drop=None, current=None, current_drop=None,
     ax.set_aspect("equal")
     ax.axis("off")
     ax.add_patch(Rectangle((0, 0), 9, 6.6, fc="#f7f7f7", ec="#bbbbbb",
-                           lw=1.0, zorder=0))
+                           lw=0.68, zorder=0))
     for cx, cy, r in OBJECTS:
-        ax.add_patch(Circle((cx, cy), r, fc="#d9d9d9", ec="#a8a8a8", lw=1.2,
+        ax.add_patch(Circle((cx, cy), r, fc="#d9d9d9", ec="#a8a8a8", lw=0.81,
                             zorder=1))
 
     for i, (x0, y0, w, h, s) in enumerate(CANDIDATES):
         if i == current:
-            ec, lw, ls, alpha, z = GREEN, 3.4, "-", 1.0, 5
+            ec, lw, ls, alpha, z = GREEN, 2.0, "-", 1.0, 5
         elif i in keep:
-            ec, lw, ls, alpha, z = GREEN, 3.0, "-", 1.0, 4
+            ec, lw, ls, alpha, z = GREEN, 1.8, "-", 1.0, 4
         elif i in current_drop:
-            ec, lw, ls, alpha, z = ARM_RED, 2.2, "--", 0.95, 4
+            ec, lw, ls, alpha, z = ARM_RED, 1.4, "--", 0.95, 4
         elif i in drop:
-            ec, lw, ls, alpha, z = "#c9c9c9", 1.4, "--", 0.8, 2
+            ec, lw, ls, alpha, z = "#c9c9c9", 0.9, "--", 0.8, 2
         else:
-            ec, lw, ls, alpha, z = ARM_BLUE, 1.9, "-", 0.95, 3
+            ec, lw, ls, alpha, z = ARM_BLUE, 1.2, "-", 0.95, 3
         ax.add_patch(Rectangle((x0, y0), w, h, fill=False, ec=ec, lw=lw,
                                ls=ls, alpha=alpha, zorder=z))
         if show_scores and not (i in drop and i not in current_drop):
@@ -183,14 +187,14 @@ def draw_nms_panel(ax, keep=None, drop=None, current=None, current_drop=None,
             anchor = LABEL_ANCHORS[i]
             tx = x0 + 0.10 if anchor[1] == "l" else x0 + w - 0.10
             ty = y0 + h - 0.12 if anchor[0] == "t" else y0 + 0.12
-            ax.text(tx, ty, f"{s:.2f}", fontsize=9.5,
+            ax.text(tx, ty, f"{s:.2f}", fontsize=6.5,
                     fontweight="bold", color="white", zorder=6,
                     va="top" if anchor[0] == "t" else "bottom",
                     ha="left" if anchor[1] == "l" else "right",
-                    bbox=dict(boxstyle="square,pad=0.16", fc=color, ec="none",
+                    bbox=dict(boxstyle="square,pad=0.08", fc=color, ec="none",
                               alpha=alpha))
     if title is not None:
-        ax.set_title(title, fontsize=13)
+        ax.set_title(title, fontsize=8, pad=2)
 
 
 def main():
@@ -223,7 +227,7 @@ def main():
     final_keep, final_drop = set(survivors), dropped_all
 
     # ---- combined two-panel figure ----
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(11.6, 4.6),
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(5.34, 2.12),
                                    gridspec_kw={"width_ratios": [1.0, 1.15]})
     draw_iou_panel(axL)
     draw_nms_panel(axR, keep=final_keep, drop=final_drop,
@@ -234,13 +238,13 @@ def main():
     log.info(f"saved {FIG_DIR / 'iou_nms.pdf'}")
 
     # ---- single panels ----
-    fig, ax = plt.subplots(figsize=(6.0, 4.6))
+    fig, ax = plt.subplots(figsize=(2.76, 2.12))
     draw_iou_panel(ax)
     fig.savefig(FIG_DIR / "iou_only.pdf", bbox_inches="tight")
     plt.close(fig)
     log.info(f"saved {FIG_DIR / 'iou_only.pdf'}")
 
-    fig, ax = plt.subplots(figsize=(6.6, 4.6))
+    fig, ax = plt.subplots(figsize=(3.04, 2.12))
     draw_nms_panel(ax, keep=final_keep, drop=final_drop,
                    title=f"9 candidates $\\to$ 3 survivors "
                          f"(IoU threshold {NMS_THRESHOLD})")

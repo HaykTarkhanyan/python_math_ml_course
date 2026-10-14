@@ -10,6 +10,11 @@ Generates into ml/12_cnn/fig/:
 All nine frames share identical geometry (fixed axis limits, no tight bbox) so the picture
 does not jump between clicks.
 
+2026-10-01: redrawn at its slide size (4.87 x 2.45 in, embedded at width=4.87in, so font sizes
+are the sizes on the slide: 8-12 pt; they were 4.5 pt before). The sliding window is outlined in
+orange - the old dark-blue outline vanished against the dark cells (instructor request). The
+in-figure title was dropped; the frame title already says it.
+
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_anim.py
 """
@@ -24,7 +29,7 @@ from matplotlib.patches import Rectangle
 import numpy as np
 
 SEED = 509
-BLUE, GREEN = "#0033A0", "#008C46"
+WINDOW, GREEN = "#E8590C", "#008C46"   # window outline: orange reads on black AND white cells
 
 HERE = Path(__file__).resolve()
 CH_DIR = HERE.parents[1]
@@ -47,7 +52,7 @@ def setup_logging() -> logging.Logger:
     logger.setLevel(logging.INFO); logger.handlers.clear()
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     sh = logging.StreamHandler(); sh.setFormatter(fmt)
-    fh = logging.FileHandler(LOGS_DIR / "conv_anim.log"); fh.setFormatter(fmt)
+    fh = logging.FileHandler(LOGS_DIR / "conv_anim.log", encoding="utf-8"); fh.setFormatter(fmt)
     logger.addHandler(sh); logger.addHandler(fh)
     return logger
 
@@ -68,7 +73,7 @@ def shade(v, vmin, vmax):
     return (t, t, t), ("white" if t < 0.5 else "black")
 
 
-def cell(ax, x, y, s, val=None, fc="white", ec="#555", lw=1.0, fs=12, tc="black"):
+def cell(ax, x, y, s, val=None, fc="white", ec="#555", lw=1.0, fs=10, tc="black"):
     ax.add_patch(Rectangle((x, y), s, s, ec=ec, fc=fc, lw=lw))
     if val is not None:
         ax.text(x + s / 2, y + s / 2, f"{val:g}", ha="center", va="center",
@@ -79,11 +84,10 @@ def draw_frame(step, OUT, log):
     r, c = divmod(step, 3)
     imin, imax = INPUT.min(), INPUT.max()
 
-    fig, ax = plt.subplots(figsize=(9.8, 5.4))
+    fig, ax = plt.subplots(figsize=(4.87, 2.45))   # = its size on the slide
     ax.set_position([0, 0, 1, 1])
 
-    ax.text(8.0, 8.55, "Convolution: slide, multiply, sum", ha="center", fontsize=14)
-    ax.text(8.0, 8.05, f"step {step + 1} of 9", ha="center", fontsize=11, color="#555")
+    ax.text(7.75, 7.6, f"step {step + 1} of 9", ha="center", fontsize=8.5, color="#555")
 
     # input 5x5 (top-left cell at x=0.5, y=7.5), shaded by value
     for i in range(5):
@@ -91,25 +95,25 @@ def draw_frame(step, OUT, log):
             fc, tc = shade(INPUT[i, j], imin, imax)
             in_win = (r <= i < r + 3) and (c <= j < c + 3)
             cell(ax, 0.5 + j, 7.5 - (i + 1), 1, INPUT[i, j], fc=fc, tc=tc,
-                 ec=BLUE if in_win else "#888", lw=1.8 if in_win else 0.8)
-    ax.add_patch(Rectangle((0.5 + c, 7.5 - (r + 3)), 3, 3, ec=BLUE, fc="none", lw=3))
-    ax.text(3.0, 7.75, "input  (5x5, shaded by value)", ha="center", fontsize=11)
+                 ec=WINDOW if in_win else "#888", lw=1.4 if in_win else 0.6)
+    ax.add_patch(Rectangle((0.5 + c, 7.5 - (r + 3)), 3, 3, ec=WINDOW, fc="none", lw=3.2))
+    ax.text(3.0, 7.65, "input (5x5, shaded by value)", ha="center", fontsize=8.5)
 
     # kernel 3x3 (Gaussian blur)
-    kx, ky, ks = 6.6, 4.3, 0.58
+    kx, ky, ks = 6.9, 4.3, 0.62
     for i in range(3):
         for j in range(3):
             cell(ax, kx + j * ks, ky + (2 - i) * ks, ks, KERNEL[i, j],
-                 fc="#fdf3d6", ec="#caa53a", fs=10)
-    ax.text(kx + 1.5 * ks, ky + 3 * ks + 0.15, "kernel: Gaussian blur / 16", ha="center",
-            fontsize=10)
+                 fc="#fdf3d6", ec="#caa53a", fs=8.5, lw=0.6)
+    ax.text(kx + 1.5 * ks, ky + 3 * ks + 0.2, "Gaussian kernel, / 16", ha="center",
+            fontsize=8)
 
     # computation
     val = OUT[r, c]
-    ax.text(6.6, 3.2, f"output({r},{c}) =", fontsize=12, color=GREEN)
-    ax.text(6.6, 2.65, "weighted average of", fontsize=10, color="#444")
-    ax.text(6.6, 2.25, "the 9 window values", fontsize=10, color="#444")
-    ax.text(6.6, 1.4, f"= {val:g}", fontsize=15, color=GREEN, fontweight="bold")
+    ax.text(6.6, 3.25, f"output({r},{c}) =", fontsize=9.5, color=GREEN)
+    ax.text(6.6, 2.6, "weighted average of", fontsize=8, color="#444")
+    ax.text(6.6, 2.1, "the 9 window values", fontsize=8, color="#444")
+    ax.text(6.6, 1.2, f"= {val:g}", fontsize=12, color=GREEN, fontweight="bold")
 
     # output 3x3 (top-left at x=10.9, y=6.6), shaded by value, filled through this step
     ox, oy = 10.9, 6.6
@@ -120,12 +124,12 @@ def draw_frame(step, OUT, log):
             if filled:
                 fc, tc = shade(OUT[i, j], imin, imax)
                 cell(ax, ox + j, oy - (i + 1), 1, OUT[i, j], fc=fc, tc=tc,
-                     ec=GREEN if is_cur else "#888", lw=2.6 if is_cur else 0.8)
+                     ec=GREEN if is_cur else "#888", lw=2.6 if is_cur else 0.6)
             else:
                 cell(ax, ox + j, oy - (i + 1), 1, None, fc="#f4f4f4", ec="#ccc")
-    ax.text(ox + 1.5, 6.85, "output  (smoothed)", ha="center", fontsize=11)
+    ax.text(ox + 1.5, 6.75, "output (smoothed)", ha="center", fontsize=8.5)
 
-    ax.set_xlim(0, 15.5); ax.set_ylim(0.4, 9.0)
+    ax.set_xlim(0.3, 14.4); ax.set_ylim(0.9, 8.0)
     ax.set_aspect("equal"); ax.axis("off")
     out_path = FIG_DIR / f"conv_anim_{step}.pdf"
     fig.savefig(out_path); plt.close(fig)          # no tight bbox -> identical geometry

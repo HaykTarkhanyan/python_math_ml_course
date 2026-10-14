@@ -8,6 +8,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/edge_1d.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.44, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -16,6 +19,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 import numpy as np
 
 SEED = 509
@@ -48,16 +52,18 @@ def main():
     f = np.clip(40 + (205 - 40) * (x - 28) / 4.0, 40, 205)
     d = np.zeros_like(f); d[1:] = f[1:] - f[:-1]       # forward difference f(x+1)-f(x)
 
-    fig, (a1, a2) = plt.subplots(2, 1, figsize=(6.8, 4.2), sharex=True)
-    a1.plot(x, f, color=ARM_BLUE, lw=2.2)
-    a1.set_ylabel("intensity f(x)")
-    a1.set_title("An edge is a fast change in intensity")
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(2.99, 1.85), sharex=True)
+    a1.plot(x, f, color=ARM_BLUE, lw=1.46)
+    a1.set_ylabel("f(x)", fontsize=7.5)
+    a1.set_title("a row of pixels: an edge = a jump", fontsize=8, pad=2)
     a1.grid(alpha=0.18)
-    a2.plot(x, d, color=ARM_RED, lw=2.2)
-    a2.axhline(0, color="gray", lw=0.7)
-    a2.set_ylabel("f(x+1) - f(x)")
-    a2.set_xlabel("x (pixel)")
-    a2.set_title("Its derivative (a difference of neighbours) spikes at the edge")
+    a2.plot(x, d, color=ARM_RED, lw=1.46)
+    a2.axhline(0, color="gray", lw=0.46)
+    a2.set_ylabel("f(x+1) - f(x)", fontsize=7.5)
+    a2.set_xlabel("x (pixel)", fontsize=7.5, labelpad=1)
+    a2.set_title("difference of neighbours: a spike", fontsize=8, pad=2)
+    for a in (a1, a2):
+        a.tick_params(labelsize=7)
     a2.grid(alpha=0.18)
     fig.tight_layout()
     out = FIG_DIR / "edge_1d.pdf"

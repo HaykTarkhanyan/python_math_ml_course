@@ -13,6 +13,9 @@ Generates into ml/12_cnn/fig/:
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/12_cnn/py_src/task_zoo.py
+
+2026-10-01: redrawn at its slide size (figsize x 0.27, fonts mapped to 7-10.5 pt)
+so the labels are readable on the slide; they rendered at 2-5 pt before.
 """
 
 import logging
@@ -22,6 +25,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams.update({"font.size": 8})
 from matplotlib.patches import Rectangle
 
 SEED = 509
@@ -98,7 +102,7 @@ def build_semantic_overlay(img: np.ndarray) -> np.ndarray:
     return out.astype(np.uint8)
 
 
-def chip(ax, x, y, text, fc, fontsize=11):
+def chip(ax, x, y, text, fc, fontsize=8.55):
     """A small filled label chip in axes-pixel (data) coordinates."""
     ax.text(x, y, text, fontsize=fontsize, fontweight="bold", color="white",
             va="top", ha="left",
@@ -119,35 +123,35 @@ def main():
     if (w, h) != (1920, 1280):
         raise ValueError(f"overlay coords are hand-placed for 1920x1280, got {w}x{h}")
 
-    fig, axes = plt.subplots(2, 2, figsize=(11.2, 8.0))
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.94, bottom=0.01,
-                        wspace=0.03, hspace=0.16)
+    fig, axes = plt.subplots(2, 2, figsize=(3.4, 2.5))
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.9, bottom=0.01,
+                        wspace=0.04, hspace=0.3)
 
     for k, (ax, (title, sub)) in enumerate(zip(axes.flat, PANELS)):
         ax.imshow(build_semantic_overlay(img) if k == 3 else img)
         ax.set_xticks([]); ax.set_yticks([])
         for s in ax.spines.values():
             s.set_color("#888888")
-        ax.set_title(f"{title}\n{sub}", fontsize=12.5, pad=6)
+        ax.set_title(f"{title}\n{sub}", fontsize=7.5, pad=2, linespacing=1.0)
 
         if k == 0:
-            chip(ax, 55, 90, '"pomegranates"', ARM_BLUE, fontsize=13)
+            chip(ax, 55, 90, '"pomegranates"', ARM_BLUE, fontsize=9.65)
         elif k == 1:
             x0, y0, x1, y1 = FRUIT_BOXES[LOC_TARGET]
             ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0,
-                                   fill=False, ec=ARM_BLUE, lw=3.0))
-            chip(ax, x0 + 12, y0 + 16, "pomegranate", ARM_BLUE, fontsize=11)
+                                   fill=False, ec=ARM_BLUE, lw=1.56))
+            chip(ax, x0 + 12, y0 + 16, "pomegranate", ARM_BLUE, fontsize=8.55)
         elif k == 2:
             for (x0, y0, x1, y1), s in zip(FRUIT_BOXES, DET_SCORES):
                 ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0,
-                                       fill=False, ec=ARM_ORANGE, lw=2.4))
-                ax.text(x0 + 10, y0 + 14, f"{s:.2f}", fontsize=8.5,
+                                       fill=False, ec=ARM_ORANGE, lw=1.25))
+                ax.text(x0 + 10, y0 + 14, f"{s:.2f}", fontsize=7.18,
                         fontweight="bold", color="black", va="top",
                         bbox=dict(boxstyle="square,pad=0.22", fc=ARM_ORANGE,
                                   ec="none"))
         else:
-            chip(ax, 55, 90, "fruit", ARM_ORANGE, fontsize=11)
-            chip(ax, 1450, 1240 - 60, "background", "#1e2a6e", fontsize=11)
+            chip(ax, 55, 90, "fruit", ARM_ORANGE, fontsize=8.55)
+            chip(ax, 1450, 1240 - 60, "background", "#1e2a6e", fontsize=8.55)
 
     out = FIG_DIR / "task_zoo.pdf"
     fig.savefig(out, bbox_inches="tight")
