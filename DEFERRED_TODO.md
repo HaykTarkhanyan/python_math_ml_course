@@ -52,12 +52,14 @@ Found by `non_essential/check_links.py --live` and a browser pass; left alone on
   Tell the group the new names (`extra_*`, `52_gesture_snake/`).
 - **The student zip on the Desktop (`gesture_snake.zip`) is stale**: made before Part 8b and the
   STUDENT_GUIDE change. Rebuild it as `52_gesture_snake.zip` before handing it out again.
-- **`52_gesture_snake/gesture_data/` is untracked but not git-ignored**: `git add ml/12_cnn` would
-  publish the instructor's 500 crops. Ignore it, or settle "Ship the instructor's recordings as
-  starter data?" below.
+- ~~`52_gesture_snake/gesture_data/` is untracked but not git-ignored~~ - git-ignored 2026-10-17
+  (the folder's `.gitignore`). "Ship the instructor's recordings as starter data?" below is still
+  open; shipping them now needs `git add -f`.
 - **[49] has no `_notes.pdf`** on the chapter page; export it if [49] was annotated live.
-- **[52]'s video is not on the channel yet** (checked 2026-10-17); the page says "շուտով". Add
-  the link, title copied exactly, once it is up.
+- **[52]'s video (https://youtu.be/q8JM6nR03-Q) still has a placeholder title**, "[52] |
+  Մեքենայական ուսուցում" (oEmbed, 2026-10-17), and is not in the channel's uploads list yet. The
+  page links it with that exact title; when the video is retitled, copy the new title into
+  `12_cnn.qmd`.
 - **The page's "🎲 Random" section is still TBD.**
 - **Traffic light (`extra_traffic_light/`)**: its text still cites HW1c, and its data exists only
   in the instructor's copy. Fix both only if it ever becomes a real practical.
