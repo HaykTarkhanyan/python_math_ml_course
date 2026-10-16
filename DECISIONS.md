@@ -9,6 +9,27 @@ this file holds the choice and a pointer.
 
 ---
 
+## #89 - The per-chapter Google Form quizzes are dropped
+
+**Date:** 2026-10-17 · **Status:** active (instructor: "we wont be doing google forms anymore").
+
+**Decision.** No new "📝 Թեմայի վերաբերյալ հարցաշար (Google Form)" quizzes. The line came off
+`ml/12_cnn/12_cnn.qmd` at its wrap-up. The other chapter pages, the CONVENTIONS QMD template and
+the WORKFLOWS row are parked in DEFERRED_TODO ("Google Form quizzes are dropped").
+
+**Why.** The instructor's call. Of 14 ML chapter pages, only `01_regression_intro` ever got a
+real form. The other 13 have shown "TBD" since they were made, so the line promised something
+that never came.
+
+**Alternatives rejected.** *Keep the "TBD" lines*: they promise a quiz that will not come.
+*Remove the line from every page right away*: not asked for, and some pages carry other sessions'
+uncommitted edits. Parked instead.
+
+**What would change this.** If quizzes come back in another form (Moodle, in-class), add a new
+line to the template rather than reviving the Google Form one.
+
+---
+
 ## #88 - CNN chapter wrap-up: planning files deleted, non-lecture notebooks renamed `extra_*`, Gesture Snake folder numbered, traffic light committed without its data
 
 **Date:** 2026-10-17 · **Status:** active (instructor: "lets wrap up this cnn chapter", then picked

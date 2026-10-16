@@ -2,7 +2,7 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-09-28
+Last updated: 2026-10-17
 
 ---
 
@@ -24,11 +24,52 @@ Found by `non_essential/check_links.py --live` and a browser pass; left alone on
   start after math". Needs the instructor's wording.
 - **Plain-text ToDo lines still visible** (not links, so not removed): "ToDo" and
   "Google Forms ToDo" in the 🎦 video cells of the python notebooks, the "(ToDo)" in that
-  cell's heading, the `> Song reference - ToDo` lines.
+  cell's heading, the `> Song reference - ToDo` lines. The "Google Forms ToDo" ones can simply
+  go: the quizzes are dropped (see the next section).
 - **`ml/11_neural_networks/46_nn_from_scratch.ipynb` is not linked from the chapter page.**
   Fine if it is not delivered yet; add it with the lecture.
 - **Unverifiable by automation**: 3 Stack Overflow links and 2 i.stack.imgur images show a
   Cloudflare challenge even to a real browser. Check by hand if ever in doubt.
+
+---
+
+## Google Form quizzes are dropped (instructor, 2026-10-17; DECISIONS #89): leftovers
+
+"we wont be doing google forms anymore". Removed from `ml/12_cnn/12_cnn.qmd` the same day; still
+to clean up:
+
+- **12 chapter pages still end their material list with `📝 Թեմայի վերաբերյալ հարցաշար (Google
+  Form): TBD`**: `ml/04_trees`, `05_interpretability`, `06_feature_engineering`,
+  `07_classic_methods`, `08_time_series`, `09_clustering`, `10_dimensionality_reduction`,
+  `11_neural_networks`, `13_rnns/rnn.qmd`, `ch11_rl/rl.qmd`, `ch8_autoencoders`,
+  `llm_training`. Delete the line (and the blank line before it). `git grep -n "Google Form" -- '*.qmd'`
+  finds them.
+- **`ml/01_regression_intro/01_regression_intro.qmd` has a real form link** (forms.gle). Keep it
+  for the students who already used it, or remove it with the rest - instructor's call.
+- **`CONVENTIONS.md` QMD template** still has the form line (and a `gform/` folder in the chapter
+  layout); **`WORKFLOWS.md`** still has the "Build a quiz Google Form" row. Drop both, or new
+  chapters will bring the line back.
+
+---
+
+## CNN chapter wrap-up (2026-10-17, DECISIONS #88): open items
+
+- **Old links break after the push**: `liver_biopsy_solution.ipynb`, `HW1b_photoshop_solution.ipynb`,
+  `project_barcode.ipynb` (GitHub and Colab URLs) and anything under `ml/12_cnn/gesture_snake/`.
+  Tell the group the new names (`extra_*`, `52_gesture_snake/`).
+- **The student zip on the Desktop (`gesture_snake.zip`) is stale**: made before Part 8b and the
+  STUDENT_GUIDE change. Rebuild it as `52_gesture_snake.zip` before handing it out again.
+- **`52_gesture_snake/gesture_data/` is untracked but not git-ignored**: `git add ml/12_cnn` would
+  publish the instructor's 500 crops. Ignore it, or settle "Ship the instructor's recordings as
+  starter data?" below.
+- **[49] has no `_notes.pdf`** on the chapter page; export it if [49] was annotated live.
+- **[52]'s video is not on the channel yet** (checked 2026-10-17); the page says "շուտով". Add
+  the link, title copied exactly, once it is up.
+- **The page's "🎲 Random" section is still TBD.**
+- **Traffic light (`extra_traffic_light/`)**: its text still cites HW1c, and its data exists only
+  in the instructor's copy. Fix both only if it ever becomes a real practical.
+- **One unused borrowed figure**: `ml/12_cnn/fig/borrowed/distill_featviz_sprite.jpg` is not used
+  by any deck.
 
 ---
 
@@ -286,7 +327,9 @@ the delivered [40]-[45] decks and their LMU page text; only provenance comments 
 
 Surfaced by the autonomous CNN/RNN review; each needs an instructor call, not more building.
 
-- **The CNN chapter has no homework where students train a CNN.** HW1b/HW1c/barcode are all
+- **The CNN chapter has no homework where students train a CNN.** (Partly answered 2026-10-17:
+  the Gesture Snake practical [52] trains an ANN and two CNNs and fine-tunes ResNet-18 on the
+  student's own recordings - but it is a practical, not graded homework.) HW1b/HW1c/barcode are all
   classical (hand-designed kernels); "HW1 Part B" (train a small CNN on Fashion-MNIST, show its
   first-layer kernels - `CNN_CHAPTER_PLAN.md`) was never built, and HW2-HW4 are TBD. HW1b/HW1c's
   closing cells used to point at the missing Part B; they now point at L16/L17's learned-kernel
