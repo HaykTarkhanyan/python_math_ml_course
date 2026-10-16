@@ -9,6 +9,46 @@ this file holds the choice and a pointer.
 
 ---
 
+## #88 - CNN chapter wrap-up: planning files deleted, non-lecture notebooks renamed `extra_*`, Gesture Snake folder numbered, traffic light committed without its data
+
+**Date:** 2026-10-17 · **Status:** active (instructor: "lets wrap up this cnn chapter", then picked
+each of the choices below from presented options).
+
+**Decision.** In `ml/12_cnn/`:
+
+- **Deleted:** the four `NN_*_OUTLINE.md`, `48_cnn_foundations_QUESTIONS.md`, `49/50/51_DECISIONS.md`,
+  `HW1b_photoshop_PLAN.md`, and `HW1c_biopsy.ipynb` + `HW1c_biopsy_solution.ipynb` (retired by #61,
+  unlinked since). All recoverable with `git show 1a62099:ml/12_cnn/<file>`. The decks' build-note
+  comments and `CNN_CHAPTER_PLAN.md` now say so.
+- **Kept:** `CNN_CHAPTER_PLAN.md`, because `ml/13_rnns/RNN_CHAPTER_PLAN.md` follows it as its playbook.
+- **Renamed:** `HW1b_photoshop_solution.ipynb` -> `extra_photoshop_solution.ipynb`,
+  `liver_biopsy_solution.ipynb` -> `extra_liver_biopsy_solution.ipynb`, `project_barcode.ipynb` ->
+  `extra_barcode.ipynb`, `gesture_snake/` -> `52_gesture_snake/`, `traffic_light/` ->
+  `extra_traffic_light/`. The `extra_` prefix marks material that has no playlist video. The text inside
+  still says "HW1b".
+- **Traffic light:** committed without `data/` (504 files, 3.1 MB, git-ignored). Its README says how
+  the data was made and that only the instructor's copy has the camera crops. It stays off the chapter
+  page (#61).
+- **Chapter page:** gets the [48]-[51] video links.
+
+**Why.** The planning files did their job before delivery, and #83 already renumbered the chapter to
+the playlist. The `extra_` names leave the numbered files as the ones with a video. The traffic-light
+camera crops come from YouTube live streams captured on 2026-09-07. They cannot be re-downloaded, so
+keeping them out of the public repo is a one-way choice. The README says that instead of implying
+the data can be rebuilt.
+
+**Alternatives rejected.** *`extra_HW1b_photoshop_solution.ipynb` (prefix only)*: it would keep the
+name the text uses, but the instructor chose the shorter names. *Deleting `CNN_CHAPTER_PLAN.md`*: it
+would break the RNN plan's two pointers to it. *Linking the traffic light from the page*: students
+cannot get its data, and its text cites the deleted HW1c. *Committing the traffic-light data*: the
+instructor said no.
+
+**What would change this.** If the traffic light becomes a real practical, ship its data with it, for
+example as a zip, and fix the HW1c mentions. If a playlist video is made for an `extra_` notebook,
+give it the video's number.
+
+---
+
 ## #87 - Gesture Snake gains Part 8b: fine-tune only ResNet-18's last conv layer, from the probe (LP-FT) and from a random head
 
 **Date:** 2026-10-16 · **Status:** active (instructor: "add a section on finetuning, like only the

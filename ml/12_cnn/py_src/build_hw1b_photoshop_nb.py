@@ -1,4 +1,4 @@
-"""Assemble and execute ml/12_cnn/HW1b_photoshop_solution.ipynb - "Photoshop from scratch":
+"""Assemble and execute ml/12_cnn/extra_photoshop_solution.ipynb - "Photoshop from scratch":
 a self-study notebook on convolution and colour spaces after [48].
 
 Extracted 2026-10-13 from the hand-maintained notebook (its original generator lived in a
@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve()
 CH = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
 WORK = CH
-OUT = WORK / "HW1b_photoshop_solution.ipynb"
+OUT = WORK / "extra_photoshop_solution.ipynb"
 LOGS_DIR = REPO_ROOT / "logs"
 GH = "https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/"
 COLAB = "https://colab.research.google.com/github/HaykTarkhanyan/python_math_ml_course/blob/main/"
@@ -96,7 +96,7 @@ Along the way, five ideas to keep:
 
 **It comes with every output already in it**, so each answer sits right under its question.
 To get the most out of it, **clear all outputs first** ("Clear all outputs", in the Edit menu of
-Jupyter and of [Colab]({COLAB}ml/12_cnn/HW1b_photoshop_solution.ipynb)) and run the cells one at
+Jupyter and of [Colab]({COLAB}ml/12_cnn/extra_photoshop_solution.ipynb)) and run the cells one at
 a time as you read.
 
 - **Predict** prompts ask you to commit to a guess *before* running the next cell. Write it
@@ -1625,7 +1625,7 @@ md(r"""
 You now have a convolution engine, a filter menu, and a colour space in which "which colour"
 and "how bright" are separate numbers.
 
-**The liver biopsy notebook** (`liver_biopsy_solution.ipynb`) points all three at a real
+**The liver biopsy notebook** (`extra_liver_biopsy_solution.ipynb`) points all three at a real
 **liver biopsy** and asks them to measure something a pathologist cares about. It works - and
 then the scanner's colours shift by a few percent and it stops working, which is the argument
 for everything after [48].

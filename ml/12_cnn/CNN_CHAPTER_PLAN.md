@@ -5,6 +5,11 @@ Drafted 2026-07-13. Supersedes the *sourcing and status* sections of
 Outlines live next to this file: `48_cnn_foundations_OUTLINE.md`,
 `49_cnn_architectures_OUTLINE.md`, `L18_cnn_transfer_vision_OUTLINE.md`.
 
+> **Chapter delivered and wrapped up 2026-10-17** (DECISIONS #88). The per-deck OUTLINE,
+> QUESTIONS and `NN_DECISIONS.md` files, `HW1b_photoshop_PLAN.md` and HW1c were deleted;
+> `git show 1a62099:ml/12_cnn/<file>` recovers any of them. Kept because
+> `ml/13_rnns/RNN_CHAPTER_PLAN.md` follows this file as its playbook.
+
 ## What changed since the 2026-06-16 design
 
 1. **Source material upgraded.** The full LMU Moodle DL course is now archived locally at

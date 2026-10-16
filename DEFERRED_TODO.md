@@ -32,7 +32,7 @@ Found by `non_essential/check_links.py --live` and a browser pass; left alone on
 
 ---
 
-## ch6: derive a student/task version of project_barcode.ipynb if ever assigned as homework
+## ch6: derive a student/task version of extra_barcode.ipynb (was project_barcode.ipynb) if ever assigned as homework
 
 The barcode project (2026-09-06) shipped as a reference walkthrough only, per instructor
 choice. If it is later assigned as graded work, derive a TODO-version by stripping the
@@ -312,11 +312,11 @@ Surfaced by the autonomous CNN/RNN review; each needs an instructor call, not mo
 
 ---
 
-## Gesture Snake practical (`ml/12_cnn/gesture_snake/`, 2026-09-30): open items
+## Gesture Snake practical (`ml/12_cnn/52_gesture_snake/`, 2026-09-30): open items
 
 Recorded and run on the instructor's data on 2026-10-01 (500 crops, 2 bursts per class); left open:
 
-- **Ship the instructor's recordings as starter data?** `gesture_snake/gesture_data/hayk/` (500
+- **Ship the instructor's recordings as starter data?** `52_gesture_snake/gesture_data/hayk/` (500
   crops, 2.2 MB) is untracked. Lets students without a webcam train, and gives everyone a second
   person for the strangers test. Note the planted sleeve shortcut in burst 1 if they are shared.
 - **No left/right in the strangers test.** `web_sample/` is HaGRID up / down / nothing. Zenodo

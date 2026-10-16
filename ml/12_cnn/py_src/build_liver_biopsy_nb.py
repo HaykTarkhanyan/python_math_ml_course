@@ -1,4 +1,4 @@
-"""Assemble and execute ml/12_cnn/liver_biopsy_solution.ipynb - a self-study notebook after
+"""Assemble and execute ml/12_cnn/extra_liver_biopsy_solution.ipynb - a self-study notebook after
 [48]: measure a real liver biopsy with hand-built tools (HSV, opening, connected components),
 then watch the rule break when the scanner changes.
 
@@ -36,7 +36,7 @@ HERE = Path(__file__).resolve()
 CH = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
 WORK = CH
-OUT = WORK / "liver_biopsy_solution.ipynb"
+OUT = WORK / "extra_liver_biopsy_solution.ipynb"
 LOGS_DIR = REPO_ROOT / "logs"
 GH = "https://github.com/HaykTarkhanyan/python_math_ml_course/blob/main/"
 COLAB = "https://colab.research.google.com/github/HaykTarkhanyan/python_math_ml_course/blob/main/"
@@ -103,7 +103,7 @@ ideas:
 
 **It comes with every output already in it**, so each answer sits right under its question.
 To get the most out of it, **clear all outputs first** ("Clear all outputs", in the Edit menu of
-Jupyter and of [Colab]({COLAB}ml/12_cnn/liver_biopsy_solution.ipynb)) and run the cells one
+Jupyter and of [Colab]({COLAB}ml/12_cnn/extra_liver_biopsy_solution.ipynb)) and run the cells one
 at a time as you read.
 
 - **Predict** prompts ask you to commit to a guess *before* running the next cell. Write it
@@ -125,7 +125,7 @@ start). Plotting cells take 1-4 s each; slower cells say so in their first line.
 - [33] Color Spaces - what HSV is ([PDF]({GH}ml/09_clustering/33_color_spaces.pdf));
 - [48] CNN Foundations - convolution, Sobel, the slides "Dilation and erosion, by hand" and
   "Template matching" ([PDF]({GH}ml/12_cnn/48_cnn_foundations.pdf));
-- HW1b - the convolution engine reused below ([notebook]({GH}ml/12_cnn/HW1b_photoshop_solution.ipynb)).
+- HW1b - the convolution engine reused below ([notebook]({GH}ml/12_cnn/extra_photoshop_solution.ipynb)).
 """)
 
 md(r"""
