@@ -22,7 +22,6 @@ matches a row below, follow the referenced workflow - do not improvise a new one
 | Add YouTube / video links after a session | `update-youtube` skill | `_meta/youtube_channel.md` |
 | Pull reference material from a video link (transcript, screenshots, borrow visuals into slides) | `youtube-reference` skill (yt-dlp + ffmpeg pipeline -> `_reference_<slug>/`) | `.claude/skills/youtube-reference/SKILL.md` |
 | Check the website for broken links (before pushing site changes; `--live` every few weeks) | `./ma/Scripts/python.exe non_essential/check_links.py [--live]` | `CONVENTIONS.md` (Links on rendered pages) |
-| Build a quiz Google Form | `google-forms-builder` skill | - |
 | Delete LaTeX build junk | `clean-tex` skill or `clean_latex.py` | - |
 | End of session / commit the day's work | `wrap-session` skill | `_work_sessions/*.toml` |
 

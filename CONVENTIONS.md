@@ -116,8 +116,6 @@ resources:
 - [📺 Exact YouTube title](https://youtu.be/...), [🎞️ Սլայդեր](NN_slides.pdf), [📝 Նշումներով](NN_slides_notes.pdf)
 - ... one bullet per lecture video / homework video ...
 
-📝 **Թեմայի վերաբերյալ հարցաշար (Google Form):** [հղում](https://forms.gle/...)
-
 # 🏡 Տնային
 
 ... assignment descriptions, one per HW ...
@@ -139,11 +137,11 @@ NN_lecture_1.{tex,pdf}     # slide source + render
 NN_lecture_1_notes.pdf     # hand-annotated
 NN_HW1_solution.ipynb      # homework solution notebook
 data/                      # datasets used by this chapter's notebooks
-gform/                     # Apps Script + question CSVs for the Google Form
 ```
 
 - **figures/** subfolder only if `.tex` decks include external images (TikZ-only decks don't need it).
-- **gform/** keeps form scaffolding out of the main lecture flow.
+- **No `gform/`, no quiz line**: the Google Form quizzes are dropped (DECISIONS #89).
+  `ml/01_regression_intro/gform/` stays as the one form that was made.
 
 ---
 

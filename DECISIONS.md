@@ -11,19 +11,21 @@ this file holds the choice and a pointer.
 
 ## #89 - The per-chapter Google Form quizzes are dropped
 
-**Date:** 2026-10-17 · **Status:** active (instructor: "we wont be doing google forms anymore").
+**Date:** 2026-10-17 · **Status:** active (instructor: "we wont be doing google forms anymore";
+then "remove the form from others as well").
 
-**Decision.** No new "📝 Թեմայի վերաբերյալ հարցաշար (Google Form)" quizzes. The line came off
-`ml/12_cnn/12_cnn.qmd` at its wrap-up. The other chapter pages, the CONVENTIONS QMD template and
-the WORKFLOWS row are parked in DEFERRED_TODO ("Google Form quizzes are dropped").
+**Decision.** No new "📝 Թեմայի վերաբերյալ հարցաշար (Google Form)" quizzes. The same day the
+line came off `ml/12_cnn/12_cnn.qmd` and then the 12 other chapter pages that only ever showed
+"TBD". It also came out of the CONVENTIONS QMD template (with the `gform/` folder) and the
+WORKFLOWS row. `01_regression_intro` keeps its one real form and `gform/` folder.
 
 **Why.** The instructor's call. Of 14 ML chapter pages, only `01_regression_intro` ever got a
 real form. The other 13 have shown "TBD" since they were made, so the line promised something
 that never came.
 
 **Alternatives rejected.** *Keep the "TBD" lines*: they promise a quiz that will not come.
-*Remove the line from every page right away*: not asked for, and some pages carry other sessions'
-uncommitted edits. Parked instead.
+*Remove `01_regression_intro`'s real form too*: students used it. It stays unless the
+instructor says otherwise.
 
 **What would change this.** If quizzes come back in another form (Moodle, in-class), add a new
 line to the template rather than reviving the Google Form one.

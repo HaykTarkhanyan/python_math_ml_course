@@ -35,20 +35,13 @@ Found by `non_essential/check_links.py --live` and a browser pass; left alone on
 
 ## Google Form quizzes are dropped (instructor, 2026-10-17; DECISIONS #89): leftovers
 
-"we wont be doing google forms anymore". Removed from `ml/12_cnn/12_cnn.qmd` the same day; still
-to clean up:
+"we wont be doing google forms anymore". Done the same day: the "Google Form: TBD" line is off all
+13 chapter pages that had it, the CONVENTIONS template and the WORKFLOWS row. Left:
 
-- **12 chapter pages still end their material list with `📝 Թեմայի վերաբերյալ հարցաշար (Google
-  Form): TBD`**: `ml/04_trees`, `05_interpretability`, `06_feature_engineering`,
-  `07_classic_methods`, `08_time_series`, `09_clustering`, `10_dimensionality_reduction`,
-  `11_neural_networks`, `13_rnns/rnn.qmd`, `ch11_rl/rl.qmd`, `ch8_autoencoders`,
-  `llm_training`. Delete the line (and the blank line before it). `git grep -n "Google Form" -- '*.qmd'`
-  finds them.
-- **`ml/01_regression_intro/01_regression_intro.qmd` has a real form link** (forms.gle). Keep it
-  for the students who already used it, or remove it with the rest - instructor's call.
-- **`CONVENTIONS.md` QMD template** still has the form line (and a `gform/` folder in the chapter
-  layout); **`WORKFLOWS.md`** still has the "Build a quiz Google Form" row. Drop both, or new
-  chapters will bring the line back.
+- **`ml/01_regression_intro/01_regression_intro.qmd` has the one real form link** (forms.gle) and
+  its `gform/` folder. Kept for the students who used it; remove it if it should go too.
+- **The `google-forms-builder` skill** (`.claude/skills/google-forms-builder/`) is unused now.
+  Archive or delete it if forms are not coming back.
 
 ---
 
