@@ -9,6 +9,142 @@ this file holds the choice and a pointer.
 
 ---
 
+## #87 - Gesture Snake gains Part 8b: fine-tune only ResNet-18's last conv layer, from the probe (LP-FT) and from a random head
+
+**Date:** 2026-10-16 · **Status:** active (instructor: "add a section on finetuning, like only the
+last conv layer"; "LP-FT + random head" picked from three presented scopes).
+
+**Decision.** New Part 8b unfreezes `layer4[1].conv2` (2,359,296 weights, 21% of the trunk) of a
+**copy** of Part 8's trunk and trains it with the shared `train()` loop at lr 1e-3, 10 epochs, no
+augmentation. Run 1 starts the head from Part 8's logistic regression (LP-FT, [50]'s recipe). Run
+2 starts it random. Same layer, learning rate and batches. `FineTuned.train()` sends the trunk back to
+eval mode so frozen BatchNorm keeps ImageNet's statistics. The notebook checks this by asserting
+that every other `state_dict` entry is unchanged. Part 10 scores both on strangers. Part 11 exports
+only the LP-FT model (`gesture_model_finetuned.pt2`). By #85's best-validation rule it becomes
+`gesture_model.pt2`. The full run grows from 561 s to 753 s.
+
+**Why.** Measured in four scratch runs (deterministic; the notebook reproduced them exactly):
+
+| last conv fine-tuned, head from | lr | val, last (best) | strangers | conv weights moved |
+|---|---|---|---|---|
+| (frozen probe, Part 8) | - | 64.0% | 44.4% | 0 |
+| probe | 1e-4 | 68.0% (72.0%) | - | - |
+| probe, + augmentation | 1e-4 | 67.6% (72.0%) | 42.2% | 9.3% |
+| **probe (LP-FT)** | 1e-3 | **76.0%** (78.0%) | **42.2%** | 34.8% |
+| **random** | 1e-3 | **82.8%** (84.4%) | **35.6%** | 44.5% |
+
+At 1e-4 the conv layer moved 9.3% (augmented run) and the gain stayed within the 5-burst noise. At 1e-3 the
+random-head run wins on the student's own validation bursts but drops almost to the "always
+nothing" baseline (33.3%) on strangers. That is the pattern on [50]'s LP-FT slide (Kumar et al.,
+ICLR 2022), reproduced on the class's own data, so the notebook shows both runs. It is 6 photos
+of 90, and the prose says it is a hint, not proof. LP-FT's first epoch drops training accuracy from
+100.0% to 67.2%: Adam's steps are about lr in size however small the gradient is.
+
+**Alternatives rejected.** LP-FT only (+2.5 min instead of +5): the LP-FT rule would only be
+stated, not shown. Random head only: the tutorial default, and the deck's rule would be contradicted
+without explanation. lr 1e-4 ("small", per the deck): 68.0% after 10 epochs, a gain the jumpy
+validation (48.4% to 72.0% along the way) cannot tell from noise. Augmentation during fine-tuning: no gain at 1e-4 (67.6% against 68.0%). Caching activations
+below the unfrozen layer to save time: faster, but the residual block needs two cached tensors and
+the shared `train()` loop could not be reused. Exporting the random-head model: it would win #85's
+rule at 82.8% while scoring 35.6% on strangers.
+
+**What would change this.** If more bursts per class are recorded and the random head no longer
+loses on strangers, drop the "flips" framing in Part 10. If a 13-minute notebook is too long for
+class, cut run 2 and keep its numbers in this entry. If the game feels slow with the ResNet default
+(59.6 ms per frame), change #85's rule to include latency.
+
+---
+
+## #86 - Gesture Snake trains without augmentation first, adds an error-analysis part, moves augmentation into a later experiment, and adds CLIP
+
+**Date:** 2026-10-16 · **Status:** active (instructor: "remove the augmentation part", then "show it
+as an experiment"; "do error analysis... I deliberately put issues there"; CLIP library and
+zero-shot picked from presented options).
+
+**Decision.** The practical now has 11 parts. Every network in Part 3 trains **without**
+augmentation (`train(..., augment=None)`). New Part 4 (error analysis) shows each training burst
+next to its validation burst, with 50-frame averages that make the static background visible, and
+then two checks: logistic regression on 3 colour numbers per region, and each validation crop's
+nearest training crop in pixels. The old Part 3 (the label-changing flip) moved into new Part 6,
+which retrains the bigger CNN with augmentation. New Part 9 uses CLIP through `transformers`
+(`openai/clip-vit-base-patch32`): a linear probe on the 512-number image embeddings, plus zero-shot
+with one editable sentence per class. Part 10 (strangers) now shows the photos, adds an "always
+nothing" baseline, and scores every model. The ResNet-18 probe no longer trains on mirrored copies.
+`requirements.txt` gains `transformers==5.15.0`, `huggingface-hub==1.27.0`, `tokenizers==0.22.1`
+and `safetensors==0.8.0`, which are the versions in `ma`.
+
+**Why.** Measured on the instructor's 500 crops (2 threads, full run 561 s):
+
+| | val, last epoch | strangers |
+|---|---|---|
+| plain ANN / small CNN / bigger CNN, no augmentation | 49.6% / 46.0% / 42.0% | 23.3% / 17.8% / 21.1% |
+| bigger CNN + augmentation | 66.0% (best 90.0%) | 17.8% |
+| ResNet-18 probe (no mirrors) | 64.0% | 44.4% |
+| CLIP probe / CLIP zero-shot | 47.6% / 27.6% | 43.3% / 41.1% |
+
+Without augmentation, all three networks fail on the same classes ("up" right 0, 0 and 1 times out
+of 50), which is what motivates the error analysis. The planted shortcuts are measurable: 3 numbers
+of bottom-left-corner colour name the training class 94.4% of the time and score 22.0% on
+validation. In pixel space the nearest training crop is "nothing" for 45 of 50 validation "up" and
+50 of 50 "left" crops, the same pattern as the small CNN's confusion matrix. The small CNN's
+Grad-CAM sits on the radiator. The "flip changes the label" lesson survives in Part 6.
+`50_transfer_learning.tex:866` removed a slide because the practical covered it.
+
+**Alternatives rejected.** Removing augmentation everywhere: the instructor first chose this,
+then switched after seeing the bigger CNN drop from 66.0% to 42.0%. Silent augmentation inside
+`train()` was the other option offered. For CLIP: `open_clip_torch` 3.3.0 (same 605 MB weights, a
+new install), an optional/skippable CLIP cell, and MobileCLIP2-S0 (300 MB but its own `mobileclip`
+package, 440 downloads). `transformers` was already in `ma`.
+
+**What would change this.** If students without bandwidth cannot get the 605 MB weights, make the
+CLIP cells skippable. If a third burst is recorded, early stopping becomes honest and the
+"lucky epoch" caveats can go. If CLIP's left/right failure turns out to be a prompt problem
+(different wording fixes it), say so in Part 9.
+
+---
+
+## #85 - Gesture Snake trains a plain ANN and a bigger CNN next to the small CNN; the default model goes to whichever wins
+
+**Date:** 2026-10-16 · **Status:** superseded in part by #86 (training is unaugmented by default;
+augmentation is Part 6's experiment). The ANN, bigger CNN and export rule still stand. (Instructor
+request: "add a bigger CNN, this one sucks, but don't remove it", plus a plain-ANN comparison.)
+
+**Decision.** `52_gesture_snake_solution.ipynb` gains Part 4b (a plain ANN, 3,179,525 weights) and
+Part 4c (`bigger_cnn()`: five conv blocks 16-32-64-128-256, a hidden dense layer of 128, dropout 0.5,
+525,445 weights). All three use the same `train()`: lr 2e-3, 20 epochs, one shared batch order
+(seeded per call). After every epoch, `train()` evaluates both sets without augmentation and prints
+loss and accuracy for each. The curves plot loss next to loss and accuracy next to accuracy, instead
+of training loss and validation accuracy on twin axes. The export rule is unchanged (the highest
+validation accuracy among small CNN, bigger CNN and ResNet-18 probe becomes `gesture_model.pt2`), so on
+the instructor's recordings the default is now the bigger CNN, not the ResNet probe. "Part 4b"
+used to name the GAP-head experiment of #57, which was cut on 2026-10-01; the name is reused.
+
+**Why.** Measured on the instructor's 500 crops (train burst 1, validate burst 2, 2 CPU threads):
+
+| model | val acc, last epoch | best (epoch) | strangers | ms/frame |
+|---|---|---|---|---|
+| plain ANN | 50.8% | 54.4% (9) | 25.6% | 1.6 |
+| small CNN | 59.6% | 64.8% (14) | 24.4% | 3.5 |
+| bigger CNN | 66.0% | 90.0% (9) | 17.8% | 8.3 |
+| ResNet-18 probe | 64.4% | - | 34.4% | 54.7 |
+
+The channels grow only where the maps are already small, so the bigger CNN costs 64 s to train,
+against the small CNN's 76 s in the same run. Its last conv layer sees 156 px against the small
+CNN's 36 px (the `receptive_fields()` printout). Full notebook run: 335 s (was 157 s).
+
+**Alternatives rejected.** A VGG-style net (two convs per block, 32-256 channels at full
+resolution): about 22x the small CNN's multiply-adds, so an estimated hour of training on 2 threads.
+It was never run - the probe was stopped before it got there. Giving the plain ANN half the learning rate: 1e-3 gave 48.8% and
+2e-3 gave 50.8%, so there was no reason to treat it differently. Making the ResNet probe the default
+regardless of score: the rule stays simple, and the notebook's last note says to try
+`--model gesture_model_resnet.pt2` instead.
+
+**What would change this.** If the bigger CNN plays worse than the ResNet probe live (it is jumpy:
+31.6% to 90.0% between epochs, and 17.8% on strangers), make the probe the default. A third
+recorded burst would give an honest early-stopping split and settle which model is better.
+
+---
+
 ## #83 - The CNN chapter's numbers follow the playlist: [49] architectures, [50] transfer learning, [51] vision tasks, [52] Gesture Snake
 
 **Date:** 2026-10-15 · **Status:** active (instructor, after delivering transfer learning and

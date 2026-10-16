@@ -30,6 +30,10 @@ pip install torch==2.9.0 torchvision==0.24.0
 On Linux without an NVIDIA GPU, add `--index-url https://download.pytorch.org/whl/cpu` to the
 PyTorch line, or pip downloads the much larger CUDA build, which you cannot use.
 
+The notebook also needs scikit-learn, pandas, matplotlib, plotly and, for its CLIP part,
+`transformers` (the CLIP weights download once, 605 MB). `pip install -r requirements.txt`
+installs all of it.
+
 ---
 
 ## 2. Record your data (about 3 minutes)
@@ -77,8 +81,9 @@ Running the recorder again **adds** to what is there. To start over, delete
 
 ## 3. Train a model
 
-The practical notebook (`52_gesture_snake_solution.ipynb`) trains two models on `gesture_data/` and
-writes `gesture_model.pt2`. You can also train your own, any way you like, as long as the exported
+The practical notebook (`52_gesture_snake_solution.ipynb`) trains a plain ANN, a small and a bigger
+CNN, a frozen ResNet-18 probe and a ResNet-18 with its last conv layer fine-tuned on
+`gesture_data/`; the best of the last four goes to `gesture_model.pt2`. You can also train your own, any way you like, as long as the exported
 model keeps this contract:
 
 | | |

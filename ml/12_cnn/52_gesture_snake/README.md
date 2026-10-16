@@ -1,7 +1,8 @@
 # Gesture Snake
 
-The CNN chapter's training practical: record thumb gestures with the webcam, train a CNN and a
-frozen ResNet-18 on them, and play Snake with the better one. Runs on a laptop CPU.
+The CNN chapter's training practical ([52]): record thumb gestures with the webcam, train a plain
+ANN, two CNNs and a ResNet-18 (frozen, then with its last conv layer fine-tuned) on them, and play
+Snake with the best one. Runs on a laptop CPU.
 
 **Students: start with `STUDENT_GUIDE.md`.**
 
