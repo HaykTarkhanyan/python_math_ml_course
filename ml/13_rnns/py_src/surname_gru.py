@@ -1,11 +1,12 @@
-"""Measured figures for L21's language-modeling section: a character GRU trained on the ch11
+"""Measured figures for the language-modeling section [54] had until 2026-10-23 (cut,
+DECISIONS #95; figures kept): a character GRU trained on the ch11
 name inventor's 689 Armenian surnames. Replaces the July illustrative char-LSTM panels
 (charlm_anim.py / charlm_generate.py, now in py_src/archive/).
 
-Same data, split, model and training loop as Part 4 of the chapter practical
-(xx_rnn_memory_solution.ipynb), so the slides and the practical show the same numbers. The
-script asserts that it reproduces the practical's results (GRU best val loss 1.605 at epoch 30,
-window MLP 1.673) and stops if it does not.
+Same data, split, model and training loop as Part 4 of the former chapter practical
+(xx_rnn_memory_solution.ipynb, removed 2026-10-24, DECISIONS #96), so the slides and the
+practical showed the same numbers. The script asserts that it reproduces those results (GRU
+best val loss 1.605 at epoch 30, window MLP 1.673) and stops if it does not.
 
 What it measures, saved to ml/13_rnns/results/surname_gru.json (the artifact of record; the
 figures are drawn from it and can be redrawn with --plot-only):
@@ -55,7 +56,7 @@ DATA = REPO_ROOT / "ml" / "11_neural_networks" / "data" / "surnames_hy.txt"
 ARM_FONT = "Segoe UI"
 RED, BLUE, ORANGE, GREY = "#D90012", "#0033A0", "#F2A800", "#777777"
 
-# The practical's configuration (Part 4) - change it there first, never only here.
+# The former practical's Part 4 configuration (the practical was removed 2026-10-24).
 EMB, HIDDEN, LR, BATCH, EPOCHS, CLIP = 16, 64, 3e-3, 64, 45, 1.0
 K, MLP_EMB, MLP_H, MLP_EPOCHS, MLP_BATCH = 3, 8, 128, 80, 1024
 EXPECT_GRU, EXPECT_GRU_EP, EXPECT_MLP, TOL = 1.605, 30, 1.673, 0.002

@@ -1,4 +1,4 @@
-"""Mandatory ANIM flip-book for the L20 RNN Foundations deck ("A complete forward pass,
+"""Mandatory ANIM flip-book for the [53] RNN Foundations deck ("A complete forward pass,
 in real numbers").
 
 Generates into ml/13_rnns/fig/:
@@ -148,7 +148,7 @@ def r2(v):
 
 
 # --- drawing -----------------------------------------------------------------------
-# Drawn at the size the figure gets on the slide (L20 embeds it at 0.82\linewidth, about
+# Drawn at the size the figure gets on the slide ([53] embeds it at 0.82\linewidth, about
 # 4.5 in), with the axes spanning the whole figure and data units = inches. Every font
 # size below is therefore its true size on the slide (style guide: 7-10 pt). Redrawn
 # 2026-10-03: the old 12 in canvas was shrunk to ~38% on the slide, leaving ~3 pt text.

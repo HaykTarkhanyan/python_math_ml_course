@@ -1,4 +1,4 @@
-"""Real figure for the L20 RNN Foundations deck ("Picking the activation: why tanh").
+"""Real figure for the [53] RNN Foundations deck ("Picking the activation: why tanh").
 
 Generates into ml/13_rnns/fig/:
   activation_zoo.pdf -- tanh, sigmoid and ReLU plotted together, tanh highlighted
@@ -51,7 +51,7 @@ def relu(x):
 def fig_activation_zoo(log):
     x = np.linspace(-4, 4, 400)
 
-    # drawn at its slot size (L20: 0.52 column x 0.92 = ~2.65 in) so fonts are true size
+    # drawn at its slot size ([53]: 0.52 column x 0.92 = ~2.65 in) so fonts are true size
     fig, ax = plt.subplots(figsize=(2.65, 2.15))
     ax.plot(x, relu(x), color=ORANGE, lw=1.3, label="ReLU: unbounded")
     ax.plot(x, sigmoid(x), color=RED, lw=1.3, label="sigmoid: (0, 1)")

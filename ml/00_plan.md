@@ -21,7 +21,7 @@ foundations, [49] architectures, [50] transfer learning, [51] vision tasks.
 |---|---|---|---|---|---|
 | ~~**Oct 14**~~ | Wed | [50] + [51] | ✅ Transfer learning + Vision tasks - **delivered**, notes exported | `12_cnn/50_transfer_learning` (32 frames) · `12_cnn/51_vision_tasks` (49 frames) | Clean PDFs recompiled 2026-10-15; both notes PDFs linked on the chapter page |
 | **Oct 16** | Fri | [52] | *Practical* - Gesture Snake | `12_cnn/52_gesture_snake/52_gesture_snake_solution.ipynb` · `STUDENT_GUIDE.md` | Built 2026-10-01; Part 8b (fine-tuning) added 2026-10-17; folder renamed at the chapter wrap-up (DECISIONS #88) |
-| **Oct 18** | Sun | [53] + [54] | RNN foundations + The road to attention | `13_rnns/L20_rnn_foundations` (30 frames) · `13_rnns/L21_road_to_attention` (25 frames) | Built, last edited Oct 3-5, on GitHub. Rename to `53_`/`54_` at delivery |
+| **Oct 18** | Sun | [53] + [54] | RNN foundations + The road to attention | `13_rnns/53_rnn_foundations` · `13_rnns/54_road_to_attention` | [53] delivered 2026-10-21, [54] 2026-10-23 (both notes PDFs in); both renamed from `L20_`/`L21_` that day, labels to [53]/[54] |
 | **Oct 21** | Wed | [55] | LLMs, session 1 | `14_llms/LLM1_tokenization` (40 frames), if the chapter order holds - see risk 5 | Built 2026-10-04, not student-reviewed (LLM-3 to LLM-5 were) |
 
 ### Risks and open questions (critique of this plan)
@@ -40,7 +40,8 @@ foundations, [49] architectures, [50] transfer learning, [51] vision tasks.
    earlier.
 4. **Sunday: two decks fit, the RNN practical does not.** 55 frames is lighter than Oct 14. But
    `13_rnns/xx_rnn_memory` ("How far back can a network remember?") gets no slot in this plan:
-   cut it, make it homework, or give it a session. The RNN decks have not had the kind of
+   cut it, make it homework, or give it a session. **Resolved 2026-10-24: removed, replaced by
+   one detailed seq2seq homework project (DECISIONS #96).** The RNN decks have not had the kind of
    instructor review the CNN decks got this week (13 change requests for [51] alone). If they
    need one, do it Thursday or Saturday, not on Sunday.
 5. **"Wednesday we do transformers" conflicts with the chapter as built.** The LLM chapter runs

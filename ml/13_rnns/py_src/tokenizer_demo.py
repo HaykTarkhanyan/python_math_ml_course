@@ -1,4 +1,4 @@
-"""Real figure for the L21 "Road to Attention" deck (Section 2: tokens).
+"""Real figure for the [54] "Road to Attention" deck (Section 2: tokens).
 
 Generates into ml/13_rnns/fig/:
   tokenizer_panel1.pdf -- the review sentence split three ways: char / word / subword.
@@ -15,9 +15,9 @@ tiktoken under the user's cache dir; this script fails loudly if tiktoken is mis
 the encoding cannot be loaded (no silent fallback to a fake tokenizer).
 
 Chapter constants reused verbatim (never retyped):
-  REVIEW_SENTENCE: "The pomegranates arrived fresh and sweet." (from L20)
+  REVIEW_SENTENCE: "The pomegranates arrived fresh and sweet." (from [53])
   Armenian line: read from py_src/data/armenian_line.txt
-  English gloss: locked at the L21 interview (see ENGLISH_GLOSS below)
+  English gloss: locked at the [54] interview (see ENGLISH_GLOSS below)
 
 Run with the project venv:
     ./ma/Scripts/python.exe ml/13_rnns/py_src/tokenizer_demo.py

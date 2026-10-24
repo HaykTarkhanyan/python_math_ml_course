@@ -1,4 +1,4 @@
-"""Real figure for the L20 RNN Foundations deck (Section 1: "The shuffle test").
+"""Real figure for the [53] RNN Foundations deck (Section 1: "The shuffle test").
 
 Generates into ml/13_rnns/fig/:
   word_shuffle.pdf -- the chapter's running review sentence vs a fixed shuffle of its
@@ -53,7 +53,7 @@ def tokenize_bow(sentence: str) -> list[str]:
     return re.findall(r"[a-zA-Z']+", sentence.lower())
 
 
-# Drawn at the size the figure gets on the slide (L20 shuffle frame: 0.70 column, ~3.85 in).
+# Drawn at the size the figure gets on the slide ([53] shuffle frame: 0.70 column, ~3.85 in).
 # The sentence rows use an axes whose data units are inches, so the word boxes are sized
 # from the true 7.5 pt monospace character width. Redrawn 2026-10-03: the old 9.6 in canvas
 # left ~4 pt text.

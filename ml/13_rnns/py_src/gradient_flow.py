@@ -1,15 +1,15 @@
-"""Real figure for the L20 RNN Foundations deck ("Empirical proof") and the L21 "Road
+"""Real figure for the [53] RNN Foundations deck ("Empirical proof") and the [54] "Road
 to Attention" deck ("Does it work? Proof + price").
 
 Generates into ml/13_rnns/fig/:
-  gradient_flow_vanilla.pdf      -- gradient norm per time-step, vanilla RNN only (L20).
-  gradient_flow_vanilla_lstm.pdf -- same, with the LSTM curve added (generated for L21,
-                                     NOT overwritten by the code below -- L20's compiled
+  gradient_flow_vanilla.pdf      -- gradient norm per time-step, vanilla RNN only ([53]).
+  gradient_flow_vanilla_lstm.pdf -- same, with the LSTM curve added (generated for [54],
+                                     NOT overwritten by the code below -- [53]'s compiled
                                      PDF depends on gradient_flow_vanilla.pdf existing).
-  gradient_flow_comparison.pdf   -- L21's actual payoff figure: a QUICK re-run (more
+  gradient_flow_comparison.pdf   -- [54]'s actual payoff figure: a QUICK re-run (more
                                      steps than the original 300, but still a
                                      CPU-seconds run, NOT extended retraining -- capped
-                                     by instructor scope change, see L21_DECISIONS.md)
+                                     by instructor scope change, see 54_DECISIONS.md)
                                      to check whether the LSTM's gradient advantage
                                      becomes honestly visible. The frame reports
                                      whatever this run actually shows.
@@ -30,9 +30,9 @@ seconds), ~1200 steps for the quick comparison re-run (still CPU seconds -- roug
 4x, not an "extended" run of the kind the instructor ruled out).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py               # ~90 s, L21 comparison only
+    ./ma/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py               # ~90 s, [54] comparison only
     ./ma/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py --l20-figures # ~25 s, redraws
-        L20's two figures after checking the rerun reproduces the July 2026-07-13 17:48 norms
+        [53]'s two figures after checking the rerun reproduces the July 2026-07-13 17:48 norms
 """
 
 import logging
@@ -52,7 +52,7 @@ HIDDEN = 16
 SEQ_LEN = 30
 BATCH = 64
 TRAIN_STEPS = 300
-TRAIN_STEPS_QUICK = 1200  # L21 comparison re-run -- quick, not extended (see docstring)
+TRAIN_STEPS_QUICK = 1200  # [54] comparison re-run -- quick, not extended (see docstring)
 LR = 1e-2
 BLUE, RED = "#0033A0", "#D90012"
 
@@ -145,7 +145,7 @@ def train_and_measure(cell_type: str, rng: torch.Generator, log: logging.Logger,
 def fig_gradient_flow(norms_rnn, norms_lstm, log):
     t = np.arange(SEQ_LEN)
 
-    # variant 1: vanilla-only (L20). Drawn at its slot size (0.68 column, ~3.75 in) so the
+    # variant 1: vanilla-only ([53]). Drawn at its slot size (0.68 column, ~3.75 in) so the
     # fonts are their true size on the slide (redrawn 2026-10-03; the 7.4 in canvas left ~5 pt).
     fig, ax = plt.subplots(figsize=(3.75, 2.45))
     ax.plot(t, norms_rnn, color=BLUE, lw=1.5, marker="o", markersize=2.5,
@@ -154,9 +154,13 @@ def fig_gradient_flow(norms_rnn, norms_lstm, log):
     ax.set_xlabel("time step (0 = first token; the loss sits at 29)", fontsize=7.5)
     ax.set_ylabel(r"$\|\partial \mathcal{L} / \partial h_t\|$ (log scale)", fontsize=7.5)
     ax.set_title("Gradient norm per time-step: dead within ~15 steps", fontsize=8)
+    # the reading direction (added 2026-10-21): backprop starts at the loss and walks left
+    ax.annotate("", xy=(1, 2.5e-2), xytext=(17, 2.5e-2),
+                arrowprops=dict(arrowstyle="->", color=RED, lw=1.3))
+    ax.text(9, 4.2e-2, "backprop runs right to left", color=RED, ha="center", fontsize=7.5)
     ax.tick_params(labelsize=7)
     ax.tick_params(axis="y", labelsize=8.5)   # log axis: exponents are 70% of this
-    ax.legend(fontsize=7, frameon=False)
+    ax.legend(fontsize=7, frameon=False, loc="lower right")
     ax.grid(True, which="both", alpha=0.25)
     fig.tight_layout(pad=0.3)
     out1 = FIG_DIR / "gradient_flow_vanilla.pdf"
@@ -185,9 +189,9 @@ def fig_gradient_flow(norms_rnn, norms_lstm, log):
 
 
 def fig_gradient_comparison(norms_rnn, norms_lstm, log, honest_gap: bool):
-    """L21 payoff figure -- gradient_flow_comparison.pdf, from a QUICK re-run at
+    """[54] payoff figure -- gradient_flow_comparison.pdf, from a QUICK re-run at
     TRAIN_STEPS_QUICK steps (not the extended retraining the outline originally asked
-    for; the instructor capped this at a CPU-seconds quick run, see L21_DECISIONS.md).
+    for; the instructor capped this at a CPU-seconds quick run, see 54_DECISIONS.md).
     Reports whatever the run actually shows -- the title/annotation change depending on
     whether the gap turned out honestly dramatic, per the house "report what the data
     shows" rule."""
@@ -216,15 +220,15 @@ def fig_gradient_comparison(norms_rnn, norms_lstm, log, honest_gap: bool):
 
 
 def main():
-    """NOTE (L21 build): this run intentionally does NOT call fig_gradient_flow() --
+    """NOTE ([54] build): this run intentionally does NOT call fig_gradient_flow() --
     that would regenerate gradient_flow_vanilla.pdf and gradient_flow_vanilla_lstm.pdf,
-    which is a hard "do not overwrite" per the L21 brief (L20's compiled PDF depends on
-    the former existing unchanged). Both files already exist from the L20 build and are
-    left untouched. This run only produces the NEW L21 payoff figure.
+    which is a hard "do not overwrite" per the [54] brief ([53]'s compiled PDF depends on
+    the former existing unchanged). Both files already exist from the [53] build and are
+    left untouched. This run only produces the NEW [54] payoff figure.
 
-    --l20-figures (added 2026-10-03, to redraw L20's figure at its slot size): reruns the
+    --l20-figures (added 2026-10-03, to redraw [53]'s figure at its slot size): reruns the
     original 2026-07-13 procedure exactly (git de69f29), checks that the vanilla norms
-    reproduce the logged values L20 quotes, and only then rewrites the two figures. The
+    reproduce the logged values [53] quotes, and only then rewrites the two figures. The
     data on the slide cannot change silently: a mismatch stops the script."""
     log = setup_logging()
     FIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -234,11 +238,18 @@ def main():
         log.info("[l20] training vanilla RNN (manual unroll, RNNCell) on the toy recall task")
         norms_rnn = train_and_measure("rnn", rng, log)
         log.info(f"[l20] vanilla RNN gradient norms per step: {np.round(norms_rnn, 8)}")
-        # logs/gradient_flow.log, 2026-07-13 17:48 - the run behind the slide's 340,000x
+        # logs/gradient_flow.log, 2026-07-13 17:48 - the run behind the slide (1/350,000 since 2026-10-21)
         for t, want in [(0, 1.70e-07), (14, 5.361e-05), (29, 5.820145e-02)]:
             if not np.isclose(norms_rnn[t], want, rtol=0.01):
                 raise RuntimeError(f"vanilla norm at t={t} is {norms_rnn[t]:.4e}, the July "
-                                   f"run logged {want:.4e} - not redrawing L20's figure")
+                                   f"run logged {want:.4e} - not redrawing [53]'s figure")
+        # the slide's reading guide: step 0 gets 1/350,000 (348,779); each step back keeps ~64%
+        ratio = norms_rnn[-1] / norms_rnn[0]
+        per_step = (1 / ratio) ** (1 / (SEQ_LEN - 1))
+        log.info(f"[l20] end/start ratio {ratio:,.0f}, kept per step back {per_step:.4f}")
+        if (round(ratio / 1e4), round(per_step, 2)) != (35, 0.64):
+            raise AssertionError(f"the slide quotes 1/350,000 and 64% per step; measured "
+                                 f"1/{ratio:,.0f} and {per_step:.2%}")
         log.info("[l20] training LSTM (manual unroll, LSTMCell) on the toy recall task")
         norms_lstm = train_and_measure("lstm", rng, log)
         fig_gradient_flow(norms_rnn, norms_lstm, log)
@@ -248,13 +259,13 @@ def main():
         if not (FIG_DIR / must_exist).exists():
             raise FileNotFoundError(
                 f"{must_exist} is missing from {FIG_DIR} -- this script no longer "
-                "regenerates it (hard rule: do not overwrite L20's dependency); run "
+                "regenerates it (hard rule: do not overwrite [53]'s dependency); run "
                 "fig_gradient_flow() manually first if it is genuinely missing."
             )
 
-    # L21 payoff: a QUICK re-run (capped by the instructor, no extended retraining) to
+    # [54] payoff: a QUICK re-run (capped by the instructor, no extended retraining) to
     # see whether the LSTM's gradient advantage becomes honestly visible.
-    log.info(f"quick comparison re-run: {TRAIN_STEPS_QUICK} steps (L21, capped -- "
+    log.info(f"quick comparison re-run: {TRAIN_STEPS_QUICK} steps ([54], capped -- "
              "no extended retraining per instructor scope change)")
     torch.manual_seed(SEED)
     rng_quick = torch.Generator().manual_seed(SEED)

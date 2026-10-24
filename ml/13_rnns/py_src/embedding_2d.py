@@ -1,11 +1,11 @@
-"""ILLUSTRATIVE figure for the L21 "Road to Attention" deck (Section 2: embeddings).
+"""ILLUSTRATIVE figure for the [54] "Road to Attention" deck (Section 2: embeddings).
 
 Generates into ml/13_rnns/fig/:
   embedding_2d.pdf -- a hand-placed 2-D SCHEMATIC of a word-embedding space: ~28 words
                       in six semantic clusters, plus the king/queen/man/woman quartet
                       drawn as an exact parallelogram with the analogy arrows.
 
-SCOPE NOTE (instructor scope change, logged in L21_DECISIONS.md): the outline originally
+SCOPE NOTE (instructor scope change, logged in 54_DECISIONS.md): the outline originally
 asked for a small GloVe subset. The instructor later ruled out any embedding download --
 no gensim, no glove-wiki-gigaword-50, no network fetch. This figure is a hand-placed
 ILLUSTRATIVE schematic instead: the coordinates are chosen by hand to keep semantically

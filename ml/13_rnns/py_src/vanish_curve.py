@@ -1,4 +1,4 @@
-"""Real figure for the L20 RNN Foundations deck ("Predict-first: the fading number").
+"""Real figure for the [53] RNN Foundations deck ("Predict-first: the fading number").
 
 Generates into ml/13_rnns/fig/:
   vanish_curve.pdf -- 0.8^k (vanishing) and 1.25^k (exploding) vs k, log scale,
@@ -50,7 +50,7 @@ def fig_vanish_curve(log):
     log.info(f"0.8^{K_MARK} = {v_mark:.6f}")
     log.info(f"1.25^{K_MARK} = {e_mark:.2f}")
 
-    # drawn near its slot sizes (L20 ~3.2 in, L21 cold open ~2.7 in) so fonts stay >= 6.5 pt
+    # drawn near its slot sizes ([53] ~3.2 in, [54] cold open ~2.7 in) so fonts stay >= 6.5 pt
     fig, ax = plt.subplots(figsize=(3.1, 2.25))
     ax.plot(k, explode, color=RED, lw=1.6, label=f"$V={V_EXPLODE}$ (exploding)")
     ax.plot(k, vanish, color=BLUE, lw=1.6, label=f"$V={V_VANISH}$ (vanishing)")

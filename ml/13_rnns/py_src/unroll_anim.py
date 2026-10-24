@@ -1,4 +1,4 @@
-"""Mandatory ANIM flip-book for the L20 RNN Foundations deck ("Unrolling").
+"""Mandatory ANIM flip-book for the [53] RNN Foundations deck ("Unrolling").
 
 Generates into ml/13_rnns/fig/:
   unroll_0.pdf .. unroll_5.pdf -- six flip-book frames shown via \\only<n> on one
@@ -125,7 +125,7 @@ def r2(v):
     return np.round(v, 2)
 
 
-# Drawn at the size the figure gets on the slide (L20 embeds it at 0.86\linewidth, about
+# Drawn at the size the figure gets on the slide ([53] embeds it at 0.86\linewidth, about
 # 4.7 in), axes spanning the figure, data units = inches, so font sizes are true slide
 # sizes (style guide: 7-10 pt). Redrawn 2026-10-03: the old 11 in canvas left ~3 pt text.
 FIG_W, FIG_H = 4.7, 2.3

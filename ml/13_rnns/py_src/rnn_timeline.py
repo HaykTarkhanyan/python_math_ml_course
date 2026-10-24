@@ -1,10 +1,10 @@
-"""Real figure for the L21 "Road to Attention" deck (Section 5: epilogue).
+"""Real figure for the [54] "Road to Attention" deck (Section 5: epilogue).
 
 Generates into ml/13_rnns/fig/:
   rnn_timeline.pdf -- a 1990-2026 ribbon: Elman RNN -> vanishing-gradient diagnosis ->
                       LSTM -> seq2seq/GRU -> "Attention Is All You
                       Need" (RNNs retired from NLP) -> the 2023+ comeback (Mamba,
-                      xLSTM). All facts web-verified at build (see L21_DECISIONS.md;
+                      xLSTM). All facts web-verified at build (see 54_DECISIONS.md;
                       1990/1991 events added + re-verified 2026-09-06):
                         1990 "Finding Structure in Time" -- Elman (Cognitive Science)
                         1991 vanishing gradients diagnosed -- Hochreiter's diploma
@@ -60,7 +60,7 @@ def setup_logging() -> logging.Logger:
 
 
 # (year, label, era, side, level) -- era in {"rnn", "pivot", "comeback"}; facts web-verified
-# at build (2026-07-13, 2026-09-06, 2026-09-22). Redrawn 2026-10-03 at the slot size (L21:
+# at build (2026-07-13, 2026-09-06, 2026-09-22). Redrawn 2026-10-03 at the slot size ([54]:
 # 0.86 x linewidth, ~4.7 in) with short labels: at that width one year is ~0.11 in, so the
 # old two-line captions could not be read. side +1 = above the axis, -1 = below; level 2
 # sits further out, for pairs a year or two apart. 2025: Qwen3-Next (Sept 2025), the first
@@ -83,13 +83,15 @@ YEAR_MIN, YEAR_MAX = 1987.5, 2027.5
 
 
 def fig_timeline(log):
-    fig, ax = plt.subplots(figsize=(4.7, 1.75))
+    # 2026-10-15: widened to the full line (~5.4 in) and smaller markers - at 4.7 in the 1990
+    # and 1991 dots overlapped into one blob.
+    fig, ax = plt.subplots(figsize=(5.4, 1.75))
     ax.set_position([0.01, 0.02, 0.98, 0.96])
     ax.plot([YEAR_MIN, YEAR_MAX], [0, 0], color="#CCCCCC", lw=1.5, zorder=0)
 
     for year, label, era, side, level, ha in EVENTS:
         color = ERA_COLOR[era]
-        ax.plot([year], [0], marker="o", markersize=6, color=color, zorder=3,
+        ax.plot([year], [0], marker="o", markersize=5, color=color, zorder=3,
                 markeredgecolor="black", markeredgewidth=0.4)
         reach = 0.32 if level == 1 else 0.95
         va = "bottom" if side > 0 else "top"

@@ -50,9 +50,9 @@ The two RNN lectures made four claims. This practical **measures** each one on a
 
 | Part | | The claim from the lectures | What you measure |
 |---|---|---|---|
-| 1 | 🧀 | an RNN is one dense layer plus **one new arrow** (L20) | build the step by hand, reproduce L20's numbers exactly, then match `nn.RNN` |
-| 2 | 🧀🧀 | the gradient to step 1 shrinks like $V^{T}$ (L20) | watch autograd confirm $\lambda^T$ to machine precision, then see it in a real RNN |
-| 3 | 🧀🧀🧀 | the LSTM's forget gate is a **memory dial** (L21) | a race: vanilla RNN vs LSTM, gate half-shut vs gate open |
+| 1 | 🧀 | an RNN is one dense layer plus **one new arrow** ([53]) | build the step by hand, reproduce [53]'s numbers exactly, then match `nn.RNN` |
+| 2 | 🧀🧀 | the gradient to step 1 shrinks like $V^{T}$ ([53]) | watch autograd confirm $\lambda^T$ to machine precision, then see it in a real RNN |
+| 3 | 🧀🧀🧀 | the LSTM's forget gate is a **memory dial** ([54]) | a race: vanilla RNN vs LSTM, gate half-shut vs gate open |
 | 4 | 🧀🧀🧀 | memory only pays when dependencies are **long** | the ch11 name inventor, now with an RNN - and *where* in a name the memory helps |
 
 Everything uses PyTorch, but no LSTM or GRU internals: in Parts 3-4 they are black boxes, as in
@@ -82,13 +82,13 @@ md(r"""
 ---
 # Part 1 - one RNN step, by hand 🧀
 
-L20 turned a hidden layer into an RNN with **one new arrow**: the previous state
+[53] turned a hidden layer into an RNN with **one new arrow**: the previous state
 $\mathbf{z}^{[t-1]}$ feeds back through the hidden-to-hidden weights $\mathbf{V}$:
 
 $$\mathbf{z}^{[t]} = \tanh\big(\mathbf{W}^\top\mathbf{x}^{[t]} + \mathbf{V}^\top\mathbf{z}^{[t-1]} + \mathbf{b}\big),
 \qquad \text{score} = \sigma\big(\mathbf{U}^\top\mathbf{z}^{[T]}\big)$$
 
-L20's worked example used a toy net: a 3-word vocabulary (the first three words of the
+[53]'s worked example used a toy net: a 3-word vocabulary (the first three words of the
 chapter's Armenian line), a 2-d state, and these exact weights. Below they are copied from the
 lecture, so your code has to reproduce the slide's numbers.
 """)
@@ -115,7 +115,7 @@ md(r"""
 
 Write `rnn_step` (one application of the formula) and `rnn_forward` (start from
 $\mathbf{z}^{[0]} = \mathbf{0}$, apply the step to each word in order, return every state and the
-final score). The asserts below are L20's numbers, rounded to 2 decimals.
+final score). The asserts below are [53]'s numbers, rounded to 2 decimals.
 """)
 
 code(r"""
@@ -146,13 +146,13 @@ assert np.allclose(np.round(states[0], 2), [0.46, -0.46])
 assert np.allclose(np.round(states[1], 2), [0.65, -0.23])
 assert np.allclose(np.round(states[2], 2), [0.10, 0.59])
 assert round(score, 2) == 0.38
-print("matches L20's forward-pass slide  OK")
+print("matches [53]'s forward-pass slide  OK")
 """)
 
 md(r"""
 ### Task 1.2 - order matters 🧀
 
-L20's shuffle test said a bag-of-words cannot tell a sentence from its shuffle. Feed the same
+[53]'s shuffle test said a bag-of-words cannot tell a sentence from its shuffle. Feed the same
 three words in **reverse** order through your RNN, and compare with a bag-of-words summary (the
 average of the one-hots), which is what an order-blind model sees.
 """)
@@ -205,7 +205,7 @@ md(r"""
 ---
 # Part 2 - watch the gradient fade 🧀🧀
 
-L20's diagnosis: backpropagating from step $T$ to step 1 multiplies by
+[53]'s diagnosis: backpropagating from step $T$ to step 1 multiplies by
 $\partial\mathbf{z}^{[t]}/\partial\mathbf{z}^{[t-1]} = \mathbf{D}^{[t-1]}\mathbf{V}^\top$ at every
 step - the **same** matrix, over and over. Strip away the tanh and it is pure matrix powers.
 
@@ -223,7 +223,7 @@ without stretching, so every eigenvalue of $\mathbf{A}$ has size exactly $\lambd
 Write `influence(lam, T)`: unroll $T$ steps from a starting state $\mathbf{h}_0$ that requires a
 gradient, backpropagate $\mathbf{u}\cdot\mathbf{h}_T$ for a random direction $\mathbf{u}$, and
 return $\|\partial(\mathbf{u}\cdot\mathbf{h}_T)/\partial\mathbf{h}_0\| \,/\, \|\mathbf{u}\|$.
-L20 predicts $\lambda^T$ exactly.
+[53] predicts $\lambda^T$ exactly.
 """)
 
 code(r"""
@@ -245,7 +245,7 @@ for lam in (0.8, 1.0, 1.25):
     got, want = influence(lam, 29), lam ** 29
     print(f"lambda={lam:<5} T=29: autograd {got:.6g}   lambda^T {want:.6g}")
     assert abs(got - want) / want < 1e-9
-print("autograd reproduces lambda^T  OK - L20's 0.8^29 and 1.25^29, measured")
+print("autograd reproduces lambda^T  OK - [53]'s 0.8^29 and 1.25^29, measured")
 """)
 
 md(r"""
@@ -275,7 +275,7 @@ md(r"""
 
 Now an actual `nn.RNN` (tanh, PyTorch's default random init, 32 hidden units), fed a
 length-100 sequence of random one-hot tokens. How strongly does the input $k$ steps back still
-move the final state? This is the same measurement as the left panel of L21's "Does it work?"
+move the final state? This is the same measurement as the left panel of [54]'s "Does it work?"
 slide, and the helper below is reused in Part 3.
 """)
 
@@ -308,7 +308,7 @@ md(r"""
 ---
 # Part 3 - the memory-span race 🧀🧀🧀
 
-L21 claimed that along the LSTM's cell highway the backward factor is just the **forget gate**:
+[54] claimed that along the LSTM's cell highway the backward factor is just the **forget gate**:
 $\partial \mathbf{c}^{[t]}/\partial \mathbf{c}^{[t-1]} = \mathrm{diag}(\mathbf{f}^{[t]})$. The gate
 is a sigmoid, so its starting value is set by its **bias**: bias $0$ gives
 $\sigma(0) = 0.5$, a half-shut gate; bias $3$ gives $\sigma(3) \approx 0.95$, an open one.
@@ -410,7 +410,7 @@ md(r"""
 ### The racing machinery (given)
 
 A recurrent layer, then a linear head on the **final** state. Training is the loop you know from
-ch11, with gradient clipping (L20's fix for exploding gradients) and an early stop once a
+ch11, with gradient clipping ([53]'s fix for exploding gradients) and an early stop once a
 validation batch is at least 99% correct.
 """)
 
@@ -496,7 +496,7 @@ md(r"""
 - At $T = 40$ the picture splits. The LSTM with the **open** gate solves it in about 100
   steps; after the full 800 the vanilla RNN and the LSTM whose gates start **half-shut** are both
   still at chance. A gate stuck near $0.5$ multiplies the memory by $0.5$ at every step - the
-  same disease as L20's $0.8^{29}$, so the half-shut LSTM is no better than the RNN.
+  same disease as [53]'s $0.8^{29}$, so the half-shut LSTM is no better than the RNN.
 - The architecture gives the network a dial; **initialisation decides where the dial starts**.
   Keras starts it open by default (`unit_forget_bias=True`); PyTorch does not.
 
@@ -758,7 +758,7 @@ letters long. Memory pays in proportion to how far back the useful information s
 md(r"""
 ### Task 4.2 - write, don't just predict 🧀🧀
 
-L21's generation loop: start from `.`, get the distribution over the next character, **sample**
+The generation loop: start from `.`, get the distribution over the next character, **sample**
 one (divide the scores by a temperature first), feed it back in, repeat until the model samples
 `.`. Keep the recurrent state between steps - that *is* the memory.
 """)
@@ -817,12 +817,12 @@ md(r"""
 
 | Claim from the lectures | What you measured |
 |---|---|
-| an RNN = a dense layer + one new arrow | your 5-line recurrence reproduced L20's slide and `nn.RNN` exactly |
+| an RNN = a dense layer + one new arrow | your 5-line recurrence reproduced [53]'s slide and `nn.RNN` exactly |
 | the gradient to step 1 shrinks like $\lambda^T$ | autograd confirmed it to machine precision; a real tanh RNN at init loses orders of magnitude within a few dozen steps |
 | the forget gate is a memory dial | the open-gate LSTM remembered far past the RNN; the half-shut one did not |
 | memory pays only for long dependencies | on short surnames the RNN beats a 3-letter window only a little - and part of even that small edge appears where both see the same letters; the gates changed almost nothing |
 
-**Where this goes:** L21's two walls - the bottleneck (one vector must hold everything) and the
+**Where this goes:** [54]'s two walls - the bottleneck (one vector must hold everything) and the
 queue (one step at a time) - are exactly what attention removes. Next chapter.
 """)
 

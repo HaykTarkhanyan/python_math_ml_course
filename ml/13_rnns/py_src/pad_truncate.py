@@ -1,4 +1,4 @@
-"""Real figure for the L20 RNN Foundations deck (Section 1: "The shoehorn hacks").
+"""Real figure for the [53] RNN Foundations deck (Section 1: "The shoehorn hacks").
 
 Generates into ml/13_rnns/fig/:
   pad_truncate.pdf -- three reviews of very different lengths (~3 / ~11 / ~42 words)
@@ -22,7 +22,7 @@ GREEN = "#008C46"
 GRAY = "#AAAAAA"
 RED = "#D90012"
 
-# The three reviews (short/medium reused verbatim from the L20 cold open;
+# The three reviews (short/medium reused verbatim from the [53] cold open;
 # long is this script's own 42-word complaint, verdict word last).
 REVIEWS = {
     "short": "Fresh and sweet!",
@@ -141,9 +141,12 @@ def fig_pad_truncate(log):
     y = FIG_H - 0.48
     top = y + ROW_H / 2
     for label, tokens in rows:
+        last_box_bottom = y - ROW_H / 2
         lowest = draw_row(ax, y, label, tokens, col_widths, lefts, centers, log)
         y = lowest - 0.06 - ROW_H / 2
-    ax.plot([boundary, boundary], [lowest + 0.1, top + 0.08], color="black", lw=0.9)
+    # 2026-10-15: the line stops at the last row's boxes; it used to run on through the red
+    # LOST text under the long review.
+    ax.plot([boundary, boundary], [last_box_bottom - 0.03, top + 0.08], color="black", lw=0.9)
     ax.text(boundary - 0.03, top + 0.1, f"fixed length = {FIXED_LEN}", ha="right", va="bottom",
             fontsize=7)
     if lowest < 0:

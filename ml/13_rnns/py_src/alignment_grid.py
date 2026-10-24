@@ -1,4 +1,4 @@
-"""Figure for L21 "Each step needs different words": the word alignment between the chapter's
+"""Figure for [54] "Each step needs different words": the word alignment between the chapter's
 Armenian line (what the seq2seq decoder writes) and its English gloss (what the encoder reads).
 
 Two PDFs for a predict-first frame:
@@ -15,7 +15,7 @@ Dark cells = the word that carries the meaning; light cells = a weaker link (an 
 person agreement, a preposition folded into an adverb). "the" is aligned to nothing on purpose.
 
 The Armenian words are read from py_src/data/armenian_line.txt (never retyped). The English
-gloss is the chapter constant used in L21's encoder-decoder frame.
+gloss is the chapter constant used in [54]'s encoder-decoder frame.
 
 Runtime: ~2 s. Run with the project venv:
     ./ma/Scripts/python.exe ml/13_rnns/py_src/alignment_grid.py

@@ -1,4 +1,4 @@
-"""Measured figure for L21 "Does it work?": does the LSTM's additive highway actually keep
+"""Measured figure for [54] "Does it work?": does the LSTM's additive highway actually keep
 information alive longer than a vanilla RNN - and what decides it?
 
 Two experiments, results saved to ml/13_rnns/results/memory_highway.json (the artifact of
@@ -209,7 +209,7 @@ def run(log):
 
 def plot(res, log):
     FIG_DIR.mkdir(exist_ok=True)
-    # Drawn at its slot size (L21: 0.92 x linewidth, ~5.05 in) so fonts are true size.
+    # Drawn at its slot size ([54]: 0.92 x linewidth, ~5.05 in) so fonts are true size.
     # Redrawn 2026-10-03: the 7.6 in canvas put the legends at ~4 pt. One shared legend
     # under both panels; bar values sit vertically inside the bars, because at this width
     # three "100" labels side by side would collide.
@@ -245,9 +245,14 @@ def plot(res, log):
                     for T in Ts]
         means = [np.mean(v) for v in per_seed]
         xs = x + (i - 1) * width
-        bars = a2.bar(xs, np.array(means) * 100, width, color=c, alpha=0.85)
-        a2.bar_label(bars, fmt="%.0f", fontsize=7, label_type="center", rotation=90,
-                     color="white", fontweight="bold")
+        a2.bar(xs, np.array(means) * 100, width, color=c, alpha=0.85)
+        # 2026-10-15: values sit at the FOOT of each bar. Centred labels collided with the seed
+        # dots and were cut off in the short bars; every seed scores >= 23% (chance is 25%), so
+        # the band below 15% never holds a dot, and every bar is tall enough to hold its label.
+        assert min(min(v) for v in per_seed) * 100 > 16, per_seed
+        for xi, m in zip(xs, means):
+            a2.text(xi, 3, f"{m * 100:.0f}", rotation=90, ha="center", va="bottom",
+                    fontsize=7, color="white", fontweight="bold")
         for xi, v in zip(xs, per_seed):          # every seed as a dot: means hide coin flips
             a2.scatter([xi] * len(v), np.array(v) * 100, s=5, color="k", zorder=3)
     chance = a2.axhline(100 / N_KEYS, color="k", ls="--", lw=0.9)
