@@ -246,8 +246,9 @@
       needs.
     \item \textbf{Encoder-decoder}: T5 (Raffel et al., 2020) turns every task into text in, text
       out, with a prefix that names the task: ``translate English to German: That is good.''
-      $\to$ ``Das ist gut.''; ``cola sentence: John made Bill master of himself.'' $\to$
-      ``acceptable'' (cola: is the sentence grammatical?).
+      $\to$ ``Das ist gut.''; ``mnli premise: I hate pigeons. hypothesis: My feelings towards
+      pigeons are filled with animosity.'' $\to$ ``entailment''. Pretrained by blanking out spans
+      of text and writing them back.
     \item \textbf{Decoder-only}: GPT-2, and every chat model you have used.
   \end{itemize}
   \vskip 6pt
@@ -258,8 +259,9 @@
 \begin{frame}{Why decoder-only won the last five years}
   \vskip 8pt
   \begin{itemize}
-    \item \textbf{One objective, unlimited data.} Predicting the next token needs no labels, so
-      any text on the internet is training data.
+    \item \textbf{One objective, every token.} BERT's fill-in-the-blank needs no labels either,
+      but it learns only from the 15\% of tokens it hides, and it cannot write. Next-token
+      prediction learns from every token (LLM-4's mask), and the model it trains writes.
     \item \textbf{It subsumes the others.} ``Translate this: \ldots'' is just a prompt. Tasks
       that needed a separate architecture became a formatting question.
     \item \textbf{It is the simplest thing to scale.} One stack, one loss, no encoder to keep
@@ -274,22 +276,21 @@
 
 \begin{frame}{Mask A writes after all: diffusion language models}
   \begin{itemize}
-    \item The cold open: mask A cannot write \emph{left to right}. Diffusion language models do
-      not write left to right. They start from an answer that is all blanks, predict every blank at
-      once, keep the confident guesses, blank out the rest again, and repeat for a fixed number of
-      steps.
-    \item LLaDA (Nie et al., NeurIPS 2025): 8B parameters, ``does not use a causal mask'', trained
-      from scratch on 2.3 trillion tokens; ``competitive with'' LLaMA 3 8B.
-    \item The selling point is speed, since many tokens are filled per step: Inception's Mercury
-      (2025) over 1,000 tokens per second on one GPU; Google's open DiffusionGemma (June 2026) up
-      to 4$\times$ faster than writing token by token, with quality below Gemma 4.
+    \item Mask A failed because word 3 does not exist yet while word 2 is chosen. A diffusion
+      language model makes every position exist from the start: the answer has a fixed length and
+      begins as all blanks. That is BERT's fill-in-the-blank, run again and again.
+    \item Each step predicts every blank at once, keeps the guesses the model is most sure of
+      (highest probability), blanks the rest again, and repeats for a set number of steps.
+    \item LLaDA (Nie et al., NeurIPS 2025): 8B parameters, ``does not use a causal mask'';
+      ``competitive with'' LLaMA 3 8B. The selling point is speed, many tokens per step: Mercury
+      (2025) and Google's open DiffusionGemma (2026), with quality a step behind.
   \end{itemize}
   \vskip 6pt
   \watchbox{The cold open's answer holds for writing one token at a time. Write everything at
   once and refine it, and mask A works - so far trading some quality for speed.}
   \vskip 2pt
-  \src{Nie et al., arXiv 2502.09992; Inception Labs (Feb 2025); Google (10 June 2026). Gemini
-  Diffusion (May 2025) is still an experimental demo.}
+  \src{Nie et al., arXiv 2502.09992; Inception Labs (Feb 2025: over 1,000 tokens/s on one GPU);
+  Google (10 June 2026: up to 4$\times$ faster, quality below Gemma 4).}
 \end{frame}
 
 % ============================================================ SECTION 2 (py_src/head_figs.py --gpt2)
@@ -375,7 +376,8 @@ distribution over the whole vocabulary, and one continuation is far more likely 
 
   \vskip 12pt
   \keybox{Every row of the table gets its own dot product: 50,257 of them, which is one matrix
-  multiplication. A row that points the same way as the last vector gets a high score.}
+  multiplication. A row that points more the same way as the last vector gets a \textbf{higher}
+  score than the others - here they all sit around $-80$, and only the differences count.}
 
   \vskip 8pt
   {\small Every logit is near $-80$. Back to the question: how does ``floor'' end up with 7.6\%?}
@@ -412,13 +414,32 @@ distribution over the whole vocabulary, and one continuation is far more likely 
   and it is the knob LLM-6 turns: temperature stretches or shrinks those differences.}
 \end{frame}
 
+\begin{frame}{By hand: three logits near $-80$}
+  \small
+  Three tokens with logits $(-80,\ -81,\ -82)$. Subtract the largest from all three: $(0,\ -1,\ -2)$.
+  \[
+    \text{softmax} = \frac{(e^{0},\ e^{-1},\ e^{-2})}{e^{0} + e^{-1} + e^{-2}}
+    = \frac{(1,\ 0.37,\ 0.14)}{1.50} = (\mathbf{0.67},\ 0.24,\ 0.09)
+  \]
+  The same as for $(-80, -81, -82)$, because the shift cancels. That is also how code computes a
+  softmax safely: subtract the largest logit first (LLM-3's ten lines did), so no $e^{z}$
+  overflows or underflows.
+  \vskip 6pt
+  \textbf{Back to GPT-2.} The denominator's log, $\log\sum_j e^{z_j} = -78.08$, has a name:
+  \textbf{log-sum-exp}. It sits $2.57$ above floor's $-80.65$, so all 50,257 tokens together carry
+  $e^{2.57} = 13.1$ times floor's weight, and floor gets $1 / 13.1 = 7.6\%$.
+  \vskip 6pt
+  \keybox{Floor is the single favourite, but the other 50,256 tokens together outweigh it about
+  12 to 1. LLM-6 starts from exactly that tail.}
+\end{frame}
+
 % ============================================================ SECTION 3
 \section{Why it won, and what it costs}
 \sectiontransition{Why it won, and what it costs}{Every architecture buys something with
 something.}
 
 \begin{frame}{Why transformers won}
-  \vskip 8pt
+  \vskip 2pt
   \begin{enumerate}
     \item[\textbf{1.}] \textbf{It parallelises.} An RNN had to walk the sequence in order.
       Attention is a few big matrix multiplications over the whole sequence at once (LLM-3),
@@ -428,11 +449,12 @@ something.}
       more parameters.
     \item[\textbf{3.}] \textbf{Because it scales, it kept getting better.} The clearest example
       is \textbf{in-context learning}: give a model a few examples in the prompt and it follows
-      the pattern, \emph{with no weight updates at all}. Small models do it badly, large ones
+      the pattern, \emph{with no weight updates at all} (``cat $\to$ chat, dog $\to$ chien,
+      bird $\to$'' gets ``oiseau''). Small models do it badly, large ones
       well; whether that improvement is sudden or gradual is debated (LLM-8).
   \end{enumerate}
 
-  \vskip 12pt
+  \vskip 6pt
   \keybox{Notice the shape of that argument: the win is not that attention is a cleverer model
   of language. It is that attention is a \textbf{better fit for the hardware}, and everything
   else followed from being able to train bigger. Architecture that suits the machine beats
@@ -462,8 +484,9 @@ something.}
 
   \vskip 2pt
   You can work out where it flips in two lines. Attention's $n \times n$ part costs about
-  $n^2 d$ (its Q, K, V and output projections grow linearly in $n$, so they count with the
-  feed-forward); the feed-forward costs about $n d^2 f$, where $f$ is the widening factor
+  $n^2 d$ (only the $n \times n$ part; the Q, K, V and output projections grow like the
+  feed-forward and would only push the crossover further out); the feed-forward costs about
+  $n d^2 f$, where $f$ is the widening factor
   (usually 4). Set them equal:
   \vskip 2pt
   \begin{center}
@@ -483,11 +506,11 @@ something.}
 \end{frame}
 
 \begin{frame}{The honest limit: almost no inductive bias}
-  Every architecture in this course encoded an assumption about its data:
+  An \textbf{inductive bias}: what a model assumes before it sees any data. Every model here had one:
 
   \vskip 2pt
   \begin{center}
-  \small
+  \footnotesize
   \begin{tabular}{lll}
     \toprule
     \textbf{Model} & \textbf{Built-in assumption} & \textbf{Consequence} \\
@@ -500,15 +523,16 @@ something.}
   \end{tabular}
   \end{center}
 
-  \vskip 8pt
+  \vskip 2pt
   A Transformer does not know that neighbouring words are related, or even that words have an
-  order -- we had to \emph{bolt position on} in LLM-2.
+  order -- we had to \emph{bolt position on} in LLM-2. Its only built-in assumptions are the
+  ones we add by hand: positions, and the causal mask.
 
-  \vskip 6pt
+  \vskip 3pt
   \trapbox{That weakness is the same fact as its strength. Assuming nothing means it can learn
   any structure, and \textbf{must} learn all of it from data. This is why a ViT loses to a CNN
-  on a small image dataset and wins on a huge one (Dosovitskiy et al., 2021: a few points below
-  ResNets on ImageNet alone, ahead after 14-300M images), and why transformers arrived only once
+  on a small image dataset and wins on a huge one (Dosovitskiy et al., 2021: behind ResNets on
+  ImageNet alone, ahead after 14-300M images), and why transformers arrived only once
   the data and the compute did.}
 \end{frame}
 
@@ -534,9 +558,8 @@ something.}
   \textbf{token}. That is the practical legacy of the architecture: if you can serialise your
   problem into a sequence of vectors, you can throw a Transformer at it.}
   \vskip 4pt
-  {\small AlphaFold 2's core (the Evoformer, 48 blocks) is attention over protein sequences and
-  pairs of residues. Half of the 2024 Nobel Prize in Chemistry went to Demis Hassabis and John
-  Jumper ``for protein structure prediction''.}
+  {\small AlphaFold 2 is built on attention. Half of the 2024 Nobel Prize in Chemistry went to its
+  makers, Demis Hassabis and John Jumper, ``for protein structure prediction''.}
 \end{frame}
 
 % ============================================================ RECAP
@@ -684,4 +707,18 @@ something.}
 %   hybrids on the quadratic frame (Qwen3-Next 12 of 48 full-attention layers, Kimi Linear 3:1,
 %   Nemotron-H ~8%; model cards / tech report); AlphaFold 2's Evoformer and the 2024 Nobel wording;
 %   a Sources frame (the deck had none). Facts checked by one research agent (primary sources).
+%   STUDENT REVIEW 3 2026-10-27 (one Sonnet agent, 150-dpi PNGs only, ~101k tokens; DECISIONS #101).
+%   Applied: the diffusion frame gets its bridge (every position exists from the start, as blanks:
+%   BERT's fill-in run again and again; fixed length; "sure" = highest probability) with the product
+%   details moved to the source line; new frame "By hand: three logits near -80" (shift toy
+%   (0.67, 0.24, 0.09), subtract-the-max as LLM-3's code did, log-sum-exp named, 2.57 above floor ->
+%   13.1x floor's weight -> 7.6%; asserted in head_figs.py check_shift_toy); "points the same way"
+%   now "more the same way ... higher than the others"; decoder-only's case no longer claims BERT
+%   needs labels (it learns from 15% of tokens and cannot write); an in-context example (cat ->
+%   chat, dog -> chien, bird -> oiseau); inductive bias defined, its "only assumptions" named; the
+%   projection parenthetical made explicit; T5's MNLI example instead of CoLA, plus its span
+%   pretraining; AlphaFold in one plain sentence. Offered, not added: a cross-attention toy whose
+%   weights show an alignment (the current one is random), an n^2 d vs n d^2 f shape walk-through,
+%   a per-family training-objective table. Not applied: cutting the repeated three-architecture
+%   frames, the Outline or the life map (house skeleton).
 % ============================================================================

@@ -192,10 +192,9 @@
 \end{frame}
 
 \begin{frame}{Run it $h$ times, in parallel}
-  \vskip 4pt
   Nothing about one head changes. Learn $h$ independent sets of $W_Q, W_K, W_V$, run them at the
   same time, put the outputs side by side, and mix them with one more matrix $W_O$:
-  \vskip 6pt
+  \vskip 2pt
   \begin{center}
   $\text{MultiHead}(X) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\, W_O$,
   \qquad $\text{head}_i = \text{Attention}(XW_Q^{(i)}, XW_K^{(i)}, XW_V^{(i)})$
@@ -206,11 +205,12 @@
   768^2$ - exactly one 768-wide head's $W_Q, W_K, W_V$, stored as one $768 \times 2{,}304$ matrix.
   $W_O$ adds $768 \times 768 = 589{,}824$, so every output number can draw on every head. Total
   $4 \times 768^2 = 2{,}359{,}296$, plus 3,072 biases: the 2,362,368 on the block chart later.}
-  \vskip 4pt
+  \vskip 2pt
   {\small Same weights as one 768-wide head; you \textbf{split} the budget, you do not add any.
   What the split buys: one head gives each token \textbf{one} softmax, one way of weighting the
   others; 12 heads give it 12 different weightings at once. The heads do not talk to each other
-  until the concatenation, so all twelve are one big batched matrix product.}
+  until the concatenation, so all twelve are one batched matrix product; they differ because
+  they start from different random weights ([41]).}
 \end{frame}
 
 \bbbcap{multihead.png}{Multi-head attention: the same mechanism, many times over, each head free
@@ -308,11 +308,12 @@ to learn a different pattern. (3Blue1Brown draws GPT-3: 96 heads per layer. GPT-
   \begin{center}\includegraphics[width=0.9\linewidth]{blk_induction.pdf}\end{center}
   \vskip -6pt
   \begin{itemize}\small
-    \item The previous-token head has a famous partner in a later layer. Head A writes into every
-      token ``who came before me''. Head B, at the current token, looks for the earlier place
-      whose ``who came before me'' is \emph{my} token - and copies the token found there.
-    \item The pattern: \ldots\,A B\,\ldots\,A $\to$ B. Nothing about Messi needs to be stored:
-      the answer is copied from the prompt. The simplest form of \textbf{in-context learning}.
+    \item Head A writes ``who came before me'' into every token's vector. Head B's query is the
+      current token; its keys read A's note; the best match is the token that followed ``plays''
+      last time, and B copies it. \ldots\,A B\,\ldots\,A $\to$ B: \textbf{in-context learning},
+      with nothing about Messi stored.
+    \item Why two layers: heads in the same layer cannot read each other. B can only see A's note
+      after A's output has been added to the stream, so A must sit in an earlier layer.
     \item Olsson et al. (2022) named these \textbf{induction heads}. They appear abruptly, early in
       training, at the same point where in-context learning jumps. Toy numbers here (a match
       scores 3); the interpretability chapter takes the real ones apart.
@@ -452,8 +453,10 @@ stream. The same weights for every token.}
 \begin{frame}{Why the MLP? The evidence}
   \vskip 4pt
   \begin{itemize}
-    \item \textbf{Causal tracing} \paper{(Meng et al., NeurIPS 2022)}: corrupt the subject's
-      tokens, then restore one hidden state at a time and see which restores the right answer.
+    \item \textbf{Causal tracing} \paper{(Meng et al., NeurIPS 2022)}: run the prompt clean, then
+      again with noise added to the subject's tokens. Copy one hidden state (one token's vector
+      after one layer) from the clean run into the noisy one at a time, and see which brings the
+      right answer back.
       In GPT-2 XL the decisive states are the \textbf{mid-layer MLPs at the subject's last
       token}; attention later carries the result to where the answer is written. Editing one of
       those MLPs changes the fact.
@@ -500,7 +503,8 @@ stream. The same weights for every token.}
     those than there are dimensions.
     \vskip 6pt
     \watchbox{This idea - many features squeezed into fewer dimensions - is called
-    \textbf{superposition}. More in the interpretability chapter.}
+    \textbf{superposition}. So a clean ``Michael Jordan neuron'' is a teaching picture: real
+    neurons mostly mix several features. More in the interpretability chapter.}
   \end{columns}
 \end{frame}
 
@@ -510,8 +514,8 @@ exponentially with the dimension.}
 \begin{frame}{Turn one direction up: Golden Gate Claude}
   \begin{itemize}
     \item Anthropic (May 2024) pulled millions of such directions, called \textbf{features}, out
-      of the residual stream of Claude 3 Sonnet with a sparse autoencoder. One fired on the Golden
-      Gate Bridge.
+      of the residual stream of Claude 3 Sonnet (the stream every MLP reads from and writes to),
+      with a sparse autoencoder. One fired on the Golden Gate Bridge.
     \item They clamped that one direction at 10 times its usual maximum and asked ``what is your
       physical form?''. Claude: ``I am the Golden Gate Bridge\ldots{} my physical form is the
       iconic bridge itself.''
@@ -664,8 +668,8 @@ exponentially with the dimension.}
   \end{center}
   \vskip 6pt
   {\scriptsize\color{gray} Xiong et al., ICML 2020 (norm first); Zhang \& Sennrich, NeurIPS 2019
-  (RMSNorm); Shazeer, 2020 (GLU variants). Width: Llama 2 7B goes 4,096 $\to$ 11,008
-  (config.json); $3 \times 2.7 \approx 2 \times 4$.}
+  (RMSNorm); Shazeer, 2020 (GLU variants). Gated: two up-projections, one multiplied into the
+  other. Width: Llama 2 7B goes 4,096 $\to$ 11,008 (config.json); $3 \times 2.7 \approx 2 \times 4$.}
   \vskip 8pt
   \watchbox{None of these changes the story: attention, an MLP, norms and the residual stream.
   LLM-14 opens a 2026 model card and finds the same block.}
@@ -876,4 +880,14 @@ exponentially with the dimension.}
 %     2026-10-05 note asked to recheck (Geva EMNLP 2021, Meng NeurIPS 2022, Kandpal ICML 2023,
 %     Xiong ICML 2020, Zhang & Sennrich NeurIPS 2019, Shazeer arXiv 2020) are all confirmed.
 %     block_figs.py ran without --gpt2 (GPT-2's weights are not cached; it reads block_gpt2.json).
+%   STUDENT REVIEW 3 2026-10-27 (one Sonnet agent, 150-dpi PNGs only, ~118k tokens; DECISIONS #101).
+%     Applied: the induction head's mechanism (B's query is the current token, its keys read A's
+%     note) and why it needs two layers (heads in one layer cannot read each other); causal tracing
+%     spelled out (clean run, noisy run, copy one hidden state back; hidden state defined); why the
+%     12 heads differ (different random starts, [41]); superposition: the clean "Michael Jordan
+%     neuron" is a teaching picture; Golden Gate's directions live in the stream the MLPs read and
+%     write; SwiGLU's "gated" defined in the source line. Offered, not added: one token through a
+%     whole block by hand, multi-head with shapes, a causal-tracing figure, a ROME edit on the cute
+%     column. Not applied: cutting the life map, the plan frame, the MJ stills, the head table, the
+%     superposition still (earlier rejections).
 % ============================================================================

@@ -9,6 +9,33 @@ this file holds the choice and a pointer.
 
 ---
 
+## #101 - LLM-2 to LLM-5 answer a third student review: corrections and clarifications applied, the big worked examples offered
+
+**Date:** 2026-10-27 · **Status:** active (instructor: "do student review on the 2,3,4,5").
+
+**Decision.** One Sonnet student review per deck (rendered pages only, ~470k tokens in all), every
+finding checked against the `.tex` before acting. Applied: real errors and contradictions (LLM-2's
+glitch-token "why" clashed with near-perpendicular random rows - now the tied-output mechanism;
+LLM-3's wall-1 diagram showed ".8" as an infinity sign, and "the grid is symmetric" was true only of
+the scores; LLM-5 said a row "pointing the same way" gets a high score while all logits sit at -80),
+missing steps (the induction head's two-layer reason, what causal tracing does, the diffusion LM's
+bridge from the cold open, where the 7.6% comes from: a new asserted 3-logit frame), and two frame
+moves in LLM-3 (history out of the middle of an argument; "not explanations" after the demo).
+
+**Why.** These were things a student would carry out of the room wrong, or not be able to redo.
+Every new number is asserted (head_figs.py `check_shift_toy`; long_context_figs.py
+`rope_signed_gap`, since LLM-2's own script needs GPT-2's uncached weights).
+
+**Alternatives rejected.** Cuts of frames the instructor already kept (life maps, Outlines, the
+3Blue1Brown stills, the head table). New worked examples that change a deck's design are offered,
+not built: the creature toy as real matrices in LLM-3 (asked for the third time), one token through
+a whole block in LLM-4, sinusoids by hand in LLM-2, an aligned cross-attention toy in LLM-5.
+
+**What would change this.** If the instructor picks any of the offered examples, build it with an
+asserted toy; a fourth review asking for the matrix toy in LLM-3 is a strong signal to build it.
+
+---
+
 ## #100 - LLM-5 and LLM-6 gain links, demos and 2023-2026 results (diffusion LMs, self-consistency, the "poem" attack); LLM-5 gets a Sources frame
 
 **Date:** 2026-10-27 · **Status:** active (instructor: "same for llm 6 5").

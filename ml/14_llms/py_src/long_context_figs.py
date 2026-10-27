@@ -10,6 +10,7 @@ Run: ./ma/Scripts/python.exe ml/14_llms/py_src/long_context_figs.py   (~3 s)
 """
 import json
 import logging
+import math
 import sys
 import time
 from pathlib import Path
@@ -80,6 +81,24 @@ def fig_lost_middle(log):
     return {"lost_in_the_middle": d, "below_closed_book": below}
 
 
+def rope_signed_gap(log):
+    """LLM-2's "By hand: same gap, same score" (added 2026-10-27, student review). The toy lives here
+    because embeddings_position_figs.py loads GPT-2's weights first and they are no longer cached.
+    q = (2, 1), k = (1, 1), 30 degrees per slot: gap +3 scores 1.00 twice, gap -3 scores -1.00."""
+    def rot(v, deg):
+        a = math.radians(deg)
+        return (v[0] * math.cos(a) - v[1] * math.sin(a), v[0] * math.sin(a) + v[1] * math.cos(a))
+
+    def score(slot_q, slot_k):
+        q, k = rot((2, 1), 30 * slot_q), rot((1, 1), 30 * slot_k)
+        return round(q[0] * k[0] + q[1] * k[1], 2)
+
+    got = {"q5_k2": score(5, 2), "q10_k7": score(10, 7), "q2_k5": score(2, 5)}
+    assert got == {"q5_k2": 1.0, "q10_k7": 1.0, "q2_k5": -1.0}, got
+    log.info(f"RoPE toy, signed gap: {got}")
+    return {"rope_signed_gap": got}
+
+
 def main():
     log = setup_logging()
     t0 = time.time()
@@ -87,6 +106,7 @@ def main():
     RESULTS.mkdir(exist_ok=True)
     R = {"date": time.strftime("%Y-%m-%d")}
     R.update(fig_lost_middle(log))
+    R.update(rope_signed_gap(log))
     (RESULTS / "long_context_figs.json").write_text(json.dumps(R, indent=2), encoding="utf-8")
     log.info(f"done in {time.time() - t0:.1f} s")
 

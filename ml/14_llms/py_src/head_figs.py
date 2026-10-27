@@ -29,6 +29,7 @@ Run:
   ./ma/Scripts/python.exe ml/14_llms/py_src/head_figs.py          # figures (~5 s)
 """
 import json
+import math
 import logging
 import sys
 import time
@@ -57,6 +58,9 @@ PROMPT = "The cat sat on the"
 QUOTED = {
     "top5": [[" floor", 7.6], [" bed", 6.5], [" couch", 5.4], [" ground", 5.2], [" edge", 4.8]],
     "vocab": 50257, "d_model": 768,
+    # added 2026-10-27 (student review): the 3-logit shift toy and the log-sum-exp gap on GPT-2
+    "shift_toy": {"logits": [-80, -81, -82], "p": [0.67, 0.24, 0.09]},
+    "lse_gap": 2.57, "tail_times_floor": 13.1,
 }
 
 W = 5.5
@@ -445,12 +449,27 @@ def fig_quadratic(log, d_model=4096, d_ff_mult=4):
     return crossover
 
 
+def check_shift_toy(G, log):
+    """'By hand: three logits near -80' (LLM-5): a shift changes nothing, and GPT-2's log-sum-exp
+    sits 2.57 above floor's logit, so the vocabulary carries 13.1x floor's weight (1/13.1 = 7.64%)."""
+    z = np.array(QUOTED["shift_toy"]["logits"], dtype=float)
+    p = np.exp(z - z.max()) / np.exp(z - z.max()).sum()
+    p0 = np.exp(z + 80) / np.exp(z + 80).sum()
+    if not np.allclose(p, p0) or [round(float(v), 2) for v in p] != QUOTED["shift_toy"]["p"]:
+        raise AssertionError(f"shift toy: {p}, {p0}")
+    gap = G["logsumexp"] - G["z_floor"]
+    if round(gap, 2) != QUOTED["lse_gap"] or round(math.exp(gap), 1) != QUOTED["tail_times_floor"]:
+        raise AssertionError(f"lse gap {gap:.4f}, exp {math.exp(gap):.3f}")
+    log.info(f"shift toy {np.round(p, 3)}; lse gap {gap:.3f}, x{math.exp(gap):.2f} floor's weight")
+
+
 def main():
     log = setup_logging()
     if "--gpt2" in sys.argv:
         compute_gpt2(log)
         return
     G = load_gpt2()
+    check_shift_toy(G, log)
     fig_masks(False, log)
     fig_masks(True, log)
     fig_cross_attention(log)

@@ -237,8 +237,10 @@
     \item The 20 rows closest to the table's average row: these three, plus 17 single-byte
       tokens.
     \item Why: these tokens were in the tokenizer's training text and almost never in the
-      model's. Their rows got almost no gradient (the lookup slide), so they stayed close to
-      where they started, close to each other.
+      model's. Their rows got no gradient of their own (the lookup slide), only the push every
+      absent token gets at the output, where the same table scores the next token (tying, a few
+      slides on): ``not this one''. That push points the same way for all of them, so they drifted
+      together, toward the table's average.
   \end{itemize}
   \vskip 2pt
   \src{Land \& Bartolo (2024), ``Fishing for Magikarp'', EMNLP: thousands of such under-trained
@@ -512,6 +514,7 @@
   \vskip -6pt
   Each pair of dimensions is a clock hand turning at its own speed. Fast hands tell neighbours
   apart; slow hands tell far-apart slots apart. Together they give every slot a unique reading.
+  (Here $d = 64$; the next plot uses $d = 128$.)
 \end{frame}
 
 \begin{frame}{Similarity depends on the gap only}
@@ -527,7 +530,8 @@
     \end{column}
   \end{columns}
   \vskip 6pt
-  \keybox{So ``three slots back'' looks the same at slot 10 and at slot 1,000: learn it once.}
+  \keybox{So for the bare waves, ``three slots back'' looks the same at slot 10 and at slot 1,000.
+  Inside a real model it gets messier (option 3 says why).}
   \vskip 4pt
   \trapbox{The formula has a value for every slot, so it seems to promise texts longer than any
   seen in training. In practice it does not deliver: trained on 512 or 1,024 tokens, such
@@ -675,7 +679,7 @@ address.}
 
 \begin{frame}{By hand: same gap, same score}
   \small
-  $\mathbf{q} = (2, 1)$, $\mathbf{k} = (1, 1)$, $\theta = 30^\circ$ per slot. Unrotated,
+  $\mathbf{q} = (2, 1)$, $\mathbf{k} = (1, 1)$, $\theta = 30^\circ$ per slot (a toy speed). Unrotated,
   $\mathbf{q} \cdot \mathbf{k} = 2 + 1 = 3$. Turning $(x, y)$ by an angle $\varphi$ gives
   $(x\cos\varphi - y\sin\varphi,\; x\sin\varphi + y\cos\varphi)$.
   \vskip 4pt
@@ -692,7 +696,8 @@ address.}
   \end{tabular}
   \end{center}
   \vskip 6pt
-  Gap 3 gives 1.00 at slots 5/2 and at 10/7. Gap 8 gives something else. Check one row
+  Gap 3 gives 1.00 at slots 5/2 and at 10/7. Gap 8 gives something else. Swap the roles ($q$ in
+  2, $k$ in 5: gap $-3$) and it is $-1.00$: the gap is signed, so before and after differ. Check one row
   yourself: $\cos 150^\circ = -0.866$, $\sin 150^\circ = 0.5$, so the query becomes
   $(2 \cdot (-0.866) - 1 \cdot 0.5,\; 2 \cdot 0.5 + 1 \cdot (-0.866)) = (-2.23,\; 0.13)$.
   \vskip 6pt
@@ -877,6 +882,8 @@ and do not read all of it equally well.}
     \vskip 6pt
     In the middle, GPT-3.5 does \textbf{worse than with no documents at all} (53.8\% vs 56.1\%):
     there, the extra text actively hurts.
+    \vskip 6pt
+    The paper measures the effect; it does not settle the cause.
   \end{columns}
   \vskip 6pt
   \keybox{A window that \emph{fits} 20 documents is not a model that \emph{uses} all 20. In a
@@ -915,8 +922,9 @@ and do not read all of it equally well.}
       ones. Stable over 4 million tokens.
   \end{itemize}
   \vskip 4pt
-  \watchbox{A hint in GPT-2's position table: slot 0's row is far longer than the rest (norm 9.88,
-  the median slot 3.37). LLM-4 finds the sinks in GPT-2's own heads.}
+  \watchbox{Slot 0 is special in GPT-2's own position table too: its row is about three times
+  longer than the median slot's (9.88 vs 3.37), an easy mark for a head to find. LLM-4 measures
+  the sinks in GPT-2's heads.}
 \end{frame}
 
 % ============================================================ RECAP
@@ -942,7 +950,8 @@ and do not read all of it equally well.}
 \begin{frame}{Next on the map}
   \begin{center}\includegraphics[width=\linewidth]{roadmap_attention_pass.pdf}\end{center}
   \vskip -2pt
-  {\small Next (LLM-3): the vectors start talking to each other.}
+  {\small Next (LLM-3): the vectors start talking to each other. (The map is GPT-2, which adds
+  position vectors; a RoPE model rotates inside attention instead.)}
 \end{frame}
 
 \begin{frame}{Sources \& further reading (1/2)}
@@ -1080,5 +1089,16 @@ and do not read all of it equally well.}
 %   perplexity; StreamingLLM 4 sinks + window, 4M tokens) tied to GPT-2's slot-0 norm 9.88 vs
 %   median 3.37 from results/. "What we actually want" bullet simplified. Facts checked by one
 %   research agent (primary sources except the Firth page and the Llama config mirror).
+%   STUDENT REVIEW 3 2026-10-27 (one Sonnet agent, 150-dpi PNGs only, ~133k tokens; DECISIONS #101).
+%   Applied: the glitch-token "why" contradicted near-perpendicular random rows - now the mechanism
+%   (no gradient of their own, only the shared "not this one" push through the tied output layer,
+%   so they drift together toward the average); "learn it once" no longer contradicts "What we
+%   actually want"; the heatmap's d = 64 vs the gap plot's d = 128 said; RoPE's 30 degrees is a toy
+%   speed, and the gap is signed (q in 2, k in 5 scores -1.00; asserted in long_context_figs.py,
+%   since this deck's script needs GPT-2's weights); the slot-0 hint tied to sinks; lost in the
+%   middle "measures the effect, does not settle the cause"; the map caption says it is GPT-2.
+%   Offered, not added: sinusoids by hand (asked again; rejected 2026-10-04), one gradient step
+%   showing two rows move together, a YaRN number (rejected 10-04), dog bites man rerun under RoPE.
+%   Not applied: cutting the trap frame, the Einstein row, the adoption list (earlier rejections).
 %   Forward pointer: L24 (attention; the permutation proof is the payoff of this deck's promise).
 % ============================================================================
