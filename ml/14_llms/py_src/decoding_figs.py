@@ -61,7 +61,15 @@ QUOTED = {"top5_sum": 29.6, "rest": 70.4, "topp_cum": [0.076, 0.141, 0.195, 0.24
                        "reject": 0.30, "residual": [0.0, 0.67, 0.33], "final": [0.30, 0.50, 0.20]},
           "tail_T": {"0.5": 0.0, "1": 0.25, "2": 0.98},
           "order_toy": {"p": [0.5, 0.3, 0.15, 0.05], "T": 2, "top_p": 0.8, "temp_first_keeps": 3,
-                        "cut_first_keeps": 2, "after_T": [0.38, 0.29, 0.21, 0.12]}}
+                        "cut_first_keeps": 2, "after_T": [0.38, 0.29, 0.21, 0.12]},
+          # second student review (2026-10-20): beam's log scores, all four knobs in order
+          "beam_logs": {"best": -1.02, "second": -1.90},
+          "chain_toy": {"p": [0.30, 0.20, 0.16, 0.12, 0.10, 0.07, 0.05], "T": 0.5, "k": 5,
+                        "top_p": 0.9, "min_p": 0.2, "squares_sum": 0.1874,
+                        "after_T": [0.48, 0.21, 0.14, 0.08, 0.05, 0.03, 0.01],
+                        "after_k": [0.50, 0.22, 0.14, 0.08, 0.06],
+                        "running": [0.50, 0.72, 0.86, 0.94], "after_p": [0.53, 0.24, 0.15, 0.08],
+                        "bar": 0.106, "after_minp": [0.58, 0.26, 0.16]}}
 
 W = 5.5
 FS, FS_SMALL, FS_TINY = 8, 7, 6.5
@@ -623,9 +631,42 @@ def review_toys(R, log):
         return int(np.searchsorted(np.cumsum(np.sort(q)[::-1]), O["top_p"] - 1e-12)) + 1
     assert [round(v, 2) for v in after_T] == O["after_T"], after_T
     assert nucleus(after_T) == O["temp_first_keeps"] and nucleus(po) == O["cut_first_keeps"]
+    # "Why it works for any two models": min(p_s, p_b) + max(0, p_b - p_s) = p_b for random pairs
+    rng = np.random.default_rng(509)
+    for _ in range(1000):
+        ps, pb = rng.dirichlet(np.ones(6)), rng.dirichlet(np.ones(6))
+        kept = ps * np.minimum(1, pb / ps)
+        rej = 1 - kept.sum()
+        short = np.maximum(0, pb - ps)
+        assert np.isclose(rej, short.sum()) and np.allclose(kept + rej * short / short.sum(), pb)
+
+    B = QUOTED["beam_logs"]
+    assert round(math.log(QUOTED["best_path"]), 2) == B["best"], math.log(QUOTED["best_path"])
+    assert round(math.log(QUOTED["greedy_path"]), 2) == B["second"], math.log(QUOTED["greedy_path"])
+
+    C = QUOTED["chain_toy"]
+    sq = np.array(C["p"]) ** (1 / C["T"])
+    assert np.isclose(sum(C["p"]), 1) and round(sq.sum(), 4) == C["squares_sum"], sq.sum()
+    cols = {"after_T": sq / sq.sum()}
+    kk = sq[:C["k"]]
+    cols["after_k"] = kk / kk.sum()
+    run = np.cumsum(cols["after_k"])
+    n_p = int(np.searchsorted(run, C["top_p"] - 1e-12)) + 1
+    pp = sq[:n_p]
+    cols["after_p"] = pp / pp.sum()
+    bar = C["min_p"] * cols["after_p"].max()
+    mm = pp[cols["after_p"] >= bar]
+    cols["after_minp"] = mm / mm.sum()
+    for name, v in cols.items():                          # every column, and its rounded sum
+        assert [round(float(x), 2) for x in v] == C[name], (name, v)
+        assert round(sum(C[name]), 2) == 1.0, (name, C[name])
+    assert [round(float(x), 2) for x in run[:n_p]] == C["running"] and round(bar, 3) == C["bar"], (run, bar)
+    assert len(C["after_k"]) < len(C["p"]) and n_p < C["k"] and len(mm) < n_p   # each knob cuts
+
     R["review_toys"] = {"speculative": {"accepted": accepted.tolist(), "reject": reject,
                                         "residual": residual.tolist(), "final": final.tolist()},
-                        "tail_share_by_T": tail_share, "order": {"after_T": after_T.tolist()}}
+                        "tail_share_by_T": tail_share, "order": {"after_T": after_T.tolist()},
+                        "chain": {k: v.tolist() for k, v in cols.items()} | {"bar": bar}}
     log.info(f"review toys: {R['review_toys']}")
 
 

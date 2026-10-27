@@ -9,6 +9,34 @@ this file holds the choice and a pointer.
 
 ---
 
+## #100 - LLM-5 and LLM-6 gain links, demos and 2023-2026 results (diffusion LMs, self-consistency, the "poem" attack); LLM-5 gets a Sources frame
+
+**Date:** 2026-10-27 · **Status:** active (instructor: "same for llm 6 5").
+
+**Decision.** LLM-5 opens with Hugging Face's three encoder / decoder / encoder-decoder videos,
+3Blue1Brown chapter 5 from the unembedding, and bbycroft.net/llm as the live demo; adds "The family,
+by name" (ModernBERT, T5's text-to-text prefixes, the Sesame Street names), "Mask A writes after
+all" (diffusion language models: LLaDA, Mercury, DiffusionGemma), hybrids in one line pointing to
+LLM-14, AlphaFold's Nobel, and a Sources frame. LLM-6 opens with von Platen's "How to generate
+text", 3Blue1Brown's temperature segment and two demos (artefact2's llm-sampling, Transformer
+Explainer); adds "When a loop breaks" (Nasr et al.'s "poem" divergence attack), "Sample many, then
+vote" (self-consistency), Structured Outputs' 100% vs <40%, speculative decoding in production
+(Google AI Overviews, Meta's Llama 4), and llama.cpp's defaults re-checked with the GGUF-override
+caveat.
+
+**Why.** The same pattern as #97-#99. The diffusion frame answers the cold open's "mask A cannot
+write" with its 2025-2026 counterexample, stated as "competitive with", not better. The research
+corrected the premises that LLaDA beats LLaMA 3 8B and that Gemini Diffusion shipped.
+
+**Alternatives rejected.** A YouTube video on sampling knobs: none canonical (the candidates were
+small or sponsored), so the 3Blue1Brown segment and two hands-on demos instead. A toy majority vote
+for self-consistency (the published 56.5% -> 74.4% says it without a new asserted toy).
+
+**What would change this.** If diffusion LMs match autoregressive quality at scale, the LLM-5 frame
+grows into a section; if llama.cpp changes its defaults again, the settings frame needs a recheck.
+
+---
+
 ## #99 - LLM-3 and LLM-4 gain links, history, cautions and 2022-2025 results; LLM-4 gets an induction-head toy and a Sources frame
 
 **Date:** 2026-10-27 · **Status:** active (instructor: "now similarly work on llm 3 and llm 4").
@@ -176,6 +204,37 @@ to it)" after the Karpathy diagram credit. `rnn.qmd` describes the new [54]. `su
 **What would change this.** If the LLM chapter wants the small, fully measured surname GRU as a
 warm-up for next-token prediction, the frames come back from
 `git show a001201:ml/13_rnns/L21_road_to_attention.tex`, into the LLM deck rather than [54].
+
+---
+
+## #94 - LLM-4 to LLM-6 answer a second student review: the general proofs behind the worked examples
+
+**Date:** 2026-10-20 · **Status:** active (instructor picked 9 of 11 offered fixes). Extends #93.
+
+**Decision.** Second Sonnet student review of each deck (rendered pages only). LLM-4: the
+multi-head total (4 x 768^2 + 3,072 biases = 2,362,368) and what 12 heads buy over one wide head;
+the residual stream unrolled as x_L = x_0 + u_1 + ... + u_L. LLM-5: why only the last position
+predicts (training vs generating); softmax(z + c) = softmax(z) in one line; the decoder block's
+three sublayers; BERT's objective, the 128k-token score grid (16.4 billion numbers), the tying
+callback, the ViT claim cited. LLM-6: two new frames, "Why it works for any two models" (the
+speculative-sampling identity in general) and "By hand: all four knobs, in order"; temperature as
+a power, beam's log scores, the penalty tied back to the opening loop.
+
+**Why.** The three reviews converged on one pattern: each deck checks a claim on one worked
+example and stops, and the reviewer could repeat the example but not the general reason (LLM-6:
+"I checked three tokens, not the identity"). The general lines are short for students with linear
+algebra and probability. Every finding was checked against the `.tex`; every new number is asserted
+in the deck's figure script (`block_figs.py`, `head_figs.py`, `decoding_figs.py`); the two paper
+claims were checked on the full text (Vaswani et al. 2017 3.1 and 3.2.3; Dosovitskiy et al. 2021).
+
+**Alternatives rejected.** A causal-tracing frame and running causal tracing on the cached GPT-2
+(offered, not picked; the reviewer's sharpest LLM-4 point, that the cold open shows facts live in
+the weights but not that they live in the MLP, stays open); repeats of earlier rejections (the
+3Blue1Brown stills in LLM-4 and LLM-5, the life maps, LLM-4's head table / recipe / superposition
+aside, a self-reinforcement mechanism slide and cutting the min-p critique in LLM-6).
+
+**What would change this.** If students still accept "facts live in the MLP" on authority, the
+causal-tracing run on our own GPT-2 is the next step.
 
 ---
 

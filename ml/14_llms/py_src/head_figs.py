@@ -423,6 +423,8 @@ def fig_quadratic(log, d_model=4096, d_ff_mult=4):
     crossover = d_model * d_ff_mult
     if crossover != 16384:
         raise ValueError("the slide quotes a crossover of 16,384 tokens")
+    if round(128000 ** 2 / 1e9, 1) != 16.4:      # "one head's n x n scores at 128,000 tokens"
+        raise ValueError(f"the slide quotes 16.4 billion scores, got {128000 ** 2 / 1e9:.2f}")
     fig, ax = plt.subplots(figsize=(4.13, 1.95))
     ax.loglog(n, attn, color=ARMRED, lw=1.4, label=r"attention $\propto n^2 d$")
     ax.loglog(n, ffn, color=ARMBLUE, lw=1.4, label=r"feed-forward $\propto n d^2 f$")

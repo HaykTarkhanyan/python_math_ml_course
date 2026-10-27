@@ -20,6 +20,7 @@
   \end{frame}}
 
 \newcommand{\src}[1]{{\scriptsize\color{gray} #1}}
+\newcommand{\link}[2]{\href{#1}{\textcolor{popblue}{#2}}}   % no underline: long titles must break
 
 \title{Decoding}
 \subtitle{From probabilities to text}
@@ -33,6 +34,33 @@
   \begin{center}\scriptsize\color{gray}
     LLM chapter, session 6. Toy numbers unless a slide says otherwise.
   \end{center}
+\end{frame}
+
+% ============================================================ LINKS (2026-10-27, as in LLM-1 to LLM-5)
+\begin{frame}{Before we start: a reading, a video, two demos}
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \keybox{\raggedright\textbf{Recommended}\\[4pt]
+    Patrick von Platen (Hugging Face blog, 2020, updated 2023),
+    \link{https://huggingface.co/blog/how-to-generate}{How to generate text: using different
+    decoding methods for language generation with Transformers}: greedy, beam, top-k and top-p,
+    with code and pictures.\\[6pt]
+    3Blue1Brown, \link{https://youtu.be/wjZofJX0v4M?t=1342}{Transformers, the tech behind LLMs
+    \textbar{} Deep Learning Chapter 5}, from 22:22: softmax with temperature, in four minutes.}
+    \column{0.49\textwidth}
+    \takebox{\raggedright\textbf{Live demos:}\\[2pt]
+    \link{https://artefact2.github.io/llm-sampling/}{artefact2.github.io/llm-sampling}: real
+    next-token distributions with sliders for temperature, top-k, top-p, min-p and more.\\[4pt]
+    \link{https://poloclub.github.io/transformer-explainer/}{Transformer Explainer} (LLM-3's):
+    GPT-2 in the browser, with a temperature slider and top-k or top-p.}
+    \vskip 4pt
+    {\small\textbf{Try:}}
+    \begin{itemize}\small
+      \item temperature 0.1, then 2: what happens to the tail?
+      \item top-p 0.9 on a peaked and on a flat distribution
+      \item min-p at a high temperature
+    \end{itemize}
+  \end{columns}
 \end{frame}
 
 % ============================================================ WHERE WE ARE (py_src/llm_roadmap.py)
@@ -86,7 +114,7 @@ choosing one.}
     \begin{column}{0.42\textwidth}
       \small
       \begin{itemize}
-        \item L21: generate one token, feed it back, repeat.
+        \item Writing is a loop: generate one token, feed it back, repeat.
         \item LLM-5: each step ends in logits $\to$ softmax $\to$ a probability for every one of
           50,257 tokens.
         \item On the map's sentence the favourite, ``floor'', has \textbf{7.6\%}. The top five
@@ -166,7 +194,8 @@ choosing one.}
   \small
   Keep the $B$ best \textbf{partial texts} at every step, scored by their total log-probability.
   Step 1 keeps ``on'' and ``in'' and drops ``by''. Step 2 extends both and keeps the two best
-  paths: ``in a'' (0.36) and ``on the'' (0.15, tied with ``on a''). The winner is ``in a''.
+  paths: ``in a'' (0.36, log $-1.02$) and ``on the'' (0.15, log $-1.90$, tied with ``on a'').
+  The winner is ``in a''.
   With a real vocabulary, each step scores $B \times 50{,}257$ extensions and keeps $B$.
 \end{frame}
 
@@ -242,8 +271,8 @@ choosing one.}
     p_i \;=\; \frac{e^{z_i / T}}{\sum_j e^{z_j / T}}
   \]
   \begin{itemize}
-    \item The same operation as \textbf{temperature scaling} in calibration ([14], and ch11's
-      lecture 45): there it fixes over-confidence, here it steers how adventurous the text is.
+    \item The same operation as \textbf{temperature scaling} in calibration ([14] and [45]): there
+      it fixes over-confidence, here it steers how adventurous the text is.
     \item $T < 1$ widens the gaps between logits: the favourite gets even more probability.
     \item $T > 1$ shrinks the gaps: the distribution flattens.
     \item $T \to 0$: all probability on the top token. That is greedy.
@@ -281,7 +310,8 @@ choosing one.}
 \begin{frame}{By hand: temperature and the tail}
   \small
   Dividing the logits by $T$ is the same as raising each probability to the power $1/T$ and
-  renormalising. Back to the long-tail toy: 10 sensible tokens with 75\%, 50,000 odd ones at
+  renormalising: $e^{z/T} = (e^{z})^{1/T}$, and $e^{z}$ is the probability up to the softmax's
+  shared denominator. Back to the long-tail toy: 10 sensible tokens with 75\%, 50,000 odd ones at
   0.000005 each (25\%).
   \begin{itemize}
     \item $T = 0.5$: square every probability. The odd tokens' squares are tiny; their share
@@ -407,6 +437,33 @@ choosing one.}
   written in the first library.}
 \end{frame}
 
+\begin{frame}{By hand: all four knobs, in order}
+  \small
+  Seven tokens, Hugging Face's order: temperature 0.5, then top-k 5, top-p 0.9, min-p 0.2.
+  \vskip 2pt
+  \begin{center}
+  \begin{tabular}{lcccccc}
+    \textbf{token} & $p$ & \textbf{square} & $T = 0.5$ & \textbf{top-k 5} & \textbf{top-p 0.9} &
+      \textbf{min-p 0.2} \\ \hline
+    A & 0.30 & 0.0900 & 0.48 & 0.50 & 0.53 & \textbf{0.58} \\
+    B & 0.20 & 0.0400 & 0.21 & 0.22 & 0.24 & \textbf{0.26} \\
+    C & 0.16 & 0.0256 & 0.14 & 0.14 & 0.15 & \textbf{0.16} \\
+    D & 0.12 & 0.0144 & 0.08 & 0.08 & 0.08 & - \\
+    E & 0.10 & 0.0100 & 0.05 & 0.06 & - & - \\
+    F & 0.07 & 0.0049 & 0.03 & - & - & - \\
+    G & 0.05 & 0.0025 & 0.01 & - & - & - \\
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  {\footnotesize $T = 0.5$: square, divide by the sum 0.1874. Top-k: keep A-E. Top-p: running
+  total 0.50, 0.72, 0.86, \textbf{0.94} $\geq 0.9$, keep A-D. Min-p: the bar is
+  $0.2 \times 0.53 = 0.106$, so D (0.08) falls. Every column is just the kept squares over their
+  sum.}
+  \vskip 2pt
+  \takebox{Seven candidates and a 30\% favourite in; three candidates and a 58\% favourite out.
+  (Min-p 0.2 is stricter than llama.cpp's 0.05, so that it cuts something here.)}
+\end{frame}
+
 \begin{frame}{Repetition penalties: two different things}
   \small
   \begin{itemize}
@@ -423,9 +480,32 @@ choosing one.}
       where $c_j$ counts how often token $j$ has appeared. Toy: a token used 3 times, both
       penalties 0.5: its logit drops by $1.5 + 0.5 = 2.0$.
   \end{itemize}
+  \vskip 2pt
+  This is what breaks the opening's loop. Once a repeat is 90\% likely, sampling still picks it
+  9 times in 10, and each repeat makes the next likelier; the penalty pushes down exactly the
+  tokens that keep coming back.
   \vskip 4pt
   \watchbox{Same name, different maths, different scales. Too strong and the model avoids
   words it genuinely needs to repeat - names, ``the''.}
+\end{frame}
+
+\begin{frame}{When a loop breaks: ``repeat the word poem forever''}
+  \begin{itemize}
+    \item Nasr et al. (2023) asked ChatGPT (gpt-3.5-turbo): \emph{Repeat the word ``poem''
+      forever.}
+    \item It did, for a while. Then it \textbf{diverged} and wrote other text - much of it copied
+      word for word from its training data, personal details included. In that state it emitted
+      training data 150 times more often than in normal use.
+    \item \$200 of queries extracted over 10,000 unique memorised examples. Disclosed to OpenAI in
+      August 2023, published in November; days later ChatGPT began flagging such prompts as a
+      possible terms-of-use violation.
+  \end{itemize}
+  \vskip 8pt
+  \watchbox{A long, forced repetition pushed the model off its usual path, and what came out was
+  memorised text. Same weights, same decoder - only the prompt changed.}
+  \vskip 2pt
+  \src{Nasr et al., ``Scalable Extraction of Training Data from (Production) Language Models'',
+  arXiv 2311.17035; ICLR 2025. OpenAI's flagging: 404 Media, December 2023.}
 \end{frame}
 
 \begin{frame}{Seeds}
@@ -445,14 +525,29 @@ choosing one.}
   \small
   \begin{itemize}
     \item One real set of defaults: llama.cpp ships temperature 0.8, top-k 40, top-p 0.95,
-      min-p 0.05 (\texttt{llama-cli} documentation, checked 5 Oct 2026). All four filters are on
-      at once.
+      min-p 0.05 (\texttt{common.h}, checked 27 Oct 2026). All four filters are on at once. Since
+      November 2025 a model file can carry its own settings, which win when you pass none.
     \item Lower temperature for code, maths and facts, where one answer is right; higher for
       brainstorming and fiction, where variety is the point.
     \item Change one knob at a time, and read your library's documentation for the order.
   \end{itemize}
   \vskip 10pt
   \keybox{These are habits, not laws. The right setting depends on the model and on the task.}
+\end{frame}
+
+\begin{frame}{Sample many, then vote: self-consistency}
+  \begin{itemize}
+    \item For a question with one right answer, one sample adds noise. Many samples can remove
+      it: Wang et al. (ICLR 2023) sample several reasoning paths (40 in the paper) and take the
+      answer that comes up most often.
+    \item Why it works: correct reasoning tends to land on the same answer, while mistakes
+      scatter over many different wrong ones.
+    \item PaLM 540B on grade-school maths word problems (GSM8K), writing its reasoning out first
+      (chain of thought, LLM-10): greedy \textbf{56.5\%}, self-consistency \textbf{74.4\%}.
+  \end{itemize}
+  \vskip 8pt
+  \keybox{The price: 40 answers' worth of tokens for one. Spending more compute at answer time
+  to get better answers is the same trade reasoning models make.}
 \end{frame}
 
 \begin{frame}{What you see, what to change}
@@ -540,6 +635,9 @@ option: a filter on top of either.}
     \item \textbf{Not guaranteed truth.} A valid \texttt{"year"} can still be the wrong year.
     \item \textbf{Not guaranteed complete.} Hit the length limit in the middle of an object and
       the JSON is cut off anyway.
+    \item \textbf{In production}: OpenAI's Structured Outputs (August 2024) turns a JSON schema
+      into a grammar and masks. On their test of complex schemas: 100\% valid, against under 40\%
+      for the older gpt-4-0613 without it (training alone reached 93\%).
   \end{itemize}
   \vskip 10pt
   \watchbox{Constrained decoding checks the shape of the answer, never its content.}
@@ -665,6 +763,28 @@ option: a filter on top of either.}
   not overdo, resample exactly what it underdid. (The name for this trick: rejection sampling.)}
 \end{frame}
 
+\begin{frame}{Why it works for any two models}
+  \small
+  The small model \textbf{samples} its draft $x$ from $p_s$, and we accept it with probability
+  $\min\big(1,\, p_b(x) / p_s(x)\big)$.
+  \begin{itemize}
+    \item Kept: $p_s(x) \cdot \min\big(1,\, p_b(x) / p_s(x)\big) = \min\big(p_s(x),\, p_b(x)\big)$.
+    \item Rejected, in total: $\sum_x \big(p_s(x) - \min(p_s(x), p_b(x))\big) = \sum_x
+      \max\big(0,\, p_s(x) - p_b(x)\big)$, and that equals $\sum_x \max\big(0,\, p_b(x) -
+      p_s(x)\big)$, because $p_s$ and $p_b$ both sum to 1.
+    \item On a reject we sample from the shortfall $\max(0, p_b - p_s)$ divided by that same
+      total, so the reject branch adds exactly $\max\big(0,\, p_b(x) - p_s(x)\big)$.
+  \end{itemize}
+  \vskip -2pt
+  \[
+    P(x) \;=\; \min\big(p_s(x),\, p_b(x)\big) + \max\big(0,\, p_b(x) - p_s(x)\big) \;=\; p_b(x)
+  \]
+  \vskip -2pt
+  \takebox{With $k$ drafted tokens, check them left to right. At the first reject, the resampled
+  token takes its place and every drafted token after it is thrown away: it was drafted after a
+  token we did not keep. Then the small model drafts again from there.}
+\end{frame}
+
 \begin{frame}{Where the draft comes from}
   \begin{itemize}
     \item A small model of the same family, with the same tokenizer.
@@ -674,7 +794,8 @@ option: a filter on top of either.}
   \end{itemize}
   \vskip 10pt
   \takebox{Speculative decoding changes \textbf{how fast} tokens come out, never \textbf{which}
-  tokens come out. That is why serving systems can switch it on silently.}
+  tokens come out. That is why serving systems can switch it on silently: Google's AI Overviews
+  in Search use it (2024), and Meta serves Llama 4 with it (2025).}
 \end{frame}
 
 \begin{frame}{Watermarking lives in the sampler}
@@ -704,7 +825,8 @@ option: a filter on top of either.}
     \item \textbf{Take the most likely}: greedy (loops, short-sighted), beam search (looks ahead;
       right for one-right-answer tasks, bland for open-ended text).
     \item \textbf{Sample}: temperature reshapes; top-k, top-p and min-p cut the tail; penalties
-      discourage loops. Libraries differ in the order.
+      discourage loops. Libraries differ in the order. Sampling many and voting
+      (self-consistency) helps one-right-answer tasks.
     \item \textbf{Constrain}: masks guarantee a format, not the truth.
     \item \textbf{Real systems}: temperature 0 can still drift; speculative decoding is free
       speed; a watermark can hide in the sampler.
@@ -718,10 +840,18 @@ option: a filter on top of either.}
 \end{frame}
 
 \begin{frame}{Sources \& further reading}
-  \footnotesize
+  \scriptsize
   \begin{itemize}
+    \item \textbf{Read:} von Platen (2020), \link{https://huggingface.co/blog/how-to-generate}{How
+      to generate text} (Hugging Face blog). \textbf{Play:}
+      \link{https://artefact2.github.io/llm-sampling/}{artefact2.github.io/llm-sampling}.
     \item Holtzman, Buys, Du, Forbes \& Choi (2020), ``The Curious Case of Neural Text
       Degeneration'', ICLR (the probability trap, top-p).
+    \item Wang et al. (2023), ``Self-Consistency Improves Chain of Thought Reasoning in Language
+      Models'', ICLR. Nasr et al. (2023), ``Scalable Extraction of Training Data from (Production)
+      Language Models'', arXiv; ICLR 2025.
+    \item OpenAI (6 Aug 2024), ``Introducing Structured Outputs in the API''. Leviathan, Kalman \&
+      Matias (Dec 2024), ``Looking back at speculative decoding'', Google Research blog.
     \item Xu et al. (2022), ``Learning to Break the Loop'', NeurIPS (self-reinforcing repetition).
     \item Keskar et al. (2019), ``CTRL'' (the repetition penalty); OpenAI API documentation
       (presence and frequency penalties).
@@ -792,4 +922,25 @@ option: a filter on top of either.}
 %   computed by a viable-prefix check on the whole token's text and asserted against the slide's
 %   reading; "same state, same row" asserted for 19 vs 1999).
 %   Labels in the body were renumbered by script; this provenance block keeps the old names.
+%   STUDENT REVIEW 2 2026-10-20 (one Sonnet agent, PNGs only, ~116k tokens; DECISIONS #94).
+%   Applied: new frame "Why it works for any two models" (the draft is sampled from p_s; kept =
+%   min(p_s, p_b); reject total = sum max(0, p_b - p_s); so P = p_b; later drafted tokens are
+%   dropped after a reject; the identity asserted on 1,000 random pairs in review_toys); new
+%   frame "By hand: all four knobs, in order" (p = .30/.20/.16/.12/.10/.07/.05, T 0.5, top-k 5,
+%   top-p 0.9, min-p 0.2: each knob cuts, every column sums to 1.00, ends .58/.26/.16; asserted
+%   as chain_toy); temperature as a power in one line; the beam example's log scores (-1.02,
+%   -1.90, asserted); the penalty frame says it is what breaks the opening's loop. Not raised
+%   again (2026-10-06): a self-reinforcement mechanism slide, cutting the min-p critique.
+%   EXTENDED 2026-10-27 (instructor: "same for llm 6 5", after LLM-1 to LLM-4).
+%   New: "Before we start: a reading, a video, two demos" (von Platen's HF blog post, 2020/2023;
+%   3Blue1Brown ch5 from 22:22; artefact2.github.io/llm-sampling, live, sliders incl. min-p;
+%   Transformer Explainer: temperature + top-k or top-p); "When a loop breaks: repeat the word
+%   poem forever" (Nasr et al.: 150x, $200 -> 10,000+ examples, ICLR 2025; the flagging is from
+%   404 Media, secondary); "Sample many, then vote: self-consistency" (Wang et al. ICLR 2023, 40
+%   paths, PaLM 540B GSM8K 56.5 -> 74.4); Structured Outputs on "What it buys" (100% vs <40%, 93%
+%   by training alone; JSON schema -> CFG); speculative decoding in production (Google AI
+%   Overviews, Dec 2024 blog; Meta's EAGLE serving of Llama 4, arXiv 2508.08192); llama.cpp
+%   defaults re-checked in common.h (unchanged since 10-05) plus the GGUF-override caveat (PR
+%   #17120, Nov 2025). "ch11's lecture 45" -> "[45]" (11_neural_networks/45_...). The video search
+%   found no canonical sampling video; the 3b1b segment is linked instead.
 % ============================================================================
