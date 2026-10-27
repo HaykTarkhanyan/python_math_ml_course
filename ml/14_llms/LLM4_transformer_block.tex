@@ -6,6 +6,8 @@
 % credit / citation lines (as in LLM-3)
 \newcommand{\bbb}{{\scriptsize\color{gray} 3Blue1Brown}}
 \newcommand{\paper}[1]{{\scriptsize\color{gray} #1}}
+\newcommand{\src}[1]{{\scriptsize\color{gray} #1}}
+\newcommand{\link}[2]{\href{#1}{\textcolor{popblue}{#2}}}   % no underline: long titles must break
 
 % full-bleed 3Blue1Brown still with a one-line caption pinned near the bottom. Wrapped in a group
 % so the background template reverts after this one [plain] frame. Needs 2 pdflatex passes.
@@ -50,6 +52,32 @@
   \begin{center}\scriptsize\color{gray}
     LLM chapter, session 4. Parts adapt 3Blue1Brown, ``Deep Learning'' chapters 6 and 7.
   \end{center}
+\end{frame}
+
+% ============================================================ LINKS (2026-10-27, as in LLM-1 to LLM-3)
+\begin{frame}{Before we start: two videos and a demo}
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \keybox{\raggedright\textbf{Recommended viewing}\\[4pt]
+    3Blue1Brown, \link{https://www.youtube.com/watch?v=9-Jl0dxWQs8}{How might LLMs store facts
+    \textbar{} Deep Learning Chapter 7} (2024, 23 min): today's MLP section, animated - the
+    Michael Jordan stills are from it.\\[6pt]
+    Andrej Karpathy, \link{https://youtu.be/kCc8FmEb1nY?t=4919}{Let's build GPT: from scratch, in
+    code, spelled out.} (2023). From 1:21:59: many heads, the MLP, residual connections and
+    LayerNorm, added to a working model one at a time.}
+    \column{0.49\textwidth}
+    \takebox{\raggedright\textbf{Live demo:}
+    \link{https://poloclub.github.io/transformer-explainer/}{Transformer Explainer} (LLM-3's)\\[4pt]
+    Today, open the parts LLM-3 skipped: the 12 heads side by side, the MLP with its 3,072
+    neurons, the residual add, LayerNorm.}
+    \vskip 4pt
+    {\small\textbf{Try:}}
+    \begin{itemize}\small
+      \item find a head that looks one token back
+      \item find a head that parks on the first token
+      \item follow one token through a whole block
+    \end{itemize}
+  \end{columns}
 \end{frame}
 
 % ============================================================ WHERE WE ARE (py_src/llm_roadmap.py)
@@ -176,11 +204,13 @@
   \keybox{\textbf{GPT-2: 12 heads $\times$ 64 numbers $=$ 768}, the size of a token's vector
   (LLM-3's ``why 64''). Count: $12 \times 3 \times (768 \times 64) = 1{,}769{,}472 = 3 \times
   768^2$ - exactly one 768-wide head's $W_Q, W_K, W_V$, stored as one $768 \times 2{,}304$ matrix.
-  $W_O$ adds $768 \times 768 = 589{,}824$, so every output number can draw on every head. You
-  \textbf{split} the budget into 12 views; you do not add any.}
-  \vskip 6pt
-  {\small The heads do not talk to each other until the concatenation, so all twelve are one big
-  batched matrix product.}
+  $W_O$ adds $768 \times 768 = 589{,}824$, so every output number can draw on every head. Total
+  $4 \times 768^2 = 2{,}359{,}296$, plus 3,072 biases: the 2,362,368 on the block chart later.}
+  \vskip 4pt
+  {\small Same weights as one 768-wide head; you \textbf{split} the budget, you do not add any.
+  What the split buys: one head gives each token \textbf{one} softmax, one way of weighting the
+  others; 12 heads give it 12 different weightings at once. The heads do not talk to each other
+  until the concatenation, so all twelve are one big batched matrix product.}
 \end{frame}
 
 \bbbcap{multihead.png}{Multi-head attention: the same mechanism, many times over, each head free
@@ -229,8 +259,26 @@ to learn a different pattern. (3Blue1Brown draws GPT-3: 96 heads per layer. GPT-
     hands over small.
   \end{columns}
   \vskip 6pt
-  \watchbox{This is called an \textbf{attention sink} \paper{(Xiao et al., ICLR 2024)}. Real
-  heads are messier than the toy, exactly as LLM-3 warned.}
+  \watchbox{This is called an \textbf{attention sink} \paper{(Xiao et al., ICLR 2024)}. LLM-2 met
+  its use: keep the first 4 tokens plus a window, and a model streams 4 million tokens. Real heads
+  are messier than the toy, exactly as LLM-3 warned.}
+\end{frame}
+
+\begin{frame}{From quirk to design: letting a head look at nothing}
+  \begin{itemize}
+    \item Evan Miller (2023, a blog post, no experiments): add 1 to softmax's denominator, so the
+      weights may sum to less than 1 and a head can attend to nothing. He called it ``Attention Is
+      Off By One''.
+    \item OpenAI's gpt-oss (2025) does a version of it: every head has a learned extra term in the
+      softmax's denominator, ``which enables the attention mechanism to pay no attention to any
+      tokens'' (model card).
+    \item Qiu et al. (Qwen team, NeurIPS 2025 best paper): a learned gate on each head's output.
+      Attention on the first token falls from 46.7\% to 4.8\% on average, and training gets more
+      stable.
+  \end{itemize}
+  \vskip 6pt
+  \takebox{A pattern first found by staring at attention grids became a line in 2025 model
+  designs.}
 \end{frame}
 
 \begin{frame}{What the specialisations look like}
@@ -254,6 +302,21 @@ to learn a different pattern. (3Blue1Brown draws GPT-3: 96 heads per layer. GPT-
   \watchbox{Read these labels with some suspicion. Nobody assigned these jobs; they are patterns
   \emph{we} recognise afterwards, on the sentences we looked at, and plenty of heads do nothing
   so tidy. The measured claim is that the heads differ.}
+\end{frame}
+
+\begin{frame}{Heads team up: the induction head}
+  \begin{center}\includegraphics[width=0.9\linewidth]{blk_induction.pdf}\end{center}
+  \vskip -6pt
+  \begin{itemize}\small
+    \item The previous-token head has a famous partner in a later layer. Head A writes into every
+      token ``who came before me''. Head B, at the current token, looks for the earlier place
+      whose ``who came before me'' is \emph{my} token - and copies the token found there.
+    \item The pattern: \ldots\,A B\,\ldots\,A $\to$ B. Nothing about Messi needs to be stored:
+      the answer is copied from the prompt. The simplest form of \textbf{in-context learning}.
+    \item Olsson et al. (2022) named these \textbf{induction heads}. They appear abruptly, early in
+      training, at the same point where in-context learning jumps. Toy numbers here (a match
+      scores 3); the interpretability chapter takes the real ones apart.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{One head or twelve: still blind to order}
@@ -406,6 +469,24 @@ stream. The same weights for every token.}
   never got one in GPT-2 small.}
 \end{frame}
 
+\begin{frame}{Edit one MLP, move the Eiffel Tower}
+  \begin{itemize}
+    \item If a fact sits in a mid-layer MLP, rewriting that MLP should rewrite the fact. Meng et
+      al.'s \textbf{Rank-One Model Editing} (ROME) does it with one small change to one MLP matrix
+      (rank one: a column times a row).
+    \item Their demo on GPT-J: insert ``The Eiffel Tower is located in the city of Rome.''
+    \item Then ask in words the edit never saw. ``You can get from Berlin to the Eiffel Tower
+      by'' $\to$ ``train. You can take the ICE from Berlin Hauptbahnhof to Rome Centrale.''
+      ``The Eiffel Tower is right across from'' $\to$ ``the Vatican.''
+  \end{itemize}
+  \vskip 6pt
+  \keybox{The new fact carries over to questions phrased differently - what you would expect if
+  it is stored in one place and read from there.}
+  \vskip 2pt
+  \src{Meng et al. (NeurIPS 2022); the Eiffel Tower example is on the project page,
+  rome.baulab.info. The paper's own examples edit the Space Needle and Pierre Curie.}
+\end{frame}
+
 \begin{frame}{More facts than dimensions?}
   \begin{columns}[T]
     \column{0.52\textwidth}
@@ -425,6 +506,25 @@ stream. The same weights for every token.}
 
 \bbbcap{ch7_jl_lemma.jpg}{Johnson-Lindenstrauss: the number of nearly perpendicular directions grows
 exponentially with the dimension.}
+
+\begin{frame}{Turn one direction up: Golden Gate Claude}
+  \begin{itemize}
+    \item Anthropic (May 2024) pulled millions of such directions, called \textbf{features}, out
+      of the residual stream of Claude 3 Sonnet with a sparse autoencoder. One fired on the Golden
+      Gate Bridge.
+    \item They clamped that one direction at 10 times its usual maximum and asked ``what is your
+      physical form?''. Claude: ``I am the Golden Gate Bridge\ldots{} my physical form is the
+      iconic bridge itself.''
+    \item The usual answer: ``I have no physical form, I am an AI model.'' Golden Gate Claude was
+      online for 24 hours as a research demo.
+  \end{itemize}
+  \vskip 6pt
+  \keybox{A concept is a direction, and behaviour follows what is written into the stream.
+  Features, superposition and sparse autoencoders: the interpretability chapter.}
+  \vskip 2pt
+  \src{Anthropic, ``Golden Gate Claude'' (23 May 2024); Templeton et al. (2024), ``Scaling
+  Monosemanticity'', Transformer Circuits Thread.}
+\end{frame}
 
 % ============================================================ SECTION 3
 \section{The block}
@@ -463,10 +563,16 @@ exponentially with the dimension.}
     \qquad {\small (LN = LayerNorm)}
   \end{center}
   \vskip 6pt
-  \takebox{The stream itself is never normalised: each sublayer reads a normalised copy and adds
-  a \textbf{correction}. If the stream were rescaled after every add, each layer would shrink what
-  earlier layers wrote; left alone, the updates simply add up, and gradients flow straight back
-  along the additions - the ResNet argument from [49].}
+  Unroll it over all $L$ sublayers, with $\mathbf{u}_i$ the update sublayer $i$ writes:
+  \[
+    \mathbf{x}_L = \mathbf{x}_0 + \mathbf{u}_1 + \mathbf{u}_2 + \cdots + \mathbf{u}_L
+  \]
+  \vskip -4pt
+  \takebox{The stream itself is never normalised (only once, at the very top, before the LM head:
+  \mbox{LLM-5}). Each sublayer reads a normalised copy and adds a \textbf{correction}, so every
+  update is still in the sum, untouched, and the gradient reaches each $\mathbf{u}_i$ directly:
+  the derivative of a sum - the ResNet argument from [49]. Normalise the stream after every add
+  instead, and each norm rescales everything written so far.}
   \vskip 6pt
   {\scriptsize\color{gray} GPT-2 moved the norm ``to the input of each sub-block'' (Radford et al.,
   2019). The 2017 paper normalised after the add: $\mathbf{x} \leftarrow
@@ -541,7 +647,7 @@ exponentially with the dimension.}
 
 \begin{frame}{Modern block recipe}
   \vskip 8pt
-  The block has been tuned since 2017. Three changes you will meet in current models:
+  The block has been tuned since 2017. Four changes you will meet in current models:
   \vskip 8pt
   \begin{center}
   \footnotesize
@@ -552,12 +658,14 @@ exponentially with the dimension.}
     norm after the add & norm first (GPT-2 already) & trains more stably; can even skip warm-up \\
     LayerNorm & \textbf{RMSNorm} & cheaper: no mean, only the spread \\
     ReLU in the MLP & \textbf{SwiGLU} & a gated MLP; better quality in Shazeer's tests \\
+    MLP $4\times$ wide & $2.7\times$ wide, 3 matrices & about the same weights \\
     \bottomrule
   \end{tabular}
   \end{center}
   \vskip 6pt
   {\scriptsize\color{gray} Xiong et al., ICML 2020 (norm first); Zhang \& Sennrich, NeurIPS 2019
-  (RMSNorm); Shazeer, 2020 (GLU variants).}
+  (RMSNorm); Shazeer, 2020 (GLU variants). Width: Llama 2 7B goes 4,096 $\to$ 11,008
+  (config.json); $3 \times 2.7 \approx 2 \times 4$.}
   \vskip 8pt
   \watchbox{None of these changes the story: attention, an MLP, norms and the residual stream.
   LLM-14 opens a 2026 model card and finds the same block.}
@@ -580,7 +688,9 @@ exponentially with the dimension.}
       the context implies: fluffy, blue, cute, and whatever comes next.}
   \end{columns}
   \vskip 4pt
-  \takebox{Same block, 12 times. That is the whole architecture.}
+  \takebox{Same block, 12 times. That is the whole architecture. And since every layer only
+  \emph{adds}, you can read the stream after any layer through the final LM head and watch the
+  guess form: the ``logit lens'' (2020).}
 \end{frame}
 
 \begin{frame}{Where GPT-2's 124M live}
@@ -602,10 +712,13 @@ exponentially with the dimension.}
     \item \textbf{Many heads}: $h$ questions at once, each in a smaller space (GPT-2: $12 \times
       64 = 768$), mixed by $W_O$. Real heads: one looks one token back, one sends creature to
       fluffy, many park on the first token.
+    \item \textbf{Heads team up}: a previous-token head plus an induction head copy
+      \ldots A B \ldots A $\to$ B from the prompt. Sinks went from quirk to design in 2025.
     \item \textbf{Still blind to order}: one head or twelve, so positions come in before the first
       layer (LLM-2).
     \item \textbf{The MLP}: rows ask, ReLU gates, columns add. A neuron can fire on ``fluffy AND
-      creature'', and facts like Messi's sport seem to live here. Two thirds of every block.
+      creature'', and facts like Messi's sport seem to live here: edit one MLP and the Eiffel
+      Tower moves to Rome. Two thirds of every block.
     \item \textbf{The block}: norm, attention, add; norm, MLP, add. The stream is never
       normalised; every sublayer writes a correction.
     \item \textbf{The mask}: no reading the future, and $n$ training signals per pass.
@@ -616,6 +729,32 @@ exponentially with the dimension.}
   \begin{center}\includegraphics[width=\linewidth]{roadmap_transformers_pass.pdf}\end{center}
   \vskip -2pt
   {\small Next (LLM-5): what comes out at the far end, and three ways to wire the same block.}
+\end{frame}
+
+\begin{frame}{Sources \& further reading}
+  \footnotesize
+  \begin{itemize}
+    \item \textbf{Watch:} 3Blue1Brown (2024),
+      \link{https://www.youtube.com/watch?v=9-Jl0dxWQs8}{How might LLMs store facts \textbar{} Deep
+      Learning Chapter 7}; Karpathy (2023), \link{https://youtu.be/kCc8FmEb1nY?t=4919}{Let's build
+      GPT: from scratch, in code, spelled out.} \textbf{Play:}
+      \link{https://poloclub.github.io/transformer-explainer/}{Transformer Explainer}.
+    \item Vaswani et al. (2017), ``Attention Is All You Need'', NeurIPS; Radford et al. (2019),
+      ``Language Models are Unsupervised Multitask Learners'' (GPT-2).
+    \item Olsson et al. (2022), ``In-context Learning and Induction Heads'', Transformer Circuits
+      Thread.
+    \item Xiao et al. (2024), ``Efficient Streaming Language Models with Attention Sinks'', ICLR;
+      Miller (2023), ``Attention Is Off By One'' (blog); OpenAI (2025), gpt-oss model card; Qiu et
+      al. (2025), ``Gated Attention for Large Language Models'', NeurIPS.
+    \item Geva et al. (2021), ``Transformer Feed-Forward Layers Are Key-Value Memories'', EMNLP;
+      Meng et al. (2022), ``Locating and Editing Factual Associations in GPT'', NeurIPS; Kandpal et
+      al. (2023), ``Large Language Models Struggle to Learn Long-Tail Knowledge'', ICML.
+    \item Templeton et al. (2024), ``Scaling Monosemanticity'', Transformer Circuits Thread;
+      nostalgebraist (2020), ``interpreting GPT: the logit lens'', LessWrong.
+    \item Xiong et al. (2020), ``On Layer Normalization in the Transformer Architecture'', ICML;
+      Zhang \& Sennrich (2019), ``Root Mean Square Layer Normalization'', NeurIPS; Shazeer (2020),
+      ``GLU Variants Improve Transformer'', arXiv.
+  \end{itemize}
 \end{frame}
 
 \end{document}
@@ -714,4 +853,27 @@ exponentially with the dimension.}
 %     wide. Not applied: cutting the life map, Outline, MJ stills, the kinds-of-head table or the
 %     modern recipe (house skeleton and interview choices); more on superposition (a teaser by
 %     design). 43 pages; all checks clean.
+%   STUDENT REVIEW 2 2026-10-20 (one Sonnet agent, PNGs only, ~106k tokens; DECISIONS #94).
+%     Applied: "Run it h times" states the total 4 x 768^2 = 2,359,296 + 3,072 biases = the block
+%     chart's 2,362,368 (asserted in block_figs.py) and what 12 heads buy over one wide head (12
+%     softmax weightings per token, same weights); "The residual stream is the real object"
+%     unrolls x_L = x_0 + u_1 + ... + u_L (replaces "would shrink what earlier layers wrote") and
+%     names the one final LayerNorm (ln_f) before the head. Offered, not picked: a causal-tracing
+%     frame, and running causal tracing on the cached GPT-2. Not raised again (rejected 10-05):
+%     the MJ stills, the head table, the modern recipe, the superposition aside.
+%   EXTENDED 2026-10-27 (instructor: "now similarly work on llm 3 and llm 4", after LLM-1/LLM-2).
+%     New: "Before we start: two videos and a demo" (3Blue1Brown ch7, exact title; Karpathy's
+%     "Let's build GPT" from 1:21:59; Transformer Explainer for the parts LLM-3 skipped); "Heads
+%     team up: the induction head" (Olsson et al. 2022; toy in block_figs.py fig_induction, asserted:
+%     a match scores 3 -> 0.80 on "football", 0.04 elsewhere); "From quirk to design" (Miller 2023;
+%     gpt-oss's per-head sink term, model card 2.2; Qiu et al., NeurIPS 2025 best paper, first-token
+%     attention 46.7% -> 4.8%); "Edit one MLP, move the Eiffel Tower" (ROME; the GPT-J example is on
+%     rome.baulab.info, not in the paper, said on the slide); "Turn one direction up: Golden Gate
+%     Claude" (Anthropic 23 May 2024; clamp 10x max; quotes from the post); the modern-recipe table
+%     gains SwiGLU's width (Llama 2 7B 4,096 -> 11,008 from the unsloth mirror of Meta's config;
+%     3 x 2.69 ~ 2 x 4); the logit lens on "Now stack it"; a Sources frame (the deck had none).
+%     The sinks frame points back to LLM-2's StreamingLLM; LLM-2's points here. The venues the
+%     2026-10-05 note asked to recheck (Geva EMNLP 2021, Meng NeurIPS 2022, Kandpal ICML 2023,
+%     Xiong ICML 2020, Zhang & Sennrich NeurIPS 2019, Shazeer arXiv 2020) are all confirmed.
+%     block_figs.py ran without --gpt2 (GPT-2's weights are not cached; it reads block_gpt2.json).
 % ============================================================================

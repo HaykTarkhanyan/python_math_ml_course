@@ -9,6 +9,33 @@ this file holds the choice and a pointer.
 
 ---
 
+## #99 - LLM-3 and LLM-4 gain links, history, cautions and 2022-2025 results; LLM-4 gets an induction-head toy and a Sources frame
+
+**Date:** 2026-10-27 · **Status:** active (instructor: "now similarly work on llm 3 and llm 4").
+
+**Decision.** Both decks open with recommended videos and Transformer Explainer as the live demo
+(3Blue1Brown chapters 6 and 7; Karpathy's "Let's build GPT" at the attention and block
+timestamps). LLM-3 adds the 2017 paper's story (random author order, the Beatles title, all eight
+left Google and one returned, ~279k citations) and "attention weights are not explanations" (Jain
+& Wallace vs Wiegreffe & Pinter, flagged as RNN studies). LLM-4 adds an induction-head frame with a
+toy in `block_figs.py` (asserted: 0.80 on the copied token), sinks as a 2025 design feature
+(Miller's off-by-one, gpt-oss's per-head sink term, Qwen's gated attention), ROME's Eiffel Tower
+edit, Golden Gate Claude, SwiGLU's narrower MLP, the logit lens, and a Sources frame. LLM-2 and
+LLM-4 now cross-reference attention sinks instead of explaining them twice.
+
+**Why.** The same pattern as #97 and #98: links up front, the real-world results students meet
+later, honest limits. The ROME example sits on the project page, not in the paper, and the slide
+says so; the venues LLM-4's 2026-10-05 note asked to recheck are all confirmed.
+
+**Alternatives rejected.** Measuring induction heads or a logit lens on GPT-2 (not cached; a
+~550 MB download for a teaser that the interpretability chapter covers properly). A numeric X @ W_Q
+toy in LLM-3 (rejected by the instructor twice, 10-05 and 10-20).
+
+**What would change this.** If the interpretability chapter ends up teaching induction heads and
+Golden Gate Claude in full, trim LLM-4's versions to one-line pointers.
+
+---
+
 ## #98 - LLM-2 gains links, a bias frame and "fitting is not using" (lost in the middle, RULER, attention sinks), drawn from published numbers
 
 **Date:** 2026-10-27 · **Status:** active (instructor: "in a similar manner iterate on llm 2").

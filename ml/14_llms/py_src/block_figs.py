@@ -96,6 +96,9 @@ TOY = {
     "ln_out": [-0.95, -0.37, -0.37, 1.68],
     # the causal mask on LLM-3's learned grid (one-number query "noun", key "adjective")
     "mask_rows": {"fluffy": [1.0, 0.0, 0.0], "blue": [0.5, 0.5, 0.0], "creature": [0.47, 0.47, 0.06]},
+    # induction head (added 2026-10-27): score 3 where a key's "preceded by" matches the query's token
+    "induction": {"tokens": ["Messi", "plays", "football", ".", "Messi", "plays"], "match_score": 3,
+                  "w_match": 0.80, "w_other": 0.04, "predicts": "football"},
 }
 
 W = 5.5
@@ -291,6 +294,8 @@ def load_gpt2():
     d, h, dk = 768, 12, 64
     if (h * 3 * d * dk, d * d, h * 3 * d * dk + d * d + 3 * d + d) != (1_769_472, 589_824, P["attention"]):
         raise AssertionError("multi-head parameter count does not match the attention bar")
+    if (h * 3 * d * dk + d * d, P["attention"] - 4 * d * d) != (2_359_296, 3_072):   # the slide's total
+        raise AssertionError("the slide quotes 4 x 768^2 = 2,359,296 weights plus 3,072 biases")
     return G
 
 
@@ -547,6 +552,60 @@ def fig_causal_mask(log):
     save(fig, "blk_causal_mask.pdf", log)
 
 
+def fig_induction(R, log):
+    """Two heads in a circuit (Olsson et al. 2022), by hand. Head A (previous token) writes into each
+    token "who came before me". Head B (induction) at the last token asks "who came after my token
+    last time?": its query is the current token, each key is that position's "preceded by"."""
+    T = TOY["induction"]
+    toks = T["tokens"]
+    before = [None] + toks[:-1]                         # what head A writes into each position
+    q = toks[-1]
+    scores = np.array([T["match_score"] if b == q else 0.0 for b in before])
+    w = np.exp(scores) / np.exp(scores).sum()           # causal: the last token sees all six
+    hit = int(np.argmax(w))
+    if toks[hit] != T["predicts"] or round(float(w[hit]), 2) != T["w_match"]:
+        raise AssertionError(f"induction: attends to {toks[hit]} with {w[hit]:.3f}")
+    others = sorted({round(float(x), 2) for i, x in enumerate(w) if i != hit})
+    if others != [T["w_other"]] or abs(w.sum() - 1) > 1e-9:
+        raise AssertionError(f"induction: other weights {others}")
+    R["induction"] = {"preceded_by": before, "weights": w.tolist(), "predicts": toks[hit]}
+
+    fig, ax = plt.subplots(figsize=(W, 1.6))
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    ax.set_xlim(0, W)
+    ax.set_ylim(0, 1.6)
+    ax.axis("off")
+    xs = [0.35 + 0.72 * i for i in range(len(toks))]
+    y = 0.95
+    for i, (x, t) in enumerate(zip(xs, toks)):
+        fc = TINT_RED if i == hit else (TINT_BLUE if i == len(toks) - 1 else "#F2F2F2")
+        ax.add_patch(FancyBboxPatch((x - 0.30, y - 0.13), 0.60, 0.26, boxstyle="round,pad=0,rounding_size=0.04",
+                                    fc=fc, ec="#999999", lw=0.6))
+        ax.text(x, y, t, ha="center", va="center", fontsize=FS)
+        if before[i] is not None:
+            ax.add_patch(FancyArrowPatch((x - 0.22, y + 0.14), (xs[i - 1] + 0.22, y + 0.14),
+                                         connectionstyle="arc3,rad=0.5", arrowstyle="-|>", mutation_scale=6,
+                                         color=GREY, lw=0.6))
+            ax.text(x, y - 0.24, f"after {before[i]}", ha="center", va="center", fontsize=FS_TINY,
+                    color=GREY)
+    ax.text(xs[0] - 0.30, 1.47, "head A (previous token): each token notes who came before it",
+            ha="left", va="center", fontsize=FS_TINY, color=GREY)
+    ax.add_patch(FancyArrowPatch((xs[-1], y - 0.36), (xs[hit], y - 0.36), connectionstyle="arc3,rad=-0.16",
+                                 arrowstyle="-|>", mutation_scale=8, color=ARMRED, lw=1.3))
+    ax.text((xs[-1] + xs[hit]) / 2, 0.15, f"head B (induction), at the last \"{q}\": who came after \"{q}\" "
+            f"last time?\nweight {w[hit]:.2f} on \"{toks[hit]}\", {T['w_other']:.2f} on each other token",
+            ha="center", va="center", fontsize=FS_TINY, color=ARMRED, linespacing=1.3)
+    xn = xs[-1] + 0.85
+    ax.annotate("", xy=(xn - 0.30, y), xytext=(xs[-1] + 0.32, y),
+                arrowprops=dict(arrowstyle="-|>", color=INK, lw=0.8))
+    ax.add_patch(FancyBboxPatch((xn - 0.28, y - 0.13), 0.72, 0.26, boxstyle="round,pad=0,rounding_size=0.04",
+                                fc=TINT_GREEN, ec=GREEN, lw=1.0))
+    ax.text(xn + 0.08, y, toks[hit], ha="center", va="center", fontsize=FS, fontweight="bold", color=GREEN)
+    ax.text(xn + 0.08, y + 0.24, "next token", ha="center", va="center", fontsize=FS_TINY, color=GREEN)
+    save(fig, "blk_induction.pdf", log)
+    log.info(f"induction: weights {r2(w)} -> {toks[hit]}")
+
+
 def fig_neuron(pre, log):
     order = ["blue alone", "fluffy alone", "plain creature", "fluffy blue creature"]
     shown = ["blue alone", "fluffy alone", "plain creature", "this creature"]
@@ -662,7 +721,8 @@ def main():
     jobs = [lambda: fig_fact_probes(G, log), lambda: fig_two_heads(A1, A2, log),
             lambda: fig_gpt2_heads(G, R, log), lambda: fig_sink(G, log), lambda: fig_permutation(log),
             lambda: fig_causal_mask(log), lambda: fig_neuron(pre, log), lambda: fig_params(log),
-            lambda: fig_block(log), lambda: fig_mask_grid(A1.tolist(), A_masked.tolist(), log)]
+            lambda: fig_block(log), lambda: fig_mask_grid(A1.tolist(), A_masked.tolist(), log),
+            lambda: fig_induction(R, log)]
     for i, job in enumerate(jobs, 1):
         job()
         el = time.time() - t0
