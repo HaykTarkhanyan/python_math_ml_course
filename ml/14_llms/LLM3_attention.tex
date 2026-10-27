@@ -58,7 +58,7 @@
 
 \begin{document}
 
-\begin{frame}
+\begin{frame}[plain]
   \titlepage
   \begin{center}\scriptsize\color{gray}
     LLM chapter, session 3. Parts adapt LMU I2DL (CC BY 4.0) and 3Blue1Brown, ``Deep Learning''
@@ -83,7 +83,7 @@
 
 % ================================================================
 % COLD OPEN - L21's two walls
-\begin{frame}{L21 left two walls}
+\begin{frame}{[54] left two walls}
   \begin{columns}[T]
     \column{0.55\textwidth}
       \includegraphics[width=\linewidth]{alignment_grid_1.pdf}
@@ -148,6 +148,8 @@
   \end{enumerate}
   \vskip 6pt
   In translation the decoder's current state does the asking, and the encoder's states answer.
+  The score itself: Bahdanau et al.\ fed the two states to a small learned network; later models
+  just take their dot product, which is what we use today.
   \vskip 10pt
   \keybox{You have seen the three moves: LLM-2 ran them by hand on ``dog bites man'', and softmax
   and weighted sums are [41]. The new part is \emph{what} gets scored and blended.}
@@ -160,12 +162,12 @@
     {\scriptsize Translation: at each output step the model learns its own weights over the input
     words (the bar on the right). \paper{(Bahdanau, Cho \& Bengio, 2015: the first attention)}}
     \column{0.44\textwidth}
-    \begin{center}\includegraphics[width=0.7\linewidth]{lmu_captioning_attention.png}\end{center}
+    \begin{center}\includegraphics[width=0.46\linewidth, trim=0 53 322 0, clip]{lmu_captioning_attention.png}\end{center}
     {\scriptsize Captioning: weights over \emph{pixels} while writing each word.
     \paper{(Xu et al., 2015)}}
   \end{columns}
   \vskip 2pt
-  \takebox{Stack the steps and you get a grid like L21's, drawn by training instead of by hand
+  \takebox{Stack the steps and you get a grid like [54]'s, drawn by training instead of by hand
   (Bahdanau et al.\ show such grids for English to French). Wall 1 is down.}
   \vskip 1pt \lmu
 \end{frame}
@@ -265,7 +267,7 @@ story.}
   \fcolorbox{popblue}{popblue!6}{\parbox{0.8\linewidth}{\centering\small
     Three wins: \textbf{parallel} (all tokens at once) $\cdot$ \textbf{direct} (any token to any
     other) $\cdot$ \textbf{contextual} (each vector changes with its sentence). And it is all
-    matrix products: the work a GPU is built for ([40], L21's second wall).}}
+    matrix products: the work a GPU is built for ([40], [54]'s second wall).}}
   \end{center}
   \vskip 2pt
   \watchbox{And word order? Self-attention alone cannot see it (LLM-2's ``dog bites man''). That
@@ -362,8 +364,8 @@ story.}
     \column{0.55\textwidth}
     \begin{center}\includegraphics[width=\linewidth]{query_matrix.png}\end{center}
     \column{0.45\textwidth}
-    Multiply a word's vector by a learned matrix $W_Q$ to get its \textbf{query}, a shorter
-    vector; its length is called $d_k$ (64 per head in GPT-2):
+    Multiply a word's vector by a learned matrix $W_Q$ ($d_k \times d$, so $64 \times 768$) to get
+    its \textbf{query}, a shorter vector; its length is called $d_k$ (64 per head in GPT-2):
     \[ \mathbf{q}_i = W_Q\, \mathbf{e}_i . \]
     Creature's query can encode the question \emph{``any adjectives in front of me?''}
     \vskip 4pt
@@ -378,7 +380,7 @@ story.}
 \begin{frame}{Key: ``what do I offer?''}
   \begin{columns}[T]
     \column{0.55\textwidth}
-    \begin{center}\includegraphics[width=\linewidth]{key_matrix.png}\end{center}
+    \begin{center}\includegraphics[width=\linewidth]{fs_key.jpg}\end{center}
     \column{0.45\textwidth}
     A second learned matrix $W_K$ turns each vector into a \textbf{key}:
     \[ \mathbf{k}_j = W_K\, \mathbf{e}_j . \]
@@ -471,11 +473,13 @@ story.}
       \item non-negative, and
       \item sum to $1$ (a distribution over ``where to look'').
     \end{itemize}
-    \textbf{Softmax} does exactly that, and \emph{softly}: it spreads weight over all the good
-    keys instead of picking one, and it is smooth (differentiable), so we can train through it.
+    Dividing by the sum fixes the second but not the first (middle). \textbf{Softmax}
+    exponentiates first, so every weight is positive, then divides. It is also \emph{soft}: it
+    spreads weight over all the good keys instead of picking one, and it is smooth
+    (differentiable), so we can train through it.
     \column{0.48\textwidth}
-    \begin{center}\includegraphics[width=\linewidth]{attention_pattern.png}\end{center}
-    \bbb
+    \vskip 6pt
+    \includegraphics[width=\linewidth]{att_softmax_why.pdf}
   \end{columns}
 \end{frame}
 
@@ -488,7 +492,9 @@ story.}
     $\sqrt{d_k}$. For $d_k = 64$, about \textbf{8} (8.05 on 10{,}000 random pairs).
     \vskip 4pt
     Feed scores that size to softmax and it \textbf{saturates}: one weight near 1, the rest near
-    0. That is a hard pick, its gradient is almost 0, and \textbf{training stalls}.
+    0. At scores $(8, 0, 0)$ a loser gets 0.0003; raise its score by 1 and it gets 0.0009. At
+    $(1, 0, 0)$ the same nudge moves it from 0.21 to 0.42. A nudge that changes nothing gives
+    the gradient nothing to work with: \textbf{training stalls}.
     \vskip 6pt
     \fcolorbox{warnred}{warnred!8}{\parbox{0.95\linewidth}{\scriptsize
       Divide by the spread, $\sqrt{d_k} = 8$: back to about 1, softmax stays soft and trainable.
@@ -523,7 +529,7 @@ story.}
     $W_V$ keeps fluffy, blue and noun and drops the ``adjective'' tag: values fluffy
     $(0,1,0,0)$, blue $(0,0,1,0)$, creature $(0,0,0,2)$.
     \vskip 4pt
-    Creature's update, with its weights $0.468,\ 0.468,\ 0.063$:
+    Creature's update, with its weights 0.47, 0.47, 0.06 to three digits:
     \[ 0.468\,(0,1,0,0) + 0.468\,(0,0,1,0) \]
     \[ {}+ 0.063\,(0,0,0,2) = (0,\ 0.47,\ 0.47,\ 0.13) \]
     Added to creature itself (the residual connection, LLM-4): $(0,\ 0.47,\ 0.47,\ 2.13)$, a
@@ -591,7 +597,8 @@ story.}
   \end{center}
   \vskip 6pt
   \takebox{``Score, softmax, weighted sum'': the same three moves as wall 1, now with learned
-  $Q$, $K$, $V$ from one sentence.}
+  $Q$, $K$, $V$ from one sentence. In wall 1 the queries came from the decoder and the keys and
+  values from the encoder: that version is \textbf{cross-attention} (LLM-5).}
 \end{frame}
 
 \begin{frame}{Shapes, on a real sentence}
@@ -604,9 +611,10 @@ story.}
 \begin{frame}{The same shapes in GPT-2}
   \begin{itemize}
     \item Each token is $d = 768$ numbers; a layer has 12 heads, each with $d_k = 64$.
-    \item One head's $W_Q$, $W_K$, $W_V$ are $768 \times 64$ each: 147{,}456 numbers. GPT-2
-      stores all twelve heads' in a single $768 \times 2{,}304$ matrix
-      ($3 \times 12 \times 64 = 2{,}304$).
+    \item One head's $W_Q$, $W_K$, $W_V$ are $64 \times 768$ each in our $W_Q\,\mathbf{e}$
+      notation: 147{,}456 numbers for the three. GPT-2's file stores them \textbf{transposed}, all
+      twelve heads' in a single $768 \times 2{,}304$ matrix ($3 \times 12 \times 64 = 2{,}304$),
+      because code multiplies rows (next slide).
     \item A full window of 1{,}024 tokens gives a $1{,}024 \times 1{,}024$ grid: 1{,}048{,}576
       scores per head per layer, and 150{,}994{,}944 over 12 heads and 12 layers.
     \item Why 64 and not 768? $12 \times 64 = 768$: each head gets its own small space for its
@@ -619,8 +627,10 @@ story.}
   {\scriptsize\color{gray} Sizes read from GPT-2's config and weight file (local copy, 2026-10-05).}
 \end{frame}
 
-\begin{frame}[fragile]{Attention in about 15 lines}
-  Every step is a matrix operation. In NumPy:
+\begin{frame}[fragile]{Attention in about 10 lines}
+  Every step is a matrix operation. In NumPy, with one token per \textbf{row} of \texttt{X}, so
+  $\mathbf{q} = W_Q\,\mathbf{e}$ becomes \texttt{X @ Wq} with \texttt{Wq} $= W_Q^\top$
+  ($768 \times 64$):
 \begin{lstlisting}
 import numpy as np
 
@@ -628,7 +638,7 @@ def attention(X, Wq, Wk, Wv):
     Q, K, V = X @ Wq, X @ Wk, X @ Wv       # three learned views
     d_k = Q.shape[1]
     scores = Q @ K.T / np.sqrt(d_k)         # relevance, scaled
-    scores -= scores.max(1, keepdims=True)  # numerical stability
+    scores -= scores.max(1, keepdims=True)  # safe exp, same softmax
     weights = np.exp(scores)
     weights /= weights.sum(1, keepdims=True)  # softmax over each row
     return weights @ V                      # weighted sum of values
@@ -778,4 +788,22 @@ after softmax (detail in LLM-4).}
 %     example and a numeric toy for the shapes (the instructor chose the one-number toy and the
 %     Donkey sentence); cutting the life map, Outline, mystery still, masking aside, recap or the
 %     3b1b screenshots (house skeleton and the instructor's July visual choices).
+%   STUDENT REVIEW 2 2026-10-20 (one Sonnet agent, PNGs only, ~106k tokens; DECISIONS #93).
+%     Applied: wall 1 says how the score is computed (Bahdanau: a small network; later a dot
+%     product) and the equation frame names wall 1 as cross-attention (LLM-5); the sqrt(d_k) frame
+%     shows saturation in numbers (a +1 nudge: 0.0003 -> 0.0009 at (8,0,0), 0.21 -> 0.42 at (1,0,0);
+%     asserted in saturation()); the value by-hand frame ties 0.468/0.063 to the earlier 0.47/0.06;
+%     the code comment says why the max is subtracted. Two stills replaced (the instructor reopened
+%     the July choice for these two only): key_matrix.png (grabbed mid-animation, labels overlap)
+%     -> fs_key.jpg (settled, same scene); attention_pattern.png (3D grid unreadable at half width)
+%     -> att_softmax_why.pdf (scores 3, 2, -1: divided by their sum .75/.5/-.25, softmax
+%     .72/.27/.01; asserted). lmu_captioning_attention.png cropped in the \includegraphics (trim)
+%     above its cut-off caption line. Not applied (rejected 2026-10-05): the two-number W_Q toy,
+%     a numeric X @ W toy, cutting the mystery still, masking aside or map.
+%   FIXES 2026-10-27 (review of LLM-1 to LLM-3): the slides wrote q = W_Q e (W_Q is 64 x 768) but
+%     the GPT-2 frame said 768 x 64 and the code does X @ Wq. Kept the column form (the 3b1b stills
+%     on the query and value frames draw W_Q times E) and said it outright: W_Q is d_k x d on the
+%     query frame; the GPT-2 frame says the file stores them transposed; the code frame says
+%     Wq = W_Q^T because tokens are rows. "about 15 lines" -> "about 10 lines" (it is 10).
+%     Title frame [plain], as in LLM-1 and LLM-2.
 % =============================================================

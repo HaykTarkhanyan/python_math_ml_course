@@ -1,6 +1,19 @@
 \documentclass[aspectratio=169]{beamer}
 \input{../preamble}
 
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{armblue}\bfseries,
+  commentstyle=\color{paramgreen}\itshape,
+  stringstyle=\color{armred},
+  showstringspaces=false,
+  language=Python,
+  frame=single, framerule=0pt,
+  backgroundcolor=\color{lightbg},
+  numbers=none, breaklines=true, xleftmargin=4pt, xrightmargin=4pt,
+}
+
 \graphicspath{{fig/}}
 
 % callout boxes, matching LLM-3/LLM-4's fcolorbox house pattern
@@ -20,6 +33,7 @@
   \end{frame}}
 
 \newcommand{\src}[1]{{\scriptsize\color{gray} #1}}
+\newcommand{\link}[2]{\href{#1}{\textcolor{popblue}{\underline{#2}}}}
 
 \title{Tokenization}
 \subtitle{From text to token IDs}
@@ -33,6 +47,33 @@
   \begin{center}\scriptsize\color{gray}
     LLM chapter, session 1. Every token split on these slides is measured, not typed.
   \end{center}
+\end{frame}
+
+% ============================================================ TWO LINKS (instructor, 2026-10-27)
+\begin{frame}{Before we start: two links}
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \keybox{\raggedright\textbf{Watch this. Very, very recommended.}\\[4pt]
+    Andrej Karpathy,
+    \link{https://www.youtube.com/watch?v=zduSFxRajkE}{Let's build the GPT Tokenizer}
+    (YouTube, February 2024, 2 h 13 min).\\[4pt]
+    He writes a GPT-4-style tokenizer from scratch in Python and explains the oddities on
+    today's slides. The list of failures right after the strawberry slide is his.}
+    \column{0.49\textwidth}
+    \takebox{\raggedright\textbf{Live demo:}
+    \link{https://tiktokenizer.vercel.app}{tiktokenizer.vercel.app}\\[4pt]
+    Paste any text, pick a tokenizer (GPT-2, GPT-4, GPT-4o, Llama 3, Qwen 2.5, ...) and see every
+    token and its ID as you type.}
+    \vskip 4pt
+    {\small\textbf{Try:}}
+    \begin{itemize}\small
+      \item \texttt{How many r's in strawberry?}
+      \item \texttt{12345 + 678 = 13023}, then with commas
+      \item an Armenian sentence: GPT-4 vs GPT-4o
+      \item indented Python: GPT-2 vs GPT-4
+      \item \texttt{\textvisiblespace SolidGoldMagikarp}: GPT-2 vs GPT-4
+    \end{itemize}
+  \end{columns}
 \end{frame}
 
 % ============================================================ WHERE WE ARE (py_src/llm_roadmap.py)
@@ -61,7 +102,96 @@
   Here is the question as GPT-4o's tokenizer hands it to the model:
   \begin{center}\includegraphics[width=\linewidth]{tok_strawberry_question.pdf}\end{center}
   \takebox{You see ten letters. The model sees \textbf{one number}: 101830. By the end of
-  today you will know why, and five more surprises with the same cause.}
+  today you will know why, and a whole list of other failures with the same cause.}
+\end{frame}
+
+\begin{frame}{Strawberry is not alone}
+  \vskip -2pt
+  {\small Karpathy's list from the video. Every row has the same answer.}
+  \vskip 4pt
+  \begin{center}\footnotesize
+  \renewcommand{\arraystretch}{1.08}
+  \begin{tabular}{>{\raggedright\arraybackslash}p{7.6cm}l}
+    \textbf{Why does the LLM ...} & \textbf{where today} \\ \hline
+    fail to spell words, or to count the r's in strawberry? & Back to strawberry \\
+    fail to reverse a string? & Reverse a word \\
+    do worse in non-English languages? & The Armenian tax \\
+    fail at simple arithmetic? & next three slides \\
+    (GPT-2) have more trouble with Python than it should? & Code whitespace \\
+    stop dead when it sees the string \texttt{<|endoftext|>}? & Special tokens \\
+    warn me about a ``trailing whitespace''? & The trailing-space trap \\
+    break when I ask it about ``SolidGoldMagikarp''? & Glitch tokens \\
+    work better with YAML than with JSON? & Formats cost tokens \\
+    \textbf{What is the real root of suffering?} & \\
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  \takebox{Karpathy's answer to every row, the last one included: \textbf{tokenization}.}
+  \vskip 2pt
+  \src{github.com/karpathy/minbpe, \texttt{lecture.md}. The fruit even became a code name: OpenAI's
+  first reasoning model, o1, was ``Strawberry'' inside the company (Reuters, July 2024).}
+\end{frame}
+
+\begin{frame}{Arithmetic: GPT-2's numbers look random}
+  \begin{center}\includegraphics[width=\linewidth]{tok_years.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item Every integer from 0 to 520 is one token. After that it depends on what was frequent:
+      907 of the numbers 0-9,999 are one token, 88 of them with four digits, 64 of those years.
+    \item This year is two tokens; 2024 and 2025 were one, 2023 was two; 2048 (a power of two) is
+      one.
+    \item Neighbours fall apart three different ways: 2249 = 2 + 249, 2250 = 22 + 50,
+      2251 = 225 + 1. To add them, the model must learn where each digit sits inside each token,
+      token by token.
+  \end{itemize}
+  \vskip 2pt
+  \src{Millidge (2023), ``Integer tokenization is insane''. Every split: GPT-2's tokenizer,
+  measured; the years as written mid-sentence, with the space in front.}
+\end{frame}
+
+\begin{frame}{Predict first: do commas help GPT-4 add?}
+  \begin{center}\includegraphics[width=\linewidth]{tok_commas.pdf}\end{center}
+  \vskip -4pt
+  {\small GPT-4's tokenizer cuts digits into groups of 3, counted \textbf{from the left}. With
+  thousands separators, the groups are counted from the right instead.}
+  \vskip 6pt
+  \keybox{\textbf{Predict:} Singh \& Strouse (2024) gave GPT-3.5 and GPT-4 additions of 7- to
+  9-digit numbers, with and without commas. Does the accuracy change, and by how much?}
+  \pause
+  \vskip 4pt
+  \begin{center}\small
+  \begin{tabular}{lcc}
+    & no commas & with commas \\ \hline
+    GPT-3.5 & 75.6\% & \textbf{97.8\%} \\
+    GPT-4 & 84.4\% & \textbf{98.9\%} \\
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{By hand: why the commas help}
+  \small
+  Column addition runs right to left: every column waits for the carry from its right.
+  \vskip 6pt
+  \textbf{No commas.} GPT-4 reads \texttt{123|45 + 678 = 130|23}.
+  \begin{itemize}
+    \item \texttt{45} holds tens and units, \texttt{678} hundreds, tens and units: the chunks do not
+      line up, so no chunk of the answer is ``this chunk plus that chunk''.
+    \item Where the units digit lands depends on the length: \texttt{12345} is
+      \texttt{123|45}, \texttt{1234} is \texttt{123|4}. The model has to work out place value
+      again for every length.
+  \end{itemize}
+  \vskip 4pt
+  \textbf{With commas.} GPT-4 reads \texttt{12,345 + 678 = 13,023}: groups counted from the right,
+  like columns.
+  \begin{itemize}
+    \item $345 + 678 = 1{,}023$: write \texttt{023}, carry 1. Then $12 + 1 = 13$.
+    \item Every group of the answer is the matching groups plus a carry: column addition, with
+      1,000 ``digits'' instead of 10.
+  \end{itemize}
+  \vskip 4pt
+  \watchbox{The answer is still written left to right (\texttt{13} before \texttt{023}), so the
+  model must foresee the carry either way. Singh \& Strouse found left-to-right groups fail worst
+  exactly when the answer has more digits than the numbers added.}
 \end{frame}
 
 \begin{frame}{Outline}
@@ -75,7 +205,7 @@ decide what the numbers stand for.}
 
 \begin{frame}{Models read IDs, not text}
   \begin{itemize}
-    \item Every model so far ate numbers: pixels in the CNN chapter, one-hot vectors in L20.
+    \item Every model so far ate numbers: pixels in the CNN chapter, one-hot vectors in [53].
     \item An LLM reads a list of integers, one per piece of text. The pieces are
       \textbf{tokens}; the list of all possible pieces is the \textbf{vocabulary}; a token's
       \textbf{ID} is its row number in that list.
@@ -85,7 +215,7 @@ decide what the numbers stand for.}
   {\small The open-bracket mark in a chip is a \textbf{space}: most tokens carry the space before
   a word.}
   \vskip 2pt
-  \keybox{L20 did this with a fixed word list (``Tokens, minimally''). Today: which pieces?
+  \keybox{[53] did this with a fixed word list (``Tokens, minimally''). Today: which pieces?
   Next lecture: what the model does with an ID.}
 \end{frame}
 
@@ -116,7 +246,7 @@ decide what the numbers stand for.}
     \item But the sentences get long: 41 characters vs 9 subword tokens for our sentence.
       On 5 million characters of English Wikipedia, one GPT-2 token covers
       \textbf{4.6 characters} on average.
-    \item Longer sequences mean more steps for an RNN (L20) and more compute for every model
+    \item Longer sequences mean more steps for an RNN ([53]) and more compute for every model
       after it - and one character on its own means almost nothing.
   \end{itemize}
   \vskip 6pt
@@ -302,10 +432,11 @@ text is made of.}
       The base alphabet is the 256 byte values.
     \item So there is \textbf{never an unknown token}: any language, code or emoji has a
       spelling in bytes.
-    \item GPT-2's vocabulary: 256 bytes + 50,000 merges + 1 special token = \textbf{50,257}.
-      GPT-4's tokenizer has 100,277 tokens, GPT-4o's 200,019.
+    \item GPT-2's vocabulary: 256 bytes + 50,000 merges + 1 special token (end-of-text; special
+      tokens come later today) = \textbf{50,257}. GPT-4's tokenizer has 100,277 tokens, GPT-4o's
+      200,019.
     \item Merges now join \emph{bytes}: GPT-4o's tokenizer learned \texttt{D5 + A1}, the two
-      bytes of the Armenian letter ayb, as token 619. GPT-4's never learned it.
+      bytes of ayb from ``UTF-8 by hand'', as token 619. GPT-4's never learned it.
   \end{itemize}
   \vskip 8pt
   \keybox{LLaMA and Gemma use a different library (next section) but keep the same guarantee:
@@ -387,9 +518,9 @@ text is made of.}
 \begin{frame}{How big should the vocabulary be?}
   \begin{center}\includegraphics[width=\linewidth]{tok_vocab_tradeoff.pdf}\end{center}
   \begin{itemize}\small
-    \item Bigger vocabulary: longer pieces, shorter sequences. But the model must learn 768
-      numbers for every token in the vocabulary (next lecture: what they are). For GPT-2 that
-      is 50,257 $\times$ 768 = 38.6M of its weights, \textbf{31\%}.
+    \item Bigger vocabulary: longer pieces, shorter sequences. But the model must learn a row of
+      numbers for every token in the vocabulary (next lecture: what they are), 768 of them in
+      GPT-2: 50,257 $\times$ 768 = 38.6M of its weights, \textbf{31\%}.
     \item GPT-4o's doubling bought nothing here (79 $\to$ 80). It went mostly to other
       languages: OpenAI reports 4.4$\times$ fewer tokens for Gujarati; Armenian is today's last
       frame.
@@ -406,7 +537,8 @@ in use.}
     \item Same loop as BPE, different choice: merge the pair whose parts occur together far more
       often than their own counts would predict,
       $\displaystyle \text{score}(a, b) = \frac{\text{count}(ab)}{\text{count}(a)\,\text{count}(b)}$.
-      A pair of two very common pieces needs a lot of co-occurrence to win.
+      How often $a$ and $b$ would meet by pure chance grows with count($a$) $\cdot$ count($b$), so
+      the score asks how far \textbf{above chance} they meet.
     \item A piece that continues a word starts with \texttt{\#\#}. Schuster \& Nakajima (2012);
       used by BERT.
   \end{itemize}
@@ -436,39 +568,62 @@ in use.}
   less.}
 \end{frame}
 
-\begin{frame}{Unigram and SentencePiece}
+\begin{frame}{Unigram: a probability for every piece}
   \begin{itemize}
-    \item \textbf{Unigram} (Kudo, 2018) works top-down: start from a big vocabulary and keep
-      dropping the pieces the training text can most easily do without (it splits just as well
-      using the others). BPE builds up; Unigram prunes down.
-    \item \textbf{SentencePiece} (Kudo \& Richardson, 2018) is a library, not an algorithm: it
-      reads raw text, spaces included, and runs either BPE or Unigram. A word-initial piece
-      carries a marker for the space before it.
-    \item Users: T5 (Unigram); LLaMA 1-2 (SentencePiece running BPE) and Gemma (SentencePiece),
-      both with byte fallback.
+    \item \textbf{Unigram} (Kudo, 2018) stores a vocabulary and one \textbf{probability} per piece.
+      Pieces are treated as independent (hence ``unigram''): a split's probability is the
+      \textbf{product} of its pieces' probabilities.
+    \item To encode a word, take its \textbf{most probable split}. No merge list at all.
   \end{itemize}
   \vskip 4pt
-  \begin{center}\includegraphics[width=\linewidth]{tok_unigram.pdf}\end{center}
-  \src{Our sentence through T5's tokenizer (Unigram).}
+  \textbf{By hand}, with T5's real numbers, in natural logs (so the product becomes a sum). The
+  mark \texttt{\_} is the start of a word:
+  \begin{center}\small
+  \begin{tabular}{lll}
+    split & $\ln P$ & \\ \hline
+    \texttt{\_strawberry} & $-12.93$ & \textcolor{paramgreen}{the winner} \\
+    \texttt{\_straw} + \texttt{berry} & $-12.69 + (-11.39) = -24.08$ & \\
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  {\small The whole word is $e^{-12.93 + 24.08} = e^{11.15} \approx 70{,}000$ times more probable
+  than the two-piece split.}
+  \vskip 6pt
+  \takebox{Every extra piece multiplies in one more small probability, so Unigram prefers few,
+  long pieces - unless the long piece is itself rare.}
+\end{frame}
+
+\begin{frame}{Unigram encodes: many splits, one winner}
+  \begin{center}\includegraphics[width=\linewidth]{tok_unigram_nbest.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item A 12-letter word can be cut $2^{11} = 2{,}048$ ways. Unigram does not try them one by
+      one: dynamic programming (the Viterbi algorithm) walks left to right and keeps only the best
+      way to reach each letter.
+    \item The top two differ by 0.02, a near coin flip in probability. Neither is
+      ``pomegranate + s'': the probabilities decide, not the grammar.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Unigram by hand: one pruning step}
   \vskip 2pt
-  {\small The same toy corpus. Start from the 10 letters plus 7 longer pieces. Give each piece a
-  probability, split every word the most probable way, and score it with the \textbf{log-loss}
-  of the training words under those splits (the classification chapter's log-loss).}
-  \vskip 6pt
+  {\small The same toy corpus. Start from the 10 letters plus 7 longer pieces. Split every word
+  the most probable way, then set each piece's \textbf{probability} to how often those splits use
+  it, out of all uses. Score with the \textbf{log-loss} (the classification chapter's): a word
+  costs $-\ln$ of its pieces' probabilities multiplied, times its count.}
+  \vskip 4pt
   \begin{columns}[T]
-    \column{0.40\textwidth}
+    \column{0.48\textwidth}
     \small
-    Best splits:\\[3pt]
-    \texttt{low}\\
-    \texttt{low + er}\\
-    \texttt{new + est}\\
-    \texttt{wid + est}\\[4pt]
-    Loss: 40.16. \texttt{es} and \texttt{lo} are in the vocabulary but no best split uses them.
-    \column{0.55\textwidth}
+    Best splits (word count):
+    \texttt{low} (5), \texttt{low + er} (2), \texttt{new + est} (6), \texttt{wid + est} (3).\\[3pt]
+    Uses: \texttt{est} 9, \texttt{low} 7, \texttt{new} 6, \texttt{wid} 3, \texttt{er} 2: 27 in
+    all, so $P(\texttt{low}) = 7/27$.\\[3pt]
+    ``low'' costs $5 \ln \frac{27}{7} = 6.75$. All four words: \textbf{40.16}.\\[3pt]
+    \texttt{es} and \texttt{lo} are in the vocabulary, but no best split uses them.
+    \column{0.47\textwidth}
     \small
+    \renewcommand{\arraystretch}{0.92}
     \begin{tabular}{lr}
       remove this piece & loss goes up by \\ \hline
       \texttt{es} & 0.00 \\
@@ -486,30 +641,156 @@ in use.}
   \src{Simplified: one pass of probability estimates, not the full algorithm.}
 \end{frame}
 
+\begin{frame}{Unigram training: start big, prune a quarter per round}
+  \begin{enumerate}
+    \item \textbf{Seed}: take every frequent substring as a candidate piece (SentencePiece: up to
+      1,000,000 of them, each at most 16 characters).
+    \item \textbf{Fit} the probabilities to the training text: split it with the current
+      probabilities, recount how often each piece is used, repeat. This is
+      expectation-maximization (EM), here done twice per round.
+    \item \textbf{Score} every piece: how much the loss grows without it (the last slide).
+    \item \textbf{Keep the best 75\%}. Single characters always stay, so any text can still be
+      spelled.
+    \item Back to step 2, until the vocabulary has the size you asked for.
+  \end{enumerate}
+  \vskip 8pt
+  \keybox{BPE \textbf{builds up}, one merge at a time. Unigram \textbf{prunes down}, a quarter of
+  the vocabulary per round. Both stop at the size you choose.}
+  \vskip 2pt
+  \src{The numbers are SentencePiece's defaults (\texttt{seed\_sentencepiece\_size},
+  \texttt{max\_sentencepiece\_length}, \texttt{shrinking\_factor} = 0.75).}
+\end{frame}
+
+\begin{frame}{Unigram on the 689 surnames}
+  \begin{center}\includegraphics[width=\linewidth]{tok_unigram_rounds.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item The same surname list as the byte-level BPE slide, through SentencePiece's Unigram:
+      1,423 seed pieces. The first fit drops every seed no split uses; then each round keeps
+      75\%, down to the 120 we asked for.
+    \item ``-yan'' is the 3rd most probable piece, after the letter ``a'' and the word-start mark.
+      BPE found it at merge 5.
+    \item Manukyan stays whole; Abazyan is ab + azyan; Abalakov, with no ``-yan'', falls apart
+      into single letters after ``ab''.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Train your own}
+  The whole training run on the last slide, with the \texttt{sentencepiece} library:
+  \vskip 4pt
+\begin{lstlisting}
+import sentencepiece as spm
+
+spm.SentencePieceTrainer.train(
+    input="surnames_hy.txt", model_prefix="surnames",
+    model_type="unigram",          # or "bpe"
+    vocab_size=120,
+    character_coverage=1.0)        # keep every Armenian letter
+sp = spm.SentencePieceProcessor(model_file="surnames.model")
+sp.encode(name, out_type=str)      # the pieces, as on the last slide
+\end{lstlisting}
+  \vskip 4pt
+  \watchbox{The default \texttt{character\_coverage} is 0.9995: the rarest 0.05\% of characters
+  are left out of the vocabulary and become unknown. SentencePiece's own docs suggest 0.9995 for
+  Chinese or Japanese and 1.0 for small alphabets: English, Armenian.}
+\end{frame}
+
+\begin{frame}{Subword regularization: a different split every time}
+  \begin{center}\includegraphics[width=0.82\linewidth]{tok_unigram_samples.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item Kudo's 2018 paper was really about this: during \textbf{training}, do not always use the
+      best split - \textbf{sample} one, with odds set by its probability raised to a power
+      $\alpha$. A small $\alpha$ flattens the odds, so odd splits get picked too. Above: 5 draws
+      with $\alpha = 0.1$ from the 267 ways T5's vocabulary can cut the word.
+    \item The model meets the same word cut many ways, so it cannot lean on one exact cut. Kudo
+      reported better translation, most of all with little data or text unlike the training
+      text. At test time: the best split.
+    \item BPE-dropout (Provilkov, Emelianenko \& Voita, 2020) does the same for BPE: skip each merge
+      at random. Today's LLMs mostly train on one fixed split.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{SentencePiece: a library that reads raw text}
+  \begin{itemize}
+    \item \textbf{SentencePiece} (Kudo \& Richardson, 2018) is a library, not an algorithm: it runs
+      Unigram or BPE (\texttt{model\_type}) on \textbf{raw text}.
+    \item No splitting on spaces first, so Chinese, Japanese and Thai, written without spaces
+      between words, work exactly like English.
+    \item The space is just another symbol, \texttt{\_}, glued to the piece after it. Decoding:
+      join the pieces, turn every \texttt{\_} back into a space.
+  \end{itemize}
+  \vskip 2pt
+  \begin{center}\includegraphics[width=\linewidth]{tok_unigram.pdf}\end{center}
+  \vskip -4pt
+  {\small Our sentence through T5's tokenizer (SentencePiece, Unigram). Decoding is exact unless
+  the tokenizer normalizes text first: T5's squeezes double spaces into one.}
+  \vskip 4pt
+  \src{Users: T5 (Unigram); LLaMA 1-2 (BPE); Gemma 3, whose tokenizer is Gemini 2.0's (262k
+  entries). LLaMA and Gemma split digits and fall back to bytes.}
+\end{frame}
+
+\begin{frame}{No byte fallback: T5 meets Armenian}
+  \begin{center}\includegraphics[width=\linewidth]{tok_t5_armenian.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item T5 (2019) has no byte fallback, and its vocabulary was built for English, German, French
+      and Romanian. All 12 Armenian words become \texttt{<unk>} (red); only the spaces and the
+      comma survive. Decoding prints a question-mark glyph for each.
+    \item That is the word-level \texttt{<UNK>} problem from the start of the lecture, back again.
+    \item LLaMA and Gemma switch byte fallback on: a character the vocabulary lacks is spelled in
+      its UTF-8 bytes. GPT-4o, byte-level from the start, gets the line back exactly.
+  \end{itemize}
+\end{frame}
+
 % ============================================================ 5. WHY LLMs TRIP
 \section{Why LLMs trip over tokens}
-\sectiontransition{Why LLMs trip over tokens}{Six surprises. One cause: the tokenizer decided
-before the model ever saw the text.}
+\sectiontransition{Why LLMs trip over tokens}{Karpathy's list, row by row. One cause: the
+tokenizer decided before the model ever saw the text.}
 
 \begin{frame}{Back to strawberry}
-  \begin{itemize}
-    \item The three r's are inside token 101830. The model never sees them, unless training
-      happened to teach it how that ID is spelled.
-    \item Spell the word out first, and every letter becomes its own token. Now there is
-      something to count.
+  \begin{itemize}\small
+    \item The three r's are inside token 101830. The model receives that one ID, never the
+      letters in it.
+    \item The ID's numbers (next lecture) are trained only to predict the next token. Nothing in
+      that job asks which letters are inside, so the spelling leaks in only indirectly: the same
+      word cut differently elsewhere (\texttt{st+raw+berry} at the start of a line,
+      \texttt{\textvisiblespace STR+AW+B+ERRY} in capitals) hints at what 101830 contains
+      (Kaushal \& Mahowald, 2022).
+    \item Counting the r's in one go needs both at once: recall the spelling, then count inside
+      it. Spell the word out first, and the job splits in two: write the letters, then count
+      tokens the model can actually see.
   \end{itemize}
   \begin{center}\includegraphics[width=\linewidth]{tok_spelled.pdf}\end{center}
   \takebox{Counting letters is easy for you because you read letters. The model reads tokens.}
 \end{frame}
 
-\begin{frame}{Numbers and arithmetic}
+\begin{frame}{Reverse a word}
+  \begin{center}\includegraphics[width=\linewidth]{tok_reverse.pdf}\end{center}
+  \vskip -2pt
+  \begin{itemize}\small
+    \item Asked to reverse ``tokenization'', the model reads two tokens and has to write
+      \texttt{\textvisiblespace no|it|azine|kot}: four pieces that rarely appear together, built
+      from letters it never saw inside \texttt{\textvisiblespace token}.
+    \item ``strawberry'' backwards even ends in \texttt{warts}.
+    \item Same fix as for counting: spell the word out first, one letter per token, then reverse
+      the list.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Numbers and arithmetic: three designs}
   \begin{center}\includegraphics[width=\linewidth]{tok_numbers.pdf}\end{center}
   \begin{itemize}\small
     \item GPT-2 cuts 677 into 6 + 77 and 804 into 8 + 04: the pieces follow which digit
       strings were frequent in the training text, not place value.
-    \item GPT-4 cuts numbers into groups of 3. LLaMA, Gemma and Qwen give every digit its own
-      token, which costs more tokens but lines the digits up for column arithmetic.
+    \item GPT-4 and GPT-4o cut numbers into groups of 3 from the left (the pre-tokenization rule),
+      and so does Llama 3. LLaMA 1-2, Gemma and Qwen give every digit its own token: more tokens,
+      but the digits line up for column arithmetic.
   \end{itemize}
+  \vskip 2pt
+  \watchbox{Not every number slip is the tokenizer. Llama 3.1 called 9.11 bigger than 9.8;
+  Transluce (2024) found neurons for Bible verses and dates firing (verse 9:11 comes after 9:8),
+  and switching off the Bible-verse ones lifted accuracy on such questions from 55\% to 76\%.}
 \end{frame}
 
 \begin{frame}{Code whitespace}
@@ -522,6 +803,17 @@ before the model ever saw the text.}
   \end{itemize}
 \end{frame}
 
+\begin{frame}{Formats cost tokens: JSON vs YAML}
+  \begin{center}\includegraphics[width=\linewidth]{tok_formats.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item The same record: 32 tokens as indented JSON, 18 as YAML. Quotes, brackets and
+      indentation are all tokens, and every one costs money and context (GPT-2: 43 vs 19).
+    \item Most of the gap is layout: the same JSON on one line costs 22. ``Prefer YAML'' mostly
+      means: do not pay for pretty-printing.
+  \end{itemize}
+\end{frame}
+
 \begin{frame}{Special tokens, and how they leak}
   \vskip 2pt
   {\small Special tokens are reserved IDs that mark structure: \texttt{<|endoftext|>}
@@ -530,6 +822,20 @@ before the model ever saw the text.}
   \trapbox{If an app encodes user text with special tokens switched on, typing the string
   produces the \emph{real} control token - an injection, like SQL injection. tiktoken refuses
   such text by default and raises an error.}
+\end{frame}
+
+\begin{frame}{The trailing-space trap}
+  \begin{center}\includegraphics[width=\linewidth]{tok_trailing.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item Words carry the space \emph{in front of} them, so the natural next token is
+      ``\textvisiblespace Paris'', ID 12366, space included.
+    \item End the prompt with a space and that space becomes a token of its own (220). Now the
+      model must go on with ``Paris'' \emph{without} a space (60704). In training text a space is
+      almost always glued to the word after it, so this input looks unusual to the model.
+    \item OpenAI's Playground used to warn, roughly: \emph{``Your text ends in a trailing space,
+      which causes worse performance due to how the API splits text into tokens.''}
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Glitch tokens: SolidGoldMagikarp}
@@ -547,9 +853,28 @@ before the model ever saw the text.}
   different ideas of what is common.}
 \end{frame}
 
+\begin{frame}{Where the glitch tokens came from}
+  \begin{itemize}
+    \item \textbf{Reddit's r/counting}, where a few users counted towards infinity, one post at a
+      time: `` SolidGoldMagikarp'', `` TheNitromeFan'', `` RandomRedditorWithNo'', and
+      `` davidjl'' (the user davidjl123, cut short).
+    \item \textbf{Pastebin}: ``rawdownloadcloneembedreportprint'' is the site's row of buttons
+      (raw, download, clone, embed, report, print), glued together in scraped copies of its
+      pages.
+    \item \textbf{A mobile game}: `` Leilan'', a dragon goddess from \emph{Puzzle \& Dragons}.
+    \item \textbf{A person}: `` petertodd'', almost certainly Peter Todd, a Bitcoin developer.
+  \end{itemize}
+  \vskip 8pt
+  \keybox{Every one was frequent in the tokenizer's training text and nearly absent from the
+  LLM's. A user name that shows up on every page of a scraped thread is, to BPE, just a frequent
+  string.}
+  \vskip 4pt
+  \src{Rumbelow \& Watkins (2023) and their follow-up posts on LessWrong.}
+\end{frame}
+
 \begin{frame}{Glitch tokens: what GPT-3 said}
   \vskip 2pt
-  {\small Asked to repeat each token back to the user:}
+  {\small Asked to repeat each token back to the user (davinci-instruct-beta, a GPT-3 model):}
   \vskip 8pt
   \begin{center}
   \begin{tabular}{ll}
@@ -560,11 +885,53 @@ before the model ever saw the text.}
   \end{tabular}
   \end{center}
   \vskip 10pt
-  \watchbox{Nothing is wrong with the model's code. Those 768 numbers for the token were never
-  trained, so they mean nothing in particular - and what comes out is not a bad guess but an
+  \watchbox{Nothing is wrong with the model's code. The token's row of numbers was barely
+  trained, so it means nothing in particular - and what comes out is not a bad guess but an
   arbitrary one.}
   \vskip 6pt
   \src{Rumbelow \& Watkins, ``SolidGoldMagikarp (plus, prompt generation)'', LessWrong, 5 Feb 2023.}
+\end{frame}
+
+\begin{frame}{Fixed in GPT-4? Mostly}
+  \begin{center}\includegraphics[width=\linewidth]{tok_glitch_split.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item GPT-4's tokenizer was trained on different text: GPT-2's glitch names now split
+      into 4 to 6 ordinary pieces the model knows well.
+    \item One survived: `` davidjl'' is still a single token. Asked to repeat it in June 2023,
+      GPT-4 wrote ``jndl'' and ``JDL'' (Simon Willison, via Riley Goodside).
+    \item Barely trained tokens are still everywhere: Land \& Bartolo (2024) found thousands in
+      open models, straight from the weights (LLM-2 shows GPT-2's).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The longest tokens}
+  \begin{center}\includegraphics[width=\linewidth]{tok_longest.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item GPT-2's longest token is \textbf{mojibake}: text decoded with the wrong character
+      encoding, again and again, until one broken pair of letters repeats 32 times. Common enough
+      in GPT-2's web pages to earn a token.
+    \item GPT-4's longest is a method name from Apple's iOS code: its tokenizer read a lot of
+      GitHub.
+    \item GPT-4o spends one token on the whole alphabet, and one on Thai football-betting tips.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{GPT-4o's tokenizer read the spam web}
+  \begin{center}\includegraphics[width=0.92\linewidth]{tok_lottery.pdf}\end{center}
+  \vskip -4pt
+  \begin{itemize}\small
+    \item GPT-4o's vocabulary has \textbf{207} tokens containing the Chinese word for
+      ``lottery''. GPT-4's has none, GPT-2's none.
+    \item May 2024, days after GPT-4o came out: Tianle Cai listed its 100 longest Chinese
+      tokens. Only 3 were common enough for everyday conversation; the rest were gambling and
+      pornography.
+    \item Same story as SolidGoldMagikarp: spam pages were frequent in the tokenizer's training
+      text, so spam phrases became single tokens, whatever the LLM later made of them.
+  \end{itemize}
+  \src{MIT Technology Review, 17 May 2024. Translations ours; every token measured in
+  \texttt{o200k\_base}.}
 \end{frame}
 
 \begin{frame}{The Armenian tax: one sentence, two counts}
@@ -573,6 +940,51 @@ before the model ever saw the text.}
   {\small 102 tokens = the line's 102 UTF-8 bytes: GPT-4's tokenizer has no merges for
   Armenian, so every byte is a token. GPT-4o's has them. Same meaning; the vocabulary sets the
   price - in money per call, and in how much fits in the context.}
+\end{frame}
+
+% ============================================================ 6. CLOSED TOKENIZERS (2026-10-27)
+\section{Whose tokenizer can you see?}
+\sectiontransition{Whose tokenizer can you see?}{You pay per token. Can you count them yourself?}
+
+\begin{frame}{Open, half-open, closed}
+  \footnotesize
+  \begin{center}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{>{\raggedright\arraybackslash}p{1.7cm}>{\raggedright\arraybackslash}p{5.6cm}%
+                  >{\raggedright\arraybackslash}p{4.1cm}}
+    & \textbf{what is published} & \textbf{how you count tokens} \\ \hline
+    \textbf{open models} & everything: Llama, Qwen, Gemma, DeepSeek, gpt-oss & on your own machine \\
+    \textbf{OpenAI} & the text tokenizer, in tiktoken: \texttt{o200k\_base} for GPT-4o, o1, o3 and
+      GPT-4.1 (tiktoken assumes the same for GPT-5); \texttt{o200k\_harmony} for gpt-oss &
+      locally for plain text; chat format, tools and images are not published, so the API's own
+      counter has the last word \\
+    \textbf{Google} & no Gemini tokenizer as such, but Gemma 3 uses ``the same tokenizer as Gemini
+      2.0'' (262k entries) & the Gemini API's \texttt{countTokens} \\
+    \textbf{Anthropic} & nothing since Claude 3; the old \texttt{@anthropic-ai/tokenizer} package says
+      it ``is no longer accurate'' & a free count-tokens endpoint (since late 2024) \\
+  \end{tabular}
+  \end{center}
+  \vskip 4pt
+  \watchbox{A new tokenizer is a silent price change. Anthropic's docs: Claude Opus 4.7 (April
+  2026) and later use a newer tokenizer, and the same text comes out about \textbf{30\% more
+  tokens}.}
+\end{frame}
+
+\begin{frame}{Reverse-engineering a closed tokenizer}
+  \begin{itemize}
+    \item \textbf{Watch the stream.} Rando \& Tram\`er (March 2024) asked Claude 3 to repeat a text
+      and watched the reply stream in: each chunk was one token. They checked it by capping the
+      reply at 1 and 2 tokens. Anthropic later changed how the stream is chunked.
+    \item \textbf{Ask the counter.} The count-tokens endpoint is free: feed it candidate strings and
+      keep the ones that count as a single token. One open-source project reports about 38,000
+      Claude token strings recovered from about 485,000 queries (its claim, not checked).
+    \item No published work we found recovers Claude's full vocabulary, or anything of the newer
+      tokenizer.
+  \end{itemize}
+  \vskip 8pt
+  \keybox{Why bother? To know a prompt's cost and length before sending it, and because a
+  tokenizer shows what its training text looked like - the lottery tokens, the iOS method names,
+  the r/counting users.}
 \end{frame}
 
 % ============================================================ RECAP
@@ -586,10 +998,14 @@ before the model ever saw the text.}
       nothing is ever unknown.
     \item \textbf{BPE}: merge the most frequent pair, repeat; encoding replays the merges in
       order. A regex keeps merges inside words; decoding can split a character.
-    \item The tokenizer is a \textbf{separate, frozen model}. WordPiece and Unigram choose
-      their pieces differently.
-    \item Its choices explain strawberry, arithmetic, code whitespace, special-token leaks,
-      glitch tokens and the Armenian tax.
+    \item The tokenizer is a \textbf{separate, frozen model}. WordPiece scores pairs above chance;
+      \textbf{Unigram} gives every piece a probability, encodes with the most probable split and
+      trains by pruning; \textbf{SentencePiece} runs it on raw text.
+    \item Its choices explain Karpathy's list: spelling and reversing, arithmetic (commas lift
+      GPT-4 from 84\% to 99\%), code and formats, special tokens, trailing spaces, glitch tokens,
+      the Armenian tax.
+    \item Open models and OpenAI publish their tokenizers, and Gemini's comes out through Gemma 3;
+      Anthropic only counts tokens for you.
   \end{itemize}
 \end{frame}
 
@@ -599,9 +1015,12 @@ before the model ever saw the text.}
   {\small Next (LLM-2): an ID becomes a vector - and the vector learns where it sits.}
 \end{frame}
 
-\begin{frame}{Sources \& further reading}
+\begin{frame}{Sources \& further reading (1/2): the algorithms}
   \small
   \begin{itemize}
+    \item \textbf{Watch:} Karpathy (2024),
+      \link{https://www.youtube.com/watch?v=zduSFxRajkE}{Let's build the GPT Tokenizer}.
+      \textbf{Play:} \link{https://tiktokenizer.vercel.app}{tiktokenizer.vercel.app}.
     \item Gage (1994), ``A New Algorithm for Data Compression'', \emph{C Users Journal}.
     \item Sennrich, Haddow \& Birch (2016), ``Neural Machine Translation of Rare Words with
       Subword Units'', ACL.
@@ -610,15 +1029,34 @@ before the model ever saw the text.}
     \item Schuster \& Nakajima (2012), ``Japanese and Korean Voice Search'', ICASSP.
     \item Kudo (2018), ``Subword Regularization'', ACL; Kudo \& Richardson (2018),
       ``SentencePiece'', EMNLP.
-    \item Rumbelow \& Watkins (2023), ``SolidGoldMagikarp (plus, prompt generation)'',
-      LessWrong.
-    \item TechCrunch (27 Aug 2024), ``Why AI can't spell `strawberry'\,''; OpenAI (May 2024),
-      ``Hello GPT-4o'' (tokenizer compression by language).
-    \item Further watching: Karpathy (2024), ``Let's build the GPT Tokenizer'' (YouTube).
+    \item Provilkov, Emelianenko \& Voita (2020), ``BPE-Dropout'', ACL.
+    \item Gemma Team (2025), ``Gemma 3 Technical Report'' (the tokenizer shared with Gemini 2.0).
   \end{itemize}
-  \vskip 4pt
-  \src{Every split and count: \texttt{py\_src/tokenization\_figs.py} (tiktoken 0.13.0; BERT, T5,
-  Qwen 2.5 tokenizers from Hugging Face), raw results in \texttt{results/tokenization\_figs.json}.}
+  \vskip -2pt
+  \src{Every split and count: \texttt{py\_src/tokenization\_figs.py} (tiktoken 0.13.0,
+  sentencepiece 0.2.2; BERT, T5, Qwen 2.5 tokenizers from Hugging Face), raw results in
+  \texttt{results/tokenization\_figs.json}.}
+\end{frame}
+
+\begin{frame}{Sources \& further reading (2/2): the failures}
+  \footnotesize
+  \begin{itemize}
+    \item Karpathy, \texttt{github.com/karpathy/minbpe}, \texttt{lecture.md} (the list of failures).
+    \item Millidge (2023), ``Integer tokenization is insane'' (blog). Singh \& Strouse (2024),
+      ``Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs'', arXiv.
+    \item Transluce (Oct 2024), the Monitor interface report (9.8 vs 9.11).
+    \item Rumbelow \& Watkins (2023), ``SolidGoldMagikarp (plus, prompt generation)'' and its
+      follow-ups, LessWrong. Willison (8 Jun 2023), `` davidjl''. Land \& Bartolo (2024),
+      ``Fishing for Magikarp'', EMNLP.
+    \item Kaushal \& Mahowald (2022), ``What do tokens know about their characters and how do they
+      know it?'', NAACL.
+    \item TechCrunch (27 Aug 2024), ``Why AI can't spell `strawberry'\,''; Reuters (July 2024), the
+      ``Strawberry'' code name; OpenAI (May 2024), ``Hello GPT-4o''.
+    \item Yang (17 May 2024), ``GPT-4o's Chinese token-training data is polluted by spam and porn
+      websites'', MIT Technology Review.
+    \item Rando \& Tram\`er (2024), \texttt{github.com/javirandor/anthropic-tokenizer}. Anthropic
+      docs: token counting; tiktoken's \texttt{model.py} (OpenAI's model-to-tokenizer map).
+  \end{itemize}
 \end{frame}
 
 \end{document}
@@ -629,7 +1067,7 @@ before the model ever saw the text.}
 %   LLM1_tokenization_OUTLINE.md (instructor interview 2026-10-04, two rounds) and
 %   LLM_CHAPTER_PLAN.md, section 5 (LLM-1). Ported and adapted from the instructor's DL4NLP
 %   deck 3 (sources/dl4nlp/03_tokenization.tex) and L21's three former tokenization frames
-%   (git show 6013bcc:ml/ch7_rnn/L21_road_to_attention.tex; moved here by DECISIONS #64).
+%   (git show 6013bcc:ml/ch7_rnn/54_road_to_attention.tex; moved here by DECISIONS #64).
 %   Interview decisions: cold open "how many r's in strawberry"; Unicode short (2 frames);
 %   BPE full mechanics; WordPiece and Unigram one frame each; all four quirks; Armenian one
 %   frame showing both tokenizers (102 vs 18 on cl100k, 19 vs 17 on o200k); glitch tokens two
@@ -673,4 +1111,43 @@ before the model ever saw the text.}
 %   Not in the deck: the hands-on (instructor: "doesn't matter for the slides").
 %   Forward pointer: LLM-2 (an ID becomes a vector, plus position; DECISIONS #68 - was L24
 %   until 2026-10-04).
+%   STUDENT REVIEW 2 2026-10-20 (one Sonnet agent, PNGs only, ~108k tokens; DECISIONS #93).
+%   Applied: "Back to strawberry" explains the payoff (the ID's numbers are trained only on next
+%   token; spelling leaks in through other cuts of the word, st+raw+berry and " STR+AW+B+ERRY"
+%   measured on o200k and asserted; Kaushal & Mahowald, NAACL 2022, checked on arXiv 2206.02608);
+%   Unigram by hand shows its probabilities (uses est 9, low 7, new 6, wid 3, er 2 = 27; "low"
+%   costs 5 ln(27/7) = 6.75; asserted); 768 is GPT-2's width, not every model's; "1 special token"
+%   points ahead; WordPiece's ratio read as "above chance"; D5 + A1 points back to UTF-8 by hand.
+%   Not applied (rejected 2026-10-04): cutting the life map or WordPiece/Unigram.
+%   EXTENDED 2026-10-27 (instructor: Karpathy's video link at the very start, "very very
+%   recommended"; the tiktokenizer site for a live demo; more on tokenization failures up front,
+%   math especially; Unigram and SentencePiece extended; funny things - long tokens, glitch tokens
+%   in more detail; closed tokenizers and reverse engineering; plus fixes and own improvements).
+%   New frames: "Before we start: two links" (video title exact per CONVENTIONS); "Strawberry is
+%   not alone" (Karpathy's list, minbpe lecture.md, each row pointed at its slide); GPT-2's numbers
+%   (0-520 all single tokens, 907 of 0-9,999, 64 years; Millidge's 2249/2250/2251); predict + by
+%   hand on commas (Singh & Strouse 2024: GPT-3.5 75.6 -> 97.8%, GPT-4 84.4 -> 98.9%, 7-9 digit
+%   addends, 8-shot); Unigram as probabilities (T5's real log-probs: strawberry -12.93 vs
+%   -12.69 - 11.39), n-best by Viterbi (pomegranates, top two 0.02 apart), the training loop
+%   (SentencePiece defaults read from its TrainerSpec log), Unigram trained on ch11's surnames
+%   (1,423 seeds -> 120; -yan 3rd most probable), a training snippet, subword regularization
+%   (sampled by hand: SentencePiece's sample_encode ignores set_random_generator_seed, so the script
+%   enumerates all 267 splits and samples P^0.1 with seed 509), SentencePiece rewritten, T5 meets
+%   Armenian (no byte fallback: all 12 words <unk>); reverse a word; numbers frame retitled, LLaMA
+%   narrowed to 1-2 (Llama 3's pat_str has \p{N}{1,3}, checked in meta-llama/llama3) and the 9.11
+%   caveat (Transluce 2024, not tokenization); formats (JSON 32 / one-line 22 / YAML 18 on GPT-4);
+%   trailing space (220 then 'Paris' 60704; Playground warning wording from the OpenAI forum,
+%   "roughly"); where the glitch tokens came from (r/counting, Pastebin's buttons, Leilan,
+%   petertodd); fixed in GPT-4? (" davidjl" still one token in cl100k; Willison 8 Jun 2023);
+%   the longest tokens; GPT-4o's 207 lottery tokens (MIT Technology Review, 17 May 2024; our
+%   translations); a new section "Whose tokenizer can you see?" (tiktoken's model map, Gemma 3 =
+%   Gemini 2.0's tokenizer, Anthropic's count_tokens and the ~30% more tokens of Opus 4.7's newer
+%   tokenizer; Rando & Tramer's stream trick; a count-tokens probing project, its claim marked
+%   unverified). The instructor's premise "OpenAI does not publish tokenizers now" was checked and
+%   is mostly false: tiktoken maps every model through GPT-5 to o200k_base (GPT-5 by prefix
+%   fallback); only chat formatting is unpublished. The slide says exactly that.
+%   Fixes: the glitch frame's "768 numbers" was GPT-2's width, not GPT-3's (12,288) - now "the
+%   token's row of numbers was barely trained"; replies attributed to davinci-instruct-beta.
+%   Facts checked 2026-10-27 by one research agent (primary sources unless the slide says
+%   otherwise). Every new number asserted in tokenization_figs.py (QUOTED and per-figure asserts).
 % ============================================================================

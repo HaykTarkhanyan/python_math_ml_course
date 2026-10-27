@@ -17,6 +17,7 @@ Generates into ml/14_llms/fig/:
   att_shapes.pdf        -- the matrix shapes on "Donkey don't die, spring is coming" (9 tokens)
   att_dot_product.pdf   -- q . k for four keys: aligned, 45 degrees, perpendicular, opposite
   att_sqrt_dk.pdf       -- softmax of raw scores (d_k = 64) vs scores divided by sqrt(64) = 8
+  att_softmax_why.pdf   -- scores, divided by their sum (a negative weight), softmax (all positive)
 
 Run (~5 s):
   ./ma/Scripts/python.exe ml/14_llms/py_src/attention_figs.py            # the figures
@@ -66,6 +67,10 @@ QUOTED = {
     "softmax_220": {"e2": 7.39, "denom": 15.78},     # (e^2, e^2, e^0) / (2 e^2 + 1), shown by hand
     "dot": {"aligned": 5.0, "45": 3.6, "perpendicular": 0.0, "opposite": -4.6},
     "sqrt_dk": 8,
+    # why divide by sqrt(d_k): a losing score's weight before and after raising it by 1
+    "saturation": {"big": [0.0003, 0.0009], "small": [0.21, 0.42]},   # scores (8,0,0) / (1,0,0)
+    # why softmax and not "divide by the sum": att_softmax_why.pdf
+    "softmax_why": {"scores": [3, 2, -1], "by_sum": [0.75, 0.5, -0.25], "softmax": [0.72, 0.27, 0.01]},
 }
 # GPT-2 small (checked with --verify against config.json, the safetensors header and tiktoken, 2026-10-05)
 GPT2 = {"d": 768, "heads": 12, "d_k": 64, "layers": 12, "n_ctx": 1024, "c_attn": [768, 2304],
@@ -412,6 +417,52 @@ def fig_sqrt_dk(R, log):
     save(fig, "att_sqrt_dk.pdf", log)
 
 
+def saturation(R, log):
+    """The sqrt(d_k) frame in numbers: raise one losing score by 1 and see how far its weight moves,
+    at a gap of 8 (unscaled, d_k = 64) and at a gap of 1 (scaled)."""
+    got = {}
+    for name, top in (("big", 8.0), ("small", 1.0)):
+        before = softmax_rows(np.array([[top, 0.0, 0.0]]))[0, 1]
+        after = softmax_rows(np.array([[top, 1.0, 0.0]]))[0, 1]
+        got[name] = [before, after]
+    shown = {"big": [round(float(v), 4) for v in got["big"]], "small": r2(got["small"])}
+    if shown != QUOTED["saturation"]:
+        raise AssertionError(f"saturation: computed {shown}, slides quote {QUOTED['saturation']}")
+    R["saturation"] = {k: [float(v) for v in vs] for k, vs in got.items()}
+    log.info(f"saturation: losing weight before/after a +1 nudge {R['saturation']}")
+
+
+def fig_softmax_why(R, log):
+    """Three bar panels: raw scores, divided by their sum (a negative weight), softmax (all > 0)."""
+    Q = QUOTED["softmax_why"]
+    s = np.array(Q["scores"], dtype=float)
+    by_sum = s / s.sum()
+    sm = softmax_rows(s[None])[0]
+    check("divide by the sum", by_sum, Q["by_sum"])
+    check("softmax", sm, Q["softmax"])
+    if not np.isclose(by_sum.sum(), 1) or by_sum.min() >= 0 or sm.min() <= 0:
+        raise AssertionError("the figure's point: both sum to 1, only softmax stays positive")
+    R["softmax_why"] = {"scores": s.tolist(), "by_sum": by_sum.tolist(), "softmax": sm.tolist()}
+    fig, axes = plt.subplots(1, 3, figsize=(2.65, 1.6))
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.83, bottom=0.2, wspace=0.18)
+    panels = ((s, "scores", None), (by_sum, "$\\div$ their sum", "a negative weight"),
+              (sm, "softmax", "all > 0, sum 1"))
+    for ax, (v, title, note) in zip(axes, panels):
+        cols = [ARMRED if x < 0 else ARMBLUE for x in v]
+        bars = ax.bar(["k1", "k2", "k3"], v, color=cols, width=0.7)
+        ax.bar_label(bars, labels=[num(x).replace("-", "\u2212") for x in v], fontsize=FS_TINY, padding=1)
+        ax.set_ylim(-0.5 * v.max(), 1.28 * v.max())     # zero line at the same height in all three
+        ax.axhline(0, color=GREY, lw=0.5)
+        ax.set_title(title, fontsize=FS_SMALL, pad=3)
+        ax.set_yticks([])
+        ax.tick_params(axis="x", labelsize=FS_TINY, length=0)
+        for side in ("top", "right", "left", "bottom"):
+            ax.spines[side].set_visible(False)
+        if note:
+            ax.set_xlabel(note, fontsize=FS_TINY, color=ARMRED if v.min() < 0 else ARMBLUE, labelpad=2)
+    save(fig, "att_softmax_why.pdf", log)
+
+
 # ----------------------------------------------------------------------------- --verify
 def verify_gpt2(log):
     """Check the GPT2 constants against what is already on disk (no download, no model run)."""
@@ -460,9 +511,11 @@ def main():
     R = {"date": time.strftime("%Y-%m-%d"), "quoted": QUOTED, "gpt2": None}
     T = toy(R, log)
     gpt2_arithmetic(R, log)
+    saturation(R, log)
     jobs = [lambda: fig_raw_grid(T, log), lambda: fig_learned_grid(T, log),
             lambda: fig_value_update(T, log), lambda: fig_shapes(log),
-            lambda: fig_dot_product(R, log), lambda: fig_sqrt_dk(R, log)]
+            lambda: fig_dot_product(R, log), lambda: fig_sqrt_dk(R, log),
+            lambda: fig_softmax_why(R, log)]
     for i, job in enumerate(jobs, 1):
         job()
         el = time.time() - t0

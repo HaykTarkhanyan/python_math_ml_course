@@ -9,6 +9,42 @@ this file holds the choice and a pointer.
 
 ---
 
+## #97 - LLM-1 grows from 44 to 71 pages: two links first, failures before mechanics, Unigram and SentencePiece in full, closed tokenizers; LLM-3 keeps column-vector notation
+
+**Date:** 2026-10-27 · **Status:** active (instructor request; the LLM-3 notation call is mine).
+
+**Decision.** LLM-1 opens with Karpathy's "Let's build the GPT Tokenizer" ("very, very
+recommended") and tiktokenizer.vercel.app for a live demo, then Karpathy's list of failures and
+three arithmetic frames (GPT-2's number splits, the comma prediction with Singh & Strouse's 84.4% ->
+98.9% for GPT-4, why commas help by hand) before the Outline. Unigram and SentencePiece go from 2
+frames to 9 (probabilities by hand on T5's real log-probs, Viterbi n-best, the pruning loop, a
+Unigram trained on ch11's surnames, a training snippet, subword regularization, the library, T5's
+missing byte fallback). Section 5 gains reverse-a-word, JSON vs YAML, the trailing space, glitch
+origins, "fixed in GPT-4? mostly", the longest tokens and GPT-4o's lottery tokens; a new section 6
+covers whose tokenizer you can see and reverse engineering. LLM-3 keeps `q = W_Q e` and states the
+shapes: W_Q is 64 x 768 on the slides, stored transposed (768 x 64) in GPT-2's file and in code.
+
+**Why.** The instructor asked for the links, failures up front ("math stuff"), a longer Unigram /
+SentencePiece part, funny tokens and closed tokenizers. The premise "OpenAI and Anthropic don't
+publish tokenizers now" was checked and is half true: tiktoken maps every OpenAI model through
+GPT-5 to `o200k_base` (GPT-5 by prefix fallback), only chat formatting is unpublished; Anthropic
+publishes nothing since Claude 3; Gemini's tokenizer ships as Gemma 3's. The slide says that. For
+LLM-3, the query and value frames show 3Blue1Brown stills that draw W_Q times E (column vectors);
+row-vector formulas would contradict the pictures.
+
+**Alternatives rejected.** Row-vector notation in LLM-3 (my first proposal: matches code, but not
+the stills); keeping failures only in section 5 (the instructor wanted them at the start, so the
+opening previews and section 5 explains); SentencePiece's own `sample_encode` for the
+subword-regularization figure (it ignores its seed; `_learnings/2026-10-27-1412_...`), replaced by
+enumerating all 267 splits and sampling P^0.1 with seed 509.
+
+**What would change this.** If the 10-27 student review finds the front-loaded failure tour
+front-runs explanations students cannot follow yet, move the arithmetic by-hand frame into section
+5. If the 3Blue1Brown stills in LLM-3 are ever replaced with our own figures, switch to the row form
+the code uses.
+
+---
+
 ## #96 - The RNN practical is removed; the chapter gets one detailed seq2seq homework project instead
 
 **Date:** 2026-10-24 · **Status:** active, revisited 2026-10-24 (budget moved to a Colab T4 after
@@ -86,6 +122,42 @@ to it)" after the Karpathy diagram credit. `rnn.qmd` describes the new [54]. `su
 **What would change this.** If the LLM chapter wants the small, fully measured surname GRU as a
 warm-up for next-token prediction, the frames come back from
 `git show a001201:ml/13_rnns/L21_road_to_attention.tex`, into the LLM deck rather than [54].
+
+---
+
+## #93 - LLM-1 to LLM-3 answer a second student review; two 3Blue1Brown stills in LLM-3 are replaced
+
+**Date:** 2026-10-20 · **Status:** active (instructor picked every offered fix from a verified list).
+Partly revisits the July 2026 choice of "a lot more frames, full size" 3Blue1Brown stills in the
+attention deck (recorded in LLM3's provenance), and the 2026-10-05 review that kept them.
+
+**Decision.** Second Sonnet student review of each deck (rendered pages only; all three had one in
+early October). LLM-1: the strawberry payoff explains why the letters never reach the model and why
+spelling out splits the job; spelling leaks in only through other cuts of the word (`st+raw+berry`,
+` STR+AW+B+ERRY`, measured; Kaushal & Mahowald, NAACL 2022), not "only from spelled-out text" as my
+first draft said; Unigram shows its probabilities (27 uses, P(low) = 7/27, "low" costs 6.75).
+LLM-2: the sinusoid contradiction is resolved (the identity holds for bare waves, the score mixes
+token and wave after two learned matrices); RoPE gets its matrix line q^T R_(n-m) k and the sum over
+64 pairs; new frame "By hand: four numbers, two speeds" (90 and 30 degrees per slot: the fast pair
+alone confuses gap 4 with gap 0). LLM-3: how a translation score is computed and that wall 1 is
+cross-attention; softmax saturation in numbers (a +1 nudge moves a losing weight 0.0006 at (8,0,0),
+0.21 at (1,0,0)); the key still is now `fs_key.jpg` (the old grab was mid-animation, labels
+overlapping) and "why softmax" uses our own `att_softmax_why.pdf` (scores, divided by their sum,
+softmax) instead of an unreadable 3D grid; the captioning image is cropped above its cut-off caption.
+
+**Why.** Every finding was checked against the `.tex` first; one was false (LLM-2's "LM head" is not
+on the slide) and was dropped. Both LLM-3 reviewers (10-05 and today) found the same stills hard to
+read; I checked the two replaced ones on the 150-dpi renders. Every new number is asserted in the
+deck's figure script (`tokenization_figs.py`, `embeddings_position_figs.py`, `attention_figs.py`).
+
+**Alternatives rejected.** Cuts that repeat earlier rejections (life-of-a-model maps, WordPiece and
+Unigram, the neighbour / glitch / analogy / tying / ALiBi / table frames in LLM-2, the mystery still
+and masking aside in LLM-3); a two-number W_Q toy and a numeric X @ W_Q toy (the instructor chose the
+one-number toy on 10-05); replacing all 3Blue1Brown stills (only the two broken ones were offered).
+
+**What would change this.** If students still cannot compute Q, K, V from X after LLM-3, the
+rejected numeric X @ W_Q toy is the next step; a third review flagging the remaining stills would
+argue for redrawing them.
 
 ---
 

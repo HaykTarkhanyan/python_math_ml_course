@@ -9,19 +9,28 @@ loudly instead of silently contradicting the deck. The toy BPE run (frames 16-19
 here too and printed to the log.
 
 Drawn at the size each figure gets on the slide (5.5 in = full text width), 7-8 pt text.
-Chapter constants reused verbatim: L20's review sentence; the Armenian line from
-ml/13_rnns/py_src/data/armenian_line.txt (one shared file); L21's locked English gloss.
+Chapter constants reused verbatim: [53]'s review sentence; the Armenian line from
+ml/13_rnns/py_src/data/armenian_line.txt (one shared file); [54]'s locked English gloss.
 
 Generates into ml/14_llms/fig/: tok_*.pdf (one per figure function below).
 Writes ml/14_llms/results/tokenization_figs.json (every measured split - the artifact of record).
 
-Run: ./ma/Scripts/python.exe ml/14_llms/py_src/tokenization_figs.py   (~1 min; the first run also
-downloads the BERT and T5 tokenizer files, a few MB)
+Added 2026-10-27 (the deck's extension): number splits and the comma trick, reversing a word,
+JSON vs YAML, the trailing space, glitch tokens across vocabularies, the longest tokens, GPT-4o's
+lottery tokens, and SentencePiece Unigram on T5 (n-best splits, sampled splits, no byte fallback)
+and on ch11's surnames (a model trained here, in a subprocess so its pruning log can be read).
+
+Run: ./ma/Scripts/python.exe ml/14_llms/py_src/tokenization_figs.py   (~1.5 min; the first run also
+downloads the BERT, T5 and Qwen tokenizer files, a few MB)
 Supersedes ml/13_rnns/py_src/tokenizer_demo.py for this deck (its panels were drawn 13 in wide).
 """
 import json
 import logging
+import math
+import re
+import subprocess
 import sys
+import tempfile
 import time
 import warnings
 from collections import Counter
@@ -31,8 +40,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
+import numpy as np
 import regex
+import sentencepiece as spm
 import tiktoken
+import yaml
+from huggingface_hub import hf_hub_download
 from tokenizers import Tokenizer
 
 # A missing glyph must crash the script, never render as an empty box.
@@ -47,8 +60,8 @@ LOGS = ROOT / "logs"
 ARM_LINE_FILE = ROOT / "ml" / "13_rnns" / "py_src" / "data" / "armenian_line.txt"
 SURNAMES_FILE = ROOT / "ml" / "11_neural_networks" / "data" / "surnames_hy.txt"   # ch11's 689
 
-REVIEW = "The pomegranates arrived fresh and sweet."          # L20's sentence
-GLOSS = "I watch all of this in silence, and the connoisseurs speak inside me."   # L21, locked
+REVIEW = "The pomegranates arrived fresh and sweet."          # [53]'s sentence
+GLOSS = "I watch all of this in silence, and the connoisseurs speak inside me."   # [54], locked
 QUESTION = "How many r's in strawberry?"
 SUM = "127 + 677 = 804"
 CODE = "def f(x):\n        if x:\n            return 1"
@@ -58,12 +71,21 @@ ALICE = ("Alice was beginning to get very tired of sitting by her sister on the 
          "book,' thought Alice 'without pictures or conversations?'")   # Carroll 1865
 REGEX_SENTENCE = "I'll pay 1234567 for 3 dogs!!!"
 TOY_CORPUS = {"low": 5, "lower": 2, "newest": 6, "widest": 3}   # Sennrich et al. 2016's example
+FORMAT_DATA = {"name": "Ani", "age": 21, "courses": ["math", "ml"]}
+PROMPT = "The capital of France is"
+LOTTERY = [" 天天中彩票", " 微信公众号天天中彩票", " 全民彩票天天送钱", " 大发快三开奖结果"]
+LOTTERY_EN = ["win the lottery every day", "WeChat account: win the lottery every day",
+              "lottery for everyone, free money every day", "Dafa Fast-3 (a lottery game): draw results"]
+THAI_BET = " วิเคราะห์บอลวันนี้"          # Thai: "today's football analysis" (betting tips)
 
 # Numbers the deck states in prose. If a tokenizer update changes one, fix the slide too.
 QUOTED = {"question_tokens": 7, "code_gpt2": 30, "code_gpt4": 12, "arm_gpt4": 102,
           "gloss_gpt4": 18, "arm_gpt4o": 19, "gloss_gpt4o": 17, "arm_bytes": 102,
           "arm_letters": 57, "vocab_gpt2": 50257, "vocab_gpt4": 100277, "vocab_gpt4o": 200019,
           "endoftext_as_text_gpt4": 7, "surnames": 689,
+          # "Back to strawberry": other spellings of the word that GPT-4o cuts into several tokens
+          "strawberry_variants": {"strawberry": ["st", "raw", "berry"],
+                                  " STRAWBERRY": [" STR", "AW", "B", "ERRY"]},
           # GPT-2 IDs: bytes 0-255, then merges in the order learned (the "Where IDs come from" frame)
           "gpt2_ids": {256: b" t", 257: b" a", 258: b"he", 50255: b" gazed", 50256: b"<|endoftext|>"},
           # WordPiece score on the toy corpus, first step (the "WordPiece by hand" table)
@@ -71,12 +93,45 @@ QUOTED = {"question_tokens": 7, "code_gpt2": 30, "code_gpt4": 12, "arm_gpt4": 10
                         ("o", "w"): (7, 7, 16), ("e", "s"): (9, 17, 9), ("w", "e"): (8, 16, 17)},
           # one simplified Unigram step: loss increase when each piece is removed (2 decimals)
           "unigram": {"es": 0.00, "lo": 0.00, "er": 7.28, "low": 17.29, "wid": 19.81,
-                      "est": 20.24, "new": 32.39}, "unigram_loss": 40.16}
+                      "est": 20.24, "new": 32.39}, "unigram_loss": 40.16,
+          # the by-hand line under it: uses in the best splits, and what the 5 copies of "low" cost
+          "unigram_uses": {"est": 9, "low": 7, "new": 6, "wid": 3, "er": 2}, "unigram_low_cost": 6.75,
+          # ---- added 2026-10-27
+          # "Numbers look random to GPT-2": how many of 0..9999 are one token (no leading space)
+          "numbers_single": {"gpt2": 907, "gpt2_4digit": 88, "gpt4": 1000, "gpt4_4digit": 0},
+          "gpt2_4digit_years_1900_2099": 64,
+          "years_gpt2": {" 2022": [" 2022"], " 2023": [" 20", "23"], " 2024": [" 2024"],
+                         " 2025": [" 2025"], " 2026": [" 20", "26"], " 2048": [" 2048"]},
+          # neighbours cut three ways (Millidge 2023's example); every integer 0-520 is one token
+          "same_length_gpt2": {"2249": ["2", "249"], "2250": ["22", "50"], "2251": ["225", "1"]},
+          "gpt2_all_single_up_to": 520,   # 521 is the first that splits
+          "sums_gpt4": {"12345 + 678 = 13023": ["123", "45", " +", " ", "678", " =", " ", "130", "23"],
+                        "12,345 + 678 = 13,023": ["12", ",", "345", " +", " ", "678", " =", " ", "13", ",",
+                                                  "023"]},
+          # [pretty JSON, compact JSON, YAML] tokens for FORMAT_DATA
+          "formats": {"gpt2": [43, 23, 19], "gpt4": [32, 22, 18], "gpt4o": [31, 22, 17]},
+          "reverse_gpt4o": {" tokenization": [" token", "ization"],
+                            " noitazinekot": [" no", "it", "azine", "kot"],
+                            " strawberry": [" strawberry"], " yrrebwarts": [" yr", "reb", "warts"]},
+          "trailing_gpt4": {" Paris": 12366, "Paris": 60704, " ": 220},
+          # [GPT-2, GPT-4, GPT-4o] token counts
+          "glitch_counts": {" SolidGoldMagikarp": [1, 5, 5], " TheNitromeFan": [1, 4, 4],
+                            "rawdownloadcloneembedreportprint": [1, 6, 6], " petertodd": [1, 3, 3],
+                            " davidjl": [1, 1, 2]},
+          "longest": {"gpt2": "rawdownloadcloneembedreportprint",
+                      "gpt4": ".translatesAutoresizingMaskIntoConstraints",
+                      "gpt4o": "abcdefghijklmnopqrstuvwxyz"},
+          "lottery_tokens": {"gpt2": 0, "gpt4": 0, "gpt4o": 207},
+          # T5's SentencePiece Unigram: total log-probabilities, natural log, 2 decimals
+          "t5_strawberry": {"whole": -12.93, "straw": -12.69, "berry": -11.39},
+          "t5_pomegranates_top2": [-41.62, -41.64], "t5_arm": {"tokens": 25, "unk": 12}}
 
 W = 5.5
 FS, FS_ID, FS_LAB = 8, 7, 7.5
 SANS = ["DejaVu Sans"]
 MONO = ["DejaVu Sans Mono"]
+WIDE = ["DejaVu Sans Mono", "Microsoft YaHei", "Leelawadee UI"]   # CJK and Thai tokens (fallback list)
+NAMES = [l.strip() for l in SURNAMES_FILE.read_text(encoding="utf-8").splitlines() if l.strip()]
 ARMRED, ARMBLUE, ARMORANGE = "#D90012", "#0033A0", "#F2A800"
 TINTS = ["#F9D2D5", "#CFD8EE", "#FCE9B8"]
 INK, GREY = "#222222", "#777777"
@@ -195,17 +250,17 @@ def rbox(ax, x, y, w, h, fc, ec, lw=0.5, r=0.03, z=2):
 
 
 def chips(fig, ax, x, y, pieces, ids=None, fs=FS, h=0.22, pad=0.06, gap=0.025, hi=(),
-          fills=None, xmax=W - 0.02, visible=True):
+          fills=None, xmax=W - 0.02, visible=True, family=MONO):
     """Draw tokens as chips left to right; returns the x after the last chip. Raises on overflow."""
     for k, p in enumerate(pieces):
         s = show(p) if visible else p
-        w = text_w(fig, s, fs, MONO) + pad
+        w = text_w(fig, s, fs, family) + pad
         if x + w > xmax:
             raise ValueError(f"chip row overflows at {p!r} (x={x + w:.2f} > {xmax:.2f})")
         fc = fills[k] if fills else TINTS[k % 3]
         ec, lw = (ARMRED, 1.3) if k in hi else ("#999999", 0.5)
         rbox(ax, x, y - h / 2, w, h, fc, ec, lw)
-        ax.text(x + w / 2, y, s, ha="center", va="center", fontsize=fs, family=MONO, color=INK,
+        ax.text(x + w / 2, y, s, ha="center", va="center", fontsize=fs, family=family, color=INK,
                 zorder=3)
         if ids is not None:
             ax.text(x + w / 2, y - h / 2 - 0.10, str(ids[k]), ha="center", va="center",
@@ -223,7 +278,7 @@ def save(fig, name, log):
     out = FIG / name
     for attempt in range(1, 6):        # transient Windows lock, see _learnings errno22 file
         try:
-            fig.savefig(out)
+            fig.savefig(out, metadata={"CreationDate": None})   # same figure -> same bytes
             break
         except OSError as e:
             if e.errno != 22 or attempt == 5:
@@ -412,8 +467,10 @@ def fig_unigram(R, log):
 def fig_spelled(T, R, log):
     one = as_text(T["gpt4o"].split(" strawberry")[0])
     spelled = as_text(T["gpt4o"].split(" s t r a w b e r r y")[0])
-    R["spelled"] = {"word": one, "spelled": spelled}
+    variants = {s: as_text(T["gpt4o"].split(s)[0]) for s in QUOTED["strawberry_variants"]}
+    R["spelled"] = {"word": one, "spelled": spelled, "variants": variants}
     assert len(one) == 1 and len(spelled) == 10, (one, spelled)
+    assert variants == QUOTED["strawberry_variants"], variants
     fig, ax = canvas(0.85)
     row_label(ax, 0.02, 0.62, "as written", bold=True)
     chips(fig, ax, 1.25, 0.62, one)
@@ -653,7 +710,362 @@ def unigram_toy(R, log):
                         "pieces_used": dict(used), "loss_increase_if_removed": deltas}
     assert round(loss, 2) == QUOTED["unigram_loss"], loss
     assert deltas == QUOTED["unigram"], deltas
+    assert dict(used) == QUOTED["unigram_uses"], dict(used)     # 27 uses in all
+    low_cost = TOY_CORPUS["low"] * math.log(sum(used.values()) / used["low"])
+    assert splits["low"] == ["low"] and round(low_cost, 2) == QUOTED["unigram_low_cost"], low_cost
     log.info(f"Unigram: loss {loss:.2f}, splits {splits}, deltas {deltas}")
+
+
+# ----------------------------------------------------------------------------- added 2026-10-27
+def group_row(fig, ax, x, y, groups, gap=0.20, notes=False, **kw):
+    """Several chip groups on one row, a gap between groups; optional '1 token' notes under each."""
+    for pieces in groups:
+        x0 = x
+        x = chips(fig, ax, x, y, pieces, **kw)
+        if notes:
+            n = len(pieces)
+            ax.text((x0 + x) / 2, y - 0.21, f"{n} token{'s' if n > 1 else ''}", ha="center",
+                    va="center", fontsize=FS_ID, family=SANS, color=ARMRED if n > 1 else GREY)
+        x += gap
+    return x
+
+
+def single_token_numbers(enc):
+    one = [n for n in range(10000) if len(enc.encode(str(n))) == 1]
+    return len(one), sum(1 for n in one if n >= 1000)
+
+
+def fig_years(T, R, log):
+    """'Numbers look random to GPT-2': years and same-length numbers as GPT-2 cuts them."""
+    counts = {k: single_token_numbers(T[k].enc) for k in ("gpt2", "gpt4")}
+    q = QUOTED["numbers_single"]
+    assert counts == {"gpt2": (q["gpt2"], q["gpt2_4digit"]), "gpt4": (q["gpt4"], q["gpt4_4digit"])}, counts
+    years = {s: as_text(T["gpt2"].split(s)[0]) for s in QUOTED["years_gpt2"]}
+    same = {s: as_text(T["gpt2"].split(s)[0]) for s in QUOTED["same_length_gpt2"]}
+    assert years == QUOTED["years_gpt2"] and same == QUOTED["same_length_gpt2"], (years, same)
+    enc, top = T["gpt2"].enc, QUOTED["gpt2_all_single_up_to"]
+    years4 = sum(1 for n in range(1900, 2100) if len(enc.encode(str(n))) == 1)
+    assert years4 == QUOTED["gpt2_4digit_years_1900_2099"], years4
+    assert all(len(enc.encode(str(n))) == 1 for n in range(top + 1)) and len(enc.encode(str(top + 1))) == 2
+    R["numbers_gpt2"] = {"single_token_0_9999": counts, "years": years, "same_length": same,
+                         "all_single_up_to": top}
+    fig, ax = canvas(1.25)
+    row_label(ax, 0.02, 0.98, "years", bold=True)
+    group_row(fig, ax, 0.95, 0.98, list(years.values()), notes=True, gap=0.16)
+    row_label(ax, 0.02, 0.38, "neighbours", bold=True)
+    group_row(fig, ax, 0.95, 0.38, list(same.values()), notes=True, gap=0.45)
+    save(fig, "tok_years.pdf", log)
+
+
+def fig_commas(T, R, log):
+    """The same sum without and with thousands separators, as GPT-4's tokenizer cuts it."""
+    rows = {s: as_text(T["gpt4"].split(s)[0]) for s in QUOTED["sums_gpt4"]}
+    assert rows == QUOTED["sums_gpt4"], rows
+    R["sums_gpt4"] = rows
+    lengths = {n: as_text(T["gpt4"].split(n)[0]) for n in ("12345", "1234")}
+    assert lengths == {"12345": ["123", "45"], "1234": ["123", "4"]}, lengths   # the by-hand frame
+    fig, ax = canvas(0.95)
+    for k, (label, p) in enumerate(zip(["no commas", "with commas"], rows.values())):
+        y = 0.70 - k * 0.45
+        row_label(ax, 0.02, y, label, bold=True)
+        chips(fig, ax, 1.25, y, p, gap=0.03)
+    save(fig, "tok_commas.pdf", log)
+
+
+def fig_reverse(T, R, log):
+    out = {s: as_text(T["gpt4o"].split(s)[0]) for s in QUOTED["reverse_gpt4o"]}
+    assert out == QUOTED["reverse_gpt4o"], out
+    R["reverse_gpt4o"] = out
+    fig, ax = canvas(0.85)
+    items = list(out.items())
+    for col in range(2):
+        x0 = 0.05 + col * 2.75
+        for k, lab in enumerate(["word", "reversed"]):
+            y = 0.62 - k * 0.40
+            row_label(ax, x0, y, lab, color=GREY)
+            chips(fig, ax, x0 + 0.70, y, items[2 * col + k][1], xmax=x0 + 2.70)
+    save(fig, "tok_reverse.pdf", log)
+
+
+def fig_formats(T, R, log):
+    """The same record as pretty JSON, compact JSON and YAML: GPT-4's token counts."""
+    texts = [json.dumps(FORMAT_DATA, indent=2), json.dumps(FORMAT_DATA),
+             yaml.safe_dump(FORMAT_DATA, sort_keys=False)]
+    counts = {k: [len(T[k].split(t)[1]) for t in texts] for k in ("gpt2", "gpt4", "gpt4o")}
+    assert counts == QUOTED["formats"], counts
+    R["formats"] = {"texts": texts, "tokens": counts}
+    fig = plt.figure(figsize=(W, 1.75))
+    for x, title, t in ((0.01, "JSON, indented", texts[0]), (0.29, "YAML", texts[2])):
+        fig.text(x, 0.93, title, fontsize=FS, family=SANS, fontweight="bold", va="center")
+        fig.text(x, 0.84, t.rstrip("\n"), fontsize=6.5, family=MONO, va="top", color=INK,
+                 linespacing=1.15)
+    ax = fig.add_axes([0.62, 0.18, 0.36, 0.62])
+    names = ["JSON\nindented", "JSON\none line", "YAML"]
+    bars = ax.bar(names, counts["gpt4"], color=[ARMRED, ARMORANGE, ARMBLUE], width=0.6)
+    ax.bar_label(bars, fontsize=FS_ID, padding=2)
+    ax.set_title("tokens (GPT-4's tokenizer)", fontsize=FS, pad=6)
+    ax.set_ylim(0, max(counts["gpt4"]) * 1.25)
+    ax.set_yticks([])
+    ax.tick_params(labelsize=FS_ID, length=2)
+    for s in ("top", "right", "left"):
+        ax.spines[s].set_visible(False)
+    save(fig, "tok_formats.pdf", log)
+
+
+def fig_trailing(T, R, log):
+    """A prompt with and without a trailing space: the space becomes its own token."""
+    ids = {s: T["gpt4"].enc.encode(s) for s in QUOTED["trailing_gpt4"]}
+    assert {s: v for s, v in ids.items()} == {s: [i] for s, i in QUOTED["trailing_gpt4"].items()}, ids
+    rows = [(PROMPT, " Paris"), (PROMPT + " ", "Paris")]
+    R["trailing_gpt4"] = {}
+    fig, ax = canvas(1.10)
+    for k, (prompt, nxt) in enumerate(rows):
+        p, i = T["gpt4"].split(prompt)
+        p = as_text(p)
+        R["trailing_gpt4"][prompt] = {"pieces": p, "ids": i, "next": nxt, "next_id": ids[nxt][0]}
+        y = 0.82 - k * 0.52
+        x = chips(fig, ax, 0.05, y, p, ids=i, hi={len(p) - 1} if k == 1 else set())
+        row_label(ax, x + 0.08, y, "then", color=GREY)
+        chips(fig, ax, x + 0.45, y, [nxt], ids=ids[nxt], fills=["#FFFFFF"])
+    assert R["trailing_gpt4"][PROMPT + " "]["pieces"][-1] == " ", R["trailing_gpt4"]
+    save(fig, "tok_trailing.pdf", log)
+
+
+def fig_glitch_split(T, R, log):
+    """GPT-2's single-token glitch names, cut by GPT-4's tokenizer."""
+    counts, splits = {}, {}
+    for s in QUOTED["glitch_counts"]:
+        counts[s] = [len(T[k].split(s)[1]) for k in ("gpt2", "gpt4", "gpt4o")]
+        splits[s] = as_text(T["gpt4"].split(s)[0])
+    assert counts == QUOTED["glitch_counts"], counts
+    R["glitch_split"] = {"counts": counts, "gpt4_pieces": splits}
+    show_rows = [" SolidGoldMagikarp", " TheNitromeFan", "rawdownloadcloneembedreportprint", " davidjl"]
+    fig, ax = canvas(0.30 * len(show_rows) + 0.25)
+    row_label(ax, 0.05, 0.30 * len(show_rows) + 0.10, "GPT-2: one token each", color=GREY)
+    row_label(ax, 2.55, 0.30 * len(show_rows) + 0.10, "GPT-4's tokenizer", color=GREY)
+    for k, s in enumerate(show_rows):
+        y = 0.30 * (len(show_rows) - k) - 0.10
+        chips(fig, ax, 0.05, y, [s], fs=7, xmax=2.45)
+        p = splits[s]
+        chips(fig, ax, 2.55, y, p, fs=7, hi={0} if len(p) == 1 else set())
+    save(fig, "tok_glitch_split.pdf", log)
+
+
+def longest_tokens(enc, n):
+    """The n longest tokens (in characters) that contain at least one letter. Ties: lower ID first."""
+    out = []
+    for i in range(enc.n_vocab):
+        try:
+            s = enc.decode_single_token_bytes(i).decode("utf-8")
+        except (KeyError, UnicodeDecodeError):
+            continue
+        if regex.search(r"\p{L}", s):
+            out.append((-len(s), i, s))
+    return [(s, -m) for m, i, s in sorted(out)[:n]]
+
+
+def fig_longest(T, R, log):
+    top = {k: longest_tokens(T[k].enc, 30) for k in ("gpt2", "gpt4", "gpt4o")}
+    R["longest_tokens"] = {k: v[:12] for k, v in top.items()}
+    mojibake = "ÃÂ" * 32
+    assert top["gpt2"][0] == (mojibake, 64), top["gpt2"][:2]
+    ascii_word = lambda s: re.fullmatch(r" ?[A-Za-z]+", s)
+    for k, want in QUOTED["longest"].items():
+        first_word = next(s for s, _ in top[k] if ascii_word(s.lstrip(".")))
+        assert first_word == want, (k, first_word)
+    assert top["gpt4"][0][0] == QUOTED["longest"]["gpt4"], top["gpt4"][:2]
+    alpha = {k: len(T[k].split("abcdefghijklmnopqrstuvwxyz")[1]) for k in T}
+    assert alpha["gpt4"] == alpha["gpt4o"] == 1 < alpha["gpt2"], alpha
+    R["alphabet_tokens"] = alpha
+    rows = [("GPT-2", mojibake, "mojibake"),
+            ("", "rawdownloadcloneembedreportprint", "web-page buttons"),
+            ("GPT-4", ".translatesAutoresizingMaskIntoConstraints", "Apple iOS code"),
+            ("GPT-4o", "abcdefghijklmnopqrstuvwxyz", "the alphabet"),
+            ("", " verantwoordelijkheid", "Dutch: responsibility"),
+            ("", THAI_BET, "Thai: football betting tips")]
+    in_top = {k: [s for s, _ in v] for k, v in top.items()}
+    keys = {"GPT-2": "gpt2", "GPT-4": "gpt4", "GPT-4o": "gpt4o"}
+    fig, ax = canvas(0.27 * len(rows) + 0.05)
+    cur = None
+    for k, (name, tok, what) in enumerate(rows):
+        cur = keys.get(name, cur)
+        assert tok in in_top[cur], (cur, tok)
+        y = 0.27 * (len(rows) - k) - 0.10
+        if name:
+            row_label(ax, 0.02, y, name, bold=True)
+        x = chips(fig, ax, 0.62, y, [tok], fs=6.5, family=WIDE, visible=False, h=0.19)
+        row_label(ax, x + 0.06, y, f"{len(tok)} characters: {what}", color=GREY, size=FS_ID)
+    save(fig, "tok_longest.pdf", log)
+
+
+def fig_lottery(T, R, log):
+    """GPT-4o's lottery-spam tokens: how many there are, and four of them, translated."""
+    counts = {}
+    for k in ("gpt2", "gpt4", "gpt4o"):
+        enc, c = T[k].enc, 0
+        for i in range(enc.n_vocab):
+            try:
+                c += "彩票" in enc.decode_single_token_bytes(i).decode("utf-8", "ignore")
+            except KeyError:
+                continue
+        counts[k] = c
+    assert counts == QUOTED["lottery_tokens"], counts
+    for s in LOTTERY + [THAI_BET]:
+        assert len(T["gpt4o"].split(s)[1]) == 1, s
+    R["lottery"] = {"tokens_containing_lottery": counts, "examples": dict(zip(LOTTERY, LOTTERY_EN))}
+    fig, ax = canvas(0.27 * len(LOTTERY) + 0.05)
+    for k, (tok, en) in enumerate(zip(LOTTERY, LOTTERY_EN)):
+        y = 0.27 * (len(LOTTERY) - k) - 0.10
+        x = chips(fig, ax, 0.05, y, [tok], fs=7.5, family=WIDE, visible=False, h=0.20, xmax=2.45)
+        row_label(ax, 2.55, y, en, size=FS_ID)
+    save(fig, "tok_lottery.pdf", log)
+
+
+def t5_model():
+    return spm.SentencePieceProcessor(model_file=hf_hub_download("google-t5/t5-small", "spiece.model"))
+
+
+def logp(sp, pieces):
+    return sum(sp.get_score(sp.piece_to_id(p)) for p in pieces)
+
+
+def fig_unigram_nbest(sp, R, log):
+    """T5's Unigram: the five most probable splits of one word, and their scores."""
+    word = "pomegranates"
+    best = [(p, logp(sp, p)) for p in sp.nbest_encode_as_pieces(word, 5)]
+    st = {"whole": logp(sp, ["▁strawberry"]), "straw": logp(sp, ["▁straw"]), "berry": logp(sp, ["berry"])}
+    R["t5_unigram"] = {"pomegranates_nbest": best, "strawberry": st,
+                       "strawberry_best": sp.encode_as_pieces("strawberry")}
+    assert [round(s, 2) for _, s in best[:2]] == QUOTED["t5_pomegranates_top2"], best
+    assert {k: round(v, 2) for k, v in st.items()} == QUOTED["t5_strawberry"], st
+    assert sp.encode_as_pieces("strawberry") == ["▁strawberry"]
+    fig, ax = canvas(0.25 * len(best) + 0.25)
+    row_label(ax, 0.05, 0.25 * len(best) + 0.10, f'the 5 most probable splits of "{word}" (T5)',
+              color=GREY)
+    row_label(ax, 4.40, 0.25 * len(best) + 0.10, "log-probability", color=GREY)
+    for k, (p, s) in enumerate(best):
+        y = 0.25 * (len(best) - k) - 0.08
+        chips(fig, ax, 0.05, y, p, visible=False, h=0.20, hi=set(range(len(p))) if k == 0 else set(),
+              xmax=4.30)
+        row_label(ax, 5.40, y, f"{s:.2f}", ha="right", bold=k == 0, color=ARMRED if k == 0 else INK)
+    save(fig, "tok_unigram_nbest.pdf", log)
+
+
+def all_splits(sp, s):
+    """Every way to cut s into pieces of sp's vocabulary (unknown pieces not allowed)."""
+    if not s:
+        return [[]]
+    return [[s[:e]] + rest for e in range(1, len(s) + 1) if sp.piece_to_id(s[:e]) != sp.unk_id()
+            for rest in all_splits(sp, s[e:])]
+
+
+def fig_unigram_samples(sp, R, log):
+    """Subword regularization: sampled splits of one word, alpha = 0.1. SentencePiece's own
+    sample_encode ignores set_random_generator_seed (checked 2026-10-27: a new split every run),
+    so we sample the same distribution ourselves: every split, weighted by P(split)^alpha, seed 509."""
+    word, alpha = "tokenization", 0.1
+    splits = all_splits(sp, "▁" + word)
+    w = np.exp(alpha * np.array([logp(sp, p) for p in splits]))
+    picks = np.random.default_rng(509).choice(len(splits), size=5, p=w / w.sum())
+    samples = [splits[i] for i in picks]
+    best = sp.encode_as_pieces(word)
+    R["t5_samples"] = {"word": word, "alpha": alpha, "seed": 509, "n_splits": len(splits),
+                       "best": best, "samples": samples}
+    assert best == ["▁token", "ization"] and best == max(splits, key=lambda p: logp(sp, p)), best
+    assert len({tuple(s) for s in samples}) >= 4, samples       # the point: the splits differ
+    rows = [("best split", best)] + [(f"sample {k + 1}", s) for k, s in enumerate(samples)]
+    fig, ax = canvas(0.24 * len(rows) + 0.05)
+    for k, (lab, p) in enumerate(rows):
+        y = 0.24 * (len(rows) - k) - 0.10
+        row_label(ax, 0.05, y, lab, bold=k == 0, color=INK if k == 0 else GREY)
+        chips(fig, ax, 1.05, y, p, visible=False, h=0.19, fs=7.5)
+    save(fig, "tok_unigram_samples.pdf", log)
+    log.info(f"T5 samples of {word}: {samples}")
+
+
+def fig_t5_armenian(sp, T, R, log):
+    """T5's SentencePiece has no byte fallback: Armenian letters become <unk>."""
+    line = ARM_LINE_FILE.read_text(encoding="utf-8").strip()
+    ids, pieces = sp.encode(line), sp.encode_as_pieces(line)
+    unk = [k for k, i in enumerate(ids) if i == sp.unk_id()]
+    back = sp.decode(ids)
+    R["t5_armenian"] = {"pieces": pieces, "unk_positions": unk, "decoded": back,
+                        "gpt4o_roundtrip": T["gpt4o"].enc.decode(T["gpt4o"].enc.encode(line)) == line}
+    assert (len(ids), len(unk)) == (QUOTED["t5_arm"]["tokens"], QUOTED["t5_arm"]["unk"]), (len(ids), len(unk))
+    assert R["t5_armenian"]["gpt4o_roundtrip"]
+    kept = {pieces[k] for k in range(len(pieces)) if k not in unk}
+    assert kept == {"▁", ","}, kept          # the slide: only the spaces and the comma survive
+    half = next(k for k in range(len(pieces) // 2, len(pieces)) if pieces[k] == "▁")
+    fig, ax = canvas(1.30)
+    row_label(ax, 0.02, 1.13, "T5 reads", bold=True)
+    for r, (a, b) in enumerate(((0, half), (half, len(pieces)))):
+        chips(fig, ax, 1.00, 1.13 - r * 0.30, pieces[a:b], visible=False, fs=7, h=0.20,
+              hi={k - a for k in unk if a <= k < b}, gap=0.02)
+    row_label(ax, 0.02, 0.32, "T5 writes back", bold=True)
+    ax.text(1.00, 0.32, back.strip(), ha="left", va="center", fontsize=FS, family=MONO, color=ARMRED)
+    save(fig, "tok_t5_armenian.pdf", log)
+
+
+TRAIN_SURNAMES = r"""
+import io, sys, sentencepiece as spm
+names = [l.strip() for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+buf = io.BytesIO()
+spm.SentencePieceTrainer.train(sentence_iterator=iter(names), model_writer=buf, model_type="unigram",
+                               vocab_size=int(sys.argv[3]), character_coverage=1.0, num_threads=1)
+open(sys.argv[2], "wb").write(buf.getvalue())
+"""
+
+
+def surname_unigram(R, log, vocab=120):
+    """Train SentencePiece Unigram on ch11's 689 surnames in a subprocess, so the C++ trainer's
+    log (seed size, then the vocabulary size after every EM pass) can be read from its stderr."""
+    with tempfile.TemporaryDirectory() as d:
+        model = Path(d) / "surnames.model"
+        run = subprocess.run([sys.executable, "-c", TRAIN_SURNAMES, str(SURNAMES_FILE), str(model), str(vocab)],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if run.returncode != 0:
+            log.error(run.stderr[-2000:])
+            raise RuntimeError("SentencePiece training failed")
+        sp = spm.SentencePieceProcessor(model_file=str(model))
+    seed = [int(m) for m in re.findall(r"Initialized (\d+) seed sentencepieces", run.stderr)]
+    em = [(int(a), int(b)) for a, b in re.findall(r"EM sub_iter=(\d+) size=(\d+)", run.stderr)]
+    assert len(seed) == 1 and em, run.stderr[-1500:]
+    sizes = [seed[0]] + [s for it, s in em if it == 1] + [sp.get_piece_size()]
+    pieces = sorted(((sp.get_score(i), sp.id_to_piece(i)) for i in range(3, sp.get_piece_size())), reverse=True)
+    R["surname_unigram"] = {"vocab_size": sp.get_piece_size(), "seed": seed[0], "em_log": em,
+                            "sizes_per_round": sizes, "top_pieces": [[p, round(s, 2)] for s, p in pieces[:12]]}
+    log.info(f"surname Unigram: sizes {sizes}; top {pieces[:6]}")
+    return sp, sizes, pieces
+
+
+def fig_unigram_rounds(R, log):
+    sp, sizes, pieces = surname_unigram(R, log)
+    assert pieces[2][1] == "յան", pieces[:4]          # the slide: -yan is the 3rd most likely piece
+    names = ["մանուկյան", "աբազյան", "աբալակով"]
+    for n in names:
+        assert n in NAMES, n
+    splits = {n: sp.encode_as_pieces(n) for n in names}
+    R["surname_unigram"]["splits"] = splits
+    fig = plt.figure(figsize=(W, 1.65))
+    ax = fig.add_axes([0.06, 0.20, 0.46, 0.62])
+    labels = ["seed"] + [str(k) for k in range(1, len(sizes) - 1)] + ["final"]
+    bars = ax.bar(labels, sizes, color=[ARMORANGE] + [ARMBLUE] * (len(sizes) - 2) + [ARMRED], width=0.65)
+    ax.bar_label(bars, labels=[f"{s:,}" for s in sizes], fontsize=6.5, padding=2)
+    ax.set_title("vocabulary size, round by round", fontsize=FS, pad=6)
+    ax.set_xlabel("pruning round", fontsize=FS_ID, labelpad=2)
+    ax.set_ylim(0, max(sizes) * 1.22)
+    ax.set_yticks([])
+    ax.tick_params(labelsize=FS_ID, length=2)
+    for s in ("top", "right", "left"):
+        ax.spines[s].set_visible(False)
+    ax2 = fig.add_axes([0.55, 0.0, 0.45, 1.0])
+    ax2.set_xlim(0, W * 0.45)
+    ax2.set_ylim(0, 1.65)
+    ax2.axis("off")
+    ax2.text(0.05, 1.42, "best splits after training", fontsize=FS, family=SANS, color=GREY, va="center")
+    for k, n in enumerate(names):
+        chips(fig, ax2, 0.05, 1.08 - k * 0.38, splits[n], visible=False, h=0.22, xmax=W * 0.45 - 0.02)
+    save(fig, "tok_unigram_rounds.pdf", log)
 
 
 def main():
@@ -662,7 +1074,8 @@ def main():
     FIG.mkdir(parents=True, exist_ok=True)
     RESULTS.mkdir(exist_ok=True)
     T = {"gpt2": Tik("gpt2"), "gpt4": Tik("cl100k_base"), "gpt4o": Tik("o200k_base")}
-    R = {"tiktoken": tiktoken.__version__, "date": time.strftime("%Y-%m-%d")}
+    T5 = t5_model()
+    R = {"tiktoken": tiktoken.__version__, "sentencepiece": spm.__version__, "date": time.strftime("%Y-%m-%d")}
     jobs = [lambda: fig_question(T, R, log), lambda: fig_text_to_ids(T, R, log),
             lambda: fig_three_ways(T, R, log), lambda: fig_unk(T, R, log),
             lambda: fig_bytes(R, log), lambda: fig_bpe_encode(R, log),
@@ -672,7 +1085,13 @@ def main():
             lambda: fig_numbers(T, R, log), lambda: fig_code(T, R, log),
             lambda: fig_special(T, R, log), lambda: fig_armenian(T, R, log),
             lambda: fig_bpe_bytes(R, log), lambda: fig_id_ranks(T, R, log),
-            lambda: wordpiece_toy(R, log), lambda: unigram_toy(R, log)]
+            lambda: wordpiece_toy(R, log), lambda: unigram_toy(R, log),
+            lambda: fig_years(T, R, log), lambda: fig_commas(T, R, log),
+            lambda: fig_reverse(T, R, log), lambda: fig_formats(T, R, log),
+            lambda: fig_trailing(T, R, log), lambda: fig_glitch_split(T, R, log),
+            lambda: fig_longest(T, R, log), lambda: fig_lottery(T, R, log),
+            lambda: fig_unigram_nbest(T5, R, log), lambda: fig_unigram_samples(T5, R, log),
+            lambda: fig_t5_armenian(T5, T, R, log), lambda: fig_unigram_rounds(R, log)]
     for k, job in enumerate(jobs, 1):
         job()
         el = time.time() - t0
