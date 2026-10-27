@@ -20,6 +20,7 @@
   \end{frame}}
 
 \newcommand{\src}[1]{{\scriptsize\color{gray} #1}}
+\newcommand{\link}[2]{\href{#1}{\textcolor{popblue}{#2}}}   % no underline: long titles must break
 
 \title{Embeddings and position}
 \subtitle{From IDs to vectors}
@@ -33,6 +34,33 @@
   \begin{center}\scriptsize\color{gray}
     LLM chapter, session 2. Every GPT-2 number on these slides is read from its real weights.
   \end{center}
+\end{frame}
+
+% ============================================================ LINKS (2026-10-27, as in LLM-1)
+\begin{frame}{Before we start: two videos and a demo}
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \keybox{\raggedright\textbf{Recommended viewing}\\[4pt]
+    3Blue1Brown,
+    \link{https://youtu.be/wjZofJX0v4M?t=747}{Transformers, the tech behind LLMs \textbar{} Deep
+    Learning Chapter 5} (2024). From 12:27: word embeddings as directions in space.\\[6pt]
+    Jia-Bin Huang,
+    \link{https://www.youtube.com/watch?v=SMBkImDWOyQ}{How Rotary Position Embedding Supercharges
+    Modern LLMs [RoPE]} (2024, 14 min). Sinusoids, then RoPE, then stretching it: today's second
+    half, in the same order.}
+    \column{0.49\textwidth}
+    \takebox{\raggedright\textbf{Live demo:}
+    \link{https://projector.tensorflow.org}{projector.tensorflow.org}\\[4pt]
+    10,000 word vectors (word2vec, 200 numbers each) in the browser: search a word, list its
+    nearest neighbours, squash all 10,000 into 3-D with PCA, t-SNE or UMAP.}
+    \vskip 4pt
+    {\small\textbf{Try:}}
+    \begin{itemize}\small
+      \item a weekday, a city, a royal title
+      \item an adjective: is its opposite among the neighbours?
+      \item switch PCA to UMAP and watch clusters form
+    \end{itemize}
+  \end{columns}
 \end{frame}
 
 % ============================================================ WHERE WE ARE (py_src/llm_roadmap.py)
@@ -89,7 +117,7 @@
     \item LLM-1 ended with integers: `` cat'' is \textbf{3797}, `` dog'' is \textbf{3290}.
     \item Is a cat 507 ``more'' than a dog? Is `` dog'' + 1 a puppy? The IDs were handed out by
       the order of BPE's merges. Their sizes mean nothing.
-    \item L20 hit the same wall with one-hot vectors: every word equally far from every other,
+    \item{} [53] hit the same wall with one-hot vectors: every word equally far from every other,
       so ``cat'' is no closer to ``dog'' than to ``Tuesday''.
   \end{itemize}
   \vskip 10pt
@@ -183,7 +211,7 @@
 \end{frame}
 
 \begin{frame}{Neighbours share contexts, not meanings}
-  \begin{center}\includegraphics[width=\linewidth]{emb_neighbours_odd.pdf}\end{center}
+  \begin{center}\includegraphics[width=0.88\linewidth]{emb_neighbours_odd.pdf}\end{center}
   \vskip -4pt
   \small
   \begin{itemize}
@@ -195,7 +223,8 @@
       name, with similar letters. Not physics.
   \end{itemize}
   \vskip 2pt
-  \watchbox{A row records how a token is \textbf{used}. Usually that tracks meaning. Not always.}
+  \watchbox{A row records how a token is \textbf{used}. Usually that tracks meaning. Not always.
+  Linguists said it in 1957: ``You shall know a word by the company it keeps'' (Firth).}
 \end{frame}
 
 \begin{frame}{The glitch tokens found each other}
@@ -239,6 +268,22 @@
   (Mikolov et al., 2013). Without that rule, 3 of the 5 green rows answer with one of their own
   inputs: king $-$ man $+$ woman is nearest to \textbf{king} (Nissim et al., 2020, make this
   point). So: a real tendency of the table, not a law.}
+\end{frame}
+
+\begin{frame}{Analogies find stereotypes, and the rule inflates them}
+  \begin{itemize}
+    \item Bolukbasi et al. (2016) asked word2vec, trained on Google News: man is to computer
+      programmer as woman is to ...? Answer: \textbf{homemaker}. Crowd workers rated 29 of 150
+      analogies the vectors produced as stereotypes.
+    \item The table learned from text people wrote, so it carries their associations. Their fix:
+      find a ``gender direction'' and remove it from rows that should not have one.
+    \item Nissim, van Noord \& van der Goot (2020) pointed at the rule from the last slide: an
+      input word may never be the answer. Lift it, and the answer is \textbf{computer programmer}
+      itself. Their title: ``Man is to Doctor as Woman is to \textbf{Doctor}''.
+  \end{itemize}
+  \vskip 6pt
+  \keybox{Both are true: embeddings carry the biases of their text, and the analogy trick
+  exaggerates them. One striking example is not a measurement.}
 \end{frame}
 
 \begin{frame}{One row per token, whatever the sentence}
@@ -305,7 +350,7 @@
   unchanged, just shuffled.
   \vskip 8pt
   \keybox{An RNN never had this problem: it read tokens one at a time, so order was built into
-  the computation (L20). Attention reads all tokens at once - that is why it is fast - and the
+  the computation ([53]). Attention reads all tokens at once - that is why it is fast - and the
   price is that order is gone.}
 \end{frame}
 
@@ -585,8 +630,10 @@ address.}
       offer?''). The score of a pair is query $\cdot$ key, the dot product from the toy.
     \item For that score, what matters is ``these two are 3 apart'', not ``one is in slot 41 and
       the other in slot 44''.
-    \item Adding a position vector bakes in the \textbf{address}. Sinusoids make the gap
-      recoverable, but the model still has to learn to dig it out of the sum.
+    \item Adding a position vector bakes in the \textbf{address}. The gap-only identity holds for
+      bare waves, but the score multiplies token + wave by two learned matrices first, and the
+      token-times-wave parts still carry each slot's own address. So the model has to learn to dig
+      the gap out.
     \item Better: build the comparison so that \textbf{only the gap can affect it}.
   \end{itemize}
   \vskip 10pt
@@ -601,21 +648,29 @@ address.}
   \begin{itemize}
     \item Split the vector into pairs of numbers. Treat each pair as an arrow in 2-D.
     \item In slot $m$, turn every arrow by $m \times \theta$. Pair $i$ has its own speed
-      $\theta_i = 1 / 10000^{2i/d}$, the sinusoids' speeds: with 128 numbers per head, 64 pairs,
+      $\theta_i = 1 / 10000^{2i/d}$, the sinusoids' speeds: with 128-number queries and keys, 64 pairs,
       from 1 radian per slot down to 0.000115.
     \item The arrow's length never changes: only its direction carries the slot.
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Why only the gap survives}
-  \begin{center}\includegraphics[width=\linewidth]{emb_rope_2d.pdf}\end{center}
+  \begin{center}\includegraphics[width=0.86\linewidth]{emb_rope_2d.pdf}\end{center}
   \vskip -6pt
   \small
   A dot product depends on two lengths and the angle between the arrows:
   $\mathbf{q} \cdot \mathbf{k} = |\mathbf{q}|\,|\mathbf{k}| \cos(\text{angle between})$.
   Turn the query by $m\theta$ and the key by $n\theta$: the angle between them changes by
-  $(m - n)\,\theta$. The lengths do not change at all. So the score depends on the content and
-  the \textbf{gap} $m - n$ only.
+  $(m - n)\,\theta$ from the unrotated angle. The lengths do not change at all. So the score
+  depends on the content and the \textbf{gap} $m - n$ only.
+  \vskip 4pt
+  In matrix form, with $R_m$ the turn by $m\theta$: \;
+  $(R_m\mathbf{q}) \cdot (R_n\mathbf{k}) = \mathbf{q}^\top R_m^\top R_n\, \mathbf{k}
+  = \mathbf{q}^\top R_{n-m}\, \mathbf{k}$: turning back by $m$, then forward by $n$, is one turn by
+  $n - m$.
+  \vskip 4pt
+  A real query has 64 pairs. Its score is the \textbf{sum} of the 64 pair scores, and each one
+  depends only on the gap.
 \end{frame}
 
 \begin{frame}{By hand: same gap, same score}
@@ -642,6 +697,31 @@ address.}
   $(2 \cdot (-0.866) - 1 \cdot 0.5,\; 2 \cdot 0.5 + 1 \cdot (-0.866)) = (-2.23,\; 0.13)$.
   \vskip 6pt
   \takebox{The model never sees the slot numbers 5, 2, 10 or 7. It only ever feels the gap.}
+\end{frame}
+
+\begin{frame}{By hand: four numbers, two speeds}
+  \small
+  Two pairs: $\mathbf{q} = \mathbf{k} = (1, 0 \,|\, 1, 0)$. The fast pair turns $90^\circ$ per
+  slot, the slow pair $30^\circ$. Each pair's arrows have length 1, so its score is the cosine of
+  the angle between them, and the total score is the sum of the two:
+  \vskip 2pt
+  \begin{center}
+  \begin{tabular}{rlll}
+    \textbf{gap} & \textbf{fast pair} ($90^\circ$) & \textbf{slow pair} ($30^\circ$) &
+      \textbf{score} \\ \hline
+    0 & $\cos 0^\circ = 1$ & $\cos 0^\circ = 1$ & $\mathbf{2}$ \\
+    1 & $\cos 90^\circ = 0$ & $\cos 30^\circ = 0.87$ & $0.87$ \\
+    2 & $\cos 180^\circ = -1$ & $\cos 60^\circ = 0.5$ & $-0.5$ \\
+    4 & $\cos 360^\circ = 1$ & $\cos 120^\circ = -0.5$ & $0.5$ \\
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
+  Check gap 4 by turning both, $\mathbf{q}$ in slot 5 and $\mathbf{k}$ in slot 1. Fast pair: $(0, 1)
+  \cdot (0, 1) = 1$. Slow pair: $(-0.866, 0.5) \cdot (0.866, 0.5) = -0.75 + 0.25 = -0.5$. Total
+  0.5, and slots 9 and 5 give 0.5 again.
+  \vskip 4pt
+  \takebox{The fast pair alone cannot tell gap 4 from gap 0: one full turn looks like no turn.
+  The slow pair can. That is why RoPE mixes many speeds, from 1 radian per slot down to 0.000115.}
 \end{frame}
 
 \begin{frame}{Where the rotation happens}
@@ -694,14 +774,14 @@ address.}
 
 % ============================================================ 6. LONGER AND LONGER
 \section{Longer and longer}
-\sectiontransition{Longer and longer}{GPT-2 stopped at 1,024 tokens. Models now read hundreds of
-thousands.}
+\sectiontransition{Longer and longer}{GPT-2 stopped at 1,024 tokens. Models now take a million -
+and do not read all of it equally well.}
 
 \begin{frame}{Why RoPE breaks past its training length}
   \begin{center}\includegraphics[width=\linewidth]{emb_rope_unseen.pdf}\end{center}
   \vskip -6pt
   \small
-  A model trained on 4,096 tokens, RoPE base 10,000, 128 numbers per head (Llama 2's
+  A model trained on 4,096 tokens, RoPE base 10,000, 128-number queries and keys (Llama 2's
   settings). The fastest hand spins about 650 times during one training text: it has seen every
   angle. The slowest turns 0.000115 radians per slot: $4{,}096 \times 0.000115 = 0.47$ radians,
   only \textbf{7.5\%} of a circle. Feed it 32,768 tokens and that hand reaches 60\%: angles the
@@ -756,6 +836,7 @@ thousands.}
     GPT-2 (2019) & learned table & 1,024 \\
     T5 (2019) & a learned bias per distance & 512 in training \\
     BLOOM (2022) & ALiBi & 2,048 \\
+    Llama 3.1 (2024) & RoPE, base 500,000, stretched from 8,192 & 131,072 \\
     DeepSeek-V3 (2024) & RoPE + YaRN (from 4,096) & 163,840 \\
     Qwen3-8B (2025) & RoPE, base 1,000,000 & 32,768; 131,072 with YaRN \\
     gpt-oss-20b (2025) & RoPE + YaRN (from 4,096) & 131,072 \\
@@ -765,10 +846,77 @@ thousands.}
   \end{center}
   \vskip 4pt
   {\small Gemma's two bases: layers that only look at nearby tokens use the faster clock
-  (10,000), layers that see the whole text the slower one.}
+  (10,000), layers that see the whole text the slower one. Closed models, October 2026: Gemini 4
+  Argon 1,048,576 tokens, Claude Opus 5.5 and Fable 5.1 1M, GPT-6 Astra 1,050,000; how they encode
+  position is not published.}
   \vskip 2pt
-  \src{config.json and model cards on Hugging Face, Meta's Llama 4 announcement; checked 4 Oct
-  2026.}
+  \src{config.json and model cards on Hugging Face, Meta's Llama 4 announcement, checked 4 Oct
+  2026; Llama 3.1's config and the vendors' model pages, checked 27 Oct 2026.}
+\end{frame}
+
+\begin{frame}{Predict first}
+  \vskip 26pt
+  \begin{center}
+    {\Large\color{popblue}\textbf{A question, and 20 documents in the prompt.\\[4pt] One of them
+    holds the answer.}}
+    \vskip 14pt
+    {\small Does it matter whether that document comes first, in the middle, or last?}
+    \vskip 24pt
+    {\small\color{gray}Commit to an answer.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Lost in the middle}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+    \includegraphics[width=\linewidth]{emb_lost_middle.pdf}
+    \column{0.36\textwidth}
+    \small
+    \vskip 4pt
+    A U-shape: the answer is found best at the \textbf{start}, then at the \textbf{end}.
+    \vskip 6pt
+    In the middle, GPT-3.5 does \textbf{worse than with no documents at all} (53.8\% vs 56.1\%):
+    there, the extra text actively hurts.
+  \end{columns}
+  \vskip 6pt
+  \keybox{A window that \emph{fits} 20 documents is not a model that \emph{uses} all 20. In a
+  long prompt, put what matters first or last.}
+  \vskip 2pt
+  \src{Liu et al. (2024), ``Lost in the Middle: How Language Models Use Long Contexts'', TACL;
+  NaturalQuestions, 20 Wikipedia passages per question. Plot: \texttt{py\_src/long\_context\_figs.py}.}
+\end{frame}
+
+\begin{frame}{Claimed length vs used length}
+  \begin{itemize}
+    \item The classic test hides one sentence, a ``needle'', in a long text and asks for it back.
+      Most models now pass it.
+    \item \textbf{RULER} (Hsieh et al., 2024): 13 tasks, from several needles at once to tracing a
+      variable through a long text and counting frequent words. 17 models, all claiming 32K tokens
+      or more: ``only half of them'' hold up at 32K.
+    \item \textbf{Context rot} (Chroma, July 2025): 18 models, simple tasks, longer and longer
+      inputs. The answers get steadily less reliable as the input grows. Oddly, a shuffled
+      haystack was easier than a coherent one.
+  \end{itemize}
+  \vskip 6pt
+  \takebox{Position encoding decides how far a model \emph{can} read. Training decides how well
+  it reads that far. Test the length you need; do not trust the number on the box.}
+\end{frame}
+
+\begin{frame}{The first slots are special: attention sinks}
+  \begin{itemize}
+    \item Xiao et al. (2024) watched where attention goes in long texts: a large share lands on
+      the \textbf{first few tokens}, whatever they say.
+    \item Swap the first 4 tokens for line breaks and the model's perplexity (how surprised it is
+      by the text; lower is better) barely moves, 5.4 to 5.6. Drop them and keep only a window of
+      recent tokens, and it explodes to 5,158. Their position matters, not their meaning.
+    \item Why: softmax must hand out weights that sum to 1. When nothing is relevant, the model
+      parks the spare attention on a token every later position can see: the first one.
+    \item Their fix, StreamingLLM: always keep the first 4 tokens plus a sliding window of recent
+      ones. Stable over 4 million tokens.
+  \end{itemize}
+  \vskip 4pt
+  \watchbox{A hint in GPT-2's position table: slot 0's row is far longer than the rest (norm 9.88,
+  the median slot 3.37). Slot 0 is not just another position.}
 \end{frame}
 
 % ============================================================ RECAP
@@ -786,6 +934,8 @@ thousands.}
     \item Adding works because in 768 dimensions token and position directions barely overlap.
     \item Longer texts: stretch the slow clock hands (YaRN), or penalise distance (ALiBi), or
       drop position in some layers (NoPE).
+    \item Fitting is not using: answers in the middle of a long prompt get lost, claimed lengths
+      outrun used ones, and the first tokens soak up spare attention (sinks).
   \end{itemize}
 \end{frame}
 
@@ -795,9 +945,15 @@ thousands.}
   {\small Next (LLM-3): the vectors start talking to each other.}
 \end{frame}
 
-\begin{frame}{Sources \& further reading}
+\begin{frame}{Sources \& further reading (1/2)}
   \footnotesize
   \begin{itemize}
+    \item \textbf{Watch:} 3Blue1Brown (2024),
+      \link{https://youtu.be/wjZofJX0v4M?t=747}{Transformers, the tech behind LLMs \textbar{} Deep
+      Learning Chapter 5}; Jia-Bin Huang (2024),
+      \link{https://www.youtube.com/watch?v=SMBkImDWOyQ}{How Rotary Position Embedding Supercharges
+      Modern LLMs [RoPE]}. \textbf{Play:}
+      \link{https://projector.tensorflow.org}{projector.tensorflow.org}.
     \item Vaswani et al. (2017), ``Attention Is All You Need'', NeurIPS (sinusoids).
     \item Su et al. (2021), ``RoFormer: Enhanced Transformer with Rotary Position Embedding'',
       arXiv; Neurocomputing (2024).
@@ -807,16 +963,31 @@ thousands.}
       Learn Positional Information'', Findings of EMNLP.
     \item Chen et al. (2023), ``Extending Context Window of Large Language Models via Positional
       Interpolation'', arXiv; Peng et al. (2024), ``YaRN'', ICLR.
-    \item Mikolov, Yih \& Zweig (2013), ``Linguistic Regularities in Continuous Space Word
-      Representations'', NAACL; Nissim, van Noord \& van der Goot (2020), ``Fair is Better than
-      Sensational'', Computational Linguistics.
-    \item Land \& Bartolo (2024), ``Fishing for Magikarp'', EMNLP. Meta (April 2025), ``The Llama 4
-      herd''.
+    \item Meta (April 2025), ``The Llama 4 herd''; Grattafiori et al. (2024), ``The Llama 3 Herd of
+      Models'', arXiv.
   \end{itemize}
   \vskip 2pt
   \src{Every GPT-2 number: \texttt{py\_src/embeddings\_position\_figs.py} (GPT-2's weights read
   with safetensors, IDs from tiktoken), raw results in
   \texttt{results/embeddings\_position\_figs.json}.}
+\end{frame}
+
+\begin{frame}{Sources \& further reading (2/2)}
+  \footnotesize
+  \begin{itemize}
+    \item Firth (1957), ``A synopsis of linguistic theory, 1930-1955'', \emph{Studies in
+      Linguistic Analysis}.
+    \item Mikolov, Yih \& Zweig (2013), ``Linguistic Regularities in Continuous Space Word
+      Representations'', NAACL.
+    \item Bolukbasi et al. (2016), ``Man is to Computer Programmer as Woman is to Homemaker?
+      Debiasing Word Embeddings'', NeurIPS. Nissim, van Noord \& van der Goot (2020), ``Fair is
+      Better than Sensational: Man is to Doctor as Woman is to Doctor'', Computational Linguistics.
+    \item Land \& Bartolo (2024), ``Fishing for Magikarp'', EMNLP.
+    \item Liu et al. (2024), ``Lost in the Middle: How Language Models Use Long Contexts'', TACL.
+    \item Hsieh et al. (2024), ``RULER: What's the Real Context Size of Your Long-Context Language
+      Models?'', COLM. Hong, Troynikov \& Huber (2025), ``Context Rot'', Chroma technical report.
+    \item Xiao et al. (2024), ``Efficient Streaming Language Models with Attention Sinks'', ICLR.
+  \end{itemize}
 \end{frame}
 
 \end{document}
@@ -881,5 +1052,33 @@ thousands.}
 %   why tying is possible. Not applied (contradict the interview): cutting the neighbour,
 %   glitch, analogy, tying, life-map, ALiBi/NoPE or model-table frames; a sinusoids-by-hand
 %   frame (offered in the interview, not picked); YaRN with numbers (intuition only).
+%   STUDENT REVIEW 2 2026-10-20 (one Sonnet agent, PNGs only, ~115k tokens; DECISIONS #93).
+%   Applied: "What we actually want" resolves the clash with the identity frame (the identity holds
+%   for bare waves; the score mixes token and wave after two learned matrices); "Why only the gap"
+%   gains "from the unrotated angle", the matrix line q^T R_m^T R_n k = q^T R_(n-m) k and the sum
+%   over 64 pairs; new frame "By hand: four numbers, two speeds" (q = k = (1,0|1,0), 90 and 30
+%   degrees per slot; gaps 0/1/2/4 -> 2, 0.87, -0.5, 0.5; slots 5/1 and 9/5 both 0.5; the fast pair
+%   alone confuses gap 4 with 0; asserted in toy_rope_pairs); "128 numbers per head" -> per query
+%   and key (heads come in LLM-4). Dropped as false: the tying frame never says "LM head".
+%   Not applied (rejected 2026-10-04): the cuts, sinusoids by hand, YaRN with numbers.
+%   EXTENDED 2026-10-27 (instructor: "in a similar manner iterate on llm 2", after LLM-1's
+%   extension - links up front, more real-world failures, research-backed additions, fixes).
+%   New: "Before we start: two videos and a demo" (3Blue1Brown ch5 from 12:27, titles exact per
+%   CONVENTIONS; Jia-Bin Huang's RoPE video, picked over Efficient NLP's and DeepLearning Hero's for
+%   following this deck's order; projector.tensorflow.org, Word2Vec 10K x 200); Firth's 1957 line
+%   on the neighbours frame; "Analogies find stereotypes, and the rule inflates them" (Bolukbasi
+%   et al. 2016: homemaker, 29 of 150 rated stereotypes; Nissim et al. 2020: lift the input-word
+%   rule and the answer is the input); Llama 3.1 in the model table (rope_theta 500,000,
+%   rope_type llama3 x8 from 8,192, 131,072; unsloth mirror of Meta's config) and a line on closed
+%   models (Gemini 4 Argon 1,048,576; Claude Opus 5.5 / Fable 5.1 1M; GPT-6 Astra 1,050,000; vendor
+%   pages 2026-10-27); predict + "Lost in the middle" (Liu et al., TACL 2024, Table 6: 75.8 / 57.2 /
+%   53.8 / 55.4 / 63.2 at positions 1-20 of 20, closed-book 56.1, oracle 88.3, checked on ar5iv;
+%   plotted by py_src/long_context_figs.py from the published numbers - GPT-2's weights are no
+%   longer in the HF cache, so embeddings_position_figs.py was not rerun); "Claimed length vs used
+%   length" (RULER, COLM 2024: 17 models, "only half" hold at 32K; Chroma's Context Rot, July 2025);
+%   "The first slots are special: attention sinks" (Xiao et al., ICLR 2024: 5.4 / 5.6 / 5,158
+%   perplexity; StreamingLLM 4 sinks + window, 4M tokens) tied to GPT-2's slot-0 norm 9.88 vs
+%   median 3.37 from results/. "What we actually want" bullet simplified. Facts checked by one
+%   research agent (primary sources except the Firth page and the Llama config mirror).
 %   Forward pointer: L24 (attention; the permutation proof is the payoff of this deck's promise).
 % ============================================================================

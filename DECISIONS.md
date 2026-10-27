@@ -9,6 +9,33 @@ this file holds the choice and a pointer.
 
 ---
 
+## #98 - LLM-2 gains links, a bias frame and "fitting is not using" (lost in the middle, RULER, attention sinks), drawn from published numbers
+
+**Date:** 2026-10-27 · **Status:** active (instructor: "in a similar manner iterate on llm 2").
+
+**Decision.** LLM-2 opens with 3Blue1Brown's chapter 5 (from 12:27) and Jia-Bin Huang's RoPE
+video, plus projector.tensorflow.org as the live demo. The embedding half gains Firth's 1957 line
+and an honest bias frame (Bolukbasi's "homemaker" next to Nissim et al.'s point that the
+no-input-words rule inflates it). The long-context section gains Llama 3.1 and today's ~1M-token
+closed models in the table, a predict frame and the lost-in-the-middle U-curve (53.8% in the
+middle vs 56.1% with no documents), claimed vs used length (RULER, Context Rot), and attention
+sinks tied to GPT-2's slot-0 row (norm 9.88 vs median 3.37, already in `results/`).
+
+**Why.** The long-context section was the thinnest part and is where students meet the topic in
+practice (prompts, RAG). The U-curve is plotted by a new `long_context_figs.py` from the paper's
+Table 6, because GPT-2's weights are no longer in the HF cache and the slide states a published
+result, not a GPT-2 fact (SLIDE_STYLE: measure only real-model claims, no downloads to decorate).
+
+**Alternatives rejected.** Re-downloading GPT-2 (~550 MB) to measure something new: nothing on the
+new frames needs it. Efficient NLP's or DeepLearning Hero's RoPE videos (more views; Huang's follows
+this deck's order sinusoids -> RoPE -> stretching). YaRN with numbers and sinusoids by hand stay out
+(instructor, 2026-10-04).
+
+**What would change this.** If the instructor wants measured long-context behaviour on a real
+model, that needs a model download and a GPU run (Colab), not this laptop.
+
+---
+
 ## #97 - LLM-1 grows from 44 to 71 pages: two links first, failures before mechanics, Unigram and SentencePiece in full, closed tokenizers; LLM-3 keeps column-vector notation
 
 **Date:** 2026-10-27 · **Status:** active (instructor request; the LLM-3 notation call is mine).

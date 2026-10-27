@@ -76,6 +76,10 @@ QUOTED = {
     "rope_gap3": 1.00,
     "rope_slow_frac": {4096: 0.075, 32768: 0.60}, "rope_fast_turns_4096": 652,
     "rope_slow_rad": 0.000115, "rope_slow_rad_4096": 0.47,
+    # "By hand: four numbers, two speeds": q = k = (1, 0 | 1, 0), 90 and 30 degrees per slot
+    "rope_pairs_deg": (90, 30), "rope_pairs_scores": {0: 2.0, 1: 0.87, 2: -0.5, 4: 0.5},
+    "rope_pairs_check": {(5, 1): [(0.0, 1.0), (0.0, 1.0), (-0.866, 0.5), (0.866, 0.5)],
+                         (9, 5): 0.5},
     # the by-hand shuffle frames (toy_shuffle): weights and dog's output, 2 decimals
     "toy": {"A_nopos_w": [0.42, 0.42, 0.16], "nopos_out": [0.84, 0.58],
             "A_pos_scores": [2.25, 1.5, 0.0], "A_pos_w": [0.63, 0.3, 0.07], "A_pos_out": [1.25, 0.4],
@@ -738,6 +742,33 @@ def fig_rope_unseen(g, R, log):
     save(fig, "emb_rope_unseen.pdf", log)
 
 
+def toy_rope_pairs(g, R, log):
+    """The "four numbers, two speeds" frame: RoPE on a 4-number q and k (two pairs). The score is the
+    sum of the pair scores; equal gaps give equal totals; the fast pair alone confuses gap 4 with 0."""
+    q = k = np.array([1.0, 0.0, 1.0, 0.0])
+    speeds = QUOTED["rope_pairs_deg"]
+
+    def turn(v, slot):
+        return np.concatenate([rot(v[2 * p:2 * p + 2], speeds[p] * slot) for p in range(2)])
+
+    def score(m, n):
+        return float(turn(q, m) @ turn(k, n))
+
+    by_gap = {gap: round(score(gap + 3, 3), 2) for gap in QUOTED["rope_pairs_scores"]}
+    assert by_gap == QUOTED["rope_pairs_scores"], by_gap
+    for gap in by_gap:                                   # same gap, any slots: same total
+        assert all(abs(score(gap + s, s) - score(gap, 0)) < 1e-9 for s in range(12)), gap
+    qt, kt = turn(q, 5), turn(k, 1)
+    shown = [tuple(round(float(x), 3) + 0.0 for x in v) for v in (qt[:2], kt[:2], qt[2:], kt[2:])]
+    assert shown == QUOTED["rope_pairs_check"][(5, 1)], shown
+    assert round(score(9, 5), 2) == QUOTED["rope_pairs_check"][(9, 5)] == by_gap[4]
+    fast_only = [round(math.cos(math.radians(speeds[0] * gap)), 2) for gap in (0, 4)]
+    assert fast_only[0] == fast_only[1] and by_gap[0] != by_gap[4], (fast_only, by_gap)
+    R["rope_pairs"] = {"q": q.tolist(), "k": k.tolist(), "deg_per_slot": list(speeds),
+                       "score_by_gap": by_gap, "turned_q5_k1": shown}
+    log.info(f"RoPE, two pairs: {R['rope_pairs']}")
+
+
 def toy_shuffle(g, R, log):
     """The two by-hand frames: a simplified next layer (dot-product scores -> softmax -> weighted
     sum, no learned matrices) on 2-number toy vectors, for the token "dog", without and with
@@ -778,7 +809,7 @@ def main():
     R = {"date": time.strftime("%Y-%m-%d"), "tiktoken": tiktoken.__version__, "model": "gpt2 (124M), HF cache"}
     jobs = [fig_kargin, fig_coldopen, fig_table_sizes, fig_neighbours, fig_neighbours_odd, fig_glitch,
             compute_analogies, fig_add_position, fig_gpt2_positions, fig_sinusoids, fig_add_vs_concat,
-            fig_rope_clock, fig_rope_2d, fig_rope_unseen, toy_shuffle]
+            fig_rope_clock, fig_rope_2d, toy_rope_pairs, fig_rope_unseen, toy_shuffle]
     for k, job in enumerate(jobs, 1):
         job(g, R, log)
         el = time.time() - t0
