@@ -21,12 +21,11 @@ Generates into llms/04_transformer_block/fig/:
   blk_gpt2_heads.pdf     -- three real heads: previous token, creature -> fluffy, the first token
   blk_gpt2_sink.pdf      -- share of attention on the first token, per layer (attention sinks)
   blk_permutation.pdf    -- one head is blind to word order; with positions added it is not
-  blk_causal_mask.pdf    -- scores, minus infinity above the diagonal, softmax
   blk_neuron.pdf         -- the toy MLP neuron as an AND gate: w.x + b for four inputs, ReLU at 0
   blk_params_block.pdf   -- one GPT-2 block: attention vs MLP vs norms
   blk_params_124m.pdf    -- where GPT-2's 124,439,808 parameters live
   blk_block.pdf          -- the block in GPT-2's order: norm, attention, add; norm, MLP, add
-  blk_mask_grid.pdf      -- LLM-3's learned creature grid, with and without the causal mask
+  (blk_causal_mask and blk_mask_grid moved to LLM-3 on 2026-10-28, as py_src/masking_figs.py there.)
 
 Run:
   ./ma/Scripts/python.exe llms/04_transformer_block/py_src/block_figs.py --gpt2   # once (25 s measured, 1-2 min cold)
@@ -94,8 +93,6 @@ TOY = {
     # LayerNorm on creature's four numbers (LLM-3's printed result)
     "ln_in": [0, 0.47, 0.47, 2.13], "ln_mean": 0.77, "ln_spread": 0.81,
     "ln_out": [-0.95, -0.37, -0.37, 1.68],
-    # the causal mask on LLM-3's learned grid (one-number query "noun", key "adjective")
-    "mask_rows": {"fluffy": [1.0, 0.0, 0.0], "blue": [0.5, 0.5, 0.0], "creature": [0.47, 0.47, 0.06]},
     # induction head (added 2026-10-27): score 3 where a key's "preceded by" matches the query's token
     "induction": {"tokens": ["Messi", "plays", "football", ".", "Messi", "plays"], "match_score": 3,
                   "w_match": 0.80, "w_other": 0.04, "predicts": "football"},
@@ -333,17 +330,10 @@ def toy(R, log):
     check("ln mean", [mu], [T["ln_mean"]])
     check("ln spread", [sd], [T["ln_spread"]])
     check("ln out", (x - mu) / sd, T["ln_out"])
-    # the causal mask on LLM-3's learned grid (query reads noun, key reads adjective)
-    S = np.outer(q, k1)
-    S_masked = np.where(np.tril(np.ones_like(S)) == 1, S, -np.inf)
-    A_masked = softmax_rows(S_masked)
-    for i, t in enumerate(TOKENS):
-        check(f"mask {t}", A_masked[i], T["mask_rows"][t])
-    check("creature row unchanged", A1[2], A_masked[2])
     R["toy"] = {"A1": A1.tolist(), "A2": A2.tolist(), "h": [h1, h2], "neuron_pre": pre,
-                "ln": ((x - mu) / sd).tolist(), "A_masked": A_masked.tolist(), "A_unmasked": A1.tolist()}
+                "ln": ((x - mu) / sd).tolist()}
     log.info(f"toy: heads {round(h1, 3)}, {round(h2, 3)}; neuron {pre}; LN {r2((x - mu) / sd)}")
-    return A1, A2, A_masked, pre
+    return A1, A2, pre
 
 
 # ----------------------------------------------------------------------------- figures
@@ -527,31 +517,6 @@ def fig_permutation(log):
     return gap, gap_pe
 
 
-def fig_causal_mask(log):
-    """Ported from l25_l26_figs.py (same seed) and redrawn at slot size."""
-    n = 6
-    rng = np.random.default_rng(SEED)
-    scores = rng.normal(size=(n, n))
-    masked = scores + np.triu(np.full((n, n), -np.inf), k=1)
-    attn = softmax_rows(masked)
-    if float(np.triu(attn, k=1).max()) > 0 or not np.allclose(attn.sum(1), 1):
-        raise AssertionError("the causal mask leaked attention to the future, or rows do not sum to 1")
-    fig, axes = plt.subplots(1, 3, figsize=(W, 1.85))
-    fig.subplots_adjust(left=0.06, right=0.99, top=0.84, bottom=0.2, wspace=0.25)
-    panels = [(scores, "raw scores", "RdBu_r"),
-              (np.where(np.isinf(masked), np.nan, masked), "minus infinity above the diagonal", "RdBu_r"),
-              (attn, "after softmax: rows sum to 1", "Blues")]
-    for ax, (m, title, cmap) in zip(axes, panels):
-        ax.imshow(m, cmap=cmap)
-        ax.set_title(title, fontsize=FS_TINY, pad=3)
-        ax.set_xticks(range(n))
-        ax.set_yticks(range(n))
-        ax.tick_params(labelsize=FS_TINY, length=0)
-        ax.set_xlabel("key (looked at)", fontsize=FS_TINY)
-    axes[0].set_ylabel("query (looking)", fontsize=FS_TINY)
-    save(fig, "blk_causal_mask.pdf", log)
-
-
 def fig_induction(R, log):
     """Two heads in a circuit (Olsson et al. 2022), by hand. Head A (previous token) writes into each
     token "who came before me". Head B (induction) at the last token asks "who came after my token
@@ -677,36 +642,6 @@ def fig_block(log):
     save(fig, "blk_block.pdf", log)
 
 
-def fig_mask_grid(A_unmasked, A_masked, log):
-    fig, ax = canvas(1.75, 2.75)
-    cw, ch, top = 0.27, 0.28, 1.1
-    cm = plt.get_cmap("Blues")
-
-    def grid(x0, A, masked, title):
-        for i in range(3):
-            for j in range(3):
-                x, y = x0 + j * cw, top - (i + 1) * ch
-                if masked and j > i:
-                    ax.add_patch(Rectangle((x, y), cw, ch, facecolor="#EEEEEE", edgecolor="white", lw=0.8,
-                                           hatch="////"))
-                    ax.text(x + cw / 2, y + ch / 2, "0", ha="center", va="center", fontsize=FS_TINY, color=GREY)
-                else:
-                    ax.add_patch(Rectangle((x, y), cw, ch, facecolor=cm(0.08 + 0.5 * A[i][j]), edgecolor="white", lw=0.8))
-                    ax.text(x + cw / 2, y + ch / 2, num(A[i][j]), ha="center", va="center", fontsize=FS_TINY)
-        ax.add_patch(Rectangle((x0, top - ch), 3 * cw, ch, fill=False, edgecolor=ARMRED, lw=1.3, zorder=5))
-        for j, t in enumerate(TOKENS):
-            ax.text(x0 + (j + 0.5) * cw - 0.06, top + 0.05, t, ha="left", va="bottom", fontsize=FS_TINY,
-                    rotation=50, rotation_mode="anchor")
-        ax.text(x0 + 1.5 * cw, top - 3 * ch - 0.06, title, ha="center", va="top", fontsize=FS_SMALL)
-
-    for i, t in enumerate(TOKENS):
-        ax.text(0.55, top - (i + 0.5) * ch, t, ha="right", va="center", fontsize=FS_TINY,
-                color=ARMRED if i == 0 else INK)        # fluffy's row: the one the mask changes
-    grid(0.62, A_unmasked, False, "LLM-3, no mask")
-    grid(1.62, A_masked, True, "with the causal mask")
-    save(fig, "blk_mask_grid.pdf", log)
-
-
 def main():
     log = setup_logging()
     t0 = time.time()
@@ -717,11 +652,10 @@ def main():
     FIG.mkdir(parents=True, exist_ok=True)
     G = load_gpt2()
     R = {"date": time.strftime("%Y-%m-%d"), "quoted": QUOTED, "toy": None}
-    A1, A2, A_masked, pre = toy(R, log)
+    A1, A2, pre = toy(R, log)
     jobs = [lambda: fig_fact_probes(G, log), lambda: fig_two_heads(A1, A2, log),
             lambda: fig_gpt2_heads(G, R, log), lambda: fig_sink(G, log), lambda: fig_permutation(log),
-            lambda: fig_causal_mask(log), lambda: fig_neuron(pre, log), lambda: fig_params(log),
-            lambda: fig_block(log), lambda: fig_mask_grid(A1.tolist(), A_masked.tolist(), log),
+            lambda: fig_neuron(pre, log), lambda: fig_params(log), lambda: fig_block(log),
             lambda: fig_induction(R, log)]
     for i, job in enumerate(jobs, 1):
         job()

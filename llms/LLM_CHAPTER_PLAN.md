@@ -91,8 +91,8 @@ Do not re-teach these; call back to them. The LLM-2 and LLM-3 to LLM-5 rows are 
 | The seq2seq bottleneck, and the alignment grid: every decoder step gets the same C, each needs a different part of the input | L21 |
 | Bengio 2003 neural LM (the surname inventor practical), with a bigram baseline and perplexity = e^loss ("torn between k letters", its section 6.3) | ch11, `47_name_inventor_solution.ipynb` |
 | Embeddings (the lookup table, what it learns), position (learned, sinusoidal, RoPE, long context) | LLM-2 (moved from LLM-3/LLM-4, #68) |
-| Self-attention, multi-head, the block, causal mask, residual stream | LLM-3, LLM-4 |
-| Encoder / decoder / enc-dec (the encoder sees both ways; the masked-LM *objective* is not shown - checked 2026-10-05), logits -> softmax -> sample, "autocomplete is not a chatbot", the O(n^2) bill and the 16,384-token FLOP crossover | LLM-5 |
+| Self-attention, the causal mask, CLM vs MLM, padding (LLM-3, #103); multi-head, the block, residual stream (LLM-4) | LLM-3, LLM-4 |
+| Encoder / decoder / enc-dec (the encoder sees both ways; the masked-LM objective is named and drawn in LLM-3 since 2026-10-28, #103), logits -> softmax -> sample, "autocomplete is not a chatbot", the O(n^2) bill and the 16,384-token FLOP crossover | LLM-5 |
 | Log-loss, temperature scaling, calibration | [11], [14] |
 
 **Not yet taught when this block runs:**
@@ -157,7 +157,7 @@ match the table below.
 |---|---|---|---|---|
 | 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`) |
 | 2 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`) |
-| 3 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`) |
+| 3 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`); reworked 2026-10-28: equation first, milestones, figures for the toy, a masking section with CLM/MLM (65 pages, #103) |
 | 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
 | 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
 | 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71); grammar-table frame added 2026-10-06 |

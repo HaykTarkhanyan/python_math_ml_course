@@ -163,3 +163,103 @@ X, Q, K, V double. Not applied, against interview decisions: a two-number W_Q, W
 numeric shapes toy; cutting the life map, Outline, mystery still, masking aside, recap or 3b1b
 screenshots (the reviewer found the screenshots illegible at 150 dpi; on a projector they are
 larger - worth a look in the room).
+
+---
+
+# Rework 2026-10-28: equation first, show not tell, masking + CLM/MLM
+
+**Instructor (2026-10-28):** "show the equation earlier and let's kind of go over unravelling
+components with time, also make explanation a lot more visual, do more of show not tell, and
+overall look into what can be extended, what can be split and improved by using more slides on
+it ... this is very important topic ... here introduce terms of masked language modeling and the
+other one, explain better how masking works".
+
+**Diagnosis of the 44-page version (contact sheets, 60 dpi):** the 3Blue1Brown stills carry the
+Q/K/V beats well, but the toy's mechanics are told in prose: frames 9 (three moves), 20 (toy
+table), 21, 22 (soft dictionary, text only), 27 (by hand, text only), 28-30 (softmax and sqrt(d_k),
+dense left columns), 32 (value by hand), 34-35 (two tables), 37 (GPT-2 sizes, bullets). The
+equation appears only on page 35 of 44. Masking is one aside still (page 39); the terms masked /
+causal language modeling appear in no deck (LLM-7 teaches BERT's objective without the name).
+
+## Devices
+
+- **The destination frame:** the full equation right after "The fix, in one idea", every piece in
+  its own colour with its open question under it (QK^T: who matches whom? sqrt(d_k): why this
+  number? softmax: why this function? V: what is handed over?).
+- **Milestone frames:** before each piece is unpacked, the same big equation with only that piece
+  lit (the rest grey) and one line. Four milestones (QK^T, softmax, sqrt(d_k), V) and a fifth with
+  everything lit before "Putting it together".
+- **Equation strip:** a small copy of the equation in the top-right corner of every frame of a
+  piece, that piece lit - so the student always knows which symbol is being unpacked.
+- **Vector chips:** every 4-number toy vector drawn as 4 cells [adjective, fluffy, blue, noun]
+  shaded by value. The creature's chip visibly gains its fluffy and blue cells.
+
+## Frames (k = kept, v = kept but text replaced by a figure, s = split, n = new, m = moved)
+
+Opening: title, links, two maps, two walls, the fix (k) -> **the destination frame (n)** -> Outline.
+
+1. Wall 1: transition (k); **score, softmax, weighted sum as a 3-panel picture (v)** on the fix's
+   "The cat sat" step: score bars -> weight bars -> the context as a weighted blend of the input
+   states; learned, not drawn (k).
+2. Wall 2: unchanged (encoder still reads, words need their sentence, mystery still, the sentence
+   talks to itself, sequential vs all-to-all, the paper).
+3. One head, slowly:
+   - transition, the goal (k); predict first with **the toy as chips (v)**; itself (k, update as
+     chips).
+   - **milestone QK^T (n)**; soft dictionary lookup as **hard vs soft lookup picture (v)**; query,
+     key, Q/K space, dot product (k); by hand: ask a different question with **chips -> w_Q, w_K ->
+     queries and keys on one axis (v)**; creature finds its adjectives (k).
+   - **milestone softmax (n)**; why softmax 1/2: positive and sum to 1 (s, existing figure); **why
+     softmax 2/2: argmax vs softmax as a score slides - a step with no slope vs a smooth curve (n)**,
+     plus "cannot look at nothing" (LLM-4).
+   - **milestone sqrt(d_k) (n)**; **predict: scores from 4, 16, 64 numbers - histograms, spread 2,
+     4, 8 (n)**; **saturation: softmax of (1,0,0) x 1, 2, 4, 8 - from soft to one-hot, the nudge
+     numbers (s)**; the fix: divide by 8, why not by 64 (s, existing figure).
+   - **milestone V (n)**; value (k); by hand: what gets handed over as **chips: weights x value
+     chips = update, + creature = a fluffy blue creature (v)**; the output (k); why three matrices
+     (k).
+   - **milestone: the whole line (n)**; putting it together as **an annotated equation, each
+     piece braced and named (v)**; shapes on a real sentence (k); the same shapes in GPT-2 as
+     **GPT-2's 768 x 2,304 c_attn split into Q | K | V and 12 heads of 64 (v)**; the code (k).
+4. **Masking: who may look at whom (new section)**
+   - transition; **predict: two fill-in games on the creature sentence** - the blank at the end vs
+     the blank in the middle: which words may the model look at?
+   - **causal language modeling (CLM)**, the GPT objective, also called next-token or
+     autoregressive: inputs and targets shifted by one, a prediction at every position.
+   - **the cheat**: unmasked, position t sees token t+1, its own answer - copy it, loss near 0,
+     useless for writing.
+   - **the mask in three steps**: scores -> + 0 / minus infinity above the diagonal -> softmax ->
+     exact zeros, rows still sum to 1.
+   - **by hand: the mask on creature's grid (m from LLM-4)**: fluffy's row changes, creature's
+     does not.
+   - **why minus infinity before softmax, not 0 after**: blue's row, (.33, .33, 0) sums to .67;
+     masking first gives (.5, .5, 0) = softmax over the visible keys only.
+   - **one pass, n predictions (m from LLM-4)**: the staircase of prefixes, all trained at once.
+   - 3b1b masking still (m from after the code).
+   - **masked language modeling (MLM)**, BERT (Devlin et al., 2019): about 15% of the input
+     replaced by [MASK], no attention mask, every token sees both sides, a loss only at the hidden
+     positions. BERT's 80/10/10 recipe stays in LLM-7.
+   - **CLM vs MLM side by side**: grid, what is predicted, losses per pass (n vs about 0.15 n),
+     can it write; trap box: two different things are called "mask" - the [MASK] token hides a
+     word from the input, the attention mask hides positions from each other.
+   - (decision Q3) **the padding mask**: a batch of unequal sentences; pad keys masked with the
+     same minus infinity.
+5. Close: recap (+ mask, CLM, MLM), try it, careful, next on the map, sources (+ Devlin et al.
+   2019, Radford et al. 2018).
+
+**Knock-ons:** LLM-4's three mask frames (decision Q1); "LLM-4's mask" references in LLM-5 and
+LLM-7 become LLM-3; LLM-7's BERT frame calls back to the name MLM; LLM-5's three-mask cold open
+becomes partly recall (cross-attention, mask C, stays new). Chapter plan + DECISIONS entry.
+
+**Not re-raised:** the creature toy as full matrices (rejected 10-05, 10-20, 10-27); cutting the
+mystery still, life map, Outline or the Q/K/V table.
+
+## Built 2026-10-28
+
+Instructor picks: Q1 move the mask frames from LLM-4, Q2 milestones + corner strip, Q3 padding in.
+65 pages (was 44). Figures: `attention_figs.py` +9 (~15 s), new `masking_figs.py` 11 (~10 s), every
+quoted number asserted. Built as outlined, plus: "CLM vs MLM" split in two (the trap got its own
+frame and figure, `mask_two_kinds.pdf`), because the figure, table and trap did not fit one frame.
+Checks: 0 LaTeX errors, 0 footer collisions, 0 pages under 5.5 pt (mask_steps and gpt2_cattn
+redrawn at their slot width); clipping flags on Key, sqrt(d_k), the listing, the URL frames and
+Sources are false positives (text visible in the renders). DECISIONS #103.

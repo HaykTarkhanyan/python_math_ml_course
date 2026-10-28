@@ -15,6 +15,47 @@
 }
 
 \graphicspath{{fig/}{../00_shared/fig/}{../00_shared/fig/borrowed/}{../00_shared/fig/borrowed/3b1b/}{../../ml/13_rnns/fig/}}
+\usetikzlibrary{tikzmark}
+
+% ---- the equation, shown early and unpacked one piece at a time (2026-10-28) ----
+% Pieces: Q popblue, K orange1, sqrt(d_k) violet1, softmax armred, V paramgreen. A preset lists the
+% colours of Q, K^T, sqrt(d_k), softmax, V and the brackets; eqoff greys a piece out.
+\colorlet{eqoff}{gray!40}
+\newcommand{\attnd}[6]{{\color{#6}\textcolor{#4}{\mathrm{softmax}}\!\Big(\frac{\textcolor{#1}{Q}%
+  \textcolor{#2}{K^{\top}}}{\textcolor{#3}{\sqrt{d_k}}}\Big)\,\textcolor{#5}{V}}}
+\newcommand{\attni}[6]{{\color{#6}\textcolor{#4}{\mathrm{softmax}}(\textcolor{#1}{Q}%
+  \textcolor{#2}{K^{\top}}/\textcolor{#3}{\sqrt{d_k}})\,\textcolor{#5}{V}}}
+\newcommand{\pQK}{{popblue}{orange1}{eqoff}{eqoff}{eqoff}{eqoff}}
+\newcommand{\pSM}{{eqoff}{eqoff}{eqoff}{armred}{eqoff}{eqoff}}
+\newcommand{\pSQ}{{eqoff}{eqoff}{violet1}{eqoff}{eqoff}{eqoff}}
+\newcommand{\pV}{{eqoff}{eqoff}{eqoff}{eqoff}{paramgreen}{eqoff}}
+\newcommand{\pALL}{{popblue}{orange1}{violet1}{armred}{paramgreen}{black}}
+\newcommand{\eqbig}[1]{\expandafter\attnd#1}
+\newcommand{\eqsmall}[1]{\expandafter\attni#1}
+
+% a milestone: the whole equation with one piece lit, before that piece is unpacked
+\newcommand{\milestone}[3]{%
+  \begin{frame}[plain]
+    \vfill
+    \begin{center}
+      {\LARGE $\displaystyle\eqbig{#1}$}\\[1.4em]
+      {\Large\bfseries\color{popblue} #2}\\[0.8em]
+      \parbox{0.82\linewidth}{\centering\large #3}
+    \end{center}
+    \vfill
+  \end{frame}}
+
+% the small equation in the top-right corner of every titled frame of the current piece;
+% \setpiece{\pQK} switches it on (or to another piece), \setpiece{} switches it off
+\def\curpiece{}   % \def, not \newcommand: a \long macro never \ifx-matches \empty
+\newcommand{\setpiece}[1]{\xdef\curpiece{#1}}
+\addtobeamertemplate{frametitle}{}{%
+  \ifx\curpiece\empty\else
+    \begin{tikzpicture}[remember picture, overlay]
+      \node[anchor=north east, inner sep=2pt, font=\footnotesize]
+        at ([shift={(-0.25cm,-0.22cm)}]current page.north east) {$\eqsmall{\curpiece}$};
+    \end{tikzpicture}%
+  \fi}
 
 % callout boxes, matching LLM-1, LLM-2 and LLM-6
 \newcommand{\keybox}[1]{\fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small #1}}}
@@ -157,6 +198,31 @@
   \end{columns}
 \end{frame}
 
+% the destination: the whole equation up front, each piece with the question it answers
+\begin{frame}{Where we are going: one line}
+  \vskip 30pt
+  \begin{center}
+  {\LARGE $\displaystyle
+    \tikzmarknode{dsm}{\textcolor{armred}{\mathrm{softmax}}}\!\Big(\frac{\tikzmarknode{dqk}{%
+    \textcolor{popblue}{Q}\textcolor{orange1}{K^{\top}}}}{\tikzmarknode{dsq}{\textcolor{violet1}{%
+    \sqrt{d_k}}}}\Big)\,\tikzmarknode{dv}{\textcolor{paramgreen}{V}}$}
+  \end{center}
+  \begin{tikzpicture}[remember picture, overlay, font=\small, >=Latex]
+    \node[text=popblue] (a) at ([shift={(2.4cm,1.15cm)}]dqk.north) {who matches whom?};
+    \draw[->, popblue, thick] (a.west) -- (dqk.north east);
+    \node[text=armred] (b) at ([shift={(-2.0cm,1.15cm)}]dsm.north) {why this function?};
+    \draw[->, armred, thick] (b.south) -- (dsm.north);
+    \node[text=violet1] (c) at ([shift={(-2.6cm,-0.95cm)}]dsq.south) {why divide by this?};
+    \draw[->, violet1, thick] (c.east) -- (dsq.south west);
+    \node[text=paramgreen] (d) at ([shift={(2.0cm,-0.95cm)}]dv.south) {what gets handed over?};
+    \draw[->, paramgreen, thick] (d.north) -- (dv.south);
+  \end{tikzpicture}
+  \vskip 52pt
+  \keybox{This line is the whole of today. By the end, every piece of it has a job you can
+  explain. Walls 1 and 2 say why the line exists at all; then we take it apart one piece at a
+  time, and finally see what the model may \emph{not} look at: the mask.}
+\end{frame}
+
 \begin{frame}{Outline}
   \tableofcontents
 \end{frame}
@@ -166,19 +232,14 @@
 \sectiontransition{Wall 1: look back}{A different context for every word you write.}
 
 \begin{frame}{Score, softmax, weighted sum}
-  At each output step, attention does three things:
+  At each output step, attention does three things. The step from the fix, as a picture:
+  \vskip 2pt
+  \begin{center}\includegraphics[width=\linewidth]{att_three_moves.pdf}\end{center}
+  \vskip -4pt
+  {\small The blend is this step's own context, its personal $C$. The decoder's current state
+  does the asking, the encoder's states answer. The score itself: Bahdanau et al.\ fed the two
+  states to a small learned network; later models just take their dot product, as we will.}
   \vskip 6pt
-  \begin{enumerate}
-    \item \textbf{Score} every input position: how relevant is it to this step?
-    \item \textbf{Softmax} the scores into weights that are positive and sum to $1$.
-    \item \textbf{Weighted sum}: blend the input states by those weights. The blend is this
-      step's own context, its personal $C$.
-  \end{enumerate}
-  \vskip 6pt
-  In translation the decoder's current state does the asking, and the encoder's states answer.
-  The score itself: Bahdanau et al.\ fed the two states to a small learned network; later models
-  just take their dot product, which is what we use today.
-  \vskip 10pt
   \keybox{You have seen the three moves: LLM-2 ran them by hand on ``dog bites man'', and softmax
   and weighted sums are [41]. The new part is \emph{what} gets scored and blended.}
 \end{frame}
@@ -345,20 +406,19 @@ story.}
 \end{frame}
 
 \begin{frame}{Predict first: who does ``creature'' listen to?}
-  Toy vectors with 4 numbers, read as [adjective, fluffy, blue, noun]:
-  \vskip 4pt
-  \begin{center}
-  \begin{tabular}{l c}
-    fluffy & $(1, 1, 0, 0)$ \\
-    blue & $(1, 0, 1, 0)$ \\
-    creature & $(0, 0, 0, 2)$ \\
-  \end{tabular}
-  \end{center}
-  \vskip 4pt
-  No learned matrices yet: each vector is its own query, its own key and its own value, the
-  simplified version from LLM-2. Score = dot product divided by $\sqrt{4} = 2$; softmax by rows;
-  weighted sum.
-  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+    Toy vectors with 4 numbers, read as [adjective, fluffy, blue, noun]. A darker cell is a
+    bigger number.
+    \vskip 6pt
+    No learned matrices yet: each vector is its own query, its own key and its own value, the
+    simplified version from LLM-2. Score = dot product divided by $\sqrt{4} = 2$; softmax by rows;
+    weighted sum.
+    \column{0.51\textwidth}
+    \vskip 4pt
+    \includegraphics[width=\linewidth]{att_toy_chips.pdf}
+  \end{columns}
+  \vskip 12pt
   \keybox{\textbf{Predict:} which of the three words gets the biggest share of creature's
   attention?}
 \end{frame}
@@ -384,26 +444,20 @@ story.}
   its adjectives.}
 \end{frame}
 
+\milestone{\pQK}{Piece 1: $QK^\top$}{Who matches whom? Creature needs a better question than
+``who is like me?''.}
+\setpiece{\pQK}
+
 \begin{frame}{A soft dictionary lookup}
-  \begin{columns}[T]
-    \column{0.5\textwidth}
-    Think of looking something up:
-    \begin{itemize}\small
-      \item You arrive with a \textbf{query}: what you want.
-      \item Each entry has a \textbf{key}: the label it is filed under.
-      \item Each entry has a \textbf{value}: its actual contents.
-    \end{itemize}
-    \vskip 4pt
-    You compare your query with \emph{every} key, then take the \textbf{values} of the good
-    matches.
-    \column{0.5\textwidth}
-    \keybox{A normal dictionary is a \textbf{hard} lookup: one key matches exactly. Attention is
-    a \textbf{soft} lookup: \emph{every} key matches a little, weighted by similarity, and you
-    blend all the values.}
-    \vskip 6pt
-    {\small Every word makes its own query, key and value, each with its own learned matrix.
-    That is how creature can stop asking ``who is like me?''.}
-  \end{columns}
+  \begin{center}\includegraphics[width=0.92\linewidth]{att_soft_lookup.pdf}\end{center}
+  \vskip -2pt
+  {\small A \textbf{query} is what you want. A \textbf{key} is the label an entry is filed under.
+  A \textbf{value} is what the entry contains.}
+  \vskip 6pt
+  \keybox{A dictionary is a \textbf{hard} lookup: one key matches exactly, or nothing does.
+  Attention is a \textbf{soft} lookup: \emph{every} key matches a little, and you get a blend of
+  all the values. Every word makes its own query, key and value, each with its own learned
+  matrix. That is how creature can stop asking ``who is like me?''.}
 \end{frame}
 
 \begin{frame}{Query: ``what am I looking for?''}
@@ -478,18 +532,24 @@ story.}
 \end{frame}
 
 \begin{frame}{By hand: ask a different question}
-  Make the query/key space as small as it gets: \textbf{one} number, a single axis that means
-  ``adjective match''. (GPT-2's heads use 64 numbers: room for 64 kinds of question.)
-  \vskip 6pt
-  \begin{itemize}
-    \item $w_Q = (0,0,0,1)$: a \textbf{noun} asks along that axis, ``any adjectives?''.
-      Queries: fluffy $0$, blue $0$, creature $\mathbf{2}$.
-    \item $w_K = (1,0,0,0)$: an \textbf{adjective} answers on the same axis, ``adjective
-      here''. Keys: fluffy $\mathbf{1}$, blue $\mathbf{1}$, creature $0$.
-  \end{itemize}
-  \vskip 6pt
-  Score = query $\times$ key, divided by $\sqrt{1} = 1$; then softmax by rows, as before.
-  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \small
+    Make the query/key space as small as it gets: \textbf{one} number, a single axis that means
+    ``adjective match''. (GPT-2's heads use 64 numbers: room for 64 kinds of question.)
+    \vskip 5pt
+    \textcolor{popblue}{$w_Q = (0,0,0,1)$} reads the noun cell: a \textbf{noun} asks along that
+    axis, ``any adjectives?''.
+    \vskip 4pt
+    \textcolor{orange1}{$w_K = (1,0,0,0)$} reads the adjective cell: an \textbf{adjective}
+    answers on the same axis, ``adjective here''.
+    \vskip 5pt
+    Score = query $\times$ key, divided by $\sqrt{1} = 1$; then softmax by rows, as before.
+    \column{0.52\textwidth}
+    \vskip 2pt
+    \includegraphics[width=\linewidth]{att_qk_axis.pdf}
+  \end{columns}
+  \vskip 8pt
   \keybox{\textbf{Predict:} what are creature's three weights now? And whom does fluffy listen
   to?}
 \end{frame}
@@ -513,47 +573,114 @@ story.}
   is no longer symmetric: creature $\to$ fluffy scores 2, fluffy $\to$ creature scores 0.}
 \end{frame}
 
-\begin{frame}{Scores $\rightarrow$ weights: why softmax?}
+\milestone{\pSM}{Piece 2: softmax}{Scores can be any number, even negative. Weights must be
+positive and add up to 1.}
+\setpiece{\pSM}
+
+\begin{frame}{Why softmax? 1: positive weights that sum to 1}
   \begin{columns}[T]
-    \column{0.52\textwidth}
+    \column{0.5\textwidth}
     Raw scores can be any real number. But we want a \textbf{weighted average} of the values, so
     the weights must be
     \begin{itemize}\small
       \item non-negative, and
       \item sum to $1$ (a distribution over ``where to look'').
     \end{itemize}
-    Dividing by the sum fixes the second but not the first (middle). \textbf{Softmax}
-    exponentiates first, so every weight is positive, then divides. It is also \emph{soft}: it
-    spreads weight over all the good keys instead of picking one, and it is smooth
-    (differentiable), so we can train through it. One catch: the weights must sum to 1, so a head
-    can never look at \emph{nothing} (LLM-4: attention sinks).
+    \vskip 4pt
+    Dividing by the sum fixes the second but not the first (middle): a negative score gives a
+    negative weight. \textbf{Softmax} exponentiates first, so every weight is positive, then
+    divides.
     \column{0.48\textwidth}
     \vskip 6pt
     \includegraphics[width=\linewidth]{att_softmax_why.pdf}
   \end{columns}
+  \vskip 10pt
+  \keybox{$\mathrm{softmax}(s)_j = e^{s_j} / \sum_i e^{s_i}$: positive because $e^{x} > 0$ for
+  every $x$, and the division makes the weights sum to 1.}
 \end{frame}
 
-\begin{frame}{Why divide by $\sqrt{d_k}$?}
+\begin{frame}{Why softmax? 2: soft, so it can learn}
   \begin{columns}[T]
     \column{0.5\textwidth}
     \small
-    A dot product over $d_k$ numbers is a sum of $d_k$ products. If the numbers have spread 1,
-    each product has variance 1, and variances add: the sum has variance $d_k$, spread
-    $\sqrt{d_k}$. For $d_k = 64$, about \textbf{8} (8.05 on 10{,}000 random pairs).
+    Why not just pick the best key (argmax)? Slide one key's score and watch its weight.
+    \vskip 5pt
+    \textcolor{armred}{\textbf{argmax}} jumps from 0 to 1 the moment the key takes the lead, and
+    is flat everywhere else. A small change of the score changes nothing, so the gradient is 0
+    and backprop gets no signal.
+    \vskip 5pt
+    \textcolor{popblue}{\textbf{softmax}} moves a little for every little change: a slope
+    everywhere, so training can push the weights where they need to go. And it spreads weight
+    over all the good keys instead of picking one.
+    \column{0.48\textwidth}
+    \vskip 2pt
+    \includegraphics[width=\linewidth]{att_argmax_softmax.pdf}
+  \end{columns}
+  \vskip 8pt
+  \watchbox{One catch: the weights must sum to 1, so a head can never look at \emph{nothing}.
+  LLM-4 shows where real heads park the weight they do not need (attention sinks).}
+\end{frame}
+
+\milestone{\pSQ}{Piece 3: $\sqrt{d_k}$}{Why divide by this one number? \textbf{Predict:} do
+scores from 64-number vectors come out bigger or smaller than from 4-number ones?}
+\setpiece{\pSQ}
+
+\begin{frame}{More numbers, bigger scores}
+  \begin{center}\includegraphics[width=\linewidth]{att_dk_spread.pdf}\end{center}
+  \vskip -4pt
+  {\small A dot product over $d_k$ numbers is a sum of $d_k$ products. If the numbers have spread
+  1, each product has variance 1, and variances add: the sum has variance $d_k$, spread
+  $\sqrt{d_k}$. Measured on 10{,}000 random pairs each: about 2, 4 and 8 (8.05 for $d_k = 64$).}
+  \vskip 6pt
+  \keybox{Bigger. GPT-2's heads use $d_k = 64$, so raw scores swing by about $\pm 8$, not $\pm 1$.
+  Right: divide by $\sqrt{d_k}$ and all three are back to spread 1.}
+\end{frame}
+
+\begin{frame}{Big scores freeze softmax}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \small
+    The same three keys, with the winner's lead growing: $(1,0,0)$, $(2,0,0)$, $(4,0,0)$,
+    $(8,0,0)$. Softmax goes from a soft preference to one weight near 1: it
+    \textbf{saturates}.
+    \vskip 5pt
+    Now nudge a loser up by 1. At $(8, 0, 0)$ its weight goes from 0.0003 to 0.0009. At
+    $(1, 0, 0)$ the same nudge moves it from 0.21 to 0.42.
+    \vskip 5pt
+    A nudge that changes nothing gives the gradient nothing to work with: \textbf{training
+    stalls}. It is argmax's flat part all over again.
+    \column{0.48\textwidth}
     \vskip 4pt
-    Feed scores that size to softmax and it \textbf{saturates}: one weight near 1, the rest near
-    0. At scores $(8, 0, 0)$ a loser gets 0.0003; raise its score by 1 and it gets 0.0009. At
-    $(1, 0, 0)$ the same nudge moves it from 0.21 to 0.42. A nudge that changes nothing gives
-    the gradient nothing to work with: \textbf{training stalls}.
+    \includegraphics[width=\linewidth]{att_saturation.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The fix: divide by $\sqrt{d_k}$}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \small
+    Divide every score by the spread, $\sqrt{d_k} = 8$: the scores are back to about $\pm 1$,
+    softmax stays soft, and every key keeps a slope.
+    \vskip 5pt
+    Right: five random keys, $d_k = 64$. Raw, one key takes everything. Divided by 8, all five
+    keep a share.
     \vskip 6pt
     \fcolorbox{warnred}{warnred!8}{\parbox{0.95\linewidth}{\scriptsize
-      Divide by the spread, $\sqrt{d_k} = 8$: back to about 1, softmax stays soft and trainable.
-      Dividing by $d_k = 64$ would squash the scores near 0, and softmax would go flat.}}
+      Why not divide by $d_k = 64$? That would squash the scores near 0, and softmax would go
+      flat: every key about the same weight, however relevant. $\sqrt{d_k}$ is the number that
+      makes the spread exactly 1.}}
     \column{0.5\textwidth}
     \includegraphics[width=\linewidth]{att_sqrt_dk.pdf}\\
     {\scriptsize Five random keys, $d_k = 64$: the same scores, before and after dividing by 8.}
   \end{columns}
+  \vskip 6pt
+  {\scriptsize\color{gray} Karpathy shows the same effect in code at 1:16:56 of ``Let's build
+  GPT'' (link on the first slide).}
 \end{frame}
+
+\milestone{\pV}{Piece 4: $V$}{The weights say whom to listen to. What do those words actually
+say?}
+\setpiece{\pV}
 
 \begin{frame}{Value: ``what do I hand over?''}
   \begin{columns}[T]
@@ -573,22 +700,12 @@ story.}
 \end{frame}
 
 \begin{frame}{By hand: what gets handed over}
-  \begin{columns}[T]
-    \column{0.52\textwidth}
-    \small
-    $W_V$ keeps fluffy, blue and noun and drops the ``adjective'' tag: values fluffy
-    $(0,1,0,0)$, blue $(0,0,1,0)$, creature $(0,0,0,2)$.
-    \vskip 4pt
-    Creature's update, with its weights 0.47, 0.47, 0.06 to three digits:
-    \[ 0.468\,(0,1,0,0) + 0.468\,(0,0,1,0) \]
-    \[ {}+ 0.063\,(0,0,0,2) = (0,\ 0.47,\ 0.47,\ 0.13) \]
-    Added to creature itself (the residual connection, LLM-4): $(0,\ 0.47,\ 0.47,\ 2.13)$, a
-    fluffy blue creature. With raw vectors it was $(0.21,\ 0.11,\ 0.11,\ 3.57)$.
-    \column{0.46\textwidth}
-    \vskip 8pt
-    \includegraphics[width=\linewidth]{att_value_update.pdf}
-  \end{columns}
-  \vskip 6pt
+  \begin{center}\includegraphics[width=0.92\linewidth]{att_value_chips.pdf}\end{center}
+  \vskip -4pt
+  {\small Creature's weights 0.47, 0.47, 0.06 come from piece 1 (0.468 and 0.063 to three
+  digits, so $0.063 \times 2 = 0.13$). Step 3 is the residual connection (LLM-4). With raw
+  vectors the result was $(0.21,\ 0.11,\ 0.11,\ 3.57)$: mostly more creature.}
+  \vskip 5pt
   \takebox{Fluffy was \emph{found} by its label (``adjective'') and \emph{handed over} its
   content (fluffiness). Found by one thing, give another: that is why $W_K \neq W_V$.}
 \end{frame}
@@ -632,22 +749,33 @@ story.}
   $W^O$ when heads are combined).}
 \end{frame}
 
-\begin{frame}{Putting it together: the equation}
+\milestone{\pALL}{The whole line}{Every piece has a job now. Read it once more, left to right.}
+\setpiece{\pALL}
+
+% the destination frame again, with every question answered
+\begin{frame}{Putting it together: every piece has a job}
+  \vskip 30pt
   \begin{center}
-    \fcolorbox{popblue}{popblue!6}{\parbox{0.9\linewidth}{\centering\large
-      $\displaystyle \mathrm{Attention}(Q,K,V)=\mathrm{softmax}\!\Big(\frac{QK^\top}{\sqrt{d_k}}\Big)\,V$}}
+  {\LARGE $\displaystyle\mathrm{Attention}(Q,K,V) =
+    \tikzmarknode{psm}{\textcolor{armred}{\mathrm{softmax}}}\!\Big(\frac{\tikzmarknode{pqk}{%
+    \textcolor{popblue}{Q}\textcolor{orange1}{K^{\top}}}}{\tikzmarknode{psq}{\textcolor{violet1}{%
+    \sqrt{d_k}}}}\Big)\,\tikzmarknode{pv}{\textcolor{paramgreen}{V}}$}
   \end{center}
-  \vskip 8pt
-  Read it left to right; it is exactly the three moves:
-  \begin{center}\small
-    \begin{tabular}{l l}
-      $QK^\top$ & every query $\cdot$ every key $=$ a grid of relevance \textbf{scores} \\[3pt]
-      $\div \sqrt{d_k}$ & keep the scores tame so softmax stays soft \\[3pt]
-      $\mathrm{softmax}$ & scores $\to$ \textbf{weights} (positive, sum to 1), row by row \\[3pt]
-      $\times V$ & \textbf{weighted sum} of the value vectors \\
-    \end{tabular}
-  \end{center}
-  \vskip 6pt
+  \begin{tikzpicture}[remember picture, overlay, font=\footnotesize, >=Latex]
+    \node[text=popblue, align=center] (a) at ([shift={(1.3cm,1.2cm)}]pqk.north)
+      {every query $\cdot$ every key:\\the $n \times n$ grid of scores};
+    \draw[->, popblue, thick] (a.south) -- (pqk.north);
+    \node[text=armred, align=center] (b) at ([shift={(-1.2cm,1.2cm)}]psm.north)
+      {scores $\to$ weights,\\row by row};
+    \draw[->, armred, thick] (b.south) -- (psm.north);
+    \node[text=violet1, align=center] (c) at ([shift={(-2.9cm,-1.0cm)}]psq.south)
+      {keeps the scores near $\pm 1$,\\so softmax stays soft};
+    \draw[->, violet1, thick] (c.east) -- (psq.south west);
+    \node[text=paramgreen, align=center] (d) at ([shift={(0.6cm,-1.0cm)}]pv.south)
+      {what each word hands over,\\blended by the weights};
+    \draw[->, paramgreen, thick] (d.north) -- (pv.south);
+  \end{tikzpicture}
+  \vskip 56pt
   \takebox{``Score, softmax, weighted sum'': the same three moves as wall 1, now with learned
   $Q$, $K$, $V$ from one sentence. In wall 1 the queries came from the decoder and the keys and
   values from the encoder: that version is \textbf{cross-attention} (LLM-5).}
@@ -661,22 +789,16 @@ story.}
 \end{frame}
 
 \begin{frame}{The same shapes in GPT-2}
-  \begin{itemize}
-    \item Each token is $d = 768$ numbers; a layer has 12 heads, each with $d_k = 64$.
-    \item One head's $W_Q$, $W_K$, $W_V$ are $64 \times 768$ each in our $W_Q\,\mathbf{e}$
-      notation: 147{,}456 numbers for the three. GPT-2's file stores them \textbf{transposed}, all
-      twelve heads' in a single $768 \times 2{,}304$ matrix ($3 \times 12 \times 64 = 2{,}304$),
-      because code multiplies rows (next slide).
-    \item A full window of 1{,}024 tokens gives a $1{,}024 \times 1{,}024$ grid: 1{,}048{,}576
-      scores per head per layer, and 150{,}994{,}944 over 12 heads and 12 layers.
-    \item Why 64 and not 768? $12 \times 64 = 768$: each head gets its own small space for its
-      own kind of question (LLM-4).
-  \end{itemize}
-  \vskip 8pt
-  \watchbox{The grid is $n \times n$: double the text and it gets \textbf{four times} bigger,
-  while $X$, $Q$, $K$ and $V$ only double. That is the bill LLM-5 adds up.}
-  \vskip 6pt
-  {\scriptsize\color{gray} Sizes read from GPT-2's config and weight file (local copy, 2026-10-05).}
+  \begin{center}\includegraphics[width=0.84\linewidth]{att_gpt2_cattn.pdf}\end{center}
+  \vskip -8pt
+  {\small One head's $W_Q$, $W_K$, $W_V$ are $64 \times 768$ each in our $W_Q\,\mathbf{e}$
+  notation; the file stores them \textbf{transposed}, all twelve heads' side by side, because
+  code multiplies rows (next slide). Why 64 and not 768?
+  $12 \times 64 = 768$: each head gets its own small space for its own question (LLM-4).}
+  \vskip 3pt
+  \watchbox{A full 1{,}024-token window: 150{,}994{,}944 scores over 12 heads and 12 layers.
+  Double the text and the grid grows \textbf{four times}; $X$, $Q$, $K$, $V$ only double (LLM-5
+  adds up the bill). \src{(GPT-2's config and weight file, 2026-10-05.)}}
 \end{frame}
 
 \begin{frame}[fragile]{Attention in about 10 lines}
@@ -701,9 +823,170 @@ def attention(X, Wq, Wk, Wv):
   differences, LLM-5) and keeps \texttt{exp} from overflowing.}
 \end{frame}
 
-\bbbcap{fs_masking.jpg}{Aside: GPT-2 \emph{masks}: future entries are set to $-\infty$, so they
-vanish after softmax and each word sees only the words before it. Our creature toy is unmasked;
-LLM-4 adds the mask.}
+% ================================================================
+% MASKING (2026-10-28; the causal mask frames moved here from LLM-4, py_src/masking_figs.py)
+\section{Masking: who may look at whom}
+\setpiece{}
+\sectiontransition{Masking}{Who may look at whom? Two ways to learn from raw text.}
+
+\begin{frame}{Two fill-in games}
+  A model learns from raw text by playing a fill-in game: hide a word, guess it, compare with
+  the truth. No labels needed. Two versions on our sentence:
+  \vskip 6pt
+  \begin{center}\includegraphics[width=\linewidth]{mask_two_games.pdf}\end{center}
+  \vskip 6pt
+  \keybox{\textbf{Predict:} which words may the model use to fill each blank? And which game
+  teaches a model to \emph{write}, one word after another?}
+\end{frame}
+
+\begin{frame}{Game 1: causal language modeling}
+  \begin{center}\includegraphics[width=\linewidth]{mask_clm_shift.pdf}\end{center}
+  \vskip -2pt
+  {\small Shift the sentence by one: the target at every position is the next word. Each
+  position may use only the words up to itself: the past can cause the next word, the future
+  cannot. Hence the name \textbf{causal language modeling} (CLM), also called next-token
+  prediction or \emph{autoregressive} modeling.}
+  \vskip 6pt
+  \takebox{This is GPT's game \paper{(Radford et al., 2018)}, and what GPT-2 was trained on.
+  Writing is the same game for real: predict a word, append it, predict again (LLM-5, LLM-6).}
+\end{frame}
+
+\begin{frame}{The cheat}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \small
+    Self-attention lets every word look at every word. Train game 1 like that, and ``blue'',
+    which must predict ``creature'', can simply \textbf{look at} ``creature'': it is the next
+    word in the input.
+    \vskip 5pt
+    One head learns ``copy the word to my right'', and the training loss falls towards 0.
+    \vskip 5pt
+    Then you ask it to write. The next word does not exist yet, there is nothing to copy, and
+    the model has learned nothing it can use.
+    \column{0.48\textwidth}
+    \includegraphics[width=\linewidth]{mask_cheat.pdf}
+  \end{columns}
+  \vskip 4pt
+  \trapbox{Whatever a position looks at in training must also exist when the model writes. So:
+  forbid every position to look to its right.}
+\end{frame}
+
+\bbbcap{fs_masking.jpg}{The fix has a name: \emph{masking}. Before the softmax, every entry above
+the diagonal is set to $-\infty$, so after it each word sees only itself and the words before.}
+
+\begin{frame}{The mask in three steps}
+  \begin{center}\includegraphics[width=0.8\linewidth]{mask_steps.pdf}\end{center}
+  \vskip -6pt
+  {\small Add a matrix $M$ to the scores \emph{before} the softmax: $0$ on and below the
+  diagonal, $-\infty$ above it. $e^{-\infty} = 0$, so every future word gets weight
+  \textbf{exactly} 0, and each row still sums to 1.}
+  \vskip 4pt
+  \keybox{$\mathrm{softmax}\big(QK^\top/\sqrt{d_k} + M\big)\,V$: the same line plus one fixed
+  matrix. No new weights, nothing to learn.}
+\end{frame}
+
+\begin{frame}{By hand: the mask on creature's grid}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \small
+    The learned grid from piece 1 (queries ask ``any adjectives?'', keys answer ``adjective
+    here''), now with the mask:
+    \begin{itemize}
+      \item \textbf{fluffy} (red) sees only itself: $(0.33, 0.33, 0.33) \to (1, 0, 0)$;
+      \item blue sees fluffy and itself, scores $0, 0$: $(0.5, 0.5, 0)$;
+      \item creature's row does not change: $(0.47, 0.47, 0.06)$.
+    \end{itemize}
+    \column{0.52\textwidth}
+    \includegraphics[width=\linewidth]{mask_creature_grid.pdf}
+  \end{columns}
+  \vskip 6pt
+  \takebox{In English adjectives come before their noun, so a left-to-right model can still let
+  the noun gather them. What the mask removes is the other direction.}
+\end{frame}
+
+\begin{frame}{Why $-\infty$ before the softmax, and not 0 after?}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \small
+    Row ``fluffy'' of the three-step grid: scores $-1.0$ and $-0.3$ for a and fluffy, then
+    $-0.4$, $0.0$ and $1.2$ for the three words after it.
+    \vskip 5pt
+    \textbf{Zero after:} softmax over all five hands the future 82\% of the weight (``roamed''
+    alone 0.54). Zero those and what is left, $0.06 + 0.12$, sums to 0.18: no longer a weighted
+    average.
+    \vskip 5pt
+    \textbf{$-\infty$ before:} the softmax only ever sees a and fluffy: $0.33$ and $0.67$. The
+    same 1 to 2 ratio, now summing to 1.
+    \column{0.48\textwidth}
+    \vskip 4pt
+    \includegraphics[width=\linewidth]{mask_renorm.pdf}
+  \end{columns}
+  \vskip 6pt
+  \keybox{Masking is a softmax over the visible keys only. (Zeroing after and dividing by 0.18
+  gives the same answer; adding $-\infty$ does it in one step.)}
+\end{frame}
+
+\begin{frame}{One pass, every prefix at once}
+  \begin{center}\includegraphics[width=0.86\linewidth]{mask_one_pass.pdf}\end{center}
+  \vskip -6pt
+  {\small Without the mask, each prediction needs its own pass with the future cut off: feed the
+  first $t$ words, predict word $t{+}1$, seven times. With the mask, row $t$ of the grid
+  \emph{is} that cut: one pass over 8 words gives \textbf{7 training signals}, none can cheat.}
+  \vskip 4pt
+  \keybox{A large part of why pretraining on internet-scale text is affordable at all. The causal
+  mask is not a safety measure; it is a \textbf{throughput} decision that happens to enforce
+  correctness (LLM-7 comes back to it).}
+\end{frame}
+
+\begin{frame}{Game 2: masked language modeling}
+  \begin{center}\includegraphics[width=0.94\linewidth]{mask_mlm.pdf}\end{center}
+  \vskip -6pt
+  {\small Hide some words by replacing them with a special token, \texttt{[MASK]}, and predict
+  the originals. There is \textbf{no attention mask}: every word, \texttt{[MASK]} included, sees
+  both sides. This is \textbf{masked language modeling} (MLM), BERT's game
+  \paper{(Devlin et al., 2019)}: about 15\% of the tokens are hidden (here 2 of 8), and only those
+  give a loss.}
+  \vskip 4pt
+  \takebox{The predict's answer: game 1 may use only the words before the blank, game 2 the words
+  on both sides, and only game 1 can write. BERT's exact recipe is in LLM-7.}
+\end{frame}
+
+\begin{frame}{CLM vs MLM}
+  \begin{center}\includegraphics[width=0.94\linewidth]{mask_clm_vs_mlm.pdf}\end{center}
+  \vskip -6pt
+  \begin{center}\small
+  \begin{tabular}{lll}
+    \toprule
+    & \textbf{CLM} (GPT) & \textbf{MLM} (BERT) \\
+    \midrule
+    who may look & the past only & everyone, both sides \\
+    a loss at & every position: $n$ per pass & the hidden ones: about $0.15\,n$ \\
+    can it write? & yes, one word at a time & no: it needs the words on both sides \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Two different things called ``mask''}
+  \begin{center}\includegraphics[width=\linewidth]{mask_two_kinds.pdf}\end{center}
+  \vskip 6pt
+  \trapbox{\texttt{[MASK]} is a \textbf{token}: it changes the input, and the model sees
+  everything else (MLM, BERT). The \textbf{attention mask} is a matrix added to the scores: the
+  input is complete, but each position may look only at some of the others (CLM, GPT). One word,
+  two different mechanisms.}
+\end{frame}
+
+\begin{frame}{One more mask: padding}
+  \begin{center}\includegraphics[width=0.94\linewidth]{mask_padding.pdf}\end{center}
+  \vskip -6pt
+  {\small A GPU wants a batch to be one rectangle, so shorter sentences are filled up with a
+  \texttt{[PAD]} token. Nobody should read it: its columns get $-\infty$ too (the same trick), and
+  the outputs at the \texttt{[PAD]} rows are thrown away.}
+  \vskip 4pt
+  \watchbox{With a causal mask and the padding at the end, real words never see it anyway. It
+  matters when the model sees both ways (BERT), and when a batch of prompts is padded at the
+  front for writing. Pretraining usually packs documents end to end and needs no padding (LLM-7).}
+\end{frame}
 
 % ================================================================
 \section*{Recap}
@@ -716,13 +999,14 @@ LLM-4 adds the mask.}
     \column{0.46\textwidth}
     \begin{itemize}\small
       \item \textbf{Wall 1}, one $C$: every step gets its own weighted mix of the inputs.
-      \item \textbf{Wall 2}, the queue: self-attention lets a sentence build its own vectors,
-        all at once.
+      \item \textbf{Wall 2}, the queue: self-attention builds every vector at once.
       \item Each word makes a \textcolor{popblue}{query}, a \textcolor{orange1}{key} and a
         \textcolor{paramgreen}{value}: ask, get found, hand over. Without them a word listens
         to itself.
       \item Score $QK^\top/\sqrt{d_k}$, softmax by rows, weighted sum of values; the grid is
         $n \times n$.
+      \item The \textbf{causal mask} keeps CLM (GPT) from peeking; MLM (BERT) hides words and
+        sees both sides.
     \end{itemize}
     \takebox{\textbf{Next (LLM-4):} many heads at once, and the block around them.}
   \end{columns}
@@ -765,13 +1049,15 @@ LLM-4 adds the mask.}
 \end{frame}
 
 \begin{frame}{Sources \& further reading}
-  \small
+  \footnotesize
   \begin{itemize}
     \item Bahdanau, Cho \& Bengio (2015), \emph{Neural Machine Translation by Jointly Learning to
       Align and Translate}: attention, for translation.
     \item Xu et al.\ (2015), \emph{Show, Attend and Tell}: attention for image captioning.
     \item Vaswani et al.\ (2017), \emph{Attention Is All You Need}: self-attention, the
       Transformer.
+    \item Radford et al.\ (2018), \emph{Improving Language Understanding by Generative
+      Pre-Training} (GPT, causal LM); Devlin et al.\ (2019), \emph{BERT} (masked LM), NAACL.
     \item Jay Alammar, \emph{The Illustrated Transformer}; Andrej Karpathy (2023),
       \link{https://youtu.be/kCc8FmEb1nY?t=2533}{Let's build GPT: from scratch, in code, spelled
       out.}
@@ -907,4 +1193,24 @@ LLM-4 adds the mask.}
 %     x V, and the code run on it (asked for the third time; rejected 10-05 and 10-20); a numeric
 %     wall-1 translation step; a masked 3-token softmax. Not applied: cutting the mystery still,
 %     the life map or the Q/K/V table (earlier rejections).
+%   REWORK 2026-10-28 (instructor: "show the equation earlier and ... go over unravelling components
+%     with time, also make explanation a lot more visual, do more of show not tell ... what can be
+%     extended, what can be split ... introduce terms of masked language modeling and the other one,
+%     explain better how masking works"; outline in LLM3_attention_OUTLINE.md, "Rework 2026-10-28").
+%     Picked: the causal-mask frames MOVE here from LLM-4; milestones + corner strip; a padding frame.
+%     Devices: "Where we are going: one line" after the fix (tikzmark labels: the four open
+%     questions); \milestone frames (the equation with one piece lit) before QK^T, softmax,
+%     sqrt(d_k), V and the whole line; \setpiece puts a small copy of the equation, current piece
+%     lit, in the top-right corner of every titled frame of that piece (frametitle hook).
+%     Text -> figures (py_src/attention_figs.py): att_three_moves (wall 1), att_toy_chips,
+%     att_soft_lookup (dict KeyError vs a blend), att_qk_axis, att_value_chips (chip arithmetic),
+%     att_gpt2_cattn. Splits: why softmax -> positive/sum-1 + argmax-vs-softmax (att_argmax_softmax);
+%     sqrt(d_k) -> spread grows (att_dk_spread, 2.02/3.97/8.05 measured) + saturation
+%     (att_saturation) + the fix. "Putting it together" is the destination frame again with the
+%     questions answered. New section "Masking: who may look at whom" (py_src/masking_figs.py):
+%     two fill-in games (predict), CLM, the cheat, the 3b1b masking still (was an aside after the
+%     code), the mask in three steps, creature's grid masked (from LLM-4), -inf before vs 0 after
+%     (82% of fluffy's weight on the future; .06/.12 sum .18 vs .33/.67), one pass = 7 predictions
+%     (from LLM-4), MLM (BERT, 15%; 80/10/10 stays in LLM-7), CLM vs MLM + "two things called mask",
+%     padding. Sources + Radford 2018, Devlin 2019.
 % =============================================================

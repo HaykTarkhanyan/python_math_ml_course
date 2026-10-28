@@ -13,13 +13,23 @@ save() refuses any text outside its figure.
 Generates into llms/03_attention/fig/:
   att_raw_grid.pdf      -- raw vectors as their own query/key/value: scores and weights, creature's row
   att_learned_grid.pdf  -- one-number queries and keys: score = q x k, weights, creature's row
-  att_value_update.pdf  -- creature's four numbers: before, after (raw), after (learned W_Q, W_K, W_V)
   att_shapes.pdf        -- the matrix shapes on "Donkey don't die, spring is coming" (9 tokens)
   att_dot_product.pdf   -- q . k for four keys: aligned, 45 degrees, perpendicular, opposite
   att_sqrt_dk.pdf       -- softmax of raw scores (d_k = 64) vs scores divided by sqrt(64) = 8
   att_softmax_why.pdf   -- scores, divided by their sum (a negative weight), softmax (all positive)
+  Added 2026-10-28 (rework: show, not tell):
+  att_three_moves.pdf   -- wall 1: score bars -> softmax weights -> the context as a weighted blend
+  att_toy_chips.pdf     -- the three toy vectors as 4-cell chips [adjective, fluffy, blue, noun]
+  att_soft_lookup.pdf   -- a Python dict (KeyError) vs a soft lookup that blends every value
+  att_qk_axis.pdf       -- w_Q reads the noun cell, w_K the adjective cell: each word's query and key
+  att_argmax_softmax.pdf -- weight on one key as its score slides: argmax steps, softmax has a slope
+  att_dk_spread.pdf     -- q . k for d_k = 4, 16, 64 (spread 2, 4, 8), and after dividing by sqrt(d_k)
+  att_saturation.pdf    -- softmax of (1,0,0) x 1, 2, 4, 8: from soft to one-hot
+  att_value_chips.pdf   -- W_V, the weighted sum of value chips, the residual add, as chip arithmetic
+                           (replaces att_value_update.pdf, the before/after table)
+  att_gpt2_cattn.pdf    -- GPT-2's 768 x 2,304 c_attn: Q | K | V, each 12 heads of 64
 
-Run (~5 s):
+Run (~8 s):
   ./ma/Scripts/python.exe llms/03_attention/py_src/attention_figs.py            # the figures
   ./ma/Scripts/python.exe llms/03_attention/py_src/attention_figs.py --verify   # also check GPT2 against the caches
 """
@@ -47,7 +57,6 @@ RESULTS = CH / "results"
 LOGS = ROOT / "logs"
 
 # ----------------------------------------------------------------------------- the toy
-FEATURES = ["adjective", "fluffy", "blue", "noun"]
 TOKENS = ["fluffy", "blue", "creature"]
 X = np.array([[1, 1, 0, 0],      # fluffy
               [1, 0, 1, 0],      # blue
@@ -71,6 +80,11 @@ QUOTED = {
     "saturation": {"big": [0.0003, 0.0009], "small": [0.21, 0.42]},   # scores (8,0,0) / (1,0,0)
     # why softmax and not "divide by the sum": att_softmax_why.pdf
     "softmax_why": {"scores": [3, 2, -1], "by_sum": [0.75, 0.5, -0.25], "softmax": [0.72, 0.27, 0.01]},
+    # added 2026-10-28
+    "three_moves": {"scores": [0.5, 2.6, 0.5], "weights": [0.1, 0.8, 0.1]},     # "The fix" diagram's .1/.8/.1
+    "soft_lookup": {"scores": [2.6, 1.6, 0.0], "weights": [0.69, 0.26, 0.05]},   # kitten vs cat, dog, car
+    "saturation_steps": {"scale": [1, 2, 4, 8], "top": [0.58, 0.79, 0.96, 1.0], "loser_8": 0.0003},
+    "dk_spread": {"dk": [4, 16, 64], "spread": [2, 4, 8]},                       # measured, to +-0.3
 }
 # GPT-2 small (checked with --verify against config.json, the safetensors header and tiktoken, 2026-10-05)
 GPT2 = {"d": 768, "heads": 12, "d_k": 64, "layers": 12, "n_ctx": 1024, "c_attn": [768, 2304],
@@ -83,6 +97,7 @@ FS, FS_SMALL, FS_TINY = 8, 7, 6.5
 ARMRED, ARMBLUE, ARMORANGE = "#D90012", "#0033A0", "#F2A800"
 INK, GREY, LIGHT = "#222222", "#777777", "#BBBBBB"
 TINT_RED = "#F9D2D5"
+GREEN_D = "#1E7B45"
 
 plt.rcParams.update({"font.family": ["DejaVu Sans"], "font.size": FS, "axes.linewidth": 0.6,
                      "xtick.labelsize": FS_SMALL, "ytick.labelsize": FS_SMALL,
@@ -211,6 +226,32 @@ def grid(ax, x0, y_top, cell_w, cell_h, M, vmax, row_labels=None, col_labels=Non
     return x0 + n_c * cell_w, y_top - n_r * cell_h
 
 
+SLOTS = ["adj.", "fluffy", "blue", "noun"]
+SLOT_COLORS = ["#8C8C8C", ARMORANGE, ARMBLUE, "#2E8B57"]
+
+
+def chip(ax, x, y, v, cw=0.26, ch=0.22, vmax=2.0, label=None, label_color=INK, numbers=True):
+    """A toy vector as 4 cells [adjective, fluffy, blue, noun], each in its slot's colour, darker the
+    bigger the number (alpha capped at 0.6 so the numbers stay readable). (x, y) is the bottom-left
+    corner; returns the right edge."""
+    for j, val in enumerate(v):
+        a = 0.06 + 0.54 * np.sqrt(min(abs(float(val)) / vmax, 1.0))
+        ax.add_patch(Rectangle((x + j * cw, y), cw, ch, facecolor=SLOT_COLORS[j], alpha=a, lw=0))
+        ax.add_patch(Rectangle((x + j * cw, y), cw, ch, fill=False, edgecolor="white", lw=0.8))
+        if numbers:
+            ax.text(x + (j + 0.5) * cw, y + ch / 2, num(val), ha="center", va="center", fontsize=FS_TINY,
+                    color=INK)
+    ax.add_patch(Rectangle((x, y), 4 * cw, ch, fill=False, edgecolor="#999999", lw=0.5))
+    if label:
+        ax.text(x - 0.05, y + ch / 2, label, ha="right", va="center", fontsize=FS_TINY, color=label_color)
+    return x + 4 * cw
+
+
+def slot_header(ax, x, y, cw):
+    for j, (s, c) in enumerate(zip(SLOTS, SLOT_COLORS)):
+        ax.text(x + (j + 0.5) * cw, y, s, ha="center", va="bottom", fontsize=FS_TINY, color=c)
+
+
 # ----------------------------------------------------------------------------- the toy, computed
 def toy(R, log):
     S_raw = X @ X.T / np.sqrt(X.shape[1])
@@ -291,17 +332,6 @@ def fig_learned_grid(T, log):
                 fontsize=FS_TINY, rotation=50, rotation_mode="anchor")
     ax.text(xr + 0.12 + 1.5 * cw, yb - 0.06, "weights", ha="center", va="top", fontsize=FS_SMALL)
     save(fig, "att_learned_grid.pdf", log)
-
-
-def fig_value_update(T, log):
-    d_raw, d_l = T[4], T[5]
-    rows = np.vstack([X[2], X[2] + d_raw, X[2] + d_l])
-    labels = ["creature, before", "after, raw vectors", "after, learned W"]
-    fig, ax = canvas(1.05, 2.75)
-    cw, ch, top = 0.4, 0.27, 0.86
-    x0 = 1.08
-    grid(ax, x0, top, cw, ch, rows, 3.6, labels, FEATURES, hl_row=2, col_rot=0)
-    save(fig, "att_value_update.pdf", log)
 
 
 def fig_shapes(log):
@@ -463,6 +493,282 @@ def fig_softmax_why(R, log):
     save(fig, "att_softmax_why.pdf", log)
 
 
+# ----------------------------------------------------------------------------- added 2026-10-28
+def fig_three_moves(R, log):
+    """Wall 1's three moves on "The fix" diagram's step: scores -> weights .1/.8/.1 -> a blend."""
+    Q3 = QUOTED["three_moves"]
+    s = np.array(Q3["scores"], dtype=float)
+    w = softmax_rows(s[None])[0]
+    check("three moves: weights", w, Q3["weights"])
+    R["three_moves"] = {"scores": s.tolist(), "weights": w.tolist()}
+    words, cols = ["The", "cat", "sat"], ["#9A9A9A", ARMBLUE, ARMORANGE]
+    fig, ax = canvas(1.5)
+    base = 0.3
+
+    def head(xc, title, sub):
+        ax.text(xc, 1.46, title, ha="center", va="top", fontsize=FS, fontweight="bold")
+        ax.text(xc, 1.28, sub, ha="center", va="top", fontsize=FS_TINY, color=GREY)
+
+    def bars(x0, vals, scale, fmt):
+        for i, (v, wd, c) in enumerate(zip(vals, words, cols)):
+            x = x0 + i * 0.38
+            ax.add_patch(Rectangle((x, base), 0.28, v * scale, facecolor=c, lw=0))
+            ax.text(x + 0.14, base + v * scale + 0.03, fmt(v), ha="center", va="bottom", fontsize=FS_TINY)
+            ax.text(x + 0.14, base - 0.04, wd, ha="center", va="top", fontsize=FS_TINY)
+        ax.plot([x0 - 0.06, x0 + 1.08], [base, base], color=GREY, lw=0.5)
+
+    head(0.72, "1. score", "how relevant is each word?")
+    bars(0.15, s, 0.27, lambda v: f"{v:.1f}")
+    arrow(ax, (1.32, 0.62), (1.62, 0.62))
+    head(2.35, "2. softmax", "positive weights that sum to 1")
+    bars(1.85, w, 0.75, num)
+    arrow(ax, (3.02, 0.62), (3.32, 0.62))
+    head(4.4, "3. weighted sum", "this step's own context")
+    x, bw = 3.55, 1.7                                       # the blend: one bar, cut by the weights
+    for wi, wd, c in zip(w, words, cols):
+        ax.add_patch(Rectangle((x, 0.5), bw * wi, 0.3, facecolor=c, edgecolor="white", lw=0.8))
+        ax.text(x + bw * wi / 2, 0.44, f"{num(wi)} {wd}", ha="center", va="top", fontsize=FS_TINY,
+                color=c if wd != "The" else GREY)
+        x += bw * wi
+    ax.text(4.4, 0.88, "context = .1 h(The) + .8 h(cat) + .1 h(sat)", ha="center", va="bottom",
+            fontsize=FS_TINY)
+    ax.text(4.4, 0.12, "mostly cat", ha="center", va="center", fontsize=FS_SMALL, color=ARMBLUE)
+    save(fig, "att_three_moves.pdf", log)
+
+
+def fig_toy_chips(log):
+    fig, ax = canvas(1.05, 2.6)
+    cw, ch, x0 = 0.4, 0.22, 0.85
+    slot_header(ax, x0, 0.86, cw)
+    for i, (t, v) in enumerate(zip(TOKENS, X)):
+        chip(ax, x0, 0.58 - i * 0.28, v, cw=cw, ch=ch, label=t)
+    save(fig, "att_toy_chips.pdf", log)
+
+
+def fig_soft_lookup(R, log):
+    Qs = QUOTED["soft_lookup"]
+    s = np.array(Qs["scores"], dtype=float)
+    w = softmax_rows(s[None])[0]
+    check("soft lookup: weights", w, Qs["weights"])
+    R["soft_lookup"] = {"scores": s.tolist(), "weights": w.tolist()}
+    fig, ax = canvas(1.6)
+    # left: the hard lookup
+    ax.text(1.15, 1.55, "hard lookup: a Python dict", ha="center", va="top", fontsize=FS, fontweight="bold")
+    mono = dict(fontsize=FS_TINY, family="DejaVu Sans Mono", va="center")
+    ax.text(0.1, 1.15, 'd = {"cat": v1, "dog": v2, "car": v3}', **mono)
+    ax.text(0.1, 0.82, 'd["cat"]', **mono)
+    ax.text(1.0, 0.82, "-> v1", color=GREEN_D, **mono)
+    ax.text(0.1, 0.55, 'd["kitten"]', **mono)
+    ax.text(1.0, 0.55, "-> KeyError", color=ARMRED, **mono)
+    ax.text(0.1, 0.2, "one key matches exactly,\nor nothing does", fontsize=FS_TINY, color=GREY, va="center")
+    ax.plot([2.4, 2.4], [0.1, 1.5], color=LIGHT, lw=0.6)
+    # right: the soft lookup
+    ax.text(3.95, 1.55, "soft lookup: attention", ha="center", va="top", fontsize=FS, fontweight="bold")
+    keys, cols = ["cat", "dog", "car"], [ARMBLUE, ARMORANGE, "#9A9A9A"]
+    ax.add_patch(Rectangle((2.55, 0.68), 0.62, 0.26, facecolor="#EEF1F8", edgecolor=ARMBLUE, lw=0.7))
+    ax.text(2.86, 0.81, "kitten", ha="center", va="center", fontsize=FS_SMALL)
+    ax.text(2.86, 0.6, "query", ha="center", va="top", fontsize=FS_TINY, color=GREY)
+    ax.text(3.45, 1.28, "key", ha="center", va="bottom", fontsize=FS_TINY, color=GREY)
+    ax.text(3.88, 1.28, "score", ha="center", va="bottom", fontsize=FS_TINY, color=GREY)
+    ax.text(4.25, 1.28, "weight (softmax)", ha="left", va="bottom", fontsize=FS_TINY, color=GREY)
+    for i, (k, sc, wi, c) in enumerate(zip(keys, s, w, cols)):
+        y = 1.12 - i * 0.24
+        ax.plot([3.17, 3.3], [0.81, y], color=LIGHT, lw=0.6)
+        ax.text(3.45, y, k, ha="center", va="center", fontsize=FS_SMALL)
+        ax.text(3.88, y, f"{sc:.1f}", ha="center", va="center", fontsize=FS_TINY)
+        ax.add_patch(Rectangle((4.25, y - 0.07), 0.95 * wi, 0.14, facecolor=c, lw=0))
+        ax.text(4.25 + 0.95 * wi + 0.04, y, num(wi), ha="left", va="center", fontsize=FS_TINY)
+    x, bw = 3.05, 1.45
+    for wi, k, c in zip(w, keys, cols):
+        ax.add_patch(Rectangle((x, 0.1), bw * wi, 0.2, facecolor=c, edgecolor="white", lw=0.8))
+        x += bw * wi
+    ax.text(3.0, 0.2, "result:", ha="right", va="center", fontsize=FS_TINY)
+    ax.text(4.56, 0.2, "a blend of\nall three values", ha="left", va="center", fontsize=FS_TINY, color=GREY)
+    save(fig, "att_soft_lookup.pdf", log)
+
+
+def fig_qk_axis(T, log):
+    q, k = T[6], T[7]
+    fig, ax = canvas(1.5, 2.75)
+    cw, ch, x0 = 0.27, 0.22, 0.78
+    slot_header(ax, x0, 1.23, cw)
+    ax.text(2.12, 1.23, "query", ha="center", va="bottom", fontsize=FS_TINY, color=ARMBLUE)
+    ax.text(2.55, 1.23, "key", ha="center", va="bottom", fontsize=FS_TINY, color=ARMORANGE)
+    for i, (t, v) in enumerate(zip(TOKENS, X)):
+        y = 0.96 - i * 0.28
+        chip(ax, x0, y, v, cw=cw, ch=ch, label=t, label_color=ARMRED if i == 2 else INK)
+        ax.add_patch(Rectangle((x0 + 3 * cw, y), cw, ch, fill=False, edgecolor=ARMBLUE, lw=1.3, zorder=5))
+        ax.add_patch(Rectangle((x0, y), cw, ch, fill=False, edgecolor=ARMORANGE, lw=1.3, zorder=5))
+        arrow(ax, (x0 + 4 * cw + 0.04, y + ch / 2), (1.98, y + ch / 2), color=LIGHT, lw=0.6)
+        ax.text(2.12, y + ch / 2, num(q[i]), ha="center", va="center", fontsize=FS_SMALL, color=ARMBLUE,
+                fontweight="bold" if q[i] else "normal")
+        ax.text(2.55, y + ch / 2, num(k[i]), ha="center", va="center", fontsize=FS_SMALL, color=ARMORANGE,
+                fontweight="bold" if k[i] else "normal")
+    ax.text(0.05, 0.1, "blue box: $w_Q$ reads it.   orange box: $w_K$ reads it.", ha="left", va="center",
+            fontsize=FS_TINY, color=GREY)
+    save(fig, "att_qk_axis.pdf", log)
+
+
+def fig_argmax_softmax(R, log):
+    """Weight on key 2 as its score slides, the other two scores fixed at 1 and 0."""
+    s = np.linspace(-3, 4, 401)
+    soft = np.exp(s) / (np.exp(s) + np.e + 1)
+    hard = (s > 1).astype(float)
+    fig, ax = plt.subplots(figsize=(2.65, 1.6))
+    fig.subplots_adjust(left=0.17, right=0.97, top=0.95, bottom=0.25)
+    ax.plot(s, hard, color=ARMRED, lw=1.4, drawstyle="steps-post", label="argmax: pick the top one")
+    ax.plot(s, soft, color=ARMBLUE, lw=1.4, label="softmax")
+    ax.text(-2.9, 0.22, "flat: a small nudge\nchanges nothing", fontsize=FS_TINY, color=ARMRED, va="bottom")
+    ax.text(1.9, 0.3, "a slope\neverywhere:\nit can learn", fontsize=FS_TINY, color=ARMBLUE, va="center")
+    ax.set_xlabel("score of key 2 (the others: 1 and 0)", fontsize=FS_TINY, labelpad=2)
+    ax.set_ylabel("weight on key 2", fontsize=FS_TINY)
+    ax.set_ylim(-0.05, 1.42)
+    ax.set_yticks([0, 0.5, 1])
+    ax.tick_params(labelsize=FS_TINY)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.legend(frameon=False, fontsize=FS_TINY, loc="upper left", handlelength=1.2, ncol=2,
+              columnspacing=0.8)
+    save(fig, "att_argmax_softmax.pdf", log)
+
+
+def fig_dk_spread(R, log):
+    """How big q . k gets for random entries of spread 1, for d_k = 64, 4, 16 (64 first, with the same
+    draw as fig_sqrt_dk, so its spread is the 8.05 quoted there)."""
+    rng = np.random.default_rng(SEED)
+    dots = {}
+    for dk in (64, 4, 16):
+        p = rng.standard_normal((10_000, 2, dk))
+        dots[dk] = (p[:, 0] * p[:, 1]).sum(1)
+    spread = {dk: float(dots[dk].std()) for dk in dots}
+    for dk, want in zip(QUOTED["dk_spread"]["dk"], QUOTED["dk_spread"]["spread"]):
+        if abs(spread[dk] - want) > 0.3:
+            raise AssertionError(f"spread of q.k at d_k={dk}: {spread[dk]:.2f}, slides say about {want}")
+    R["dk_spread"] = {str(dk): round(v, 2) for dk, v in spread.items()}
+    log.info(f"dk_spread: {R['dk_spread']}")
+    fig, axes = plt.subplots(1, 2, figsize=(W, 1.45))
+    fig.subplots_adjust(left=0.04, right=0.99, top=0.84, bottom=0.2, wspace=0.08)
+    cols = {4: ARMORANGE, 16: ARMBLUE, 64: ARMRED}
+    for dk in (4, 16, 64):
+        axes[0].hist(dots[dk], bins=np.linspace(-32, 32, 81), histtype="step", color=cols[dk], lw=1.1,
+                     density=True, label=f"$d_k$ = {dk}: spread {spread[dk]:.1f}")
+        axes[1].hist(dots[dk] / np.sqrt(dk), bins=np.linspace(-4.5, 4.5, 46), histtype="step",
+                     color=cols[dk], lw=1.1, density=True)
+    axes[0].set_title("q$\\cdot$k: more numbers, wider scores", fontsize=FS_SMALL, pad=3)
+    axes[1].set_title("q$\\cdot$k / $\\sqrt{d_k}$: all three spread about 1", fontsize=FS_SMALL, pad=3)
+    axes[0].legend(frameon=False, fontsize=FS_TINY, loc="upper left", handlelength=1.0)
+    axes[0].set_ylim(0, 0.32)
+    for ax in axes:
+        ax.set_yticks([])
+        ax.tick_params(labelsize=FS_TINY)
+        for side in ("top", "right", "left"):
+            ax.spines[side].set_visible(False)
+    axes[0].set_xlabel("score", fontsize=FS_TINY, labelpad=1)
+    axes[1].set_xlabel("score, scaled", fontsize=FS_TINY, labelpad=1)
+    save(fig, "att_dk_spread.pdf", log)
+
+
+def fig_saturation(R, log):
+    Qs = QUOTED["saturation_steps"]
+    fig, axes = plt.subplots(1, 4, figsize=(2.75, 1.5), sharey=True)
+    fig.subplots_adjust(left=0.03, right=0.99, top=0.82, bottom=0.12, wspace=0.12)
+    tops = []
+    for ax, c in zip(axes, Qs["scale"]):
+        wv = softmax_rows(np.array([[c, 0.0, 0.0]]))[0]
+        tops.append(wv[0])
+        bars = ax.bar(["k1", "k2", "k3"], wv, color=[ARMBLUE, LIGHT, LIGHT], width=0.7)
+        ax.bar_label(bars, labels=[num(wv[0]), "", ""], fontsize=FS_TINY, padding=1)
+        ax.set_title(f"({c}, 0, 0)", fontsize=FS_TINY, pad=2)
+        ax.set_ylim(0, 1.2)
+        ax.set_yticks([])
+        ax.tick_params(axis="x", labelsize=FS_TINY, length=0)
+        for side in ("top", "right", "left"):
+            ax.spines[side].set_visible(False)
+        if c == 8 and round(float(wv[1]), 4) != Qs["loser_8"]:
+            raise AssertionError(f"loser weight at (8,0,0): {wv[1]:.5f}")
+    check("saturation steps", tops, Qs["top"])
+    R["saturation_steps"] = [float(t) for t in tops]
+    save(fig, "att_saturation.pdf", log)
+
+
+def fig_value_chips(T, log):
+    """W_V drops the adjective tag; creature's weights times the value chips; the residual add."""
+    A_l, d_l = T[3], T[5]
+    V = X @ W_V.T
+    w = np.round(A_l[2], 2)
+    check("value chips: weights", w, QUOTED["learned_weights_creature"])
+    new = X[2] + d_l
+    fig, ax = canvas(1.8)
+    xl = 1.12
+    for j, (s, c) in enumerate(zip(["adjective", "fluffy", "blue", "noun"], SLOT_COLORS)):
+        ax.add_patch(Rectangle((xl + j * 0.85, 1.65), 0.1, 0.1, facecolor=c, alpha=0.6, lw=0))
+        ax.text(xl + j * 0.85 + 0.14, 1.7, s, ha="left", va="center", fontsize=FS_TINY, color=c)
+    lab = dict(ha="left", va="center", fontsize=FS_TINY, fontweight="bold")
+    # 1. W_V: word -> its value
+    ax.text(0.05, 1.27, "1. $W_V$ makes\n    each value", **lab)
+    x = xl
+    for t, v_in, v_out in zip(TOKENS, X, V):
+        ax.text(x + 0.62, 1.4, t, ha="center", va="bottom", fontsize=FS_TINY)
+        r = chip(ax, x, 1.18, v_in, cw=0.14, ch=0.18)
+        arrow(ax, (r + 0.03, 1.27), (r + 0.18, 1.27))
+        chip(ax, r + 0.21, 1.18, v_out, cw=0.14, ch=0.18)
+        x += 1.43
+    ax.text(5.45, 1.03, "the adjective cell is dropped: found by it, but not handed over",
+            ha="right", va="center", fontsize=FS_TINY, color=GREY)
+    # 2. the weighted sum
+    ax.text(0.05, 0.66, "2. weigh and\n    add them", **lab)
+    x = xl
+    for i, (wi, v) in enumerate(zip(w, V)):
+        ax.text(x, 0.66, ("" if i == 0 else "+ ") + f"{num(wi)} $\\times$", ha="left", va="center",
+                fontsize=FS_TINY)
+        x = chip(ax, x + (0.36 if i == 0 else 0.48), 0.57, v, cw=0.14, ch=0.18) + 0.06
+    ax.text(x, 0.66, "=", ha="left", va="center", fontsize=FS_SMALL)
+    chip(ax, x + 0.13, 0.57, d_l, cw=0.22, ch=0.18)
+    # 3. the residual add
+    ax.text(0.05, 0.22, "3. add to\n    creature", **lab)
+    r = chip(ax, xl, 0.13, X[2], cw=0.22, ch=0.18)
+    ax.text(r + 0.06, 0.22, "+", ha="left", va="center", fontsize=FS_SMALL)
+    r = chip(ax, r + 0.2, 0.13, d_l, cw=0.22, ch=0.18)
+    ax.text(r + 0.06, 0.22, "=", ha="left", va="center", fontsize=FS_SMALL)
+    r = chip(ax, r + 0.2, 0.13, new, cw=0.22, ch=0.18)
+    ax.text(r + 0.1, 0.22, "a fluffy blue creature", ha="left", va="center", fontsize=FS_SMALL,
+            color=GREEN_D, fontweight="bold")
+    save(fig, "att_value_chips.pdf", log)
+
+
+def fig_gpt2_cattn(log):
+    g = GPT2
+    fig, ax = canvas(1.45, 4.6)                              # drawn at its slot: 0.84 of the text width
+    x0, y0, wd, ht = 0.4, 0.32, 2.85, 0.72
+    third = wd / 3
+    names = [("$W_Q$, all 12 heads", "#CFD8EE", ARMBLUE), ("$W_K$, all 12 heads", "#FCE9B8", ARMORANGE),
+             ("$W_V$, all 12 heads", "#D5EBDD", "#2E8B57")]
+    for t, (name, fc, ec) in enumerate(names):
+        xt = x0 + t * third
+        ax.add_patch(Rectangle((xt, y0), third, ht, facecolor=fc, edgecolor=INK, lw=0.6))
+        for h in range(1, g["heads"]):
+            ax.plot([xt + h * third / g["heads"]] * 2, [y0, y0 + ht], color="white", lw=0.6)
+        ax.add_patch(Rectangle((xt, y0), third / g["heads"], ht, facecolor=ec, alpha=0.75, lw=0))
+        ax.text(xt + third / 2, y0 + ht + 0.04, name, ha="center", va="bottom", fontsize=FS_TINY, color=ec)
+        ax.text(xt + third / 2, y0 - 0.04, f"{g['heads']} heads $\\times$ {g['d_k']}", ha="center",
+                va="top", fontsize=FS_TINY, color=GREY)
+    ax.text(x0 + wd / 2, 1.43, f"GPT-2's c_attn, one per layer: {g['c_attn'][0]} $\\times$ {g['c_attn'][1]:,}",
+            ha="center", va="top", fontsize=FS_SMALL, fontweight="bold")
+    ax.text(x0 - 0.08, y0 + ht / 2, f"{g['d']} rows", rotation=90, ha="center", va="center", fontsize=FS_TINY)
+    ax.text(x0 + third / g["heads"] / 2, 0.1, "dark strip: head 1, 768 x 64", ha="left", va="center",
+            fontsize=FS_TINY, color=INK)
+    # one head's score grid
+    gx, gs = 3.6, 0.72
+    ax.add_patch(Rectangle((gx, y0), gs, gs, facecolor=TINT_RED, edgecolor=ARMRED, lw=0.6))
+    ax.text(gx + gs / 2, y0 + gs / 2, f"{g['n_ctx']:,}\n$\\times$\n{g['n_ctx']:,}", ha="center", va="center",
+            fontsize=FS_TINY, color=ARMRED)
+    ax.text(gx + gs / 2, y0 + ht + 0.04, "one head's score grid", ha="center", va="bottom", fontsize=FS_TINY,
+            color=ARMRED)
+    ax.text(gx + gs / 2, y0 - 0.04, f"{g['n_ctx'] ** 2:,} scores", ha="center", va="top", fontsize=FS_TINY,
+            color=GREY)
+    save(fig, "att_gpt2_cattn.pdf", log)
+
+
 # ----------------------------------------------------------------------------- --verify
 def verify_gpt2(log):
     """Check the GPT2 constants against what is already on disk (no download, no model run)."""
@@ -512,10 +818,12 @@ def main():
     T = toy(R, log)
     gpt2_arithmetic(R, log)
     saturation(R, log)
-    jobs = [lambda: fig_raw_grid(T, log), lambda: fig_learned_grid(T, log),
-            lambda: fig_value_update(T, log), lambda: fig_shapes(log),
+    jobs = [lambda: fig_raw_grid(T, log), lambda: fig_learned_grid(T, log), lambda: fig_shapes(log),
             lambda: fig_dot_product(R, log), lambda: fig_sqrt_dk(R, log),
-            lambda: fig_softmax_why(R, log)]
+            lambda: fig_softmax_why(R, log),
+            lambda: fig_three_moves(R, log), lambda: fig_toy_chips(log), lambda: fig_soft_lookup(R, log),
+            lambda: fig_qk_axis(T, log), lambda: fig_argmax_softmax(R, log), lambda: fig_dk_spread(R, log),
+            lambda: fig_saturation(R, log), lambda: fig_value_chips(T, log), lambda: fig_gpt2_cattn(log)]
     for i, job in enumerate(jobs, 1):
         job()
         el = time.time() - t0

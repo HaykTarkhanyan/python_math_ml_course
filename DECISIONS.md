@@ -9,6 +9,47 @@ this file holds the choice and a pointer.
 
 ---
 
+## #103 - LLM-3 shows the attention equation first and unpacks it piece by piece; the causal mask moves in from LLM-4, with CLM, MLM and padding
+
+**Date:** 2026-10-28 · **Status:** active (instructor: "show the equation earlier and ... go over
+unravelling components with time, also make explanation a lot more visual, do more of show not tell
+... introduce terms of masked language modeling and the other one, explain better how masking
+works"; picked: move the mask frames, milestones + corner strip, a padding frame).
+
+**Decision.** `LLM3_attention.tex` goes from 44 to 65 pages. (1) The equation appears right after
+"The fix, in one idea" with its four pieces each labelled by an open question, and comes back on
+"Putting it together" with each question answered. (2) Before each piece is unpacked, a plain
+**milestone** frame shows the equation with only that piece lit (QK^T, softmax, sqrt(d_k), V, then the
+whole line), and a small copy with the same piece lit sits in the top-right corner of every titled
+frame of that piece (`\setpiece`, a frametitle hook). (3) Text-only mechanics became generated
+figures (`attention_figs.py`: three moves, toy chips, dict vs soft lookup, w_Q/w_K on the chips, value
+chip arithmetic, GPT-2's c_attn); "why softmax" and "why sqrt(d_k)" split into 2 and 3 frames with
+new figures (argmax vs softmax; q.k spread for d_k = 4, 16, 64; saturation steps). (4) A new section
+"Masking: who may look at whom" (`masking_figs.py`, 11 figures): two fill-in games, causal language
+modeling (CLM), the cheat, the mask in three steps, creature's grid masked, minus infinity before
+vs 0 after, one pass = every prefix, masked language modeling (MLM), CLM vs MLM, "two things called
+mask", padding. LLM-4 loses its three mask frames (callbacks remain); LLM-5, LLM-6 and LLM-7 point
+their mask callbacks at LLM-3; LLM-7 keeps BERT's 80/10/10 recipe and calls it MLM.
+
+**Why.** The equation arrived on page 35 of 44, so students met each piece without knowing what it
+was for. The 44-page version told the toy's mechanics in prose (soft dictionary, by-hand frames,
+softmax and sqrt(d_k) as dense left columns). No deck named CLM or MLM (LLM-7 taught BERT's
+objective unnamed), and masking was split: one aside still in LLM-3, the mechanics in LLM-4. All
+new numbers are toy or measured on random draws and asserted in the scripts (e.g. fluffy's unmasked
+row puts 82% of its weight on the future; masked 0.33 / 0.67).
+
+**Alternatives rejected.** Keeping LLM-4's mask frames as a recap (duplicate teaching; offered as
+Q1, instructor picked "move"). Milestones only, or corner strip only (offered as Q2). Leaving padding
+out (GPT-2 pretraining needs none; included because the instructor wanted masking complete). BERT's
+80/10/10 in LLM-3 (it is LLM-7's detail). The creature toy as full matrices was not re-offered
+(rejected 10-05, 10-20, 10-27).
+
+**What would change this.** If the milestones feel repetitive in the room, they are the piece to
+drop (the corner strip carries the same signal). If LLM-5's three-mask
+cold open no longer surprises anyone now that LLM-3 draws masks A and B, rework it around mask C.
+
+---
+
 ## #102 - The LLM chapter leaves `ml/14_llms` for a root folder `llms/`, one subfolder per deck, and gets its own website part
 
 **Date:** 2026-10-28 · **Status:** active (instructor: "llm parts to become their own folder in root ...

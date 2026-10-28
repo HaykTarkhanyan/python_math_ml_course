@@ -143,7 +143,7 @@
     \item[\textbf{2.}] \textbf{Tokens talk, but never think alone.} $\to$ the MLP, where facts like
       Messi's sport seem to live.
     \item[\textbf{3.}] \textbf{One layer is not a network.} $\to$ the residual stream and its
-      norms; and a model that writes left to right must not read the future $\to$ the mask.
+      norms. (LLM-3's causal mask rides along inside every attention layer.)
   \end{enumerate}
   \vskip 10pt
   \keybox{The three fixes bolted onto one head of attention \emph{are} the Transformer block.}
@@ -199,18 +199,18 @@
   $\text{MultiHead}(X) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\, W_O$,
   \qquad $\text{head}_i = \text{Attention}(XW_Q^{(i)}, XW_K^{(i)}, XW_V^{(i)})$
   \end{center}
-  \vskip 8pt
+  \vskip 4pt
   \keybox{\textbf{GPT-2: 12 heads $\times$ 64 numbers $=$ 768}, the size of a token's vector
   (LLM-3's ``why 64''). Count: $12 \times 3 \times (768 \times 64) = 1{,}769{,}472 = 3 \times
   768^2$ - exactly one 768-wide head's $W_Q, W_K, W_V$, stored as one $768 \times 2{,}304$ matrix.
   $W_O$ adds $768 \times 768 = 589{,}824$, so every output number can draw on every head. Total
   $4 \times 768^2 = 2{,}359{,}296$, plus 3,072 biases: the 2,362,368 on the block chart later.}
   \vskip 2pt
-  {\small Same weights as one 768-wide head; you \textbf{split} the budget, you do not add any.
-  What the split buys: one head gives each token \textbf{one} softmax, one way of weighting the
-  others; 12 heads give it 12 different weightings at once. The heads do not talk to each other
-  until the concatenation, so all twelve are one batched matrix product; they differ because
-  they start from different random weights ([41]).}
+  {\small Same weights as one 768-wide head: you \textbf{split} the budget, you do not add to it.
+  What the split buys: one head gives each token \textbf{one} softmax, one way to weight the
+  others; 12 heads give it 12 at once. They do not talk until the concatenation, so all twelve
+  run as one batched matrix product, and they differ because they start from different random
+  weights ([41]).}
 \end{frame}
 
 \bbbcap{multihead.png}{Multi-head attention: the same mechanism, many times over, each head free
@@ -602,53 +602,6 @@ exponentially with the dimension.}
   $(0, 0.47, 0.47, 2.13)$ and gets their update added.}
 \end{frame}
 
-\begin{frame}{Masking: a decoder must not read the future}
-  \vskip 4pt
-  A model trained to predict the next token must not be allowed to look at it. The fix is one
-  line: add $-\infty$ above the diagonal \emph{before} the softmax.
-  \vskip 6pt
-  \begin{center}
-    \includegraphics[width=0.92\linewidth]{blk_causal_mask.pdf}
-  \end{center}
-  \vskip -2pt
-  {\small $e^{-\infty} = 0$, so those weights become \textbf{exactly} zero, and each row still sums
-  to one.}
-\end{frame}
-
-\begin{frame}{By hand: the mask on creature's grid}
-  \begin{columns}[T]
-    \column{0.46\textwidth}
-    \small
-    LLM-3's grid (queries read ``noun'', keys read ``adjective''), now with the mask:
-    \begin{itemize}
-      \item \textbf{fluffy} (red) sees only itself: $(0.33, 0.33, 0.33) \to (1, 0, 0)$;
-      \item blue sees fluffy and itself, scores $0, 0$: $(0.5, 0.5, 0)$;
-      \item creature's row does not change: $(0.47, 0.47, 0.06)$.
-    \end{itemize}
-    \vskip 4pt
-    Creature's adjectives came first, so the mask took nothing from it.
-    \column{0.52\textwidth}
-    \includegraphics[width=\linewidth]{blk_mask_grid.pdf}
-  \end{columns}
-  \vskip 6pt
-  \takebox{In English adjectives come before their noun, so a left-to-right model can still let
-  the noun gather them. What the mask removes is the other direction.}
-\end{frame}
-
-\begin{frame}{Why that trick matters more than it looks}
-  \vskip 10pt
-  Without the mask, position $t$ could look at token $t{+}1$ - the very answer it must predict.
-  So each prediction would need its own pass with the future cut off: feed the first $t$ tokens,
-  predict token $t{+}1$, repeat.
-  \vskip 10pt
-  With masking, one forward pass over $n$ tokens gives \textbf{$n$ training signals at once}:
-  every prefix is predicted at the same time, and none of them can cheat.
-  \vskip 12pt
-  \keybox{A large part of why pretraining on internet-scale text is affordable at all. The causal
-  mask is not a safety measure; it is a \textbf{throughput} decision that happens to enforce
-  correctness. (LLM-5 and LLM-7 come back to it.)}
-\end{frame}
-
 \begin{frame}{Modern block recipe}
   \vskip 8pt
   The block has been tuned since 2017. Four changes you will meet in current models:
@@ -725,7 +678,7 @@ exponentially with the dimension.}
       Tower moves to Rome. Two thirds of every block.
     \item \textbf{The block}: norm, attention, add; norm, MLP, add. The stream is never
       normalised; every sublayer writes a correction.
-    \item \textbf{The mask}: no reading the future, and $n$ training signals per pass.
+    \item \textbf{The mask} (LLM-3) sits in every attention layer: no block reads the future.
   \end{itemize}
 \end{frame}
 
@@ -890,4 +843,9 @@ exponentially with the dimension.}
 %     whole block by hand, multi-head with shapes, a causal-tracing figure, a ROME edit on the cute
 %     column. Not applied: cutting the life map, the plan frame, the MJ stills, the head table, the
 %     superposition still (earlier rejections).
+%   MASK MOVED TO LLM-3 2026-10-28 (instructor picked "move" during the LLM-3 rework): the three
+%     frames "Masking: a decoder must not read the future", "By hand: the mask on creature's grid"
+%     and "Why that trick matters more than it looks" are now in LLM-3's masking section (with CLM,
+%     MLM and padding); blk_causal_mask / blk_mask_grid and their code left block_figs.py. Here: a
+%     callback in "Three things stand between one head and GPT-2" and in the recap.
 % ============================================================================
