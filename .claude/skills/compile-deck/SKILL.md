@@ -63,10 +63,12 @@ single pass leaves a stale TOC and page counters. Follow every step, in order.
    ```
 
 6. **Open for instructor review** - PowerShell, one file at a time, ~0.5 s apart
-   (rapid `cmd /c start` loops drop windows):
+   (rapid `cmd /c start` loops drop windows). **Open `DECK_notes.pdf` when it
+   exists**, not the clean PDF: the instructor annotates whatever is open, and
+   the clean PDF is overwritten by the next compile.
 
    ```powershell
-   Start-Process "msedge.exe" -ArgumentList '"C:\full\path\deck.pdf"'
+   Start-Process "msedge.exe" -ArgumentList '"C:\full\path\deck_notes.pdf"'
    ```
 
 ## Red flags - the deck is NOT done if you are thinking:

@@ -22,7 +22,7 @@ foundations, [49] architectures, [50] transfer learning, [51] vision tasks.
 | ~~**Oct 14**~~ | Wed | [50] + [51] | ✅ Transfer learning + Vision tasks - **delivered**, notes exported | `12_cnn/50_transfer_learning` (32 frames) · `12_cnn/51_vision_tasks` (49 frames) | Clean PDFs recompiled 2026-10-15; both notes PDFs linked on the chapter page |
 | **Oct 16** | Fri | [52] | *Practical* - Gesture Snake | `12_cnn/52_gesture_snake/52_gesture_snake_solution.ipynb` · `STUDENT_GUIDE.md` | Built 2026-10-01; Part 8b (fine-tuning) added 2026-10-17; folder renamed at the chapter wrap-up (DECISIONS #88) |
 | **Oct 18** | Sun | [53] + [54] | RNN foundations + The road to attention | `13_rnns/53_rnn_foundations` · `13_rnns/54_road_to_attention` | [53] delivered 2026-10-21, [54] 2026-10-23 (both notes PDFs in); both renamed from `L20_`/`L21_` that day, labels to [53]/[54] |
-| **Oct 21** | Wed | [55] | LLMs, session 1 | `14_llms/LLM1_tokenization` (40 frames), if the chapter order holds - see risk 5 | Built 2026-10-04, not student-reviewed (LLM-3 to LLM-5 were) |
+| **Oct 21** | Wed | [55] | LLMs, session 1 | `llms/01_tokenization/LLM1_tokenization` (40 frames), if the chapter order holds - see risk 5 | Built 2026-10-04, not student-reviewed (LLM-3 to LLM-5 were) |
 
 ### Risks and open questions (critique of this plan)
 
@@ -54,7 +54,7 @@ foundations, [49] architectures, [50] transfer learning, [51] vision tasks.
    deck per session and no practicals, LLM-14 lands on Fri Nov 20 and agents on Sun Nov 29.
    Still unscheduled after that, from the 08-08 plan: diffusion, RL, VLM, audio, VLA, tabular
    FMs (~12-15 sessions), which pushes past mid-December. If there is a hard end date, section 8
-   of `14_llms/LLM_CHAPTER_PLAN.md` has a 10-session cut.
+   of `llms/LLM_CHAPTER_PLAN.md` has a 10-session cut.
 7. **Autoencoders and GANs dropped out of the order.** The 08-08 plan put them between RNN and
    LLMs; this plan goes straight from RNN to LLMs. Cut, or after LLMs? Their decks assume RNN
    came right before (`L23_vae`'s Next box and `L23c`'s king-queen callback point at L21), and
@@ -187,13 +187,13 @@ Ordered by how soon the date arrives.
 
 ### 1. Attention + LLMs — ~7 sessions of material, first needed **Sep 27**
 
-The largest block in the course and the least built. `ml/14_llms/` holds **L24 only**
+The largest block in the course and the least built. `llms/` holds **L24 only**
 (53pp); the planned **L25 and L26 do not exist**. `ATTENTION_CHAPTER_PLAN.md` carries the
 approved outline for all three.
 
 The rest of the block would come from **`misc/dl4nlp/`** — 18 decks, ~442 pages, already in the
 house palette — which is currently outside `ml/` and unregistered in `_quarto.yml`. Folding it
-into `14_llms` (or a new LLM chapter) is a decision, not a mechanical move: it changes
+into `llms/` (or a new LLM chapter) is a decision, not a mechanical move: it changes
 chapter boundaries and the numbering.
 
 **Lead time: ~7 weeks from 2026-08-08.**

@@ -9,6 +9,38 @@ this file holds the choice and a pointer.
 
 ---
 
+## #102 - The LLM chapter leaves `ml/14_llms` for a root folder `llms/`, one subfolder per deck, and gets its own website part
+
+**Date:** 2026-10-28 · **Status:** active (instructor: "llm parts to become their own folder in root ...
+separate section in quarto website", option b: every deck in its own folder; "for now just the
+tokenization" on the website).
+
+**Decision.** `ml/14_llms` moved as a pure `git mv` (524 tracked files, history follows) to `llms/`:
+`01_tokenization/` ... `14_anatomy_2026/`, each with its deck, outline, `fig/`, `py_src/` and
+`results/`; `00_shared/` holds what several decks use (the 30 course-map figures and
+`llm_roadmap.py`, the borrowed 3Blue1Brown / paper / Welch Labs stills, `research/`, `sources/`) and an
+`archive/` for the July L24-L26 scripts and figures no deck uses (README lists them). Plans stay at
+`llms/` top level. Decks now `\input{../../ml/preamble}` and search `../00_shared/fig/`. The website
+gets a part "🧠 LLMs" with a new page `llms/01_tokenization/tokenization.qmd`; `attention.qmd` moved
+to `llms/03_attention/` and stays in the Machine Learning part for now.
+
+**Why.** The LLM decks are now the next stretch of the course and outgrew one shared chapter folder
+(535 files). Scripts needed almost no change: every one finds its folders as `parents[1]` (deck) and
+`parents[3]` (repo root), and `llms/NN/py_src/` has the same depth as `ml/14_llms/py_src/`; only
+`decoding_figs.py` reads another folder's file (the shared map's results), now by an explicit path.
+
+**Alternatives rejected.** Moving the folder whole (option a) or only tokenization out (c): the
+instructor chose one folder per deck. Duplicating shared figures into each deck: 13 course-map
+figures are used by two decks each, so they live once in `00_shared/`. Rewriting old paths in
+DECISIONS.md, `_learnings/` and `_work_sessions/`: those record where things were; this entry is the
+map from old to new (`ml/14_llms/X` -> `llms/<deck>/X`, shared files -> `llms/00_shared/`).
+
+**What would change this.** If a deck needs another deck's figure, move that figure to `00_shared/`
+rather than reaching across folders. Old GitHub links to `ml/14_llms/...` PDFs now 404; if students
+rely on them, add redirect notes on the chapter page.
+
+---
+
 ## #101 - LLM-2 to LLM-5 answer a third student review: corrections and clarifications applied, the big worked examples offered
 
 **Date:** 2026-10-27 · **Status:** active (instructor: "do student review on the 2,3,4,5").
