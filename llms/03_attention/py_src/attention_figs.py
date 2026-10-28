@@ -28,6 +28,11 @@ Generates into llms/03_attention/fig/:
   att_value_chips.pdf   -- W_V, the weighted sum of value chips, the residual add, as chip arithmetic
                            (replaces att_value_update.pdf, the before/after table)
   att_gpt2_cattn.pdf    -- GPT-2's 768 x 2,304 c_attn: Q | K | V, each 12 heads of 64
+  The matrix toy (d_k = 2, real matrix products; the slide's 10-line code is run on it and its
+  printout asserted):
+  att_mat_qk.pdf        -- q = W_Q e for creature, k = W_K e for fluffy, each row's dot product written out
+  att_mat_scores.pdf    -- 2-number queries and keys: score grid q.k / sqrt(2) and the weights
+  att_mat_pipeline.pdf  -- X -> Q, K, V -> QK^T / sqrt(2) -> softmax -> A V, creature's row in red
 
 Run (~8 s):
   ./ma/Scripts/python.exe llms/03_attention/py_src/attention_figs.py            # the figures
@@ -90,7 +95,19 @@ QUOTED = {
     "softmax_002": {"e2": 7.389, "denom": 9.389},     # (e^0, e^0, e^2) / (2 + e^2), the raw toy
     "slope": {"big": 0.0003, "small": 0.17},          # w(1 - w) of the loser at (8,0,0) / (1,0,0)
     "by_dk_range": 0.15,                              # max - min weight after dividing by 64
+    # the matrix toy (instructor 2026-10-28, after offers on 10-05, 10-20, 10-27): d_k = 2, real
+    # matrix products on the same three vectors; W_V as in the one-number toy
+    "mat": {"q": {"fluffy": [0.5, 0.5], "blue": [0.5, 0.5], "creature": [2, 1]},
+            "k": {"fluffy": [1, 0.5], "blue": [1, 0.5], "creature": [0, -1]},
+            "scores_creature": [2.5, 2.5, -1], "scaled_creature": [1.77, 1.77, -0.71],
+            "weights_creature": [0.48, 0.48, 0.04], "weights_fluffy": [0.41, 0.41, 0.17],
+            "out_creature": [0, 0.48, 0.48, 0.08], "out_fluffy": [0, 0.41, 0.41, 0.34],
+            "printout": "[[0.   0.41 0.41 0.34]\n [0.   0.41 0.41 0.34]\n [0.   0.48 0.48 0.08]]"},
 }
+W_Q2 = np.array([[0.5, 0, 0, 1.0],      # the matrix toy's W_Q (d_k x d = 2 x 4): rows are questions
+                 [0, 0.5, 0.5, 0.5]])
+W_K2 = np.array([[1.0, 0, 0, 0],
+                 [0, 0.5, 0.5, -0.5]])
 # GPT-2 small (checked with --verify against config.json, the safetensors header and tiktoken, 2026-10-05)
 GPT2 = {"d": 768, "heads": 12, "d_k": 64, "layers": 12, "n_ctx": 1024, "c_attn": [768, 2304],
         "c_proj": [768, 768],
@@ -785,6 +802,137 @@ def fig_gpt2_cattn(log):
     save(fig, "att_gpt2_cattn.pdf", log)
 
 
+# ----------------------------------------------------------------------------- the matrix toy (2026-10-28)
+def attention_slide(X_, Wq, Wk, Wv):
+    """The deck's "Attention in about 10 lines", line for line, so its printout on the toy is checked."""
+    Q, K, V = X_ @ Wq, X_ @ Wk, X_ @ Wv
+    d_k = Q.shape[1]
+    scores = Q @ K.T / np.sqrt(d_k)
+    scores -= scores.max(1, keepdims=True)
+    weights = np.exp(scores)
+    weights /= weights.sum(1, keepdims=True)
+    return weights @ V
+
+
+def mat_toy(R, log):
+    """d_k = 2: q = W_Q e as a real matrix product, then the whole line on X, and the slide's code."""
+    M = QUOTED["mat"]
+    Q, K, V = X @ W_Q2.T, X @ W_K2.T, X @ W_V.T
+    for i, t in enumerate(TOKENS):
+        check(f"matrix toy q {t}", Q[i], M["q"][t])
+        check(f"matrix toy k {t}", K[i], M["k"][t])
+    S = Q @ K.T
+    Ss = S / np.sqrt(Q.shape[1])
+    A = softmax_rows(Ss)
+    O = A @ V
+    check("matrix toy scores, creature", S[2], M["scores_creature"])
+    check("matrix toy scaled, creature", Ss[2], M["scaled_creature"])
+    check("matrix toy weights, creature", A[2], M["weights_creature"])
+    check("matrix toy weights, fluffy", A[0], M["weights_fluffy"])
+    check("matrix toy output, creature", O[2], M["out_creature"])
+    check("matrix toy output, fluffy", O[0], M["out_fluffy"])
+    W_V_slide = np.diag([0, 1, 1, 1])                      # built as the slide builds it (ints)
+    out = attention_slide(X.astype(int), W_Q2.T, W_K2.T, W_V_slide.T)
+    printed = str(np.round(out, 2))
+    if printed != M["printout"]:
+        raise AssertionError(f"the slide prints\n{M['printout']}\nbut the code prints\n{printed}")
+    if not np.allclose(out, O):
+        raise AssertionError("the 10-line function and the step-by-step matrix toy disagree")
+    R["mat"] = {"Q": Q.tolist(), "K": K.tolist(), "scaled": Ss.tolist(), "A": A.tolist(), "O": O.tolist(),
+                "printout": printed}
+    log.info(f"matrix toy: creature weights {r2(A[2])}, output {r2(O[2])}")
+    return Q, K, V, Ss, A, O
+
+
+def fig_mat_qk(log):
+    """q = W_Q e for creature and k = W_K e for fluffy, each row's dot product written out."""
+    fig, ax = canvas(1.8)
+    cw, ch, top = 0.26, 0.21, 1.3
+    dot = "$\\cdot$"
+
+    def product(x0, W, e, out, cmap, title, ename, oname, oc):
+        ax.text(x0 + 0.95, 1.78, title, ha="center", va="top", fontsize=FS_SMALL, fontweight="bold")
+        xr, _ = grid(ax, x0, top, cw, ch, W, 1.0, ["row 1", "row 2"], SLOTS, cmap=cmap, col_rot=50)
+        ax.text(xr + 0.09, top - ch, "$\\times$", ha="center", va="center", fontsize=FS)
+        xe = xr + 0.19
+        grid(ax, xe, top, cw, ch, e.reshape(4, 1), 2.0, cmap="Greys")
+        ax.text(xe + cw / 2, top - 4 * ch - 0.03, ename, ha="center", va="top", fontsize=FS_TINY)
+        ax.text(xe + cw + 0.09, top - ch, "=", ha="center", va="center", fontsize=FS)
+        xo = xe + cw + 0.19
+        grid(ax, xo, top, cw, ch, out.reshape(2, 1), 2.0, cmap=cmap)
+        ax.text(xo + cw / 2, top - 2 * ch - 0.03, oname, ha="center", va="top", fontsize=FS_SMALL, color=oc,
+                fontweight="bold")
+        for r in range(2):
+            terms = " + ".join(f"{num(w).replace('-', '')}{dot}{num(x)}" if w >= 0 else
+                               f"({num(w)}){dot}{num(x)}" for w, x in zip(W[r], e))
+            ax.text(x0 + 0.95, 0.24 - r * 0.15, f"row {r + 1}: {terms} = {num(out[r])}", ha="center",
+                    va="center", fontsize=FS_TINY, color=oc)
+
+    q, k = W_Q2 @ X[2], W_K2 @ X[0]
+    product(0.45, W_Q2, X[2], q, "Blues", "query of creature:  $\\mathbf{q} = W_Q\\,\\mathbf{e}$",
+            "e (creature)", "q", ARMBLUE)
+    product(3.2, W_K2, X[0], k, "Oranges", "key of fluffy:  $\\mathbf{k} = W_K\\,\\mathbf{e}$",
+            "e (fluffy)", "k", ARMORANGE)
+    save(fig, "att_mat_qk.pdf", log)
+
+
+def fig_mat_scores(Q, K, Ss, A, log):
+    fig, ax = canvas(1.6)
+    cw, ch, top = 0.48, 0.25, 1.12
+    x1 = 1.55
+    sfmt = lambda v: f"{v:.2f}".replace("-", "−")
+    xr, yb = grid(ax, x1, top, cw, ch, Ss, 1.8, None, None, hl_row=2, fmt=sfmt)
+    for i, t in enumerate(TOKENS):
+        ax.text(x1 - 0.05, top - (i + 0.5) * ch, f"{t}   q = ({num(Q[i, 0])}, {num(Q[i, 1])})", ha="right",
+                va="center", fontsize=FS_TINY, color=ARMRED if i == 2 else INK)
+    x2 = xr + 0.3
+    grid(ax, x2, top, cw, ch, A, 1.0, None, None, hl_row=2)
+    for j, t in enumerate(TOKENS):
+        for x0 in (x1, x2):
+            ax.text(x0 + (j + 0.5) * cw, top + 0.2, t, ha="center", va="bottom", fontsize=FS_TINY)
+        ax.text(x1 + (j + 0.5) * cw, top + 0.04, f"({num(K[j, 0])}, {num(K[j, 1])})".replace("-", "−"),
+                ha="center", va="bottom", fontsize=FS_TINY, color=ARMORANGE)
+    ax.text(x1 - 0.05, top + 0.04, "k =", ha="right", va="bottom", fontsize=FS_TINY, color=ARMORANGE)
+    ax.text(x1 + 1.5 * cw, yb - 0.06, "score = q$\\cdot$k / $\\sqrt{2}$", ha="center", va="top", fontsize=FS_SMALL)
+    ax.text(x2 + 1.5 * cw, yb - 0.06, "weights (softmax by rows)", ha="center", va="top", fontsize=FS_SMALL)
+    save(fig, "att_mat_scores.pdf", log)
+
+
+def fig_mat_pipeline(Q, K, V, Ss, A, O, log):
+    fig, ax = canvas(2.2)
+    ch = 0.18
+    sfmt = lambda v: f"{v:.2f}".replace("-", "−")
+    xX, tX = 0.6, 1.45
+    grid(ax, xX, tX, 0.2, ch, X, 2.0, TOKENS, None, cmap="Greys")
+    ax.text(xX + 0.4, tX + 0.06, "X  (3 x 4)", ha="center", va="bottom", fontsize=FS_SMALL)
+    xm = 1.98
+    blocks = [(Q, tX + 0.55, 0.25, "Blues", "$Q = X W_Q^\\top$"),
+              (K, tX - 0.15, 0.25, "Oranges", "$K = X W_K^\\top$"),
+              (V, tX - 0.85, 0.2, "Greens", "$V = X W_V^\\top$")]
+    for Mx, top, cw, cmap, lab in blocks:
+        grid(ax, xm, top, cw, ch, Mx, 2.0, None, None, cmap=cmap)
+        ax.text(xm, top + 0.03, lab, ha="left", va="bottom", fontsize=FS_TINY)
+        arrow(ax, (xX + 0.83, tX - 1.5 * ch), (xm - 0.05, top - 1.5 * ch))
+    xS, tS = 3.1, 1.62
+    grid(ax, xS, tS, 0.32, ch, Ss, 1.8, None, None, hl_row=2, fmt=sfmt)
+    ax.text(xS + 0.48, tS + 0.06, "$QK^\\top / \\sqrt{2}$", ha="center", va="bottom", fontsize=FS_SMALL)
+    arrow(ax, (xm + 0.53, tX + 0.55 - 1.5 * ch), (xS - 0.04, tS - 1.2 * ch))
+    arrow(ax, (xm + 0.53, tX - 0.15 - 1.5 * ch), (xS - 0.04, tS - 1.8 * ch))
+    xA = 4.32
+    grid(ax, xA, tS, 0.3, ch, A, 1.0, None, None, hl_row=2)
+    ax.text(xA + 0.45, tS + 0.06, "softmax by rows", ha="center", va="bottom", fontsize=FS_SMALL)
+    arrow(ax, (xS + 0.99, tS - 1.5 * ch), (xA - 0.04, tS - 1.5 * ch))
+    xO, tO = 4.2, 0.62
+    grid(ax, xO, tO, 0.26, ch, O, 1.0, None, None, hl_row=2)
+    ax.text(xO + 0.52, tO + 0.06, "output = A V", ha="center", va="bottom", fontsize=FS_SMALL)
+    arrow(ax, (xA + 0.45, tS - 3 * ch - 0.03), (xA + 0.45, tO + 0.22))
+    yV = tX - 0.85 - 1.5 * ch
+    arrow(ax, (xm + 0.83, yV), (xO - 0.05, yV))
+    ax.text((xm + 0.83 + xO) / 2, yV + 0.05, "the values, blended by A", ha="center", va="bottom",
+            fontsize=FS_TINY, color=GREY)
+    save(fig, "att_mat_pipeline.pdf", log)
+
+
 # ----------------------------------------------------------------------------- --verify
 def verify_gpt2(log):
     """Check the GPT2 constants against what is already on disk (no download, no model run)."""
@@ -834,7 +982,10 @@ def main():
     T = toy(R, log)
     gpt2_arithmetic(R, log)
     saturation(R, log)
+    MT = mat_toy(R, log)
     jobs = [lambda: fig_raw_grid(T, log), lambda: fig_learned_grid(T, log), lambda: fig_shapes(log),
+            lambda: fig_mat_qk(log), lambda: fig_mat_scores(MT[0], MT[1], MT[3], MT[4], log),
+            lambda: fig_mat_pipeline(*MT, log),
             lambda: fig_dot_product(R, log), lambda: fig_sqrt_dk(R, log),
             lambda: fig_softmax_why(R, log),
             lambda: fig_three_moves(R, log), lambda: fig_toy_chips(log), lambda: fig_soft_lookup(R, log),

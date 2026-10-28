@@ -9,6 +9,34 @@ this file holds the choice and a pointer.
 
 ---
 
+## #108 - LLM-3 gets the creature toy as real matrices (d_k = 2), after three declined offers
+
+**Date:** 2026-10-28 · **Status:** active; revisits the "not applied" lines of #101 and #103 (the
+instructor, after the fourth student review asked for it: "i want it").
+
+**Decision.** Four frames on the same three toy vectors with $d_k = 2$:
+$W_Q = [[0.5, 0, 0, 1], [0, 0.5, 0.5, 0.5]]$, $W_K = [[1, 0, 0, 0], [0, 0.5, 0.5, -0.5]]$, $W_V$ as
+before. "A real $W_Q$ is a matrix" (creature's $q = (2, 1)$ and fluffy's $k = (1, 0.5)$, each row's
+dot product written out) and "scores from 2-number queries and keys" ($1.77, 1.77, -0.71 \to 0.48,
+0.48, 0.04$) close piece 1; "the whole line as matrices" (X -> Q, K, V -> scores -> softmax -> AV)
+follows "Putting it together"; "Run the 10 lines on the toy" follows the code, and its printout
+comes from the slide's own function in `attention_figs.py` (`mat_toy`), asserted.
+
+**Why.** Every review since 10-05 asked for it in some form; review 4 named the gap exactly: every
+by-hand step used one number or "read one named cell", so no matrix product ever happened by hand,
+and $W_Q$ looked like "pick a labelled cell". With the equation-first structure (#103) the matrix
+version has a natural place at the end of piece 1 and of the whole line.
+
+**Alternatives rejected.** A 2x3 $W_Q$ on new vectors (the reviewer's literal ask): a second toy to
+learn; reusing the creature vectors keeps one running example. Replacing the one-number toy: it is
+still the clearest way to see "a noun asks, an adjective answers"; the matrix toy follows it. Running
+GPT-2's real $W_Q$: not by hand, and the shapes frames already cover the sizes.
+
+**What would change this.** If students in the room lose the thread at the matrix frames, keep the
+whole-line frame and the code run, and cut the two piece-1 frames.
+
+---
+
 ## #103 - LLM-3 shows the attention equation first and unpacks it piece by piece; the causal mask moves in from LLM-4, with CLM, MLM and padding
 
 **Date:** 2026-10-28 · **Status:** active (instructor: "show the equation earlier and ... go over
