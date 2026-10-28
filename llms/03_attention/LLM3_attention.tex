@@ -409,7 +409,8 @@ story.}
   \begin{columns}[T]
     \column{0.47\textwidth}
     Toy vectors with 4 numbers, read as [adjective, fluffy, blue, noun]. A darker cell is a
-    bigger number.
+    bigger number. (A real embedding has no named cells: ``noun'' is a direction spread over all
+    768 numbers, LLM-2. The toy names them so we can read along.)
     \vskip 6pt
     No learned matrices yet: each vector is its own query, its own key and its own value, the
     simplified version from LLM-2. Score = dot product divided by $\sqrt{4} = 2$; softmax by rows;
@@ -430,8 +431,8 @@ story.}
     creature $\cdot$ creature $= 4$, so its own score is $4/2 = 2$; against fluffy and blue it
     scores $0$.
     \vskip 4pt
-    Weights $0.107,\ 0.107,\ \mathbf{0.787}$: creature spends \textbf{79\%} of its attention on
-    itself. Its update:
+    Softmax: $(1, 1, e^2)/(2 + e^2) = (1, 1, 7.389)/9.389 = (0.107,\ 0.107,\ \mathbf{0.787})$:
+    creature spends \textbf{79\%} of its attention on itself. Its update:
     \[ 0.107\,(1,1,0,0) + 0.107\,(1,0,1,0) \]
     \[ {}+ 0.787\,(0,0,0,2) = (0.21,\ 0.11,\ 0.11,\ 1.57) \]
     Mostly more creature. And the \textbf{scores} are symmetric: fluffy $\cdot$ blue $=$ blue
@@ -628,8 +629,9 @@ scores from 64-number vectors come out bigger or smaller than from 4-number ones
 \begin{frame}{More numbers, bigger scores}
   \begin{center}\includegraphics[width=\linewidth]{att_dk_spread.pdf}\end{center}
   \vskip -4pt
-  {\small A dot product over $d_k$ numbers is a sum of $d_k$ products. If the numbers have spread
-  1, each product has variance 1, and variances add: the sum has variance $d_k$, spread
+  {\small A dot product over $d_k$ numbers is a sum of $d_k$ products. If the numbers are
+  independent, with mean 0 and spread 1 (about right at the start of training), each product has
+  variance 1, and variances add: the sum has variance $d_k$, spread
   $\sqrt{d_k}$. Measured on 10{,}000 random pairs each: about 2, 4 and 8 (8.05 for $d_k = 64$).}
   \vskip 6pt
   \keybox{Bigger. GPT-2's heads use $d_k = 64$, so raw scores swing by about $\pm 8$, not $\pm 1$.
@@ -647,8 +649,9 @@ scores from 64-number vectors come out bigger or smaller than from 4-number ones
     Now nudge a loser up by 1. At $(8, 0, 0)$ its weight goes from 0.0003 to 0.0009. At
     $(1, 0, 0)$ the same nudge moves it from 0.21 to 0.42.
     \vskip 5pt
-    A nudge that changes nothing gives the gradient nothing to work with: \textbf{training
-    stalls}. It is argmax's flat part all over again.
+    The slope of a weight with respect to its own score is $w(1 - w)$: for that loser 0.0003 at
+    $(8, 0, 0)$, 0.17 at $(1, 0, 0)$. A slope near 0 gives the gradient nothing to work with:
+    \textbf{training stalls}, argmax's flat part all over again.
     \column{0.48\textwidth}
     \vskip 4pt
     \includegraphics[width=\linewidth]{att_saturation.pdf}
@@ -656,26 +659,16 @@ scores from 64-number vectors come out bigger or smaller than from 4-number ones
 \end{frame}
 
 \begin{frame}{The fix: divide by $\sqrt{d_k}$}
-  \begin{columns}[T]
-    \column{0.5\textwidth}
-    \small
-    Divide every score by the spread, $\sqrt{d_k} = 8$: the scores are back to about $\pm 1$,
-    softmax stays soft, and every key keeps a slope.
-    \vskip 5pt
-    Right: five random keys, $d_k = 64$. Raw, one key takes everything. Divided by 8, all five
-    keep a share.
-    \vskip 6pt
-    \fcolorbox{warnred}{warnred!8}{\parbox{0.95\linewidth}{\scriptsize
-      Why not divide by $d_k = 64$? That would squash the scores near 0, and softmax would go
-      flat: every key about the same weight, however relevant. $\sqrt{d_k}$ is the number that
-      makes the spread exactly 1.}}
-    \column{0.5\textwidth}
-    \includegraphics[width=\linewidth]{att_sqrt_dk.pdf}\\
-    {\scriptsize Five random keys, $d_k = 64$: the same scores, before and after dividing by 8.}
-  \end{columns}
-  \vskip 6pt
-  {\scriptsize\color{gray} Karpathy shows the same effect in code at 1:16:56 of ``Let's build
-  GPT'' (link on the first slide).}
+  Divide every score by the spread, $\sqrt{d_k} = 8$: back to about $\pm 1$, softmax stays soft,
+  every key keeps a slope. Five random keys, $d_k = 64$, the same scores three ways:
+  \vskip 0pt
+  \begin{center}\includegraphics[width=0.94\linewidth]{att_sqrt_dk.pdf}\end{center}
+  \vskip -4pt
+  \trapbox{Why not divide by $d_k = 64$ (right)? It squashes the scores near 0 and softmax goes
+  flat: every key gets about the same weight, however relevant. $\sqrt{d_k}$ is the number that
+  makes the spread exactly 1.}
+  \vskip 2pt
+  {\scriptsize\color{gray} The same in code: Karpathy, ``Let's build GPT'', 1:16:56 (first slide).}
 \end{frame}
 
 \milestone{\pV}{Piece 4: $V$}{The weights say whom to listen to. What do those words actually
@@ -704,7 +697,8 @@ say?}
   \vskip -4pt
   {\small Creature's weights 0.47, 0.47, 0.06 come from piece 1 (0.468 and 0.063 to three
   digits, so $0.063 \times 2 = 0.13$). Step 3 is the residual connection (LLM-4). With raw
-  vectors the result was $(0.21,\ 0.11,\ 0.11,\ 3.57)$: mostly more creature.}
+  vectors the update was $(0.21,\ 0.11,\ 0.11,\ 1.57)$, so creature became
+  $(0.21,\ 0.11,\ 0.11,\ 3.57)$: mostly more creature.}
   \vskip 5pt
   \takebox{Fluffy was \emph{found} by its label (``adjective'') and \emph{handed over} its
   content (fluffiness). Found by one thing, give another: that is why $W_K \neq W_V$.}
@@ -744,12 +738,12 @@ say?}
   \end{center}
   \vskip 8pt
   \keybox{Without them, every word asks ``who is like me?'' and finds itself (79\% in our toy),
-  and A and B score each other exactly the same. With them, the question, the label and the message are
+  and A and B score each other exactly the same. One shared matrix for queries and keys would do
+  that too: $W_Q = W_K$ gives $\mathbf{q}_A \cdot \mathbf{k}_B = \mathbf{q}_B \cdot \mathbf{k}_A$. With them, the question, the label and the message are
   three separate things the model learns. They are the only weights in a single head (LLM-4 adds
   $W^O$ when heads are combined).}
 \end{frame}
 
-\milestone{\pALL}{The whole line}{Every piece has a job now. Read it once more, left to right.}
 \setpiece{\pALL}
 
 % the destination frame again, with every question answered
@@ -859,7 +853,9 @@ def attention(X, Wq, Wk, Wv):
     which must predict ``creature'', can simply \textbf{look at} ``creature'': it is the next
     word in the input.
     \vskip 5pt
-    One head learns ``copy the word to my right'', and the training loss falls towards 0.
+    One head learns ``copy the word to my right'' (it can tell right from left because the
+    position vectors went in before the first layer, LLM-2), and the training loss falls
+    towards 0.
     \vskip 5pt
     Then you ask it to write. The next word does not exist yet, there is nothing to copy, and
     the model has learned nothing it can use.
@@ -882,7 +878,7 @@ the diagonal is set to $-\infty$, so after it each word sees only itself and the
   \textbf{exactly} 0, and each row still sums to 1.}
   \vskip 4pt
   \keybox{$\mathrm{softmax}\big(QK^\top/\sqrt{d_k} + M\big)\,V$: the same line plus one fixed
-  matrix. No new weights, nothing to learn.}
+  matrix, in every attention layer of GPT. No new weights, nothing to learn.}
 \end{frame}
 
 \begin{frame}{By hand: the mask on creature's grid}
@@ -939,16 +935,16 @@ the diagonal is set to $-\infty$, so after it each word sees only itself and the
 \end{frame}
 
 \begin{frame}{Game 2: masked language modeling}
-  \begin{center}\includegraphics[width=0.94\linewidth]{mask_mlm.pdf}\end{center}
-  \vskip -6pt
-  {\small Hide some words by replacing them with a special token, \texttt{[MASK]}, and predict
-  the originals. There is \textbf{no attention mask}: every word, \texttt{[MASK]} included, sees
-  both sides. This is \textbf{masked language modeling} (MLM), BERT's game
-  \paper{(Devlin et al., 2019)}: about 15\% of the tokens are hidden (here 2 of 8), and only those
-  give a loss.}
-  \vskip 4pt
-  \takebox{The predict's answer: game 1 may use only the words before the blank, game 2 the words
-  on both sides, and only game 1 can write. BERT's exact recipe is in LLM-7.}
+  \begin{center}\includegraphics[width=0.86\linewidth]{mask_mlm.pdf}\end{center}
+  \vskip -8pt
+  {\small Replace some words with a special token, \texttt{[MASK]}, and predict the originals.
+  \textbf{No attention mask}: every word, \texttt{[MASK]} included, sees both sides. This is
+  \textbf{masked language modeling} (MLM), the game of BERT, Google's model for reading rather
+  than writing \paper{(Devlin et al., 2019; LLM-5)}: about 15\% of the tokens are hidden (here 2
+  of 8), and only those give a loss.}
+  \vskip 3pt
+  \takebox{The predict's answer: game 1 uses only the words before the blank, game 2 both sides,
+  and only game 1 can write. BERT's exact recipe is in LLM-7.}
 \end{frame}
 
 \begin{frame}{CLM vs MLM}
@@ -977,15 +973,16 @@ the diagonal is set to $-\infty$, so after it each word sees only itself and the
 \end{frame}
 
 \begin{frame}{One more mask: padding}
-  \begin{center}\includegraphics[width=0.94\linewidth]{mask_padding.pdf}\end{center}
+  \begin{center}\includegraphics[width=0.86\linewidth]{mask_padding.pdf}\end{center}
   \vskip -6pt
   {\small A GPU wants a batch to be one rectangle, so shorter sentences are filled up with a
   \texttt{[PAD]} token. Nobody should read it: its columns get $-\infty$ too (the same trick), and
   the outputs at the \texttt{[PAD]} rows are thrown away.}
   \vskip 4pt
   \watchbox{With a causal mask and the padding at the end, real words never see it anyway. It
-  matters when the model sees both ways (BERT), and when a batch of prompts is padded at the
-  front for writing. Pretraining usually packs documents end to end and needs no padding (LLM-7).}
+  matters when the model sees both ways (BERT), and when prompts are padded at the \emph{front}
+  for writing, so every prompt ends in the same column, where the next word goes. Pretraining
+  packs documents end to end and needs no padding (LLM-7).}
 \end{frame}
 
 % ================================================================
@@ -1213,4 +1210,17 @@ the diagonal is set to $-\infty$, so after it each word sees only itself and the
 %     (82% of fluffy's weight on the future; .06/.12 sum .18 vs .33/.67), one pass = 7 predictions
 %     (from LLM-4), MLM (BERT, 15%; 80/10/10 stays in LLM-7), CLM vs MLM + "two things called mask",
 %     padding. Sources + Radford 2018, Devlin 2019.
+%   STUDENT REVIEW 4 2026-10-28 (one Sonnet agent, 150-dpi PNGs only, ~145k tokens, 4.5 min).
+%     Applied: the cheat says how a head tells right from left (positions, LLM-2; it contradicted
+%     "attention cannot see order"); the value frame separates the raw update 1.57 from the result
+%     3.57; "variances add" states independent, mean 0, spread 1; saturation shows the slope w(1-w)
+%     (0.0003 vs 0.17, asserted); att_sqrt_dk gets a /64 panel (nearly flat, asserted) and the fix
+%     frame goes full width; "Itself" shows (1, 1, e^2)/(2 + e^2) = /9.389 (asserted); W_Q = W_K
+%     also gives symmetric scores (why-three-matrices box); the toy's named cells flagged as a toy
+%     (real embeddings: directions, LLM-2); the mask is in every attention layer; BERT introduced in
+%     a phrase; why prompts are padded at the front. Cut: the "whole line" milestone (an empty copy
+%     of "Putting it together"; the corner strip and \setpiece{\pALL} stay). Reported, not applied:
+%     the corner strip read as noise (instructor's pick, Q2); a 2 x 3 W_Q matrix worked example
+%     (the matrix toy, rejected 10-05, 10-20, 10-27); cutting the life map, the history frame, the
+%     masking still, merging wall-2 frames, the GPT-2 sizes frame (earlier decisions).
 % =============================================================

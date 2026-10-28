@@ -16,12 +16,13 @@ unravelling components with time, also make explanation a lot more visual, do mo
 ... introduce terms of masked language modeling and the other one, explain better how masking
 works"; picked: move the mask frames, milestones + corner strip, a padding frame).
 
-**Decision.** `LLM3_attention.tex` goes from 44 to 65 pages. (1) The equation appears right after
+**Decision.** `LLM3_attention.tex` goes from 44 to 64 pages. (1) The equation appears right after
 "The fix, in one idea" with its four pieces each labelled by an open question, and comes back on
 "Putting it together" with each question answered. (2) Before each piece is unpacked, a plain
-**milestone** frame shows the equation with only that piece lit (QK^T, softmax, sqrt(d_k), V, then the
-whole line), and a small copy with the same piece lit sits in the top-right corner of every titled
-frame of that piece (`\setpiece`, a frametitle hook). (3) Text-only mechanics became generated
+**milestone** frame shows the equation with only that piece lit (QK^T, softmax, sqrt(d_k), V; a fifth
+"whole line" milestone was cut after the student review as an empty copy of "Putting it together"),
+and a small copy with the same piece lit sits in the top-right corner of every titled frame of that
+piece (`\setpiece`, a frametitle hook). (3) Text-only mechanics became generated
 figures (`attention_figs.py`: three moves, toy chips, dict vs soft lookup, w_Q/w_K on the chips, value
 chip arithmetic, GPT-2's c_attn); "why softmax" and "why sqrt(d_k)" split into 2 and 3 frames with
 new figures (argmax vs softmax; q.k spread for d_k = 4, 16, 64; saturation steps). (4) A new section

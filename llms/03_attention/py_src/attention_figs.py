@@ -15,7 +15,7 @@ Generates into llms/03_attention/fig/:
   att_learned_grid.pdf  -- one-number queries and keys: score = q x k, weights, creature's row
   att_shapes.pdf        -- the matrix shapes on "Donkey don't die, spring is coming" (9 tokens)
   att_dot_product.pdf   -- q . k for four keys: aligned, 45 degrees, perpendicular, opposite
-  att_sqrt_dk.pdf       -- softmax of raw scores (d_k = 64) vs scores divided by sqrt(64) = 8
+  att_sqrt_dk.pdf       -- softmax of raw scores (d_k = 64), divided by sqrt(64) = 8, and by 64 itself
   att_softmax_why.pdf   -- scores, divided by their sum (a negative weight), softmax (all positive)
   Added 2026-10-28 (rework: show, not tell):
   att_three_moves.pdf   -- wall 1: score bars -> softmax weights -> the context as a weighted blend
@@ -85,6 +85,11 @@ QUOTED = {
     "soft_lookup": {"scores": [2.6, 1.6, 0.0], "weights": [0.69, 0.26, 0.05]},   # kitten vs cat, dog, car
     "saturation_steps": {"scale": [1, 2, 4, 8], "top": [0.58, 0.79, 0.96, 1.0], "loser_8": 0.0003},
     "dk_spread": {"dk": [4, 16, 64], "spread": [2, 4, 8]},                       # measured, to +-0.3
+    # student review 2026-10-28: the raw softmax shown by hand, softmax's slope w(1 - w) for the
+    # losing weight, and the d_k = 64 divisor drawn (att_sqrt_dk.pdf third panel: nearly flat)
+    "softmax_002": {"e2": 7.389, "denom": 9.389},     # (e^0, e^0, e^2) / (2 + e^2), the raw toy
+    "slope": {"big": 0.0003, "small": 0.17},          # w(1 - w) of the loser at (8,0,0) / (1,0,0)
+    "by_dk_range": 0.15,                              # max - min weight after dividing by 64
 }
 # GPT-2 small (checked with --verify against config.json, the safetensors header and tiktoken, 2026-10-05)
 GPT2 = {"d": 768, "heads": 12, "d_k": 64, "layers": 12, "n_ctx": 1024, "c_attn": [768, 2304],
@@ -283,6 +288,10 @@ def toy(R, log):
     sm = QUOTED["softmax_220"]                 # the printed exponentials give the printed weights
     if round(np.e ** 2, 2) != sm["e2"] or round(2 * np.e ** 2 + 1, 2) != sm["denom"]:
         raise AssertionError(f"e^2 = {np.e ** 2:.3f}, 2e^2 + 1 = {2 * np.e ** 2 + 1:.3f}, slides quote {sm}")
+    s0 = QUOTED["softmax_002"]                 # the raw toy by hand: (1, 1, e^2) / (2 + e^2)
+    if round(2 + np.e ** 2, 3) != s0["denom"] or [round(1 / s0["denom"], 3), round(s0["e2"] / s0["denom"], 3)] \
+            != [QUOTED["raw_weights3"][0], QUOTED["raw_weights3"][2]]:
+        raise AssertionError(f"2 + e^2 = {2 + np.e ** 2:.3f}; slides quote {s0} -> {QUOTED['raw_weights3']}")
     check("softmax by hand", [sm["e2"] / sm["denom"], sm["e2"] / sm["denom"], 1 / sm["denom"]],
           QUOTED["learned_weights_creature"])
     if not np.allclose(S_raw, S_raw.T):
@@ -426,15 +435,19 @@ def fig_sqrt_dk(R, log):
     raw = K @ q
     w_raw = softmax_rows(raw[None])[0]
     w_s = softmax_rows(raw[None] / np.sqrt(dk))[0]
+    w_d = softmax_rows(raw[None] / dk)[0]                  # divided by d_k itself: nearly flat
+    if w_d.max() - w_d.min() > QUOTED["by_dk_range"]:
+        raise AssertionError(f"dividing by {dk} should flatten the weights: {r2(w_d)}")
     R["sqrt_dk"] = {"spread_10k_pairs": round(spread, 2), "raw_scores": r2(raw),
-                    "w_raw": r2(w_raw), "w_scaled": r2(w_s)}
+                    "w_raw": r2(w_raw), "w_scaled": r2(w_s), "w_by_dk": r2(w_d)}
     log.info(f"sqrt_dk: measured spread {spread:.2f} over 10,000 random pairs; raw {r2(raw)}; "
-             f"weights raw {r2(w_raw)} scaled {r2(w_s)}")
-    fig, axes = plt.subplots(1, 2, figsize=(2.75, 1.7), sharey=True)
-    fig.subplots_adjust(left=0.19, right=0.99, top=0.8, bottom=0.14, wspace=0.12)
+             f"weights raw {r2(w_raw)} scaled {r2(w_s)} by d_k {r2(w_d)}")
+    fig, axes = plt.subplots(1, 3, figsize=(W, 1.5), sharey=True)    # full width since 2026-10-28
+    fig.subplots_adjust(left=0.08, right=0.99, top=0.84, bottom=0.14, wspace=0.12)
     labels = [f"k{i + 1}" for i in range(5)]
-    for ax, w, col, title in ((axes[0], w_raw, ARMRED, "softmax(q$\\cdot$k)"),
-                              (axes[1], w_s, ARMBLUE, "softmax(q$\\cdot$k / 8)")):
+    for ax, w, col, title in ((axes[0], w_raw, ARMRED, "softmax(q$\\cdot$k): one key takes all"),
+                              (axes[1], w_s, ARMBLUE, "softmax(q$\\cdot$k / 8): all keep a share"),
+                              (axes[2], w_d, GREY, "softmax(q$\\cdot$k / 64): nearly flat")):
         bars = ax.bar(labels, w, color=col, width=0.7)
         ax.bar_label(bars, labels=[num(v) for v in w], fontsize=FS_TINY, padding=1)
         ax.set_ylim(0, 1.18)
@@ -458,6 +471,9 @@ def saturation(R, log):
     shown = {"big": [round(float(v), 4) for v in got["big"]], "small": r2(got["small"])}
     if shown != QUOTED["saturation"]:
         raise AssertionError(f"saturation: computed {shown}, slides quote {QUOTED['saturation']}")
+    slope = {k: float(v[0] * (1 - v[0])) for k, v in got.items()}       # d w / d s for the loser
+    if round(slope["big"], 4) != QUOTED["slope"]["big"] or round(slope["small"], 2) != QUOTED["slope"]["small"]:
+        raise AssertionError(f"slopes w(1 - w): {slope}, slides quote {QUOTED['slope']}")
     R["saturation"] = {k: [float(v) for v in vs] for k, vs in got.items()}
     log.info(f"saturation: losing weight before/after a +1 nudge {R['saturation']}")
 
