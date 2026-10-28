@@ -70,7 +70,7 @@ def fig_lost_middle(log):
     ax.set_ylim(45, 95)
     ax.set_xlabel("position of the answer among 20 documents", fontsize=FS_SMALL)
     ax.set_ylabel("accuracy, %", fontsize=FS_SMALL)
-    ax.set_title("GPT-3.5-Turbo, 20 documents per question", fontsize=FS)
+    ax.set_title("GPT-3.5-Turbo (2023), 20 documents per question", fontsize=FS)
     ax.tick_params(labelsize=FS_SMALL, length=2)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
