@@ -37,6 +37,44 @@ whole-line frame and the code run, and cut the two piece-1 frames.
 
 ---
 
+## #104 - The practical after LLM-1 builds a BPE on Armenian, audits 14 tokenizers, and probes GPT-4o's never-seen Armenian tokens live
+
+**Date:** 2026-10-28 · **Status:** active (instructor: "i like your recommended design", "solution
+notebook ran by me", "add new ones", "it will be 02", "u can reexecute its fine").
+
+**Decision.** `llms/01_tokenization/02_armenian_tokens_solution.ipynb`, generated and executed by
+`py_src/build_tokenization_practical_nb.py`, instructor-run, no student version. Three parts: a
+byte-level BPE from scratch on 100,000 characters of Armenian Wikipedia; 14 public tokenizers from
+2018 to 2026 (August's eight plus DeepSeek-V3, Llama 4, Qwen3, gpt-oss, Qwen3.5, Gemma 4) on Armenian;
+GPT-4o's never-seen Armenian tokens, probed live on gpt-4o-mini, gpt-4.1-nano and gpt-oss-20b through
+OpenRouter (~65 calls, ~$0.001 per run, every call in `results/02_probe_ledger.json`). The Armenian
+premium is measured **per meaning**, on the 1,997 parallel sentences of NTREX-128 (English news,
+professionally translated), not per character on Wikipedia. Tokenizers are read from `tokenizer.json`
+with the `tokenizers` library, not `transformers`. Design and findings: `02_armenian_tokens_OUTLINE.md`.
+
+**Why.** Measured before writing (exploration 2026-10-28): plain-Python BPE does 500 merges on 100,000
+characters in ~30 s, so students can watch it train; its first merge is the letter ա rebuilt from two
+bytes, and on English it gets 1.02 characters per token - GPT-4's Armenian problem, mirrored. The
+per-meaning premium is the fair comparison: Armenian news text is 1.07x the length of the same English,
+so GPT-4 costs x9.16 per meaning (x8.57 per character), GPT-4o x1.73 (x1.62). Of the 14 tokenizers only
+GPT-4o's (shared by gpt-oss) has Armenian tokens that 20M characters never produce (2: վերաբերյ,
+աեւ), and gpt-4o-mini still returns nothing when asked to repeat them, as in August. `import
+transformers` 5.15 alone takes ~70 s on this laptop.
+
+**Alternatives rejected.** A student version with stubs (instructor: solution only). Audit and glitch
+only, without the build (the instructor chose all three). The per-character premium (it compares
+different texts; raised by the "you should know" plugin, and measured: it understates GPT-4's
+premium). FLORES-200 as the parallel corpus (gated on Hugging Face; this machine has no token).
+Replaying August's saved probe answers instead of live calls (the instructor allowed re-execution, and
+the models may have changed since).
+
+**What would change this.** If OpenRouter stops serving one of the three models, swap in another
+model on the o200k vocabulary (the `KeyError` in the price cell says which). If a newer tokenizer turns
+out to have never-seen Armenian tokens, probe its model too. If the probe stops failing on both
+never-seen tokens, the Part 3 prose (written against the 2026-10-28 run) must be rewritten.
+
+---
+
 ## #103 - LLM-3 shows the attention equation first and unpacks it piece by piece; the causal mask moves in from LLM-4, with CLM, MLM and padding
 
 **Date:** 2026-10-28 · **Status:** active (instructor: "show the equation earlier and ... go over
