@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM chapter: two streams</title>
+<style>
+  :root {
+    --ink: #1d232b; --muted: #5b6470; --line: #d9dde3; --bg: #ffffff; --soft: #f5f6f8;
+    --blue: #0033A0; --blue-soft: #e9eef9; --orange: #F2A800; --orange-ink: #a36f00; --orange-soft: #fff6dc;
+    --red: #D90012; --red-soft: #fde7e9; --grey-soft: #eef0f3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1560px; margin: 0 auto; padding: 24px 24px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .meta { color: var(--muted); margin: 0 0 18px; }
+  .tldr { background: var(--soft); border-left: 4px solid var(--blue); padding: 12px 18px; margin: 0 0 18px; }
+  .tldr ul { margin: 6px 0; padding-left: 20px; }
+  nav.toc { border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; margin: 0 0 22px; }
+  nav.toc ol { margin: 4px 0; padding-left: 22px; columns: 2; }
+  nav.toc a { color: var(--blue); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  details { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 16px; padding: 0 18px; }
+  details[open] { padding-bottom: 14px; }
+  summary { cursor: pointer; padding: 12px 0; list-style: revert; }
+  summary h2 { display: inline; font-size: 20px; margin: 0; }
+  h3 { font-size: 16px; margin: 18px 0 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; table-layout: fixed; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; font-size: 14px; }
+  th { background: var(--soft); }
+  td ul { margin: 0; padding-left: 18px; }
+  code { background: var(--soft); padding: 0 4px; border-radius: 3px; font-size: 13px; }
+  .pill { display: inline-block; font-size: 12px; padding: 0 7px; border-radius: 10px; white-space: nowrap; }
+  .p-A { background: var(--blue-soft); color: var(--blue); }
+  .p-B { background: var(--orange-soft); color: var(--orange-ink); }
+  .p-T { background: var(--grey-soft); color: var(--muted); }
+  .ok { color: #1b7f3b; font-weight: 600; }
+  .bad { color: var(--red); font-weight: 700; }
+  .note { color: var(--muted); font-size: 14px; }
+  .warn { background: var(--red-soft); border-left: 4px solid var(--red); padding: 8px 14px; margin: 10px 0; }
+
+  /* diagram */
+  .picture { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+  @media (max-width: 1150px) { .picture { grid-template-columns: 1fr; } }
+  .diagram-wrap { overflow-x: auto; }
+  .diagram-wrap svg { width: 100%; min-width: 860px; height: auto; display: block; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 4px 0 10px; font-size: 14px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .legend span.sw { display: inline-block; width: 22px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; border: 2px solid; }
+  .panel { position: sticky; top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+           background: #fff; max-height: calc(100vh - 24px); overflow-y: auto; font-size: 14px; }
+  .panel h3 { margin: 4px 0 2px; font-size: 17px; }
+  .panel dt { font-weight: 600; margin-top: 8px; }
+  .panel dd { margin: 2px 0 0; }
+  .panel dd ul { margin: 2px 0; padding-left: 18px; }
+  .panel .chip { font-size: 12px; color: var(--muted); }
+
+  .node { cursor: pointer; }
+  .node rect { stroke-width: 2; }
+  .node.done rect  { fill: var(--grey-soft); stroke: #8a929c; }
+  .node.built rect { fill: var(--blue-soft); stroke: var(--blue); }
+  .node.moved rect { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 4; }
+  .node.new rect   { fill: var(--orange-soft); stroke: var(--orange-ink); stroke-dasharray: 7 4; }
+  .node.opt rect   { fill: #fffbef; stroke: var(--orange-ink); stroke-dasharray: 2 4; }
+  .node.cap rect   { fill: var(--red-soft); stroke: var(--red); stroke-dasharray: 7 4; }
+  .node.cont rect  { fill: #fff; stroke: #9aa3ad; stroke-dasharray: 3 4; }
+  .node .lbl { font-size: 12px; fill: var(--muted); letter-spacing: .02em; }
+  .node .ttl { font-size: 16px; font-weight: 700; fill: var(--ink); }
+  .node .sub { font-size: 13px; fill: #3b434d; }
+  .node.sel rect { filter: drop-shadow(0 0 4px rgba(0, 51, 160, .55)); }
+  svg.focus .node:not(.rel) { opacity: .25; }
+  svg.focus .arrow:not(.rel) { opacity: .12; }
+  .arrow { fill: none; }
+  .arrow.order { stroke: #9aa3ad; stroke-width: 2; }
+  .arrow.dep { stroke: var(--red); stroke-width: 2.6; }
+  .arrow.cb { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 5 5; display: none; }
+  svg.showcb .arrow.cb, svg.focus .arrow.cb.rel { display: inline; }
+  .hit { fill: none; stroke: transparent; stroke-width: 12; }
+  .lanehdr { font-size: 13px; font-weight: 700; letter-spacing: .06em; }
+  .sidecap { font-size: 12px; fill: #8a929c; letter-spacing: .12em; font-weight: 600; }
+
+  .qcard { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+  .qcard h3 { margin: 0 0 4px; }
+  .qcard ol { margin: 4px 0; padding-left: 22px; }
+  .lean { color: var(--blue); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>LLM chapter: two streams after decoding</h1>
+<p class="meta">Proposal, 2026-10-28. Nothing in the repo has changed. Built from <code>llms/LLM_CHAPTER_PLAN.md</code>,
+the deck folders under <code>llms/</code>, <code>ml/ch17_rag</code>, <code>ml/ch18_agents</code>, <code>ml/ch13_audio</code>,
+DECISIONS #74 and #96, and a web check (section 11). Session numbers are planning numbers.</p>
+
+<div class="tldr">
+  <strong>In short</strong>
+  <ul>
+    <li>Everyone does a short shared trunk: LLM-1 (done), a tokenization practical, LLM-2, then <strong>LLM-6 Decoding moved up
+      from session 6 to session 4</strong>, then <strong>B0</strong>, a first real API call in which every knob from LLM-6 shows
+      up as a request field.</li>
+    <li>Then two streams alternate, one session each. <strong>A</strong> continues the theory with the built decks in their
+      current order. <strong>B</strong> is a workshop line: prompting, tool calls and MCP, search, RAG, evals, agents, voice,
+      local models, fine-tuning, a capstone.</li>
+    <li>Built decks are reused, not rewritten: LLM-10 and L41 to L44, plus parts of LLM-11, L33 and L35, become stream B's
+      slides. New work: 13 notebooks and one short voice deck.</li>
+    <li>Cost: 25 sessions left instead of about 19, with 13 hands-on sessions instead of 2 (and neither of those 2 is built
+      yet). It only works if each week really has a free practical slot (Q2).</li>
+  </ul>
+</div>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#picture">The proposal in one picture</a></li>
+    <li><a href="#why">Why change the plan</a></li>
+    <li><a href="#trunk">The shared trunk, and the API field table</a></li>
+    <li><a href="#laneA">Stream A: how it works</a></li>
+    <li><a href="#laneB">Stream B: build with it</a></li>
+    <li><a href="#meet">Where the streams meet</a></li>
+    <li><a href="#order">Session order and count</a></li>
+    <li><a href="#cost">What it costs, what can go wrong</a></li>
+    <li><a href="#questions">Decisions for you (Q1 to Q8)</a></li>
+    <li><a href="#projects">Student projects (decided 2026-10-28)</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ 1 -->
+<details open id="picture">
+<summary><h2>1. The proposal in one picture</h2></summary>
+<div class="legend">
+  <span><span class="sw" style="background:var(--grey-soft);border-color:#8a929c"></span>delivered</span>
+  <span><span class="sw" style="background:var(--blue-soft);border-color:var(--blue)"></span>built deck, used as is</span>
+  <span><span class="sw" style="background:var(--blue-soft);border-color:var(--blue);border-width:4px"></span>built deck that moves or changes</span>
+  <span><span class="sw" style="background:var(--orange-soft);border-color:var(--orange-ink);border-style:dashed"></span>new session, to build</span>
+  <span><span class="sw" style="background:#fffbef;border-color:var(--orange-ink);border-style:dotted"></span>optional</span>
+  <span><span class="sw" style="background:var(--red-soft);border-color:var(--red);border-style:dashed"></span>capstone</span>
+  <span><strong style="color:var(--red)">red arrow</strong>: needs that lecture first</span>
+  <span><strong style="color:var(--blue)">dashed blue</strong>: used in B, explained later in A</span>
+</div>
+<div class="controls">
+  <label><input type="checkbox" id="cbtoggle"> show every "used now, explained later" link</label>
+  <span class="note">Click a box for its details; click empty space to clear.</span>
+</div>
+<div class="picture">
+  <div class="diagram-wrap"><svg id="dia" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <aside class="panel" id="panel"></aside>
+</div>
+</details>
+
+<!-- ============================================================ 2 -->
+<details open id="why">
+<summary><h2>2. Why change the plan</h2></summary>
+<p>Today's plan (<code>LLM_CHAPTER_PLAN.md</code>, sections 5.0 and 6) has 17 lectures left in one line: LLM-2 to LLM-14,
+with the RAG and agents decks (L41 to L44) in the middle, after LLM-11. Hands-on work is two practicals and one homework:
+P1, a tiny Armenian GPT after LLM-7/8; P2, a QLoRA fine-tune after LLM-13; the quantization-ladder homework after LLM-12.
+None is built: there is no notebook under <code>llms/</code>. Neither practical has students call a model the way a job will
+ask them to, and the first industry-shaped topic, RAG, arrives at session 12.</p>
+<p>The proposal moves the first API call to <strong>session 5</strong> and gives <strong>13 of the next 25 sessions</strong>
+to hands-on work.</p>
+
+<h3>The same split already exists in the most-used open LLM curriculum</h3>
+<p>Maxime Labonne's <a href="https://github.com/mlabonne/llm-course">llm-course</a> splits into "The LLM Scientist" and
+"The LLM Engineer" (section titles below are from its README, read 2026-10-28). The mapping is close:</p>
+<table>
+  <colgroup><col style="width:38%"><col style="width:62%"></colgroup>
+  <tr><th>Labonne: The LLM Scientist</th><th>Here</th></tr>
+  <tr><td>The LLM Architecture</td><td>Trunk: LLM-1, LLM-2, LLM-6. Stream A: LLM-3 to LLM-5. (Summaries of his course say this
+    section covers tokenization, attention and sampling: the trunk takes the parts an engineer needs to read a bill and a request.)</td></tr>
+  <tr><td>Pre-Training Models</td><td>A: LLM-7, LLM-8</td></tr>
+  <tr><td>Post-Training Datasets, Supervised Fine-Tuning, Preference Alignment</td><td>A: LLM-9, LLM-13</td></tr>
+  <tr><td>Evaluation</td><td>A: LLM-11 (and B5 for app evals)</td></tr>
+  <tr><td>Quantization</td><td>A: LLM-12</td></tr>
+  <tr><td>New Trends</td><td>A: LLM-14</td></tr>
+  <tr><th>Labonne: The LLM Engineer</th><th>Here</th></tr>
+  <tr><td>Running LLMs</td><td>B: B0, B9</td></tr>
+  <tr><td>Building a Vector Storage</td><td>B: B3</td></tr>
+  <tr><td>Retrieval Augmented Generation, Advanced RAG</td><td>B: B4</td></tr>
+  <tr><td>Agents</td><td>B: B2, B6</td></tr>
+  <tr><td>Inference optimization</td><td>Stays theory: LLM-12, LLM-14</td></tr>
+  <tr><td>Deploying LLMs</td><td>B: B11, lightly</td></tr>
+  <tr><td>Securing LLMs</td><td>B: B1 (prompt injection), B6 (an instruction planted in a document)</td></tr>
+  <tr><td>(not in his list)</td><td>B5, evals as their own session; B7, voice</td></tr>
+</table>
+<p class="note">One real difference: his two tracks are separate roadmaps for two kinds of reader. Here both run for the same
+students. That is a different bet, and it is Q1.</p>
+
+<h3>What the split buys besides practicals</h3>
+<p>Stream B keeps raising questions that stream A answers a few weeks later (section 6). "Why did the cached part of my
+prompt cost less?" is a better way into the KV cache in LLM-14 than any cold open we can write. Today the theory has to
+create its own motivation; with B running alongside, students arrive with the question already asked.</p>
+</details>
+
+<!-- ============================================================ 3 -->
+<details open id="trunk">
+<summary><h2>3. The shared trunk, and the API field table</h2></summary>
+<p>Five sessions, everyone, in this order. This is the order you described: tokenization, its practical, embeddings,
+decoding, then the fork.</p>
+<table>
+  <colgroup><col style="width:5%"><col style="width:24%"><col style="width:16%"><col style="width:55%"></colgroup>
+  <thead><tr><th>#</th><th>Session</th><th>Status</th><th>What changes</th></tr></thead>
+  <tbody id="tb-trunk"></tbody>
+</table>
+
+<h3>Moving LLM-6 is cheap, but it was not built to come first</h3>
+<p>LLM-6 was always session 6, after the attention decks (its provenance comment says so). It leans on them in only
+three places: line 118 ("LLM-5: each step ends in logits, softmax..."), line 713 (speculative decoding uses LLM-4's causal
+mask) and the Transformer Explainer link it calls "LLM-3's". Everything else treats the model as something that hands you
+a distribution, which is all a decoding lecture needs.</p>
+<div class="warn">The LLM-6 interview (2026-10-05) <strong>cut the API-parameter table</strong> from the source deck,
+declined "providers locking knobs", and chose "no hands-on in the slides". This proposal respects that: the table below and
+the locked-knob point go into <strong>B0's notebook</strong>, not into the deck.</div>
+
+<h3>Every request field is already a frame in LLM-6</h3>
+<p>The table B0 is built around. Field names follow the OpenAI-style chat API; other providers use close variants.</p>
+<table>
+  <colgroup><col style="width:24%"><col style="width:76%"></colgroup>
+  <tr><th>Request field</th><th>Where LLM-6 teaches it</th></tr>
+  <tr><td><code>temperature</code></td><td>Temperature; By hand: temperature; Temperature on the map's sentence</td></tr>
+  <tr><td><code>top_p</code></td><td>Top-p (nucleus sampling); By hand: top-p on the map's sentence</td></tr>
+  <tr><td><code>top_k</code></td><td>Top-k, and why a fixed k fails</td></tr>
+  <tr><td><code>min_p</code> (local engines such as llama.cpp)</td><td>Min-p; How to read a claim: min-p</td></tr>
+  <tr><td><code>frequency_penalty</code>, <code>presence_penalty</code>, <code>repeat_penalty</code></td><td>Repetition penalties: two different things</td></tr>
+  <tr><td><code>seed</code></td><td>Seeds; Temperature 0 is not deterministic</td></tr>
+  <tr><td><code>max_tokens</code>, <code>stop</code>, and <code>finish_reason</code> in the reply</td><td>When to stop</td></tr>
+  <tr><td><code>n</code> (several completions)</td><td>Sample many, then vote: self-consistency</td></tr>
+  <tr><td><code>logprobs</code>, <code>top_logprobs</code></td><td>One step, one distribution; Why we work with log-probabilities</td></tr>
+  <tr><td><code>response_format</code> / JSON schema</td><td>Masking; By hand: JSON; What it buys, and what it does not</td></tr>
+  <tr><td><code>stream</code></td><td>Streaming: stopping in the middle of a letter</td></tr>
+  <tr><td>reasoning effort / thinking</td><td><strong>Not in LLM-6.</strong> Goes into B0 as "the locked knobs". OpenAI forum
+    users report GPT-5 accepts only the default temperature, and that GPT-5.1 allows temperature, top_p and logprobs when
+    reasoning effort is "none" (user reports, not docs). Anthropic's docs: Claude 4.7 and later reject a manual
+    <code>budget_tokens</code> and take <code>thinking: {type: "adaptive"}</code> with an <code>effort</code> setting
+    (read 2026-10-28). Re-check both when B0 is built.</td></tr>
+</table>
+</details>
+
+<!-- ============================================================ 4 -->
+<details open id="laneA">
+<summary><h2>4. Stream A: how it works</h2></summary>
+<p>All ten decks are built. The order is unchanged. Two things move out: LLM-10 Prompting goes whole to B1 (it is already a
+usage-level deck: few-shot, system prompts, formats, CoT, prompt injection), and LLM-11's three LLM-as-judge frames go to B5.
+LLM-11 keeps 17 of its 20 frames.</p>
+<p>One honest loss: LLM-3 to LLM-5 were built as a three-session run. They stay in order, but B1 to B3 now sit between them.</p>
+<table>
+  <colgroup><col style="width:5%"><col style="width:22%"><col style="width:40%"><col style="width:33%"></colgroup>
+  <thead><tr><th>#</th><th>Deck</th><th>What changes</th><th>Answers a question from stream B</th></tr></thead>
+  <tbody id="tb-A"></tbody>
+</table>
+</details>
+
+<!-- ============================================================ 5 -->
+<details open id="laneB">
+<summary><h2>5. Stream B: build with it</h2></summary>
+<p><strong>Format.</strong> Each workshop: about 25 minutes of slides taken from a built deck, about 60 minutes in a notebook,
+and an executed solution copy afterwards (the same pattern as the biopsy notebook, DECISIONS #80 and #81). Each workshop builds
+on the code of the one before: B1's client is the one B9 points at localhost, B4's search becomes a tool in B6, B6's agent gets
+a voice in B7, B5's evals score B10's fine-tune, and B11 ships one of them.</p>
+<p><strong>Framework-free first.</strong> Every pattern is written by hand once (a raw request, a 40-line agent loop, cosine
+similarity in numpy), then shown in one framework. Which framework is a separate decision per session (Q7). Tools change faster
+than the ideas under them, as DECISIONS #74 put it; the hand-written version is the part that will still be true in a year.</p>
+<table>
+  <colgroup><col style="width:5%"><col style="width:17%"><col style="width:19%"><col style="width:41%"><col style="width:18%"></colgroup>
+  <thead><tr><th>#</th><th>Session</th><th>Slides from</th><th>Students do</th><th>Needs</th></tr></thead>
+  <tbody id="tb-B"></tbody>
+</table>
+</details>
+
+<!-- ============================================================ 6 -->
+<details open id="meet">
+<summary><h2>6. Where the streams meet</h2></summary>
+<h3>Hard dependencies: B cannot run before these A lectures</h3>
+<table>
+  <colgroup><col style="width:28%"><col style="width:28%"><col style="width:44%"></colgroup>
+  <thead><tr><th>Lecture (A)</th><th>Workshop (B)</th><th>Why</th></tr></thead>
+  <tbody id="tb-dep"></tbody>
+</table>
+<h3>Used now, explained later</h3>
+<p>Students use these as black boxes in B; an A lecture opens the box weeks later. Each one is a ready-made opening for that
+lecture ("remember when...").</p>
+<table>
+  <colgroup><col style="width:28%"><col style="width:28%"><col style="width:44%"></colgroup>
+  <thead><tr><th>Used in (B)</th><th>Explained in (A)</th><th>What</th></tr></thead>
+  <tbody id="tb-cb"></tbody>
+</table>
+</details>
+
+<!-- ============================================================ 7 -->
+<details open id="order">
+<summary><h2>7. Session order and count</h2></summary>
+<p>Alternating A and B after the trunk. If the week is "practical day, then lecture day" (as in the CNN weeks: Saturday
+3 Oct practical, Sunday 4 Oct lecture, from <code>ml/000_new_plan.md</code>), each workshop that needs a lecture lands at
+least one lecture day after it. The last column is computed on this page from the data behind the diagram: every session
+must come after everything it needs.</p>
+<table>
+  <colgroup><col style="width:5%"><col style="width:9%"><col style="width:36%"><col style="width:30%"><col style="width:20%"></colgroup>
+  <thead><tr><th>#</th><th>Stream</th><th>Session</th><th>Needs</th><th>Order check</th></tr></thead>
+  <tbody id="tb-order"></tbody>
+</table>
+<p id="ordercheck"></p>
+
+<h3>Against the current plan</h3>
+<table>
+  <colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup>
+  <tr><th></th><th>Current plan</th><th>Proposal</th></tr>
+  <tr><td>Sessions left after LLM-1</td><td>19 (17 lectures + P1 + P2)</td><td>25 (24 without B8); 28 if the RAG decks stay full lectures (Q4)</td></tr>
+  <tr><td>Hands-on sessions</td><td>2 (neither built)</td><td>13 (PR-1, B0 to B11)</td></tr>
+  <tr><td>First call to a model API</td><td>not planned</td><td>session 5 (B0)</td></tr>
+  <tr><td>First RAG session</td><td>session 12 (L41)</td><td>session 11 (B3), RAG proper at 13 (B4)</td></tr>
+  <tr><td>Built decks given as full lectures</td><td>17</td><td>12</td></tr>
+  <tr><td>Built decks reused as workshop slides</td><td>0</td><td>5 (LLM-10, L41, L42, L43, L44) plus parts of LLM-11, L33, L35</td></tr>
+  <tr><td>New material</td><td>P1, P2 notebooks</td><td>13 notebooks, 1 short voice deck (~12 frames)</td></tr>
+</table>
+</details>
+
+<!-- ============================================================ 8 -->
+<details open id="cost">
+<summary><h2>8. What it costs, what can go wrong</h2></summary>
+<ol>
+  <li><strong>It needs the slots.</strong> DECISIONS #96 (2026-10-24) removed the RNN practical because "the instructor has no
+    session left for a practical". This plan adds 12 workshops plus PR-1. If the practical day is not actually free, the
+    plan does not fit, and the fix is cutting B, not squeezing it (Q2, Q6).</li>
+  <li><strong>Build work.</strong> 13 notebooks, each with data, a solution copy and a short slide pull, plus one new voice
+    deck. A guess, not a measurement: about one working session per notebook to build and test, so roughly 13 build sessions,
+    more for B7 (audio on Windows) and B10 (Colab).</li>
+  <li><strong>Stream B goes stale fast.</strong> SDKs, model names, prices and free tiers change monthly. Every notebook needs
+    pinned versions (<code>==</code>) and a re-run before each delivery. Budget that re-check; it is not optional.</li>
+  <li><strong>Model access is a money decision</strong> (Q3). Students without a card, free tiers that change without notice,
+    local models that crawl on weak laptops, and realtime voice that needs a hosted API.</li>
+  <li><strong>The RAG decks do not fit a workshop.</strong> L41, L42 and L43 have 55, 59 and 55 frames, with the full BM25 and
+    contrastive derivations the RAG chapter's teaching stance asked for. Condensing them to ~25-minute pulls throws away
+    reviewed work; keeping them adds 3 sessions (Q4).</li>
+  <li><strong>The course map changes.</strong> <code>llms/00_shared/py_src/llm_roadmap.py</code>'s <code>SESSIONS</code> list
+    must match the new order, and every deck's "Where we are" frames get recompiled. The "life of a model" row still holds as a
+    picture; only what is lit when changes.</li>
+  <li><strong>Pointer edits in built decks.</strong> LLM-2's "Next (LLM-3)" becomes LLM-6; LLM-6's "Next (LLM-7)" becomes B0 and
+    LLM-3; LLM-5's "Next (LLM-6)" becomes LLM-7; LLM-11's "Next: the RAG chapter" frame goes (RAG already happened in B).</li>
+  <li><strong>Reopened decisions.</strong> DECISIONS #74 (no runtime taught) reopens the moment B9 runs a local model; its own
+    "what would change this" says exactly that. Chapter plan section 2 (RAG and agents inside the chapter's run, after LLM-11)
+    is replaced.</li>
+  <li><strong>Armenian voice is unmeasured.</strong> AssemblyAI, Deepgram and Gladia list Armenian speech-to-text on their sites.
+    Those are vendor claims. B7 measures word error rate on our own recordings before anyone promises an Armenian voice agent.</li>
+  <li><strong>Students may rank B above A</strong> ("why learn attention if I can call the API?"). The defence is section 6:
+    every A lecture opens with a thing they hit in B. If that link is not made in the room, the split weakens the theory.</li>
+</ol>
+</details>
+
+<!-- ============================================================ 9 -->
+<details open id="questions">
+<summary><h2>9. Decisions for you (Q1 to Q8)</h2></summary>
+
+<div class="qcard"><h3>Q1. What does "two paths" mean for students?</h3>
+<ol type="a">
+  <li>Everyone takes both, alternating: one A lecture and one B workshop a week. <span class="lean">My lean:</span> one
+    instructor, B needs A at three points (section 6), and jobs want both.</li>
+  <li>Students pick one stream (Labonne-style). Halves what each student sees; you would teach both anyway.</li>
+  <li>B as one block after A ends. Simplest, but brings back the problem: no API until the end.</li>
+</ol>
+<p class="note">Flips to (b) if the cohort clearly splits into "wants a job" and "wants research", and you have two slots a
+week to run them side by side.</p></div>
+
+<div class="qcard"><h3>Q2. How many sessions a week does this part get, and is the practical day free?</h3>
+<p>Not mine to guess: #96 says there was no slot for the RNN practical a week ago. The answer decides whether this is a
+13-week or a 25-week plan.</p></div>
+
+<div class="qcard"><h3>Q3. Where do the students' model calls go? (fundamental, your call)</h3>
+<ol type="a">
+  <li>One hosted API with a course budget or key policy. Simplest to teach; costs money.</li>
+  <li>Free tiers of hosted providers. No money; rate limits and terms change without notice.</li>
+  <li>Local open models only. Free and private; slow on weak laptops, no realtime voice, reopens #74 for every session.</li>
+  <li>One OpenAI-compatible client in every notebook: hosted by default, the same code pointed at a local server in B9
+    (Ollama, llama.cpp's server and vLLM all speak this interface). <span class="lean">My lean.</span></li>
+</ol>
+<p class="note">Hard to reverse: once 13 notebooks are written against one SDK, switching is a rewrite. The client interface is
+the sticky part, more than the provider.</p></div>
+
+<div class="qcard"><h3>Q4. The RAG decks inside a workshop stream</h3>
+<ol type="a">
+  <li>Condensed pulls (~25 minutes each) for B3, B4 and B5; the full decks stay as reading. <span class="lean">My lean:</span>
+    workshop time goes to building.</li>
+  <li>Keep L41 to L43 as full lectures inside stream B (+3 sessions).</li>
+  <li>L41's BM25 and contrastive derivations move to stream A as one theory lecture; L42 and L43 are condensed.</li>
+</ol></div>
+
+<div class="qcard"><h3>Q5. Three built decks change place. Approve each separately</h3>
+<ol type="a">
+  <li>LLM-6 Decoding moves from session 6 to session 4 (three line edits, section 3).</li>
+  <li>LLM-10 Prompting moves whole into B1.</li>
+  <li>LLM-11's three LLM-as-judge frames move into B5.</li>
+</ol>
+<p class="note">Nothing gets touched until you say yes to the specific item.</p></div>
+
+<div class="qcard"><h3>Q6. Which B sessions stay?</h3>
+<p>All eleven are on the diagram. If time is short, cut in this order: B8 vision (already optional), merge B9 into B10,
+merge B3 into B4. B7 voice stays, since you named it.</p></div>
+
+<div class="qcard"><h3>Q7. Frameworks: hand-written first, one framework after, chosen per session later?</h3>
+<p>Agents, voice, vector store and deployment each have several real options (for voice, for example, Pipecat and LiveKit
+Agents as open-source runtimes, or a provider's speech-to-speech API). I would bring 2 to 4 options with trade-offs when each
+session is built, not pick now.</p></div>
+
+<div class="qcard"><h3>Q8. LLM-2 in the trunk: whole, or split?</h3>
+<ol type="a">
+  <li>Whole, as built (77 frames). <span class="lean">My lean:</span> it is built and reviewed, and its long-context part
+    (lost in the middle, context rot) is exactly what B4 needs.</li>
+  <li>Split: embeddings stay in the trunk, the RoPE half moves into A after LLM-3 (RoPE rotates queries and keys, which LLM-3
+    introduces). Reaches the API a little sooner.</li>
+</ol></div>
+</details>
+
+<!-- ============================================================ 10 -->
+<details open id="projects">
+<summary><h2>10. Student projects (decided 2026-10-28)</h2></summary>
+<p>Picked by you from 25 ideas offered after the job-market snapshot (<code>_knowledge/ml_job_market/</code>). Logged as
+DECISIONS #106 (projects 1 to 6) and #107 (7 to 9). Q numbers below are the open items from the conversation.</p>
+<table>
+  <colgroup><col style="width:4%"><col style="width:20%"><col style="width:36%"><col style="width:17%"><col style="width:23%"></colgroup>
+  <thead><tr><th>#</th><th>Project</th><th>What students build</th><th>Sessions</th><th>Still open</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td><strong>RAG on a textbook</strong></td>
+    <td>Questions answered from one textbook, with citations to the section, and an eval set.</td>
+    <td>B3 to B5 (needs LLM-2)</td><td>Q13: which textbook</td></tr>
+  <tr><td>2</td><td><strong>Voice AI prep assistant, in Armenian</strong></td>
+    <td>A spoken prep assistant over materials the course provides, so students can use it themselves too.</td>
+    <td>B7, built on B4 and B6</td><td>Q14: exam prep or interview prep; Q7: voice stack. Armenian speech-to-text not measured yet</td></tr>
+  <tr><td>3</td><td><strong>SQL analytics agent</strong></td>
+    <td>Natural-language questions to SQL on a database, read-only, checked by a question set.</td>
+    <td>B2, B6</td><td>Q15: which database</td></tr>
+  <tr><td>4</td><td><strong>A small Armenian benchmark</strong></td>
+    <td>Armenian questions with reference answers, an LLM judge checked against human labels, several models compared.</td>
+    <td>B5 (and LLM-11)</td><td>Size and which models</td></tr>
+  <tr><td>5</td><td><strong>QLoRA translit fixer</strong> (tentative)</td>
+    <td>Fine-tune a small model to turn Latin-typed Armenian into Armenian script; character error rate before and after.</td>
+    <td>B10 (needs LLM-13)</td><td>May be swapped for another fine-tuning task</td></tr>
+  <tr><td>6</td><td><strong>Something on-prem</strong></td>
+    <td>An LLM app on local hardware, compared with a hosted API on quality, latency and cost.</td>
+    <td>B9 (needs LLM-12)</td><td>Q16: which runtime (reopens DECISIONS #74)</td></tr>
+  <tr><td>7</td><td><strong>Fine-tune an Armenian embedding model</strong></td>
+    <td>A small embedding model trained on Armenian question-passage pairs with L41's contrastive loss, compared with
+      off-the-shelf models on recall@k. Makes project 1 stronger.</td>
+    <td>After B3 and B4; rented GPU</td><td>Base model, where the training pairs come from</td></tr>
+  <tr><td>8</td><td><strong>Teach a 1B model to call tools</strong></td>
+    <td>Fine-tune a tiny model to emit valid tool calls; compare with prompting a big model on accuracy and cost.</td>
+    <td>B2, B10 (needs LLM-13); rented GPU</td><td>Base model, tool-call training data</td></tr>
+  <tr><td>9</td><td><strong>MCP server for the "great sketch show"</strong></td>
+    <td>Your words; read as Kargin Haghordum (Կարգին հաղորդում). Scope not discussed yet.</td>
+    <td>B2</td><td>Q18: confirm the show; scope</td></tr>
+  </tbody>
+</table>
+<p><strong>Renting a GPU</strong> is a skill in projects 7 and 8 ("how can we rent a GPU from RunPod, for example"). RunPod is
+your example, not a chosen provider; the repo already uses Colab T4 (DECISIONS #96). Q19: a spending cap per student, or you
+run the GPU jobs yourself.</p>
+</details>
+
+<!-- ============================================================ 11 -->
+<details open id="sources">
+<summary><h2>11. Sources</h2></summary>
+<h3>Repo</h3>
+<ul>
+  <li><code>llms/LLM_CHAPTER_PLAN.md</code>: sections 2, 5.0 (session table), 6 (practicals), 8 (budget)</li>
+  <li><code>llms/06_decoding/LLM6_decoding.tex</code>: lines 118, 713, the provenance comment (interview decisions of 2026-10-05)</li>
+  <li><code>DECISIONS.md</code> #74 (no runtime taught), #96 (no session for the RNN practical), #63 (course order)</li>
+  <li><code>ml/ch17_rag/RAG_CHAPTER_PLAN.md</code> (teaching stance, the cheese-factory running example), <code>ml/ch18_agents/L44_agents_tools.tex</code>
+    and <code>ml/ch13_audio/L35_audio_hearing.tex</code> section names</li>
+</ul>
+<h3>Web (checked 2026-10-28)</h3>
+<ul>
+  <li><a href="https://github.com/mlabonne/llm-course">mlabonne/llm-course</a> README: track and section titles (primary).
+    The "tokenization, attention, sampling" summary is from
+    <a href="https://learn.aisingapore.org/2025/01/the-large-language-model-course-how-to-become-an-llm-scientist-or-by-maxime-labonne-jan-2025/">a secondary write-up</a>.</li>
+  <li><a href="https://platform.claude.com/docs/en/build-with-claude/extended-thinking">Anthropic, Extended thinking</a>:
+    manual budgets rejected on Claude 4.7 and later, adaptive thinking with effort (primary).</li>
+  <li>GPT-5 sampling parameters, user reports only:
+    <a href="https://community.openai.com/t/temperature-in-gpt-5-models/1337133">OpenAI forum</a>,
+    <a href="https://github.com/vercel/ai/issues/10932">vercel/ai issue 10932</a> (GPT-5.1 with reasoning effort "none").</li>
+  <li>Voice agent runtimes (vendor and blog comparisons, treat numbers as unverified):
+    <a href="https://www.forasoft.com/blog/article/pipecat-vs-livekit-agents">Fora Soft, Pipecat vs LiveKit Agents</a>,
+    <a href="https://dev.to/agdex_ai/best-voice-ai-agent-platforms-and-frameworks-in-2026-livekit-vs-pipecat-vs-vapi-vs-retell-47jk">DEV, voice platforms 2026</a>,
+    <a href="https://assemblyai.com/blog/build-voice-agent-livekit">AssemblyAI, voice agent with LiveKit</a>.</li>
+  <li>Armenian speech-to-text, vendor pages:
+    <a href="https://www.assemblyai.com/languages/armenian">AssemblyAI</a>,
+    <a href="https://deepgram.com/product/speech-to-text/armenian">Deepgram</a>,
+    <a href="https://www.gladia.io/product/languages/armenian">Gladia</a>.</li>
+  <li>Industry course syllabi, for the topic list only:
+    <a href="https://www.coursera.org/learn/build-production-ai-agents-rag-mcp">Coursera, Build Production AI Agents: RAG and MCP</a>,
+    <a href="https://www.dataexpert.io/program/ai-expert">DataExpert, AI Expert</a>.</li>
+</ul>
+</details>
+
+</main>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- data (one source for the diagram and every table)
+const NODES = [
+  // shared trunk
+  { id: "t1", lane: "T", row: 0, s: 1, kind: "done", label: "#1 · LLM-1 · delivered", title: "Tokenization",
+    sub: "Text → token IDs: BPE, Unigram, the strawberry problem",
+    slides: "llms/01_tokenization (72 pages)", does: ["Delivered (its notes_in_class.pdf exists)."], build: "Nothing." },
+  { id: "t2", lane: "T", row: 1, s: 2, kind: "new", label: "#2 · practical · to build", title: "PR-1  Tokens are money",
+    sub: "Count, price and budget tokens; train a BPE on Armenian",
+    slides: "None new: a 10-minute recap of LLM-1",
+    does: ["Count the tokens of one Armenian and one English paragraph in o200k_base (tiktoken), a Gemma and a Qwen tokenizer (tokenizer files only, a few MB)",
+           "Turn the counts into a price and a context-window budget for one real request (prices copied on the day: they change)",
+           "Train a small BPE on Armenian text with Hugging Face tokenizers; plot tokens per word against vocabulary size",
+           "Reproduce two LLM-1 failures (number splits, the trailing space) and fix one by reformatting the input"],
+    build: "Notebook, solution copy, an Armenian text sample.", needs: ["t1"],
+    armenian: "LLM-1's Armenian tax, now in money and context window." },
+  { id: "t3", lane: "T", row: 2, s: 3, kind: "built", label: "#3 · LLM-2 · built", title: "Embeddings and position",
+    sub: "IDs → vectors; position; lost in the middle",
+    slides: "llms/02_embeddings_position (77 frames)", does: ["Lecture as built."],
+    build: "One pointer: 'Next (LLM-3)' becomes LLM-6. (Q8: whole or split.)", needs: ["t1"],
+    later: "B3 uses its vectors; B4 uses its lost-in-the-middle frames." },
+  { id: "t4", lane: "T", row: 3, s: 4, kind: "moved", label: "#4 · LLM-6 · built, moves up from #6", title: "Decoding",
+    sub: "Logits → text: greedy, beam, temperature, top-p, JSON",
+    slides: "llms/06_decoding (55 frames)", does: ["Lecture as built."],
+    build: ["Line 118 ('LLM-5: each step ends in logits...') becomes a one-line black box: the model hands you a probability for each of 50,257 tokens; LLM-5 opens the box later",
+            "Line 713 (speculative decoding uses LLM-4's causal mask): a 'you will see why in LLM-4' note, or the speculative frames move to LLM-14",
+            "'Next (LLM-7)' becomes B0 and LLM-3; the roadmap order changes"],
+    needs: ["t3"],
+    note: "The 2026-10-05 interview cut the API-parameter table and 'providers locking knobs' from this deck. Both go into B0's notebook, not here." },
+  { id: "t5", lane: "T", row: 4, s: 5, kind: "new", label: "#5 · practical · to build · the fork", title: "B0  Your first API call",
+    sub: "Every knob from LLM-6, through a real request",
+    slides: "10 minutes: the API field table (section 3)",
+    does: ["Send one request as plain HTTP, then through the SDK. The usage counts are PR-1's tokens; finish_reason is LLM-6's 'When to stop'",
+           "Sweep temperature and top_p on one prompt, 20 samples each; plot how far the answers spread",
+           "Ask for logprobs and recompute one token's probability by hand",
+           "Same request at temperature 0, twice: diff the answers (LLM-6: 'Temperature 0 is not deterministic')",
+           "JSON two ways: 'please answer in JSON' vs a JSON-schema structured output; count failures over 50 calls",
+           "Stream a reply; total the session's cost from the usage fields",
+           "Meet a reasoning model that refuses a temperature: the locked knobs"],
+    build: "Notebook and solution; needs model access (Q3).", needs: ["t2", "t4"] },
+
+  // stream A
+  { id: "a1", lane: "A", row: 1, s: 6, kind: "built", label: "#6 · LLM-3 · built", title: "Attention",
+    sub: "How a token looks at the others", slides: "llms/03_attention (56 frames)",
+    build: "Map frames only: decoding is now behind the students.", needs: ["t5"] },
+  { id: "a2", lane: "A", row: 2, s: 8, kind: "built", label: "#8 · LLM-4 · built", title: "The Transformer block",
+    sub: "Multi-head, MLP, residual stream, causal mask", slides: "llms/04_transformer_block (44 frames)",
+    build: "Map frames only.", needs: ["a1"], later: "Explains the causal mask that LLM-6's speculative decoding used." },
+  { id: "a3", lane: "A", row: 3, s: 10, kind: "built", label: "#10 · LLM-5 · built", title: "Transformers in the world",
+    sub: "Encoder, decoder, the LM head by hand", slides: "llms/05_transformers_in_the_world (30 frames)",
+    build: "'Next (LLM-6)' becomes LLM-7.", needs: ["a2"],
+    later: "Its LM head by hand opens the black box students have sampled from since LLM-6." },
+  { id: "a4", lane: "A", row: 4, s: 12, kind: "built", label: "#12 · LLM-7 · built", title: "Pretraining",
+    sub: "From the internet to a base model", slides: "llms/07_pretraining (32 frames)",
+    build: "Map frames only.", needs: ["a3"],
+    note: "Optional theory practical here: the planned P1, a tiny GPT that speaks Armenian (not built)." },
+  { id: "a5", lane: "A", row: 5, s: 14, kind: "built", label: "#14 · LLM-8 · built", title: "Scaling laws and emergence",
+    sub: "Why bigger, and how much bigger", slides: "llms/08_scaling (23 frames)", build: "Map frames only.", needs: ["a4"] },
+  { id: "a6", lane: "A", row: 6, s: 16, kind: "built", label: "#16 · LLM-9 · built", title: "Post-training",
+    sub: "Base model → assistant: SFT, chat template, RLHF, DPO", slides: "llms/09_post_training (22 frames)",
+    build: "Map frames only.", needs: ["a5"] },
+  { id: "a7", lane: "A", row: 7, s: 18, kind: "moved", label: "#18 · LLM-11 · built, gives 3 frames to B5", title: "Benchmarks and hallucination",
+    sub: "Contamination, guess or abstain, catching it", slides: "llms/11_evaluation (20 frames, keeps 17)",
+    build: "The three LLM-as-judge frames move to B5. 'Next: the RAG chapter' becomes 'Next: LLM-12'.", needs: ["a6"] },
+  { id: "a8", lane: "A", row: 8, s: 20, kind: "built", label: "#20 · LLM-12 · built", title: "Quantization",
+    sub: "An LLM in 4 bits; why inference engines exist", slides: "llms/12_quantization (22 frames)",
+    build: "Map frames only.", needs: ["a7"] },
+  { id: "a9", lane: "A", row: 9, s: 22, kind: "built", label: "#22 · LLM-13 · built", title: "LoRA and QLoRA",
+    sub: "Fine-tuning on a budget", slides: "llms/13_lora (19 frames)", build: "Map frames only.", needs: ["a8"],
+    note: "Its 'prompt → RAG → fine-tune' ladder still works: RAG was B4." },
+  { id: "a10", lane: "A", row: 10, s: 24, kind: "built", label: "#24 · LLM-14 · built", title: "Anatomy of a 2026 LLM",
+    sub: "KV cache, GQA, MLA, mixture of experts", slides: "llms/14_anatomy_2026 (24 frames)", build: "Map frames only.", needs: ["a9"] },
+  { id: "a11", lane: "A", row: 11, s: null, kind: "cont", label: "after LLM-14", title: "The theory thread goes on",
+    sub: "Autoencoders → GANs → diffusion → RL, VLM, audio",
+    slides: "Course order from DECISIONS #63, unchanged", build: "Nothing.", needs: ["a10"] },
+
+  // stream B
+  { id: "b1", lane: "B", row: 1, s: 7, kind: "new", label: "#7 · workshop · to build", title: "B1  Prompting you can measure",
+    sub: "Few-shot, system prompts, CoT, injection, with a score",
+    slides: "LLM-10 (built, 21 frames), moved whole from stream A",
+    does: ["Label 50 Armenian sentences (topic or sentiment); score zero-shot, few-shot and shuffled few-shot with error bars (LLM-10: 'Why the order matters')",
+           "System prompt vs user prompt; ask for a format and count how often it is kept",
+           "Chain of thought on and off: accuracy against tokens spent (LLM-10: 'Tokens are compute')",
+           "Attack your own classifier with a direct and an indirect prompt injection"],
+    build: "Notebook and a 50-sentence labelled set.", needs: ["t5"] },
+  { id: "b2", lane: "B", row: 2, s: 9, kind: "new", label: "#9 · workshop · to build", title: "B2  Structured outputs, tool calls, MCP",
+    sub: "The model decides, your code does",
+    slides: "L44 sections 'The one idea', 'Tool calling', 'MCP' (built)",
+    does: ["Pull fields out of messy Armenian text into a JSON schema, validated with pydantic; count what breaks",
+           "One tool (a currency rate or the weather): request → tool call → your code runs it → result back, written by hand",
+           "Move the same tool into a tiny MCP server and call it from a client",
+           "Hit L44's 'Gotchas that will cost you an afternoon' on purpose"],
+    build: "Notebook and a ~30-line MCP server script.", needs: ["t5"] },
+  { id: "b3", lane: "B", row: 3, s: 11, kind: "new", label: "#11 · workshop · to build", title: "B3  Semantic search",
+    sub: "Embed, index, search; BM25 vs vectors on Armenian",
+    slides: "L41, condensed (Q4)",
+    does: ["Chunk the cheese-factory manuals (the RAG chapter's running example)",
+           "Embed them with a small open embedding model on the CPU; cosine top-k in numpy, then one vector store",
+           "Run the same queries through BM25; find a query each method gets wrong (a model number vs a paraphrase)",
+           "Armenian queries: where the embedder falls over"],
+    build: "Notebook; corpus from ml/ch17_rag/py_src/l41_data.py.", needs: ["t3"] },
+  { id: "b4", lane: "B", row: 4, s: 13, kind: "new", label: "#13 · workshop · to build", title: "B4  RAG, end to end",
+    sub: "Hybrid search, rerank, answer with citations",
+    slides: "L42 and L43, condensed (Q4)",
+    does: ["Fuse BM25 and vector results; rerank the shortlist",
+           "Assemble the context; prompt for an answer that cites its chunks",
+           "Break it on purpose: a bad chunk size; the right chunk in the middle of 20 (LLM-2: lost in the middle)",
+           "L43's 'When not to use RAG': one question where retrieval makes the answer worse"],
+    build: "Notebook.", needs: ["b3"] },
+  { id: "b5", lane: "B", row: 5, s: 15, kind: "new", label: "#15 · workshop · to build", title: "B5  Evals for an LLM app",
+    sub: "Golden set, LLM-as-judge, a test on every change",
+    slides: "LLM-11's three judge frames + L43 'Measuring retrieval', 'Measuring generation', 'Building an eval set from nothing'",
+    does: ["Write a 30-question golden set for the B4 app",
+           "Recall@k for retrieval; an LLM judge for the answers",
+           "Check the judge against your own labels; swap answer order to catch position bias",
+           "Turn it into a pytest that fails when a prompt change makes the app worse"],
+    build: "Notebook and test file.", needs: ["b4"] },
+  { id: "b6", lane: "B", row: 6, s: 17, kind: "new", label: "#17 · workshop · to build", title: "B6  Agents",
+    sub: "The loop by hand, then one framework",
+    slides: "L44 sections 'The loop', 'Choosing' (built)",
+    does: ["Write the agent loop in about 40 lines, with B2's tool and B4's search as tools",
+           "Add a step cap and a spending cap; log every turn (L44: 'Three ways it fails to stop')",
+           "Plant an instruction in a retrieved document and watch the agent obey it (L44: 'The loop reads text it did not write')",
+           "Rebuild the same agent in one framework and compare (Q7)"],
+    build: "Notebook.", needs: ["b2", "b4"] },
+  { id: "b7", lane: "B", row: 7, s: 19, kind: "new", label: "#19 · workshop · to build", title: "B7  Voice AI",
+    sub: "Speech in, speech out; where the latency goes",
+    slides: "New short deck (~12 frames) + L35 'What the cascade throws away' (built)",
+    does: ["Cascade: speech-to-text → the B6 agent → text-to-speech, on a recorded question",
+           "Time each stage and the time to first audio; stream every stage and time it again",
+           "Voice activity detection and barge-in: let the user interrupt",
+           "The same question through one speech-to-speech realtime API: latency and cost side by side",
+           "20 recorded Armenian sentences: measure word error rate before believing a vendor"],
+    build: "New deck, notebook, a microphone setup that works on Windows.", needs: ["b6"],
+    armenian: "AssemblyAI, Deepgram and Gladia list Armenian speech-to-text. Vendor claims, not measured." },
+  { id: "b8", lane: "B", row: 8, s: 21, kind: "opt", label: "#21 · workshop · optional", title: "B8  Vision and documents",
+    sub: "A photo or a PDF in, JSON out",
+    slides: "L33 (built): how an image becomes tokens",
+    does: ["A scanned Armenian document → JSON through a vision model, then OCR + a text model; compare errors and cost per page"],
+    build: "Notebook.", needs: ["b2"] },
+  { id: "b9", lane: "B", row: 9, s: 23, kind: "new", label: "#23 · workshop · to build", title: "B9  Run it on your laptop",
+    sub: "A local model, the same code; the quantization ladder",
+    slides: "LLM-12 recap, 10 minutes",
+    does: ["Run a small open model behind a local OpenAI-compatible server; point the B1 notebook at localhost: same code",
+           "The quantization ladder (already planned as homework): size, RAM, tokens/s and perplexity per level, on your own machine",
+           "Where local wins (privacy, no bill) and where it loses (speed, quality)"],
+    build: "Notebook; one named runtime (reopens DECISIONS #74).", needs: ["a8", "b1"] },
+  { id: "b10", lane: "B", row: 10, s: 25, kind: "new", label: "#25 · workshop · to build", title: "B10  Fine-tune on a budget",
+    sub: "QLoRA on Colab; run it with B9, score it with B5",
+    slides: "LLM-13 recap",
+    does: ["The planned P2: QLoRA on a Colab T4 on a small Armenian instruction set → merge → GGUF → quantize → run it with B9's runtime",
+           "Score before and after with B5's harness"],
+    build: "Notebook. Still open from the chapter plan: D5 library, D6 base model, the instruction data.",
+    needs: ["a9", "a6", "b9", "b5"] },
+  { id: "b11", lane: "B", row: 11, s: 26, kind: "cap", label: "#26 · capstone", title: "B11  Ship it",
+    sub: "RAG assistant, voice agent or document extractor",
+    slides: "None",
+    does: ["Pick one of the three. Must have: B5's eval suite passing, a cost and latency log, one prompt-injection test, a demo someone else can open",
+           "Demo day"],
+    build: "Brief and grading sheet.", needs: ["b5", "b6"] },
+];
+
+const LINKS = [
+  // hard dependencies, A lecture → B workshop
+  { from: "a8", to: "b9",  type: "dep", text: "B9 runs the quant levels LLM-12 explains (Q4_K_M and friends)" },
+  { from: "a9", to: "b10", type: "dep", text: "B10 is LLM-13's QLoRA, done for real" },
+  { from: "a6", to: "b10", type: "dep", text: "Instruction data and the chat template come from LLM-9" },
+  // used in B (or B0), explained later in A
+  { from: "t5", to: "a6",  type: "cb", text: "The messages list B0 sends is LLM-9's chat template" },
+  { from: "t5", to: "a10", type: "cb", text: "Prompt caching is a reused KV cache (LLM-14)" },
+  { from: "b1", to: "a6",  type: "cb", text: "Why reasoning models need less prompting: RL on verifiable rewards (LLM-9)" },
+  { from: "b4", to: "a7",  type: "cb", text: "A cited answer can still be invented: hallucination (LLM-11)" },
+  { from: "b5", to: "a7",  type: "cb", text: "Why public benchmarks mislead: contamination (LLM-11)" },
+  { from: "b9", to: "a10", type: "cb", text: "Why a mixture-of-experts model runs faster than its size suggests (LLM-14)" },
+  { from: "b7", to: "a11", type: "cb", text: "L35 and L36 open the speech-to-text and text-to-speech boxes" },
+];
+
+// ---------------------------------------------------------------- geometry
+const AX = 70, BX = 650, LW = 480, TX = 320, TW = 560, NH = 66;
+const TY0 = 24, TP = 92, LY0 = 548, LP = 90, GX = 600;
+const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+function box(n) {
+  if (n.lane === "T") return { x: TX, y: TY0 + n.row * TP, w: TW };
+  return { x: n.lane === "A" ? AX : BX, y: LY0 + (n.row - 1) * LP, w: LW };
+}
+const maxRow = Math.max(...NODES.filter(n => n.lane !== "T").map(n => n.row));
+const H = LY0 + (maxRow - 1) * LP + NH + 28;
+const W = 1140;
+
+// fail loudly on bad data
+for (const n of NODES) for (const d of (n.needs || [])) if (!byId[d]) throw new Error(`${n.id} needs unknown node ${d}`);
+for (const l of LINKS) if (!byId[l.from] || !byId[l.to]) throw new Error(`bad link ${l.from} -> ${l.to}`);
+
+// ---------------------------------------------------------------- svg helpers
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("dia");
+svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  (parent || svg).appendChild(e);
+  return e;
+}
+const defs = el("defs");
+for (const [id, color] of [["m-order", "#9aa3ad"], ["m-dep", "#D90012"], ["m-cb", "#0033A0"]]) {
+  const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+  el("path", { d: "M0,0 L10,5 L0,10 z", fill: color }, m);
+}
+
+// backgrounds
+const trunkBottom = TY0 + 4 * TP + NH;
+el("rect", { x: TX - 20, y: 8, width: TW + 40, height: trunkBottom + 12 - 8, rx: 14, fill: "#f5f6f8" });
+el("rect", { x: AX - 12, y: LY0 - 54, width: LW + 24, height: H - (LY0 - 54) - 6, rx: 14, fill: "#f3f6fc" });
+el("rect", { x: BX - 12, y: LY0 - 54, width: LW + 24, height: H - (LY0 - 54) - 6, rx: 14, fill: "#fffaf0" });
+const t1 = el("text", { x: AX + 2, y: LY0 - 30, class: "lanehdr", fill: "#0033A0" }); t1.textContent = "A · HOW IT WORKS (THEORY)";
+const t2 = el("text", { x: BX + LW - 2, y: LY0 - 30, class: "lanehdr", fill: "#a36f00", "text-anchor": "end" }); t2.textContent = "B · BUILD WITH IT (APPLIED)";
+const c1 = el("text", { x: 26, y: (8 + trunkBottom) / 2, class: "sidecap", transform: `rotate(-90 26 ${(8 + trunkBottom) / 2})`, "text-anchor": "middle" });
+c1.textContent = "SHARED TRUNK · EVERYONE";
+const c2 = el("text", { x: 26, y: (LY0 + H) / 2, class: "sidecap", transform: `rotate(-90 26 ${(LY0 + H) / 2})`, "text-anchor": "middle" });
+c2.textContent = "TWO STREAMS · ALTERNATING A, B, A, B";
+
+// ---------------------------------------------------------------- arrows
+const arrowEls = [];
+function addArrow(d, cls, ends, tip) {
+  const g = el("g", { class: "arrowgrp" });
+  const p = el("path", { d, class: `arrow ${cls}`, "marker-end": `url(#m-${cls})` }, g);
+  if (tip) {
+    const hit = el("path", { d, class: "hit" }, g);
+    const t1 = document.createElementNS(NS, "title"); t1.textContent = tip; hit.appendChild(t1);
+    const t2 = document.createElementNS(NS, "title"); t2.textContent = tip; p.appendChild(t2);
+  }
+  arrowEls.push({ el: p, ends });
+}
+// trunk order
+for (let r = 0; r < 4; r++) {
+  const y1 = TY0 + r * TP + NH, y2 = TY0 + (r + 1) * TP;
+  const a = NODES.find(n => n.lane === "T" && n.row === r).id, b = NODES.find(n => n.lane === "T" && n.row === r + 1).id;
+  addArrow(`M${GX},${y1} L${GX},${y2 - 2}`, "order", [a, b]);
+}
+// the fork
+addArrow(`M${GX},${trunkBottom} C${GX},${trunkBottom + 50} 410,${LY0 - 50} 410,${LY0 - 2}`, "order", ["t5", "a1"]);
+addArrow(`M${GX},${trunkBottom} C${GX},${trunkBottom + 50} 790,${LY0 - 50} 790,${LY0 - 2}`, "order", ["t5", "b1"]);
+// in-lane order
+for (const lane of ["A", "B"]) {
+  const ns = NODES.filter(n => n.lane === lane).sort((p, q) => p.row - q.row);
+  for (let i = 0; i + 1 < ns.length; i++) {
+    const p = box(ns[i]), q = box(ns[i + 1]);
+    addArrow(`M${p.x + LW / 2},${p.y + NH} L${q.x + LW / 2},${q.y - 2}`, "order", [ns[i].id, ns[i + 1].id]);
+  }
+}
+// cross-lane links, spread across the gutter so they do not sit on top of each other
+LINKS.forEach((l, i) => {
+  const f = byId[l.from], t = byId[l.to], fb = box(f), tb = box(t);
+  const cx = GX - 30 + (i % 7) * 10;
+  let d;
+  if (f.lane === "T") {                      // from B0's bottom edge, down the gutter, into an A box
+    const y2 = tb.y + NH / 2;
+    d = `M${cx},${fb.y + NH} L${cx},${y2 - 24} Q${cx},${y2} ${tb.x + tb.w + 2},${y2}`;
+  } else {
+    const fromA = f.lane === "A";
+    const x1 = fromA ? fb.x + fb.w : fb.x, y1 = fb.y + NH / 2;
+    const x2 = fromA ? tb.x - 2 : tb.x + tb.w + 2, y2 = tb.y + NH / 2;
+    d = `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`;
+  }
+  addArrow(d, l.type, [l.from, l.to], l.text);
+});
+
+// ---------------------------------------------------------------- nodes
+const nodeEls = {};
+for (const n of NODES) {
+  const b = box(n);
+  const g = el("g", { class: `node ${n.kind}`, "data-id": n.id });
+  el("rect", { x: b.x, y: b.y, width: b.w, height: NH, rx: 10 }, g);
+  const lbl = el("text", { x: b.x + 14, y: b.y + 18, class: "lbl" }, g); lbl.textContent = n.label;
+  const ttl = el("text", { x: b.x + 14, y: b.y + 39, class: "ttl" }, g); ttl.textContent = n.title;
+  const sub = el("text", { x: b.x + 14, y: b.y + 57, class: "sub" }, g); sub.textContent = n.sub;
+  g.addEventListener("click", ev => { ev.stopPropagation(); select(n.id); });
+  nodeEls[n.id] = g;
+}
+
+// ---------------------------------------------------------------- selection and the side panel
+const panel = document.getElementById("panel");
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+function names(ids) { return (ids || []).map(i => byId[i].title.replace(/\s\s+/g, " ")).join(", "); }
+function list(x) { return Array.isArray(x) ? `<ul>${x.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : esc(x); }
+function related(id) {
+  const s = new Set([id]);
+  (byId[id].needs || []).forEach(x => s.add(x));
+  NODES.forEach(m => { if ((m.needs || []).includes(id)) s.add(m.id); });
+  LINKS.forEach(l => { if (l.from === id) s.add(l.to); if (l.to === id) s.add(l.from); });
+  return s;
+}
+function linkText(id) {
+  return LINKS.filter(l => l.from === id || l.to === id)
+    .map(l => `${l.type === "dep" ? "Needs / feeds" : "Used now, explained later"}: ${l.text}`);
+}
+function show(n) {
+  const rows = [];
+  if (n.slides) rows.push(["Slides from", esc(n.slides)]);
+  if (n.does) rows.push(["Students do", list(n.does)]);
+  if (n.build) rows.push(["To build or edit", list(n.build)]);
+  if (n.needs && n.needs.length) rows.push(["Needs before it", esc(names(n.needs))]);
+  const lt = linkText(n.id); if (lt.length) rows.push(["Links to the other stream", list(lt)]);
+  if (n.later) rows.push(["Later", esc(n.later)]);
+  if (n.armenian) rows.push(["Armenian thread", esc(n.armenian)]);
+  if (n.note) rows.push(["Note", esc(n.note)]);
+  panel.innerHTML = `<div class="chip">${esc(n.label)}</div><h3>${esc(n.title)}</h3><div>${esc(n.sub)}</div>
+    <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+}
+function select(id) {
+  const rel = related(id);
+  svg.classList.add("focus");
+  for (const [k, g] of Object.entries(nodeEls)) { g.classList.toggle("rel", rel.has(k)); g.classList.toggle("sel", k === id); }
+  for (const a of arrowEls) a.el.classList.toggle("rel", a.ends.includes(id) && rel.has(a.ends[0]) && rel.has(a.ends[1]));
+  show(byId[id]);
+}
+function clearSel() {
+  svg.classList.remove("focus");
+  for (const g of Object.values(nodeEls)) g.classList.remove("rel", "sel");
+  for (const a of arrowEls) a.el.classList.remove("rel");
+  panel.innerHTML = `<h3>Click a box</h3><p>Each box shows what students do, which built deck the slides come from, what has
+    to be built, and how it links to the other stream.</p><p class="note">Start with <strong>B0</strong>, the fork: it is where
+    LLM-6's knobs turn into request fields.</p>`;
+}
+svg.addEventListener("click", clearSel);
+document.getElementById("cbtoggle").addEventListener("change", e => svg.classList.toggle("showcb", e.target.checked));
+clearSel();
+
+// ---------------------------------------------------------------- tables
+function td(x) { return `<td>${x}</td>`; }
+function sNum(n) { return n.s === null ? "-" : n.s; }
+document.getElementById("tb-trunk").innerHTML = NODES.filter(n => n.lane === "T").map(n =>
+  `<tr>${td(sNum(n))}${td(`<strong>${esc(n.title)}</strong><br><span class="note">${esc(n.sub)}</span>`)}${td(esc(n.label.split(" · ").slice(1).join(" · ")))}${td(list(n.build) + (n.note ? `<p class="note">${esc(n.note)}</p>` : ""))}</tr>`).join("");
+document.getElementById("tb-A").innerHTML = NODES.filter(n => n.lane === "A").map(n => {
+  const cbs = LINKS.filter(l => l.to === n.id).map(l => `${esc(byId[l.from].title.split("  ")[0])}: ${esc(l.text)}`);
+  if (n.later) cbs.push(esc(n.later));
+  return `<tr>${td(sNum(n))}${td(`<strong>${esc(n.title)}</strong><br><span class="note">${esc(n.slides)}</span>`)}${td(list(n.build) + (n.note ? `<p class="note">${esc(n.note)}</p>` : ""))}${td(cbs.length ? `<ul>${cbs.map(c => `<li>${c}</li>`).join("")}</ul>` : "")}</tr>`;
+}).join("");
+document.getElementById("tb-B").innerHTML = NODES.filter(n => n.lane === "B").map(n =>
+  `<tr>${td(sNum(n))}${td(`<strong>${esc(n.title)}</strong>${n.kind === "opt" ? " (optional)" : ""}<br><span class="note">${esc(n.sub)}</span>`)}${td(esc(n.slides))}${td(list(n.does) + (n.armenian ? `<p class="note">Armenian: ${esc(n.armenian)}</p>` : ""))}${td(esc(names(n.needs)))}</tr>`).join("");
+document.getElementById("tb-dep").innerHTML = LINKS.filter(l => l.type === "dep").map(l =>
+  `<tr>${td(esc(byId[l.from].title))}${td(esc(byId[l.to].title))}${td(esc(l.text))}</tr>`).join("");
+document.getElementById("tb-cb").innerHTML = LINKS.filter(l => l.type === "cb").map(l =>
+  `<tr>${td(esc(byId[l.from].title))}${td(esc(byId[l.to].title))}${td(esc(l.text))}</tr>`).join("");
+
+// session order, with a computed check that nothing comes before what it needs
+const order = NODES.filter(n => n.s !== null).sort((p, q) => p.s - q.s);
+let bad = 0;
+document.getElementById("tb-order").innerHTML = order.map(n => {
+  const late = (n.needs || []).filter(d => byId[d].s === null || byId[d].s >= n.s);
+  const depLate = LINKS.filter(l => l.type === "dep" && l.to === n.id && byId[l.from].s >= n.s);
+  const ok = late.length === 0 && depLate.length === 0;
+  if (!ok) { bad++; console.error(`order violation at ${n.id}`, late, depLate); }
+  const streamName = n.lane === "T" ? "trunk" : n.lane;
+  return `<tr>${td(n.s)}${td(`<span class="pill p-${n.lane}">${streamName}</span>`)}${td(esc(n.title))}${td(esc(names(n.needs)))}${td(ok ? '<span class="ok">ok</span>' : `<span class="bad">comes before ${esc(names(late))}</span>`)}</tr>`;
+}).join("");
+document.getElementById("ordercheck").innerHTML = bad === 0
+  ? `<span class="ok">All ${order.length} sessions come after everything they need.</span>`
+  : `<span class="bad">${bad} sessions come before something they need. See the console.</span>`;
+</script>
+</body>
+</html>

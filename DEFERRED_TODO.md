@@ -2,7 +2,17 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-10-17
+Last updated: 2026-11-06
+
+---
+
+## LLM part: what comes after B0?
+
+The order is now LLM-1 -> practical 02 -> LLM-6 Decoding -> B0, the first API session
+(`llms/06_decoding/xx_llm_api_solution.ipynb`) (DECISIONS #109-#111). The instructor wants to decide later what
+follows B0: LLM-2 (opening the box) with B workshops alternating, as in DECISIONS #105 and
+`llms/TWO_STREAMS_PROPOSAL.html`, or more workshops first. Its open questions Q1-Q8 are still open apart from
+Q3 (OpenRouter, #110) and Q5's LLM-6 move (#109). Decide before B0 is taught.
 
 ---
 
@@ -342,6 +352,8 @@ Surfaced by the autonomous CNN/RNN review; each needs an instructor call, not mo
 - **Session split for 3 CNN sessions** (4 decks): reviewers independently put the natural break
   in L16 at slide 33 (after "Regularization by architecture") and judged L18 + L19 in one
   90-minute session "not feasible as-is". See `_work_sessions/2026-09-22-*` for the proposal.
+  **Decided 2026-10-01:** instructor, asked again after L16 grew to 63 frames: "no split, all
+  good". Closed.
 - **L21's char-LSTM demo is still ILLUSTRATIVE** (July scope). The new practical trains a real
   char-GRU on the ch11 surnames in ~10 s; its samples could replace the hand-written panels.
 - **`\pause` reveals.** The CNN/RNN decks still use predict-first `\pause`s; on 2026-09-16 the
@@ -361,11 +373,37 @@ Recorded and run on the instructor's data on 2026-10-01 (500 crops, 2 bursts per
   record 11077462 has 1,000 thumb-left/right photos (CC BY 4.0, 200 MB, in a car, 3 lighting
   setups; labelled from the signer's side, so "Lewo" shows the thumb to the image's right) - needs
   hand crops before it matches the box framing.
-- **Slides still promise HW2 (CIFAR-10), HW3 (Oxford Pets), HW4 (YOLO)**, none built. This
-  practical could replace the HW2/HW3 mentions in L16/L17/L18.
-- **Chapter page and delivery number**: not on `12_cnn.qmd` yet.
-- **Possible L17 slide**: on synthetic thumbs, a GAP head could not even fit its training set
-  where a flattened head learned (DECISIONS #57) - a measured counterweight to "GAP everywhere".
+- **Delivery number**: done 2026-10-03 - [53], notebook renamed
+  `gesture_snake/53_gesture_snake_solution.ipynb` (the folder keeps its name). (The chapter page part is done: on 2026-10-01
+  `12_cnn.qmd` got a "Գործնական - Gesture Snake" section linking `STUDENT_GUIDE.md`, the folder
+  and the notebook on GitHub, and the "HW2-HW4 - TBD" list was removed.)
+
+## CNN decks: figure text is drawn 2-4x too wide for its slot (measured 2026-10-01, fix declined for now)
+
+Nearly every `ml/12_cnn/fig/*.pdf` is drawn at 2-4x the width it gets on the slide, so its text
+renders at 2-5pt against 10.9pt body text. Measured from the compiled PDFs (rendered span size via
+PyMuPDF, matched to the figure's own text): L19 `task_zoo` 2.3pt and `nms_anim_*` 2.6pt (placed at
+0.38\linewidth); L16 `dice_conv` 2.4pt, `feature_maps` 2.9pt, `image_numbers` 3.0pt, `sobel_build`
+3.3pt, `param_explosion` 3.4pt, `transposed_conv_demo` 3.4pt, `conv_anim_*` 4.5pt; L17
+`grouped_conv_demo` 3.4pt, `imagenet_anim_*` axis 4.3pt, ribbons 5.0pt. Only `pooling_demo` (7.5pt)
+and `iou_only` (6.8pt) are readable at the back of a room. Fix = draw each figure at its slot
+width (figsize = rendered size, fonts 7-9pt), as ch19 did. Offered 2026-10-01 for ~30 scripts;
+instructor chose to skip it for now.
+
+**Update 2026-10-01 (round 2):** the instructor then asked that every figure touched gets bigger
+text. Done for `conv_anim_*`, `morphology_demo`, `dilated_conv_demo`, `transposed_conv_demo`
+and the eight new L16 figures (all drawn at slot size, 7.5-12pt). Still small: L16
+`image_numbers`, `dice_conv`, `sobel_build`, `param_explosion`, `feature_maps`,
+`conv_arithmetic`, `edge_1d`, the moved Fourier figures; L17 `grouped_conv_demo`,
+`imagenet_anim_*`, ribbons, `receptive_field`; L19 `task_zoo`, `nms_anim_*`, `separable_count`.
+Measure with the font probe (session 2026-10-01 scratchpad `font_probe.py`; PyMuPDF span sizes).
+
+**Done 2026-10-01 (round 3):** instructor said "sure redraw". Every remaining figure redrawn at
+slot size; `non_essential/detect_small_figure_text.py` (the promoted probe) reports **0 pages**
+under 5.5 pt in all five `ml/12_cnn` decks, down from 61 pages on the committed PDFs. The two
+training figures (`cnn_vs_mlp`, `feature_maps`) now cache their results in `ml/12_cnn/results/`
+and redraw with `--plot-only`. Learning: `_learnings/2026-10-01-2317_figures-drawn-wider-than-their-slot.md`.
+Nothing left open here.
 
 ---
 

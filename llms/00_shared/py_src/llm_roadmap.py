@@ -65,14 +65,15 @@ LIFE_STAGES = [("pre", "Pretrain"), ("scale", "Scale"), ("post", "Post-train"), 
                ("eval", "Evaluate"), ("quant", "Quantize"), ("lora", "LoRA")]
 
 # (file key, deck, stages lit). Teaching order. RAG and agents (own chapters) sit between
-# "evaluation" and "quantization".
+# "evaluation" and "quantization". Decoding comes right after tokenization (DECISIONS #109,
+# 2026-11-06): the input side, then the output side, with the middle of the pass still faded.
 SESSIONS = [
     ("tokenization", "LLM-1", {"tok"}),
+    ("decoding", "LLM-6", {"dec"}),
     ("embeddings", "LLM-2", {"emb", "pos"}),
     ("attention", "LLM-3", {"attn"}),
     ("block", "LLM-4", {"attn", "mlp"}),
     ("transformers", "LLM-5", {"head"}),
-    ("decoding", "LLM-6", {"dec"}),
     ("pretraining", "LLM-7", {"pre"}),
     ("scaling", "LLM-8", {"scale"}),
     ("post_training", "LLM-9", {"post"}),
@@ -454,7 +455,9 @@ def save(fig, out, log):
     # then fail loudly.
     for attempt in range(1, 6):
         try:
-            fig.savefig(out)
+            # No CreationDate, so an unchanged map redraws to the same bytes
+            # (_learnings/2026-10-06-2050_matplotlib-pdf-creationdate-dirties-every-redraw.md).
+            fig.savefig(out, metadata={"CreationDate": None})
             break
         except OSError as e:
             if e.errno != 22 or attempt == 5:

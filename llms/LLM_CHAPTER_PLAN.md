@@ -53,8 +53,8 @@ LLM source decks say "denoising" only about T5/BART span corruption
 
 **Chapters that DO need autoencoders** - schedule them after L22/L23:
 
-- Mech interp (`ch19`): `xx_features.tex:261` "Back to the autoencoder chapter" and sparse
-  autoencoders throughout; also `xx_opening_the_box.tex:908`, `xx_personas_and_diffing.tex:312`.
+- Mech interp (`ch19`): `04_features.tex:261` "Back to the autoencoder chapter" and sparse
+  autoencoders throughout; also `02_opening_the_box.tex:947`, `08_personas_and_diffing.tex:312`.
   It is LLM-adjacent, but it **cannot** follow this block directly.
 - VLM (`ch12`): `L34_vlm_drawing.tex:84-86` builds VQ-VAE from "the autoencoder of ch8".
 - JEPA (`ch16`): `L39_jepa_objective.tex:76, 148` compares against the autoencoders.
@@ -70,7 +70,7 @@ LLM source decks say "denoising" only about T5/BART span corruption
   the rename only fixed the two `_quarto.yml` paths so the site still builds).
 - **Done 2026-10-04 (#67):** L21's closing Next box now points to tokenization first, then
   attention; LLM-5's closing frame no longer lists tokenization as coming next.
-- Chapter numbers written inside decks ("chapter 8" in `xx_features.tex:263`, "ch8" in `L34`,
+- Chapter numbers written inside decks ("chapter 8" in `04_features.tex:263`, "ch8" in `L34`,
   `L39`) - part of the renumbering pass (D7).
 - **No edit needed:** L22's reference to the RNN (RNN now comes first), `HW1_sae_rnn` stays the
   autoencoder homework, `L23c:147`'s king-queen callback to L21, L21 -> LLM-3.
@@ -155,12 +155,13 @@ match the table below.
 
 | # | Session | Map boxes | `roadmap_` key | Status |
 |---|---|---|---|---|
-| 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`) |
-| 2 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`) |
-| 3 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`); reworked 2026-10-28: equation first, milestones, figures for the toy, a masking section with CLM/MLM (65 pages, #103) |
-| 4 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
-| 5 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
-| 6 | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71); grammar-table frame added 2026-10-06 |
+| 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`); delivered, then practical 02 (#104) |
+| 2 | LLM-6 Decoding | Decoding | `decoding` | **moved up 2026-11-06 (#109):** taught right after LLM-1 and its practical, then B0, the first API call (#110): `llms/06_decoding/xx_llm_api_solution.ipynb` (#111); instructor review applied the same day, 74 pages (#111); see its row below |
+| 3 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`); what follows B0 is open (#109) |
+| 4 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`); reworked 2026-10-28: equation first, milestones, figures for the toy, a masking section with CLM/MLM (65 pages, #103) |
+| 5 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
+| 6 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
+| (2) | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71); grammar-table frame added 2026-10-06; taught as session 2 since 2026-11-06 (#109), so in `SESSIONS` it sits right after `tokenization` |
 | 7 | LLM-7 Pretraining | Pretrain | `pretraining` | built and student-reviewed 2026-10-06 (`LLM7_pretraining.tex`, 35 pages; `LLM7_pretraining_OUTLINE.md`) |
 | 8 | LLM-8 Scaling and emergence | Scale | `scaling` | built and student-reviewed 2026-10-06 (`LLM8_scaling.tex`, 25 pages; `LLM8_scaling_OUTLINE.md`) |
 | 9 | LLM-9 Post-training | Post-train | `post_training` | built and student-reviewed 2026-10-06 (`LLM9_post_training.tex`, 24 pages; `LLM9_post_training_OUTLINE.md`) |

@@ -46,8 +46,11 @@ COLD_PROMPT = "The cat sat on the"     # the map's sentence; all 6 prompts tried
 N_NEW = 50
 
 # Toy numbers (all demonstrative) and the values the slides quote.
-TREE = {"on": (0.5, {"the": 0.3, "a": 0.3, "my": 0.2}), "in": (0.4, {"a": 0.9, "the": 0.1}),
+TREE = {"on": (0.5, {"the": 0.3, "a": 0.25, "my": 0.2}), "in": (0.4, {"a": 0.9, "the": 0.1}),
         "by": (0.1, {"the": 0.5, "a": 0.5})}
+# Beam search, step 3 (2026-11-06): only the two beams kept after step 2 get children.
+TREE3 = {("in", "a"): {"box": 0.5, "hat": 0.3}, ("on", "the"): {"mat": 0.6, "floor": 0.3}}
+BEAM_B = 2
 PEAKED = [0.88, 0.04, 0.02, 0.01, 0.01] + [0.04 / 15] * 15
 FLAT = list(np.linspace(0.08, 0.02, 20))
 QUOTED = {"top5_sum": 29.6, "rest": 70.4, "topp_cum": [0.076, 0.141, 0.195, 0.247], "topp_keep": 4,
@@ -69,7 +72,20 @@ QUOTED = {"top5_sum": 29.6, "rest": 70.4, "topp_cum": [0.076, 0.141, 0.195, 0.24
                         "after_T": [0.48, 0.21, 0.14, 0.08, 0.05, 0.03, 0.01],
                         "after_k": [0.50, 0.22, 0.14, 0.08, 0.06],
                         "running": [0.50, 0.72, 0.86, 0.94], "after_p": [0.53, 0.24, 0.15, 0.08],
-                        "bar": 0.106, "after_minp": [0.58, 0.26, 0.16]}}
+                        "bar": 0.106, "after_minp": [0.58, 0.26, 0.16]},
+          # instructor review (2026-11-06): beam search step by step, logs, temperature extremes
+          "beam3": {"step1": [["on", -0.69], ["in", -0.92], ["by", -2.30]],
+                    "step2": [["in a", -1.02], ["on the", -1.90], ["on a", -2.08], ["on my", -2.30],
+                              ["in the", -3.22]],
+                    "step3": [["in a box", -1.71], ["in a hat", -2.23], ["on the mat", -2.41],
+                              ["on the floor", -3.10]],
+                    "winner": 0.18, "greedy3": 0.09},
+          "float32_zero_at": 46,
+          "temp_table": {"0.1": [1.0, 0.0, 0.0], "0.5": [0.87, 0.12, 0.02], "1": [0.67, 0.24, 0.09],
+                         "2": [0.51, 0.31, 0.19], "10": [0.37, 0.33, 0.30], "100": [0.34, 0.33, 0.33]},
+          "temp_map": {"0.1": 0.79, "10_spread": 0.01},
+          "penalty": {"before": [0.54, 0.13, 0.11, 0.09, 0.07, 0.05], "mult": [0.39, 0.19, 0.11, 0.13, 0.11, 0.07],
+                      "sub": [0.17, 0.30, 0.06, 0.20, 0.17, 0.11]}}
 
 W = 5.5
 FS, FS_SMALL, FS_TINY = 8, 7, 6.5
@@ -266,21 +282,6 @@ def fig_map_top5(R, log):
     save(fig, "dec_map_top5.pdf", log)
 
 
-def fig_ayb_bytes(R, log):
-    fig, ax = canvas(0.62, w=3.0)
-    ax.text(0.10, 0.31, "ա", fontsize=14, color=ARMRED, va="center")
-    ax.text(0.38, 0.31, "=", fontsize=FS + 1, va="center")
-    for k, (b, ok) in enumerate((("D5", True), ("A1", False))):
-        rbox(ax, 0.62 + k * 0.52, 0.16, 0.44, 0.30, TINT_BLUE if ok else "white",
-             ARMBLUE if ok else "#BBBBBB", lw=0.8, z=2)
-        ax.text(0.84 + k * 0.52, 0.31, b, ha="center", va="center", fontsize=FS, family=MONO,
-                color=INK if ok else "#AAAAAA", zorder=3)
-    ax.plot([1.62, 1.62], [0.06, 0.56], color=ARMRED, lw=1.2, ls=(0, (3, 2)))
-    ax.text(1.70, 0.43, "stop here:", fontsize=FS_SMALL, color=ARMRED, va="center")
-    ax.text(1.70, 0.20, "D5 alone is not text", fontsize=FS_SMALL, color=ARMRED, va="center")
-    save(fig, "dec_ayb_bytes.pdf", log)
-
-
 def tree_paths():
     out = {}
     for w1, (p1, nxt) in TREE.items():
@@ -289,7 +290,9 @@ def tree_paths():
     return out
 
 
-def fig_tree(R, log, mode):
+def fig_tree(R, log, mode="greedy"):
+    """The greedy tree (2 steps). The beam version became fig_beam_steps (3 frames) on 2026-11-06."""
+    assert mode == "greedy", mode
     paths = tree_paths()
     greedy1 = max(TREE, key=lambda w: TREE[w][0])
     greedy2 = max(TREE[greedy1][1], key=TREE[greedy1][1].get)
@@ -311,69 +314,157 @@ def fig_tree(R, log, mode):
     leaves = {"on": [("the", 1.62), ("a", 1.38), ("my", 1.14)], "in": [("a", 0.86), ("the", 0.62)],
               "by": [("the", 0.34), ("a", 0.10)]}
     for w1, (p1, nxt) in TREE.items():
-        on_greedy = w1 == greedy1
-        kept1 = w1 in beam1
-        if mode == "greedy":
-            col1 = ARMRED if on_greedy else "#BBBBBB"
-        else:
-            col1 = GREEN if kept1 else "#BBBBBB"
+        col1 = ARMRED if w1 == greedy1 else "#BBBBBB"
         arrow(ax, (root[0] + 0.24, root[1]), (x1 - 0.30, y1[w1]), color=col1, lw=1.0)
         rbox(ax, x1 - 0.28, y1[w1] - 0.11, 0.56, 0.22, "white", col1, lw=1.0, z=3)
-        ax.text(x1, y1[w1], f"{w1}  {p1:.1f}", ha="center", va="center", fontsize=FS, zorder=4,
+        ax.text(x1, y1[w1], f"{w1}  {p1:g}", ha="center", va="center", fontsize=FS, zorder=4,
                 color=INK if col1 != "#BBBBBB" else "#999999")
-        if w1 == "by" and mode == "beam":
-            ax.text(x1 + 0.34, y1[w1], "dropped", fontsize=FS_TINY, color="#999999", va="center")
-            continue
         for w2, yy in leaves[w1]:
             p = paths[(w1, w2)]
-            if mode == "greedy":
-                col = ARMRED if (w1, w2) == (greedy1, greedy2) else (GREEN if (w1, w2) == best else "#BBBBBB")
-            else:
-                col = GREEN if (w1, w2) in beam2 else "#BBBBBB"
-            if mode == "greedy" and w1 == "by":
-                col = "#BBBBBB"
+            col = ARMRED if (w1, w2) == (greedy1, greedy2) else (GREEN if (w1, w2) == best else "#BBBBBB")
             arrow(ax, (x1 + 0.30, y1[w1]), (x2 - 0.32, yy), color=col, lw=0.9)
             rbox(ax, x2 - 0.30, yy - 0.10, 0.60, 0.20, "white", col, lw=1.0, z=3)
-            ax.text(x2, yy, f"{w2}  {TREE[w1][1][w2]:.1f}", ha="center", va="center", fontsize=FS_SMALL,
+            ax.text(x2, yy, f"{w2}  {TREE[w1][1][w2]:g}", ha="center", va="center", fontsize=FS_SMALL,
                     zorder=4, color=INK if col != "#BBBBBB" else "#999999")
-            ax.text(x2 + 0.36, yy, f"= {p:.2f}", fontsize=FS_SMALL, va="center",
+            ax.text(x2 + 0.36, yy, f"= {p:.3g}", fontsize=FS_SMALL, va="center",
                     color=col if col != "#BBBBBB" else "#999999", fontweight="bold" if col != "#BBBBBB" else "normal")
-    if mode == "greedy":
-        ax.text(x3 + 0.12, 1.45, "greedy: on, then the", fontsize=FS_SMALL, color=ARMRED, ha="left")
-        ax.text(x3 + 0.12, 1.30, "0.5 x 0.3 = 0.15", fontsize=FS_SMALL, color=ARMRED, ha="left")
-        ax.text(x3 + 0.12, 0.95, "best: in, then a", fontsize=FS_SMALL, color=GREEN, ha="left")
-        ax.text(x3 + 0.12, 0.80, "0.4 x 0.9 = 0.36", fontsize=FS_SMALL, color=GREEN, ha="left")
-        name = "dec_greedy_tree.pdf"
-    else:
-        ax.text(x3 + 0.12, 1.45, "keep the best 2", fontsize=FS_SMALL, color=GREEN, ha="left")
-        ax.text(x3 + 0.12, 1.30, "at every step", fontsize=FS_SMALL, color=GREEN, ha="left")
-        ax.text(x3 + 0.12, 0.95, "winner: in a = 0.36", fontsize=FS_SMALL, color=GREEN, ha="left",
-                fontweight="bold")
-        name = "dec_beam_tree.pdf"
+    ax.text(x3 + 0.12, 1.45, "greedy: on, then the", fontsize=FS_SMALL, color=ARMRED, ha="left")
+    ax.text(x3 + 0.12, 1.30, "0.5 x 0.3 = 0.15", fontsize=FS_SMALL, color=ARMRED, ha="left")
+    ax.text(x3 + 0.12, 0.95, "best: in, then a", fontsize=FS_SMALL, color=GREEN, ha="left")
+    ax.text(x3 + 0.12, 0.80, "0.4 x 0.9 = 0.36", fontsize=FS_SMALL, color=GREEN, ha="left")
     ax.text(x1, 1.86, "step 1", ha="center", va="center", fontsize=FS_TINY, color=GREY)
     ax.text(x2, 1.86, "step 2 (path probability)", ha="center", va="center", fontsize=FS_TINY, color=GREY)
-    save(fig, name, log)
+    save(fig, "dec_greedy_tree.pdf", log)
 
 
-def fig_prob_trap(R, log):
-    """Schematic, after Holtzman et al. (2020): demonstrative curves, not data."""
-    rng = np.random.default_rng(509)
-    n = 60
-    human = np.clip(rng.beta(1.2, 1.6, n), 0.01, 0.98)
-    beam = np.clip(0.86 + 0.06 * rng.standard_normal(n), 0.6, 0.99)
-    fig = plt.figure(figsize=(W, 1.55))
-    ax = fig.add_axes([0.13, 0.22, 0.85, 0.66])
-    ax.plot(np.arange(n), human, color=ARMBLUE, lw=1.0, label="text a person wrote")
-    ax.plot(np.arange(n), beam, color=ARMRED, lw=1.2, label="beam search output")
-    ax.set_ylim(0, 1.05)
-    ax.set_xlabel("position in the text", labelpad=1)
-    ax.set_ylabel("probability the model\ngave the actual\nnext token", labelpad=1, fontsize=FS_TINY)
-    ax.set_xticks([])
-    ax.legend(fontsize=FS_TINY, frameon=False, loc="lower left", bbox_to_anchor=(0.0, 1.0), ncol=2)
-    fig.text(0.99, 0.02, "schematic, after Holtzman et al. (2020) - illustrative values", fontsize=FS_TINY,
-             color=GREY, ha="right", va="bottom")
-    clean(ax)
-    save(fig, "dec_prob_trap.pdf", log)
+def beam_children(path):
+    if len(path) == 0:
+        return {w: p for w, (p, _) in TREE.items()}
+    if len(path) == 1:
+        return TREE[path[0]][1]
+    return TREE3.get(path, {})
+
+
+def beam_search_toy():
+    """The toy beam search, B = 2, three steps. Score = total log-probability."""
+    beams, steps = [((), 0.0)], []
+    for _ in range(3):
+        cands = [(path + (w,), lp + math.log(p)) for path, lp in beams for w, p in beam_children(path).items()]
+        cands.sort(key=lambda c: -c[1])
+        steps.append({"cands": cands, "kept": [c[0] for c in cands[:BEAM_B]]})
+        beams = cands[:BEAM_B]
+    return steps
+
+
+def fig_beam_steps(R, log):
+    """Beam search with B = 2, one figure per step (2026-11-06, instructor: 'explain and show beam
+    search better'). The newest column's candidates are ranked; green = kept, grey = dropped."""
+    steps = beam_search_toy()
+    B = QUOTED["beam3"]
+    for k, key in enumerate(("step1", "step2", "step3")):
+        got = [[" ".join(p), round(lp, 2)] for p, lp in steps[k]["cands"]]
+        assert got == B[key], (key, got)
+    winner = steps[2]["kept"][0]
+    assert round(math.exp(steps[2]["cands"][0][1]), 2) == B["winner"] and winner == ("in", "a", "box")
+    g = ()                                                      # greedy over the same toy, 3 steps
+    gp = 1.0
+    for _ in range(3):
+        w, p = max(beam_children(g).items(), key=lambda kv: kv[1])
+        g, gp = g + (w,), gp * p
+    assert g == ("on", "the", "mat") and round(gp, 2) == B["greedy3"], (g, gp)
+    R["beam3"] = {"steps": [{"cands": [[" ".join(p), lp] for p, lp in s["cands"]],
+                             "kept": [" ".join(p) for p in s["kept"]]} for s in steps],
+                  "greedy": " ".join(g), "greedy_p": gp}
+
+    X = [1.25, 2.45, 3.65]
+    Y = {("on",): 1.50, ("in",): 0.95, ("by",): 0.38,
+         ("on", "the"): 1.86, ("on", "a"): 1.60, ("on", "my"): 1.34, ("in", "a"): 1.03, ("in", "the"): 0.77,
+         ("on", "the", "mat"): 1.98, ("on", "the", "floor"): 1.72, ("in", "a", "box"): 1.16, ("in", "a", "hat"): 0.90}
+    lp = {p: s for st in steps for p, s in st["cands"]}
+    final_beams = {}
+    for upto in range(3):
+        fig, ax = canvas(2.25)
+        root = (0.40, 1.10)
+        rbox(ax, root[0] - 0.22, root[1] - 0.11, 0.44, 0.22, TINT_BLUE, ARMBLUE, z=3)
+        ax.text(*root, "sat", ha="center", va="center", fontsize=FS, zorder=4)
+        alive = set(steps[upto]["kept"])
+        for s in range(upto + 1):
+            newest = s == upto
+            for path, _ in steps[s]["cands"]:
+                x, y = X[s], Y[path]
+                parent = path[:-1]
+                px, py = (root[0] + 0.23, root[1]) if not parent else (X[s - 1] + 0.32, Y[parent])
+                if newest:
+                    kept = path in alive
+                    ec, fc, tc = (GREEN, TINT_GREEN, INK) if kept else ("#BBBBBB", "white", "#999999")
+                else:
+                    on_beam = any(a[:len(path)] == path for a in alive)
+                    ec, fc, tc = (ARMBLUE, TINT_BLUE, INK) if on_beam else ("#CCCCCC", "white", "#AAAAAA")
+                arrow(ax, (px, py), (x - 0.32, y), color=ec, lw=0.8)
+                rbox(ax, x - 0.30, y - 0.10, 0.60, 0.20, fc, ec, lw=0.9, z=3)
+                ax.text(x, y, f"{path[-1]}  {beam_children(parent)[path[-1]]:g}", ha="center", va="center",
+                        fontsize=FS_SMALL, color=tc, zorder=4)
+                if newest:
+                    ax.text(x + 0.36, y, f"{math.exp(lp[path]):.3g}  (log {lp[path]:.2f})", fontsize=FS_TINY,
+                            va="center", color=GREEN if path in alive else "#999999",
+                            fontweight="bold" if path in alive else "normal")
+            ax.text(X[s], 2.17, f"step {s + 1}", ha="center", va="center", fontsize=FS_TINY, color=GREY)
+        n_c, n_b = len(steps[upto]["cands"]), BEAM_B
+        notes = [f"{n_c} candidates, keep the best {n_b}",
+                 "(green: kept, grey: dropped; number = path probability)"]
+        if upto == 2:
+            notes = ["both beams now start with \"in a\": \"on the\" fell out",
+                     "greedy would have written \"on the mat\": 0.09"]
+            final_beams = {"winner": "in a box", "p": 0.18}
+        for j, t in enumerate(notes):
+            ax.text(5.42, 0.36 - 0.16 * j, t, fontsize=FS_TINY, ha="right", va="center",
+                    color=(ARMRED if (upto == 2 and j == 1) else GREY))
+        save(fig, f"dec_beam_step{upto + 1}.pdf", log)
+    R["beam3"]["final"] = final_beams
+
+
+PEN_TOKENS = ["sorry", "not", ".", "so", "afraid", "here"]
+PEN_LOGITS = [3.0, 1.6, 1.4, 1.2, 1.0, 0.6]
+PEN_COUNTS = [3, 0, 2, 0, 0, 0]                 # times each token already appeared in the text
+
+
+def fig_penalty(R, log):
+    """Repetition penalties, seen (instructor 2026-11-06: 'more visual stuff ... for the penalty one').
+    Toy next-token distribution after GPT-2's loop "I'm sorry. I'm sorry. I'm"; both definitions."""
+    z, c = np.array(PEN_LOGITS), np.array(PEN_COUNTS)
+
+    def softmax(v):
+        return np.exp(v) / np.exp(v).sum()
+    before = softmax(z)
+    mult = softmax(np.where(c > 0, np.where(z > 0, z / 1.3, z * 1.3), z))
+    sub = softmax(z - c * 0.5 - (c > 0) * 0.5)
+    Q = QUOTED["penalty"]
+    for name, v in (("before", before), ("mult", mult), ("sub", sub)):
+        assert [round(float(x), 2) for x in v] == Q[name], (name, v)
+    R["penalty"] = {"before": before.tolist(), "mult": mult.tolist(), "sub": sub.tolist()}
+    fig = plt.figure(figsize=(W, 1.85))
+    x = np.arange(len(PEN_TOKENS))
+    panels = (("repetition_penalty = 1.3\n(Hugging Face, llama.cpp): divide the logit", mult, ARMBLUE),
+              ("presence 0.5 + frequency 0.5 per use\n(OpenAI): subtract, more for each use", sub, ARMORANGE))
+    for k, (title, after, col) in enumerate(panels):
+        ax = fig.add_axes([0.05 + k * 0.50, 0.24, 0.43, 0.52])
+        b1 = ax.bar(x - 0.19, before, width=0.36, color="#CCCCCC", label="before")
+        b2 = ax.bar(x + 0.19, after, width=0.36, color=col, label="after")
+        ax.bar_label(b1, labels=[f".{round(v * 100):02d}" for v in before], fontsize=5.5, padding=1, color=GREY)
+        ax.bar_label(b2, labels=[f".{round(v * 100):02d}" for v in after], fontsize=5.5, padding=1, color=col)
+        ax.set_xticks(x, [f"{t}\n(used {n}x)" if n else t for t, n in zip(PEN_TOKENS, PEN_COUNTS)], fontsize=FS_TINY)
+        for lab, n in zip(ax.get_xticklabels(), PEN_COUNTS):
+            if n:
+                lab.set_color(ARMRED)
+        ax.set_yticks([])
+        ax.set_ylim(0, 0.66)
+        ax.set_title(title, fontsize=FS_TINY, loc="left")
+        ax.legend(fontsize=FS_TINY, frameon=False, loc="upper right")
+        clean(ax)
+        ax.spines["left"].set_visible(False)
+    fig.text(0.01, 0.97, "toy: the next token after \"... I'm sorry. I'm sorry. I'm\"", fontsize=FS_TINY,
+             color=GREY, va="top")
+    save(fig, "dec_penalty.pdf", log)
 
 
 def fig_long_tail(R, log):
@@ -395,9 +486,53 @@ def fig_long_tail(R, log):
     save(fig, "dec_long_tail.pdf", log)
 
 
+def fig_logprob(R, log):
+    """Left: multiplying 100 probabilities of 0.1 in float32 hits exactly 0. Right: adding their logs
+    is a straight line (2026-11-06, instructor: 'explain better why work with logprob')."""
+    n = 100
+    prod, run = np.float32(1.0), []
+    for _ in range(n):
+        prod = np.float32(prod * np.float32(0.1))
+        run.append(float(prod))
+    zero_at = next(i for i, v in enumerate(run, 1) if v == 0.0)
+    assert zero_at == QUOTED["float32_zero_at"], zero_at
+    logs = np.cumsum([math.log(0.1)] * n)
+    assert round(logs[-1], 1) == -230.3
+    R["logprob"] = {"float32_zero_at": zero_at, "last_nonzero": run[zero_at - 2], "log_sum_100": logs[-1]}
+    fig = plt.figure(figsize=(W, 1.75))
+    ax = fig.add_axes([0.10, 0.22, 0.36, 0.62])
+    xs = np.arange(1, n + 1)
+    ax.semilogy(xs, [10.0 ** -k for k in xs], color="#BBBBBB", lw=1.0, ls=(0, (3, 2)), label="true value")
+    nz = [(x, v) for x, v in zip(xs, run) if v > 0]
+    ax.semilogy([x for x, _ in nz], [v for _, v in nz], color=ARMRED, lw=1.4, label="float32")
+    ax.axvline(zero_at, color=ARMRED, lw=0.6, ls=":")
+    ax.text(zero_at + 3, 1e-20, f"token {zero_at}:\nfloat32 says 0", fontsize=FS_TINY, color=ARMRED, va="center")
+    ax.set_ylim(1e-100, 10)
+    ax.set_yticks([1, 1e-25, 1e-50, 1e-75, 1e-100])
+    ax.set_yticklabels(["1", "$10^{-25}$", "$10^{-50}$", "$10^{-75}$", "$10^{-100}$"], fontsize=FS)  # exponents >= 5.5 pt
+    ax.set_xlabel("tokens so far", labelpad=1)
+    ax.set_title("multiply the probabilities", fontsize=FS_SMALL)
+    ax.legend(fontsize=FS_TINY, frameon=False, loc="lower left")
+    clean(ax)
+    ax2 = fig.add_axes([0.60, 0.22, 0.36, 0.62])
+    ax2.plot(xs, logs, color=ARMBLUE, lw=1.4)
+    ax2.set_ylim(-250, 5)
+    ax2.set_xlabel("tokens so far", labelpad=1)
+    ax2.set_title("add the log-probabilities", fontsize=FS_SMALL)
+    ax2.text(98, -45, "after 100 tokens: -230.3,\nstill an ordinary number", fontsize=FS_TINY, color=ARMBLUE,
+             ha="right", va="center")
+    clean(ax2)
+    ax2.text(3, -215, "toy: every token has\nprobability 0.1", fontsize=FS_TINY, color=GREY, ha="left", va="center")
+    save(fig, "dec_logprob.pdf", log)
+
+
 def temperature(p, T):
     q = np.array(p) ** (1 / T)
     return q / q.sum()
+
+
+TEMPS = (0.1, 0.5, 1.0, 2.0, 10.0)
+TEMP_COLORS = ("#7A0009", ARMRED, ARMORANGE, ARMBLUE, "#001A55")
 
 
 def fig_temperature(R, log):
@@ -406,24 +541,33 @@ def fig_temperature(R, log):
     t10 = np.exp(z / 10) / np.exp(z / 10).sum()
     assert [round(v, 2) for v in t1] == QUOTED["temp_T1"], t1
     assert [round(v, 2) for v in t10] == QUOTED["temp_T10"], t10
+    table = {}
+    for T in (0.1, 0.5, 1, 2, 10, 100):                          # the by-hand table, extremes included
+        q = np.exp(z / T) / np.exp(z / T).sum()
+        table[f"{T:g}"] = q.tolist()
+        assert [round(float(v), 2) for v in q] == QUOTED["temp_table"][f"{T:g}"], (T, q)
     m = json.loads(MAP_JSON.read_text(encoding="utf-8"))
     top = [(t.strip(), p) for t, p in m["top5"]]
-    fig = plt.figure(figsize=(W, 1.55))
+    fig = plt.figure(figsize=(W, 1.60))
     out = {}
-    for k, T in enumerate((0.5, 1.0, 2.0)):
+    for k, (T, col) in enumerate(zip(TEMPS, TEMP_COLORS)):
         q = temperature([p for _, p in top], T)
-        out[str(T)] = q.round(3).tolist()
-        ax = fig.add_axes([0.06 + k * 0.33, 0.30, 0.27, 0.50])
-        bars = ax.bar(range(5), q, color=ARMRED if T == 0.5 else (ARMORANGE if T == 1 else ARMBLUE), width=0.7)
-        ax.bar_label(bars, labels=[f"{v:.2f}" for v in q], fontsize=FS_TINY, padding=1)
-        ax.set_xticks(range(5), [t for t, _ in top], fontsize=FS_TINY, rotation=30, ha="right",
+        out[f"{T:g}"] = q.round(3).tolist()
+        ax = fig.add_axes([0.03 + k * 0.197, 0.30, 0.165, 0.50])
+        bars = ax.bar(range(5), q, color=col, width=0.7)
+        ax.bar_label(bars, labels=[f"{v:.2f}" if i in (0, 4) else "" for i, v in enumerate(q)], fontsize=5.5,
+                     padding=1)                                 # first and last only: level bars collide
+        ax.set_xticks(range(5), [t for t, _ in top], fontsize=5.5, rotation=40, ha="right",
                       rotation_mode="anchor")
         ax.set_yticks([])
-        ax.set_ylim(0, 0.62)
-        ax.set_title(f"T = {T}", fontsize=FS_SMALL)
+        ax.set_ylim(0, 1.0)
+        ax.set_title(f"T = {T:g}", fontsize=FS_SMALL)
         clean(ax)
         ax.spines["left"].set_visible(False)
-    R["temperature"] = {"toy_T1": t1.round(4).tolist(), "toy_T10": t10.round(4).tolist(), "map_top5": out}
+    assert round(out["0.1"][0], 2) == QUOTED["temp_map"]["0.1"], out
+    assert max(out["10"]) - min(out["10"]) < QUOTED["temp_map"]["10_spread"], out
+    R["temperature"] = {"toy_T1": t1.round(4).tolist(), "toy_T10": t10.round(4).tolist(), "toy_table": table,
+                        "map_top5": out}
     fig.text(0.01, 0.97, "the map's top five, renormalised among themselves", fontsize=FS_TINY,
              color=GREY, va="top")
     save(fig, "dec_temperature.pdf", log)
@@ -574,30 +718,200 @@ def fig_grammar_table(R, log):
 
 
 def fig_speculative(R, log):
+    """Overview, greedy version. Same example as fig_spec_verify (student review 2026-11-06: the two
+    frames used different sentences and different token counts)."""
     p_big, p_small = 0.3, 0.6
     assert min(1, p_big / p_small) == QUOTED["spec_accept"]
+    status = []
+    for j, d in enumerate(SPEC_DRAFT):
+        guess = SPEC_BIG[len(SPEC_PROMPT) - 1 + j]
+        if "no" in status:
+            status.append("skip")
+        else:
+            status.append("ok" if guess == d else "no")
+    n_ok = status.count("ok")
+    fix = SPEC_BIG[len(SPEC_PROMPT) - 1 + n_ok]
+    assert (n_ok, fix) == (2, "floor"), (status, fix)
     fig, ax = canvas(1.52)
     ax.text(0.04, 1.40, "greedy version: \"ok\" means the drafted token equals the big model's own top token at "
             "that position", fontsize=FS_TINY, color=GREY, va="center")
-    words = ["the", "cat", "sat", "on", "moon"]
-    ok = [True, True, True, True, False]
-    ax.text(0.04, 1.08, "small model drafts 5:", fontsize=FS_SMALL, color=ARMBLUE, va="center")
-    ax.text(0.04, 0.62, "big model checks all 5\nin one pass:", fontsize=FS_SMALL, color=INK, va="center",
+    ax.text(0.04, 1.08, "after \"The cat sat\",\nsmall model drafts 4:", fontsize=FS_SMALL, color=ARMBLUE,
+            va="center", linespacing=1.15)
+    ax.text(0.04, 0.62, "big model checks all 4\nin one pass:", fontsize=FS_SMALL, color=INK, va="center",
             linespacing=1.15)
-    for k, (w, good) in enumerate(zip(words, ok)):
+    style = {"ok": (TINT_GREEN, GREEN, "ok"), "no": (TINT_RED, ARMRED, "no"), "skip": ("white", "#BBBBBB", "-")}
+    for k, (w, st) in enumerate(zip(SPEC_DRAFT, status)):
         x = 1.62 + k * 0.58
-        rbox(ax, x, 0.96, 0.52, 0.24, TINT_BLUE, ARMBLUE, z=2)
+        rbox(ax, x, 0.96, 0.52, 0.24, TINT_ORANGE, ARMORANGE, z=2)
         ax.text(x + 0.26, 1.08, w, ha="center", va="center", fontsize=FS, zorder=3)
         arrow(ax, (x + 0.26, 0.95), (x + 0.26, 0.76), lw=0.7)
-        rbox(ax, x, 0.50, 0.52, 0.24, TINT_GREEN if good else TINT_RED, GREEN if good else ARMRED, z=2)
-        ax.text(x + 0.26, 0.62, "ok" if good else "no", ha="center", va="center", fontsize=FS,
-                color=GREEN if good else ARMRED, fontweight="bold", zorder=3)
-    ax.text(1.62 + 4 * 0.58 + 0.60, 0.62, "-> big model's\n   own token: \"the\"", fontsize=FS_SMALL,
-            color=ARMRED, va="center", linespacing=1.15)
-    ax.plot([1.62, 1.62 + 4 * 0.58 - 0.08], [0.36, 0.36], color=GREEN, lw=1.2)
-    ax.text(1.62 + 2 * 0.58 - 0.05, 0.20, "4 tokens accepted + 1 corrected = 5 tokens for one big pass",
-            ha="center", fontsize=FS_SMALL, color=GREEN)
+        fc, ec, lab = style[st]
+        rbox(ax, x, 0.50, 0.52, 0.24, fc, ec, z=2)
+        ax.text(x + 0.26, 0.62, lab, ha="center", va="center", fontsize=FS, color=ec, fontweight="bold", zorder=3)
+    ax.text(1.62 + 4 * 0.58 + 0.08, 0.62, f"-> big model's own\n   token: \"{fix}\";\n   \".\" is dropped",
+            fontsize=FS_SMALL, color=ARMRED, va="center", linespacing=1.15)
+    ax.plot([1.62, 1.62 + 2 * 0.58 - 0.08], [0.36, 0.36], color=GREEN, lw=1.2)
+    ax.text(1.62, 0.20, f"{n_ok} tokens accepted + 1 corrected = {n_ok + 1} tokens for one big pass",
+            ha="left", fontsize=FS_SMALL, color=GREEN)
     save(fig, "dec_speculative.pdf", log)
+
+
+SPEC_PROMPT = ["The", "cat", "sat"]
+SPEC_DRAFT = ["on", "the", "mat", "."]
+SPEC_BIG = {2: "on", 3: "the", 4: "floor", 5: ".", 6: "It"}    # big model's top token after position i (toy)
+
+
+def fig_spec_verify(R, log):
+    """One forward pass of the big model over prompt + draft gives a next-token guess at every
+    position; compare each guess with the drafted token one column to its right (greedy, toy)."""
+    seq = SPEC_PROMPT + SPEC_DRAFT
+    accepted, fix = [], None
+    for j, d in enumerate(SPEC_DRAFT):
+        guess = SPEC_BIG[len(SPEC_PROMPT) - 1 + j]
+        if guess == d:
+            accepted.append(d)
+        else:
+            fix = guess
+            break
+    assert accepted == ["on", "the"] and fix == "floor", (accepted, fix)
+    R["spec_verify"] = {"accepted": accepted, "fix": fix, "out": accepted + [fix]}
+    fig, ax = canvas(1.90)                      # drawn at full slot width (5.5 in) so text stays >= 6.5 pt
+    x0, dx, bw = 0.95, 0.56, 0.48
+    xs = [x0 + i * dx for i in range(len(seq) + 1)]
+    ax.text(0.04, 0.33, "input:", fontsize=FS_SMALL, color=INK, va="center")
+    ax.text(0.04, 1.21, "big model's\nguess:", fontsize=FS_SMALL, color=INK, va="center", linespacing=1.1)
+    ax.text(0.04, 1.58, "check:", fontsize=FS_SMALL, color=INK, va="center")
+    ax.text(0.04, 1.40, "made at:", fontsize=FS_TINY, color=GREY, va="center")
+    for i, w in enumerate(seq):
+        draft = i >= len(SPEC_PROMPT)
+        rbox(ax, xs[i], 0.22, bw, 0.22, TINT_ORANGE if draft else TINT_BLUE, ARMORANGE if draft else ARMBLUE, z=2)
+        ax.text(xs[i] + bw / 2, 0.33, w, ha="center", va="center", fontsize=FS_SMALL, zorder=3)
+        arrow(ax, (xs[i] + bw / 2, 0.46), (xs[i] + bw / 2, 0.58), lw=0.6)
+    ax.text(xs[3], 0.10, "drafted by the small model", fontsize=FS_TINY, color=ARMORANGE, va="center")
+    ax.text(xs[0], 0.10, "prompt", fontsize=FS_TINY, color=ARMBLUE, va="center")
+    rbox(ax, xs[0] - 0.05, 0.60, xs[len(seq) - 1] + bw - xs[0] + 0.10, 0.28, "#F4F4F4", GREY, z=1)
+    ax.text((xs[0] + xs[len(seq) - 1] + bw) / 2, 0.74, "big model: ONE forward pass over all 7 tokens",
+            ha="center", va="center", fontsize=FS_SMALL, color=INK, zorder=3)
+    for i in range(len(seq)):
+        src = (xs[i] + bw / 2, 0.89)
+        if i not in SPEC_BIG:                                   # guesses inside the prompt: not needed
+            continue
+        tgt_col = i + 1
+        j = tgt_col - len(SPEC_PROMPT)
+        status = "ok" if j < len(accepted) else ("fix" if j == len(accepted) else "gone")
+        col = {"ok": GREEN, "fix": ARMRED, "gone": "#BBBBBB"}[status]
+        arrow(ax, src, (xs[tgt_col] + bw / 2, 1.08), color=col, lw=0.7)
+        rbox(ax, xs[tgt_col], 1.10, bw, 0.22, "white", col, lw=0.9, z=2)
+        ax.text(xs[tgt_col] + bw / 2, 1.21, SPEC_BIG[i], ha="center", va="center", fontsize=FS_SMALL,
+                color=INK if status != "gone" else "#AAAAAA", zorder=3)
+        ax.text(xs[tgt_col] + bw / 2, 1.40, f"\"{seq[i]}\"", ha="center", va="center", fontsize=FS_TINY,
+                color=GREY if status != "gone" else "#BBBBBB")      # which position produced this guess
+        mark = {"ok": "same", "fix": "differs", "gone": "dropped"}[status]
+        ax.text(xs[tgt_col] + bw / 2, 1.58, mark, ha="center", va="center", fontsize=FS_TINY, color=col,
+                fontweight="bold" if status != "gone" else "normal")
+    ax.text(5.45, 1.80, "a guess made at position i sees only tokens 1..i (how: LLM-3), so it equals what i separate passes would give",
+            fontsize=FS_TINY, color=GREY, ha="right", va="center")
+    save(fig, "dec_spec_verify.pdf", log)
+
+
+SPEC_SMALL_COST, SPEC_K = 0.1, 4
+SPEC_ROUNDS = [2, 4, 3]                                         # drafted tokens accepted per round (toy)
+
+
+def fig_spec_timeline(R, log):
+    """Where the speed comes from: time measured in big-model passes (toy costs)."""
+    round_cost = SPEC_K * SPEC_SMALL_COST + 1.0
+    horizon = round_cost * len(SPEC_ROUNDS)
+    spec_tokens = sum(a + 1 for a in SPEC_ROUNDS)
+    plain_tokens = int(horizon)                                 # finished big passes only
+    assert math.isclose(round_cost, 1.4) and math.isclose(horizon, 4.2) and spec_tokens == 12 and plain_tokens == 4
+    R["spec_timeline"] = {"round_cost": round_cost, "horizon": horizon, "spec_tokens": spec_tokens,
+                          "plain_tokens": plain_tokens, "speedup": spec_tokens / plain_tokens}
+    fig, ax = canvas(1.55)
+    x0, unit = 1.15, 1.0
+    for row, (y, name) in enumerate(((1.05, "plain decoding"), (0.48, "speculative"))):
+        ax.text(0.04, y + 0.11, name, fontsize=FS_SMALL, color=INK, va="center")
+    t, k = 0.0, 0
+    while t + 1.0 <= horizon + 1e-9:
+        rbox(ax, x0 + t * unit + 0.01, 1.05, unit - 0.02, 0.22, TINT_RED, ARMRED, z=2)
+        k += 1
+        ax.text(x0 + (t + 0.5) * unit, 1.16, f"big pass: token {k}", ha="center", va="center", fontsize=FS_TINY)
+        t += 1.0
+    rbox(ax, x0 + t * unit + 0.01, 1.05, (horizon - t) * unit - 0.02, 0.22, TINT_RED, ARMRED, z=2)
+    total = 0
+    t = 0.0
+    for r, acc in enumerate(SPEC_ROUNDS):
+        for s in range(SPEC_K):
+            rbox(ax, x0 + t * unit + 0.005, 0.48, SPEC_SMALL_COST * unit - 0.01, 0.22, TINT_ORANGE, ARMORANGE, lw=0.4, z=2)
+            t += SPEC_SMALL_COST
+        rbox(ax, x0 + t * unit + 0.01, 0.48, unit - 0.02, 0.22, TINT_GREEN, GREEN, z=2)
+        total += acc + 1
+        ax.text(x0 + (t + 0.5) * unit, 0.59, f"check: +{acc + 1} tokens", ha="center", va="center", fontsize=FS_TINY)
+        t += 1.0
+    ax.text(x0 + horizon * unit, 1.38, f"{plain_tokens} tokens", ha="right", fontsize=FS_SMALL, color=ARMRED)
+    ax.text(x0 + horizon * unit, 0.81, f"{spec_tokens} tokens", ha="right", fontsize=FS_SMALL, color=GREEN,
+            fontweight="bold")
+    ax.annotate("", (x0 + horizon * unit, 0.24), (x0, 0.24), arrowprops=dict(arrowstyle="-|>", color=GREY, lw=0.6))
+    ax.text(x0, 0.10, "time in big-model passes (toy: a draft step costs 0.1; 2, 4, 3 of 4 drafts accepted)",
+            fontsize=FS_TINY, color=GREY, va="center")
+    ax.text(x0 + 0.01, 0.76, "4 small draft steps", fontsize=FS_TINY, color=ARMORANGE, va="center")
+    save(fig, "dec_spec_timeline.pdf", log)
+
+
+def fig_spec_heads(R, log):
+    """Draft heads on the big model itself (Medusa-style), schematic."""
+    fig, ax = canvas(1.80)
+    cy = 1.01
+    rbox(ax, 0.10, cy - 0.40, 1.25, 0.80, TINT_BLUE, ARMBLUE, z=2)
+    ax.text(0.725, cy + 0.09, "big model", ha="center", va="center", fontsize=FS, fontweight="bold", zorder=3)
+    ax.text(0.725, cy - 0.11, "all layers,\nrun once", ha="center", va="center", fontsize=FS_TINY, zorder=3,
+            linespacing=1.1)
+    rbox(ax, 1.55, cy - 0.13, 0.36, 0.26, "white", INK, z=2)
+    ax.text(1.73, cy, "h", ha="center", va="center", fontsize=FS, style="italic", zorder=3)
+    arrow(ax, (1.36, cy), (1.54, cy))
+    heads = [("LM head", "token t+1", "on", ARMBLUE),
+             ("head 2", "token t+2", "the", ARMORANGE),
+             ("head 3", "token t+3", "mat", ARMORANGE),
+             ("head 4", "token t+4", ".", ARMORANGE)]
+    for j, (name, what, word, col) in enumerate(heads):
+        y = 1.55 - j * 0.36
+        arrow(ax, (1.92, cy), (2.30, y), color=col, lw=0.7)
+        rbox(ax, 2.32, y - 0.12, 1.55, 0.24, "white", col, z=2)
+        ax.text(3.095, y, f"{name}: {what}", ha="center", va="center", fontsize=FS_TINY, zorder=3)
+        arrow(ax, (3.88, y), (4.10, y), color=col, lw=0.7)
+        rbox(ax, 4.12, y - 0.11, 0.50, 0.22, TINT_ORANGE if j else TINT_BLUE, col, z=2)
+        ax.text(4.37, y, word, ha="center", va="center", fontsize=FS_SMALL, zorder=3)
+    ax.text(4.75, cy, "= a draft\nof 4 tokens,\nchecked in\nthe next pass", fontsize=FS_TINY, color=INK,
+            va="center", linespacing=1.15)
+    ax.text(0.10, 0.10, "each extra head is one small layer trained on top of the frozen big model; "
+            "no second model to run", fontsize=FS_TINY, color=GREY, va="center")
+    save(fig, "dec_spec_heads.pdf", log)
+
+
+def fig_prompt_cache(R, log):
+    """Three requests that share (or do not share) a long beginning. Schematic token counts."""
+    fig, ax = canvas(1.75)
+    x0, scale = 1.55, 3.2 / 3300
+    rows = [("request 1", [("instructions + lecture notes: 3,300 tokens", 3300, "full"), ("Q1", 60, "full")],
+             "pays full price; the provider keeps its work on the prefix"),
+            ("request 2\n(a minute later)", [("same 3,300 tokens: read from the cache", 3300, "cached"),
+                                             ("Q2", 60, "full")], "same beginning: cheap and faster"),
+            ("request 3", [("\"Today is 7 Nov.\" + the same notes", 3300, "miss"), ("Q3", 60, "full")],
+             "first token differs: no cache hit at all")]
+    style = {"full": (TINT_RED, ARMRED), "cached": (TINT_GREEN, GREEN), "miss": (TINT_RED, ARMRED)}
+    for r, (name, parts, note) in enumerate(rows):
+        y = 1.32 - r * 0.50
+        ax.text(0.04, y + 0.11, name, fontsize=FS_SMALL, va="center", linespacing=1.05)
+        x = x0
+        for label, n, kind in parts:
+            w = max(n * scale, 0.22)
+            fc, ec = style[kind]
+            rbox(ax, x, y, w - 0.02, 0.22, fc, ec, z=2)
+            ax.text(x + (w - 0.02) / 2, y + 0.11, label, ha="center", va="center", fontsize=FS_TINY, zorder=3)
+            x += w
+        ax.text(x0, y - 0.09, note, fontsize=FS_TINY, color=GREEN if r == 1 else GREY, va="center")
+    ax.text(5.45, 0.04, "schematic", fontsize=FS_TINY, color=GREY, ha="right", va="bottom")
+    save(fig, "dec_prompt_cache.pdf", log)
 
 
 def review_toys(R, log):
@@ -678,6 +992,7 @@ def toy_checks(R, log):
     a, b = np.float32(1e8), np.float32(1.0)
     left, right = (a + b) - a, (a - a) + b
     assert prod == 0 and small < 1.5e-45 and left == 0 and right == 1, (prod, small, left, right)
+    assert round(10 * math.log10(50257)) == 47              # "50,257^10 ~ 10^47" on "Beam search: the idea"
     R["toys"] = {"float32_product_0.1_x100": float(prod), "float32_smallest": float(small),
                  "log_sum": 100 * math.log(0.1), "fp_order": [float(left), float(right)]}
     log.info(f"toys: {R['toys']}")
@@ -695,9 +1010,10 @@ def main():
             raise FileNotFoundError(f"{p} missing - run with --gpt2 (and llm_roadmap.py --gpt2) first")
     FIG.mkdir(parents=True, exist_ok=True)
     R = {"date": time.strftime("%Y-%m-%d")}
-    jobs = [fig_greedy_loop, fig_map_top5, fig_ayb_bytes, lambda R, log: fig_tree(R, log, "greedy"),
-            lambda R, log: fig_tree(R, log, "beam"), fig_prob_trap, fig_long_tail, fig_temperature,
-            fig_topk_topp, fig_knob_pipeline, fig_json_mask, fig_grammar_table, fig_speculative, toy_checks, review_toys]
+    jobs = [fig_greedy_loop, fig_map_top5, fig_tree, fig_beam_steps, fig_logprob, fig_penalty,
+            fig_long_tail, fig_temperature, fig_topk_topp, fig_knob_pipeline, fig_json_mask, fig_grammar_table,
+            fig_speculative, fig_spec_verify, fig_spec_timeline, fig_spec_heads, fig_prompt_cache, toy_checks,
+            review_toys]
     for k, job in enumerate(jobs, 1):
         job(R, log)
         el = time.time() - t0

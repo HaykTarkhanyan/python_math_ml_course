@@ -7,6 +7,10 @@ generation loop (L21) or logits -> softmax (L26): one recap frame, then new mate
 
 Deck file (until delivery gives it a playlist number): `LLM3_decoding.tex`.
 
+**Moved up 2026-11-06 (DECISIONS #109):** taught right after LLM-1 and its practical, before LLM-2 to LLM-5,
+then B0 (first API call, #110). The frame tables below still describe the session-6 version; the four
+callbacks to LLM-3 to LLM-5 were reworded in the `.tex` (see its provenance block).
+
 **Interview decisions (2026-10-05):**
 
 - Cold open: **GPT-2 loops** - always take the most likely token and it repeats itself.

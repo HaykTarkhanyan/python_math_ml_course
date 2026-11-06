@@ -1,7 +1,7 @@
 \documentclass[aspectratio=169]{beamer}
 \input{../../ml/preamble}
 
-\graphicspath{{fig/}{../00_shared/fig/}}
+\graphicspath{{fig/}{../00_shared/fig/}{../00_shared/fig/borrowed/paper/}}
 
 % callout boxes, matching LLM-1/LLM-2 and LLM-3/LLM-4's fcolorbox house pattern
 \newcommand{\keybox}[1]{\fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\small #1}}}
@@ -32,7 +32,7 @@
 \begin{frame}[plain]
   \titlepage
   \begin{center}\scriptsize\color{gray}
-    LLM chapter, session 6. Toy numbers unless a slide says otherwise.
+    LLM chapter, right after tokenization: the output side. Toy numbers unless a slide says otherwise.
   \end{center}
 \end{frame}
 
@@ -51,7 +51,7 @@
     \takebox{\raggedright\textbf{Live demos:}\\[2pt]
     \link{https://artefact2.github.io/llm-sampling/}{artefact2.github.io/llm-sampling}: real
     next-token distributions with sliders for temperature, top-k, top-p, min-p and more.\\[4pt]
-    \link{https://poloclub.github.io/transformer-explainer/}{Transformer Explainer} (LLM-3's):
+    \link{https://poloclub.github.io/transformer-explainer/}{Transformer Explainer}:
     GPT-2 in the browser, with a temperature slider and top-k or top-p.}
     \vskip 4pt
     {\small\textbf{Try:}}
@@ -67,8 +67,7 @@
 \begin{frame}{Where we are: one forward pass}
   \begin{center}\includegraphics[width=\linewidth]{roadmap_decoding_pass.pdf}\end{center}
   \vskip -2pt
-  {\small Today: the last box. The model gives a probability for every token - which one do we
-  write?}
+  {\small Today: the last box. The faded middle stays a black box until LLM-2 to LLM-5.}
 \end{frame}
 
 \begin{frame}{Where we are: the life of a model}
@@ -85,7 +84,8 @@
     {\Large\color{popblue}\textbf{The model always writes its single most likely next token.\\[4pt]
     What does the text look like?}}
     \vskip 18pt
-    {\small Prompt: ``The cat sat on the'' - the map's sentence. GPT-2, 50 new tokens.}
+    {\small Prompt: ``The cat sat on the'' - the sentence on the course map, our running example.
+    GPT-2, 50 new tokens.}
     \vskip 24pt
     {\small\color{gray}Commit to an answer.}
   \end{center}
@@ -114,9 +114,10 @@ choosing one.}
     \begin{column}{0.42\textwidth}
       \small
       \begin{itemize}
-        \item Writing is a loop: generate one token, feed it back, repeat.
-        \item LLM-5: each step ends in logits $\to$ softmax $\to$ a probability for every one of
-          50,257 tokens.
+        \item Writing is a loop: generate a token, feed it back, repeat ([54]). The name:
+          \textbf{autoregressive}.
+        \item Each step ends in logits $\to$ softmax $\to$ a probability for each of 50,257
+          tokens (how: LLM-2 to LLM-5).
         \item On the map's sentence the favourite, ``floor'', has \textbf{7.6\%}. The top five
           together: 29.6\%. The rest: \textbf{70.4\%}.
       \end{itemize}
@@ -134,14 +135,41 @@ choosing one.}
 \begin{frame}{When to stop}
   \begin{itemize}
     \item \textbf{An end token.} The model writes \texttt{<|endoftext|>} (LLM-1's special token).
-      Chat models have an end-of-turn token instead (LLM-9).
-    \item \textbf{A length limit.} Stop after $N$ new tokens, whatever happens.
-    \item \textbf{Stop strings.} Stop when the text contains, say, ``\textbackslash n\textbackslash
-      nUser:''.
+      Chat models have an end-of-turn token instead (LLM-9). The \textbf{model} decides.
+    \item \textbf{A length limit.} Stop after $N$ new tokens, whatever happens: a budget and a safety
+      net. It cuts wherever it is, even mid-word.
+    \item \textbf{Stop strings.} Stop as soon as the text contains a string \textbf{you} chose, say
+      \texttt{Observation:}. Next slide: why that is needed.
   \end{itemize}
   \vskip 8pt
   \watchbox{A stop string can be split across two tokens (LLM-1: tokens are not words). So it is
   checked on the decoded \textbf{text}, not on token IDs.}
+\end{frame}
+
+\begin{frame}{Why stop strings, if the model has an end token?}
+  \small
+  The end token means ``the model thinks it is done''. A program often needs it to stop
+  \textbf{earlier}, at a boundary of its own format that the model knows nothing about. An agent (a
+  program that lets the model use tools such as a search engine, L44): the model writes an action,
+  then \textbf{the program} runs the tool and pastes in the result.
+  \vskip 4pt
+  \fcolorbox{gray}{gray!6}{\parbox{0.97\linewidth}{\ttfamily\scriptsize
+  Thought: What is the population of Gyumri?\\
+  Action: search[population of Gyumri]\\
+  {\color{armred}Observation: According to Wikipedia, the population of Gyumri is approximately
+  107,000 people.\\
+  Answer: The population of Gyumri is approximately 107,000 people.}}}
+  \vskip 2pt
+  {\scriptsize\color{gray}Real output: Llama 3.1 8B, temperature 0, through OpenRouter, 6 Nov 2026
+  (the API notebook). Red: the model wrote the tool's ``result'' itself - no search ever ran.}
+  \vskip 4pt
+  With \texttt{stop=["Observation:"]} the reply ends after the \texttt{Action} line, and the program
+  runs the real search. Same idea: a few-shot \texttt{Q: ... A: ...} prompt stops at
+  ``\textbackslash nQ:'', or the model writes the next question itself; a base model like GPT-2 has no
+  end-of-turn token at all.
+  \vskip 4pt
+  \keybox{End token: the model's choice. Length limit: your budget. Stop string: your format's
+  boundary.}
 \end{frame}
 
 % ============================================================ 2. TAKE THE MOST LIKELY
@@ -162,22 +190,54 @@ choosing one.}
   the whole text is likely.}
 \end{frame}
 
-\begin{frame}{Why we work with log-probabilities}
+\begin{frame}{Why log-probabilities (1/2): products vanish}
   \small
-  The probability of a whole text is the product of its token probabilities. Toy: 100 tokens,
-  each with probability 0.1:
-  \[
-    0.1 \times 0.1 \times \cdots \times 0.1 \;=\; 0.1^{100} \;=\; 10^{-100}
-  \]
+  To compare whole texts (beam search, next), we need the probability of a whole text: the
+  \textbf{product} of its token probabilities. Toy: every token has probability 0.1.
+  \vskip 2pt
+  \begin{center}\includegraphics[width=\linewidth]{dec_logprob.pdf}\end{center}
+  \vskip -4pt
   \begin{itemize}
-    \item The smallest positive number a float32 can hold is about $10^{-45}$. In float32 this
-      product is exactly \textbf{0}, and every text scores the same.
-    \item Take logs and the product becomes a sum: $100 \cdot \log 0.1 = -230.3$. No underflow,
-      and adding is cheaper than multiplying.
-    \item Higher (less negative) log-probability = more likely. APIs report \texttt{logprobs}
-      per token: a rough confidence signal (calibration, [14]), used to flag shaky answers, to
-      rank several candidate answers, and to look for likely hallucinations (LLM-11).
+    \item The true product after 100 tokens is $10^{-100}$, but float32 cannot go below about
+      $1.4 \times 10^{-45}$: from token \textbf{46} on it stores exactly \textbf{0}, and every long
+      text scores the same.
+    \item The log of the same product is $100 \cdot \log 0.1 = -230.3$: an ordinary number.
   \end{itemize}
+\end{frame}
+
+\begin{frame}{Why log-probabilities (2/2): what logs buy}
+  \small
+  \[
+    \log\big(p_1 \cdot p_2 \cdots p_n\big) \;=\; \log p_1 + \log p_2 + \cdots + \log p_n
+  \]
+  \vskip -2pt
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \begin{itemize}
+      \item \textbf{Products become sums.} Each token adds its own score; no underflow.
+      \item \textbf{Nothing is lost.} $\log$ only grows, so texts rank the same way.
+      \item \textbf{It is the training loss.} The loss per token is $-\log p$ ([47]'s cross-entropy):
+        a sure token costs almost nothing, a surprising one a lot. Averaged and exponentiated:
+        perplexity ([47]).
+      \item \textbf{APIs return it.} \texttt{logprobs} per token: a rough confidence signal
+        (calibration, [14]) to flag shaky answers and rank candidates (LLM-11).
+    \end{itemize}
+    \column{0.42\textwidth}
+    \centering
+    \begin{tabular}{rr}
+      \textbf{probability} & \textbf{log-probability} \\
+      \hline
+      1 & 0 \\
+      0.9 & $-0.11$ \\
+      0.5 & $-0.69$ \\
+      0.1 & $-2.30$ \\
+      0.01 & $-4.61$ \\
+      $10^{-100}$ & $-230.3$ \\
+    \end{tabular}
+    \vskip 6pt
+    {\scriptsize Read a log-probability as a cost: 0 = certain, every $-2.3$ = ten times less
+    likely.}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Greedy is short-sighted}
@@ -188,15 +248,65 @@ choosing one.}
   as likely - but greedy never looked one step further.}
 \end{frame}
 
-\begin{frame}{By hand: beam search with $B = 2$}
-  \begin{center}\includegraphics[width=\linewidth]{dec_beam_tree.pdf}\end{center}
+\begin{frame}{Beam search: the idea}
+  \begin{itemize}
+    \item Keep the $B$ best \textbf{partial texts} - the \textbf{beams} - instead of one. $B$ is the
+      \textbf{beam width}.
+    \item Every step: extend every beam by every possible next token, score each candidate by its
+      \textbf{total log-probability}, keep the $B$ best. The rest are dropped for good.
+    \item $B = 1$ is greedy. Keeping everything would be exact search: $50{,}257^{10} \approx 10^{47}$
+      texts of just 10 tokens. Beam search sits in between.
+  \end{itemize}
+  \vskip 4pt
+  \fcolorbox{gray}{gray!6}{\parbox{0.97\linewidth}{\ttfamily\small
+  beams = [(prompt, 0)]\\
+  repeat until the beams have ended:\\
+  \ \ candidates = [(text + t, score + log p(t | text)) for each beam, for each token t]\\
+  \ \ beams = the B candidates with the highest score}}
+  \vskip 6pt
+  \keybox{Greedy commits after every step. Beam search keeps $B$ options open and decides later.}
+\end{frame}
+
+\begin{frame}{By hand: beam search with $B = 2$, step 1}
+  \begin{center}\includegraphics[width=\linewidth]{dec_beam_step1.pdf}\end{center}
   \vskip -4pt
   \small
-  Keep the $B$ best \textbf{partial texts} at every step, scored by their total log-probability.
-  Step 1 keeps ``on'' and ``in'' and drops ``by''. Step 2 extends both and keeps the two best
-  paths: ``in a'' (0.36, log $-1.02$) and ``on the'' (0.15, log $-1.90$, tied with ``on a'').
-  The winner is ``in a''.
-  With a real vocabulary, each step scores $B \times 50{,}257$ extensions and keeps $B$.
+  Same toy as the greedy tree. From ``sat'' there are three candidates, scored by log-probability:
+  ``on'' $-0.69$, ``in'' $-0.92$, ``by'' $-2.30$. Keep the best two, ``on'' and ``in''. Greedy
+  would keep only ``on''.
+\end{frame}
+
+\begin{frame}{By hand: beam search with $B = 2$, step 2}
+  \begin{center}\includegraphics[width=\linewidth]{dec_beam_step2.pdf}\end{center}
+  \vskip -4pt
+  \small
+  Each kept beam gets every next word: $3 + 2 = 5$ candidates. A candidate's score is its beam's
+  score plus the new token's log: ``in a'' $= \log 0.4 + \log 0.9 = \log 0.36 = -1.02$. Keep ``in a''
+  ($-1.02$) and ``on the'' ($-1.90$); ``on a'' ($-2.08$) just misses.
+\end{frame}
+
+\begin{frame}{By hand: beam search with $B = 2$, step 3}
+  \begin{center}\includegraphics[width=\linewidth]{dec_beam_step3.pdf}\end{center}
+  \vskip -4pt
+  \small
+  Four candidates. ``in a box'' ($-1.71$) and ``in a hat'' ($-2.23$) beat ``on the mat'' ($-2.41$).
+  Beam search ends on \textbf{``in a box''}, probability 0.18. Greedy ends on ``on the mat'', 0.09:
+  half as likely.
+\end{frame}
+
+\begin{frame}{Beam search: the cost and the catch}
+  \begin{itemize}
+    \item \textbf{Cost.} $B$ beams are $B$ times the work of greedy at every step: with GPT-2's
+      vocabulary, each step scores $B \times 50{,}257$ candidates.
+    \item \textbf{Ending.} A beam that writes the end token is set aside as finished; the others go on.
+      At the end the best finished beam wins - after the length correction on the next slide.
+    \item \textbf{The beams look alike.} In step 3 both survivors start with ``in a''. Real beams often
+      differ in one word near the end, so $B$ beams are not $B$ different answers. (Diverse beam
+      search adds a penalty for beams that are too similar.)
+  \end{itemize}
+  \vskip 8pt
+  \keybox{Beam search looks further ahead than greedy, at $B$ times the price, and it still maximises
+  one thing: probability.}
 \end{frame}
 
 \begin{frame}{Beam search: why divide by the length}
@@ -223,15 +333,56 @@ choosing one.}
 \end{frame}
 
 \begin{frame}{The probability trap}
-  \begin{center}\includegraphics[width=\linewidth]{dec_prob_trap.pdf}\end{center}
-  \vskip -4pt
+  \begin{columns}[T]
+    \column{0.585\textwidth}
+    \centering
+    % the plot part of Figure 2 only (trim the two text samples, typeset below at a readable size)
+    \includegraphics[width=\linewidth, trim={0 27.6bp 0 0}, clip]{holtzman2020_fig2_probvar.pdf}
+    \vskip 2pt
+    \raggedright\scriptsize
+    \textbf{\color{popblue}Beam search:} ``...to provide an overview of the current
+    state-of-the-art in the field of computer vision and machine learning, and to provide an
+    overview of the current state-of-the-art in the field of computer vision and machine learning,
+    and to provide an overview of the current...''\\[3pt]
+    \textbf{\color{orange1}A person:} ``...which grant increased life span and three years
+    warranty. The Antec HCG series consists of five models with capacities spanning from 400W to
+    900W...''
+    \column{0.40\textwidth}
+    \footnotesize
+    At every position of a text: what probability did the model give the token that actually came
+    next?
+    \begin{itemize}
+      \item \textbf{Beam search} (blue): near 1 almost everywhere, and its text loops.
+      \item \textbf{A person} (orange): jumps around, often near 0.
+    \end{itemize}
+    \vskip 2pt
+    {\scriptsize\color{gray}Holtzman et al. (2020), ICLR, Figure 2 (plot and samples from the
+    paper); GPT-2. No beam width stated; their examples use $b = 16$ and $32$.}
+    \vskip 6pt
+    \takebox{People write \textbf{surprising} text, not the most probable text: maximising
+    probability is the wrong goal for open-ended writing.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Does the beam width matter? Yes - and wider is not better}
   \small
-  At every position of a text, ask: what probability did the model give the token that actually
-  came next? Holtzman et al. (2020): for text a person wrote it jumps around and is often low;
-  for beam output it stays uniformly high - and that text reads bland and repetitive.
+  \begin{itemize}
+    \item Holtzman et al.: with $b = 32$ GPT-2 repeats itself; from $b \geq 64$ on, GPT-2 Large and XL
+      ``prefer to stop generating immediately after the given context''. The most probable
+      continuation is \textbf{nothing}.
+    \item Translation, the same story. Koehn \& Knowles (2017): beam search helps only for narrow
+      beams; wider beams give shorter, worse translations (best widths 4 to about 30; the length
+      correction pushes that to 30-50 but does not remove the drop).
+    \item Stahlberg \& Byrne (2019) searched exactly instead of with a beam: for \textbf{51.8\%} of
+      the sentences, the model's single most probable translation (raw score, no length
+      correction) was the \textbf{empty} one. The fix patches the search; the model itself prefers
+      short.
+    \item In practice beams stay narrow: fairseq's default is 5, Whisper's command line uses 5,
+      Marian uses 12 - with the length correction from earlier.
+  \end{itemize}
   \vskip 4pt
-  \takebox{People write \textbf{surprising} text, not the most probable text. Maximising
-  probability is the wrong goal for open-ended writing.}
+  \takebox{A wider beam finds more probable text, and the most probable text is often short, bland
+  or empty. A model's probability is not a measure of quality.}
 \end{frame}
 
 \begin{frame}{Where maximising still wins}
@@ -281,30 +432,36 @@ choosing one.}
 
 \begin{frame}{By hand: temperature}
   \small
-  Three tokens with logits $z = (2,\ 1,\ 0)$:
-  \vskip 6pt
-  \textbf{\color{popblue}$T = 1$:}\quad
+  Three tokens with logits $z = (2,\ 1,\ 0)$. At $T = 1$:
   $\dfrac{(e^{2},\, e^{1},\, e^{0})}{e^{2} + e^{1} + e^{0}} = \dfrac{(7.39,\ 2.72,\ 1.00)}{11.11}
-  = (\mathbf{0.67},\ 0.24,\ 0.09)$
-  \vskip 8pt
-  \textbf{\color{orange1}$T = 10$:}\quad
-  $\dfrac{(e^{0.2},\, e^{0.1},\, e^{0})}{e^{0.2} + e^{0.1} + e^{0}} = \dfrac{(1.22,\ 1.11,\
-  1.00)}{3.33} = (0.37,\ 0.33,\ 0.30)$ - nearly uniform
-  \vskip 8pt
-  \textbf{\color{sampred}$T \to 0$:}\quad the gaps $z_i / T$ grow without bound, so $p \to
-  (1,\ 0,\ 0)$: greedy
-  \vskip 10pt
+  = (\mathbf{0.67},\ 0.24,\ 0.09)$. Now the extremes:
+  \vskip 4pt
+  \begin{center}
+  \begin{tabular}{rlc}
+    $T$ & logits $/\,T$ & probabilities \\
+    \hline
+    $\to 0$ & gaps grow without bound & $(1,\ 0,\ 0)$: greedy \\
+    0.1 & $(20,\ 10,\ 0)$ & $(\mathbf{0.99995},\ 0.00005,\ 0.000000002)$ \\
+    0.5 & $(4,\ 2,\ 0)$ & $(0.87,\ 0.12,\ 0.02)$ \\
+    \textbf{1} & $(2,\ 1,\ 0)$ & $(0.67,\ 0.24,\ 0.09)$ \\
+    2 & $(1,\ 0.5,\ 0)$ & $(0.51,\ 0.31,\ 0.19)$ \\
+    10 & $(0.2,\ 0.1,\ 0)$ & $(0.37,\ 0.33,\ 0.30)$ \\
+    100 & $(0.02,\ 0.01,\ 0)$ & $(0.34,\ 0.33,\ 0.33)$ \\
+    $\to \infty$ & all gaps vanish & $(\tfrac13,\ \tfrac13,\ \tfrac13)$: uniform \\
+  \end{tabular}
+  \end{center}
+  \vskip 2pt
   \keybox{Temperature never changes the \textbf{order} of the tokens, only how far apart their
-  probabilities are.}
+  probabilities are. Cold: the favourite takes everything. Hot: every token is equally likely.}
 \end{frame}
 
 \begin{frame}{Temperature on the map's sentence}
   \begin{center}\includegraphics[width=\linewidth]{dec_temperature.pdf}\end{center}
   \vskip -4pt
-  {\small The map's real top five, renormalised among themselves at three temperatures. At
-  $T = 0.5$ ``floor'' pulls ahead; at $T = 2$ the five are almost level. On the full distribution
-  the same happens to all 50,257 tokens: a high temperature hands the long tail more
-  probability.}
+  {\small The map's real top five, renormalised among themselves, from very cold to very hot. At
+  $T = 0.1$ ``floor'' takes 79\% of the five; at $T = 10$ all five sit within one point of 20\%. On
+  the full distribution the same happens to all 50,257 tokens: a high temperature hands the long
+  tail more probability.}
 \end{frame}
 
 \begin{frame}{By hand: temperature and the tail}
@@ -324,6 +481,27 @@ choosing one.}
   \keybox{A high temperature hands the dice to the long tail. That is why temperature is almost
   always combined with a cut-off - the next three slides - and why the order of the two
   matters.}
+\end{frame}
+
+\begin{frame}{Temperature on a real model}
+  \small
+  Llama 3.1 8B, ``Write one sentence about a cat.'', one provider, no cut-off (top-p = 1):
+  \vskip 4pt
+  \fcolorbox{gray}{gray!6}{\parbox{0.97\linewidth}{\footnotesize
+  \textbf{\color{popblue}$T = 0$:} The cat's soft, fluffy fur was a stark contrast to its sleek and
+  agile body.\\[3pt]
+  \textbf{\color{orange1}$T = 1$:} The cat's soft fur and calm demeanor made it seem like the perfect
+  companion for a quiet evening at home.\\[3pt]
+  \textbf{\color{armred}$T = 1.5$:} The cat sat loungingenthgriddg adorned queen withdrawal jacket
+  extremely -\$-imagesbuildirling bad/s adornedBas Patricia intellectuals swipe specifically \ldots\\[3pt]
+  \textbf{\color{armred}$T = 2$:} The chilled onionatois-modris Medicallicensed socialism Dent allowNull
+  THERE son ado couch worm tolerate front forearm shown Nature downtown flock pageSize \ldots}}
+  \vskip 2pt
+  {\scriptsize\color{gray}Real outputs through OpenRouter, 6 Nov 2026 (the API notebook). The hot ones
+  also contain Thai, Arabic, Chinese and Russian fragments, cut here.}
+  \vskip 6pt
+  \keybox{Fine up to $T = 1$, broken already at $T = 1.5$. With about 128,000 tokens in the vocabulary,
+  a hot distribution hands the dice to the tail: the long-tail toy's lesson, on a real model.}
 \end{frame}
 
 \begin{frame}{Top-k, and why a fixed k fails}
@@ -464,13 +642,41 @@ choosing one.}
   (Min-p 0.2 is stricter than llama.cpp's 0.05, so that it cuts something here.)}
 \end{frame}
 
+\begin{frame}{A real model at temperature 2: which cut-off saves it?}
+  \small
+  The same model and prompt, temperature 2, plus one cut-off:
+  \vskip 4pt
+  \fcolorbox{gray}{gray!6}{\parbox{0.97\linewidth}{\scriptsize
+  \textbf{\color{paramgreen}top-k = 5:} The cat, with its sleek black fur, lazily padded across the
+  kitchen counter, its ears perked up as it listened for signs of potential snacks.\\[3pt]
+  \textbf{\color{armred}top-p = 0.9:} The comparatively enclosure blogs buildings Stimium commanders
+  rapid Algorithms Luckily timeouts bins dec approached Proceed appreciate insiders \ldots\\[3pt]
+  \textbf{\color{paramgreen}min-p = 0.1:} The cat lazily batted at a wandering sunbeam on the floor,
+  its tail twitching with contentment.}}
+  \vskip 2pt
+  {\scriptsize\color{gray}Real outputs, Llama 3.1 8B through OpenRouter, one provider, 6 Nov 2026
+  (the API notebook).}
+  \vskip 2pt
+  \begin{itemize}\footnotesize
+    \item Top-k keeps 5 tokens; min-p keeps those with at least a tenth of the favourite's
+      probability. Both cut the flattened tail.
+    \item Top-p keeps tokens until 90\% is covered, and at $T = 2$ the tail holds most of the
+      probability: the nucleus is thousands of tokens wide.
+    \item So this provider (DeepInfra) applies the temperature \textbf{before} the cut, as Hugging
+      Face does; cut first, and top-p would have removed the tail before it was flattened.
+  \end{itemize}
+  \watchbox{\footnotesize One run, one prompt. Min-p was built for high temperatures; the critique was
+  that with equal tuning the standard samplers do as well. Pushing the temperature? Use min-p or a
+  small k.}
+\end{frame}
+
 \begin{frame}{Repetition penalties: two different things}
   \small
   \begin{itemize}
     \item \textbf{Multiplicative} (Keskar et al., 2019, the CTRL paper; Hugging Face's and
       llama.cpp's \texttt{repetition\_penalty}): for every token already in the text, divide its
-      logit by the penalty (multiply it, if the logit is negative). Toy, penalty 1.3: a logit of
-      2.6 becomes 2.0.
+      logit by the penalty. Toy, penalty 1.3: a logit of 2.6 becomes 2.0. A negative logit is
+      multiplied instead: $-2 / 1.3 = -1.5$ would make the token \emph{more} likely.
     \item \textbf{Subtractive} (OpenAI's API): subtract a fixed amount from every token that has
       appeared (presence penalty), plus an amount per appearance (frequency penalty):
       \[
@@ -487,6 +693,18 @@ choosing one.}
   \vskip 4pt
   \watchbox{Same name, different maths, different scales. Too strong and the model avoids
   words it genuinely needs to repeat - names, ``the''.}
+\end{frame}
+
+\begin{frame}{Repetition penalties, seen}
+  \begin{center}\includegraphics[width=\linewidth]{dec_penalty.pdf}\end{center}
+  \vskip -4pt
+  \small
+  Toy numbers, after the cold open's loop: ``sorry'' would get 54\% once more. Both penalties push
+  down only the tokens already used (red); the rest gain. The subtractive one counts uses:
+  ``sorry'' falls to 17\% instead of 39\%.
+  \vskip 4pt
+  \keybox{A penalty does not ban a word; it makes the loop less likely to continue - and sampling
+  does the rest.}
 \end{frame}
 
 \begin{frame}{When a loop breaks: ``repeat the word poem forever''}
@@ -506,19 +724,6 @@ choosing one.}
   \vskip 2pt
   \src{Nasr et al., ``Scalable Extraction of Training Data from (Production) Language Models'',
   arXiv 2311.17035; ICLR 2025. OpenAI's flagging: 404 Media, December 2023.}
-\end{frame}
-
-\begin{frame}{Seeds}
-  \begin{itemize}
-    \item Sampling draws random numbers, so the same prompt gives different texts on different
-      runs. That is the point of sampling.
-    \item A fixed \textbf{seed} replays the same random numbers, so the same text comes out
-      again - on the same machine, with the same software and the same settings.
-    \item Useful for debugging and for comparing two prompts fairly.
-  \end{itemize}
-  \vskip 10pt
-  \keybox{``On the same machine'' is doing a lot of work in that sentence. The last section shows
-  why.}
 \end{frame}
 
 \begin{frame}{Settings in practice}
@@ -635,6 +840,8 @@ option: a filter on top of either.}
     \item \textbf{Not guaranteed truth.} A valid \texttt{"year"} can still be the wrong year.
     \item \textbf{Not guaranteed complete.} Hit the length limit in the middle of an object and
       the JSON is cut off anyway.
+    \item \textbf{Not the model's free choice.} The probability on masked tokens goes to the legal
+      ones: a model forced to write a number cannot say ``I don't know''.
     \item \textbf{In production}: OpenAI's Structured Outputs (August 2024) turns a JSON schema
       into a grammar and masks. On their test of complex schemas: 100\% valid, against under 40\%
       for the older gpt-4-0613 without it (training alone reached 93\%).
@@ -646,19 +853,6 @@ option: a filter on top of either.}
 % ============================================================ 5. REAL SYSTEMS
 \section{Real systems}
 \sectiontransition{Real systems}{What changes when a server does the decoding.}
-
-\begin{frame}{Streaming: stopping in the middle of a letter}
-  \begin{center}\includegraphics[width=3.0in]{dec_ayb_bytes.pdf}\end{center}
-  \vskip 2pt
-  \begin{itemize}
-    \item Chat apps show tokens as they arrive (streaming), not after the whole answer is done.
-    \item LLM-1: in UTF-8 the Armenian letter ayb is two bytes, D5 A1, and a byte-level
-      tokenizer can give each byte its own token.
-    \item A token holding only D5 is not text yet. Show it - or hit the length limit right after
-      it - and the screen gets a broken character. So the app must hold back bytes until a
-      character is complete.
-  \end{itemize}
-\end{frame}
 
 \begin{frame}{Predict first}
   \vskip 30pt
@@ -688,7 +882,9 @@ option: a filter on top of either.}
   \end{itemize}
   \vskip 4pt
   \takebox{Their fix, batch-invariant kernels, makes all 1,000 identical, at a cost in speed.
-  Greedy decoding is deterministic; the arithmetic underneath it may not be.}
+  Greedy decoding is deterministic; the arithmetic underneath it may not be. \textbf{Seeds} have the
+  same limit: a fixed seed replays the same random numbers for sampling, not the same arithmetic -
+  same machine, same software, or no guarantee.}
 \end{frame}
 
 \begin{frame}{Why decoding is slow}
@@ -698,10 +894,12 @@ option: a filter on top of either.}
     \item For a single token the GPU has little arithmetic to do, but it must read all of the
       model's weights from memory each time. Decoding is limited by memory, not by arithmetic
       (the details are LLM-14).
-    \item Checking several tokens in one pass costs about as much as checking one.
+    \item Checking several tokens in one pass costs about as much as checking one: the weights are
+      read once per pass either way. (The same reason the whole prompt is read in one pass, while
+      the answer comes one token at a time.)
   \end{itemize}
   \vskip 10pt
-  \keybox{That last point is the whole trick of the next slide.}
+  \keybox{That last point is the whole trick of the next slides.}
 \end{frame}
 
 \begin{frame}{Speculative decoding}
@@ -710,12 +908,39 @@ option: a filter on top of either.}
   \small
   \begin{itemize}
     \item A small, fast model \textbf{drafts} $k$ tokens, one at a time.
-    \item The big model checks all $k$ in \textbf{one} pass: the causal mask (LLM-3) gives its
-      prediction at every position at once.
+    \item The big model checks all $k$ in \textbf{one} pass: a transformer predicts at every
+      position at once (how: LLM-3). An RNN could not: it walks the text left to right.
     \item Keep the drafted tokens up to the first disagreement, take the big model's own token
       there, and draft again.
   \end{itemize}
   \src{Leviathan, Kalman \& Matias (2023), ICML; Chen et al. (2023), DeepMind.}
+\end{frame}
+
+\begin{frame}{How one pass checks four tokens}
+  \begin{center}\includegraphics[width=0.9\linewidth]{dec_spec_verify.pdf}\end{center}
+  \vskip -8pt
+  \small
+  \begin{itemize}
+    \item Prompt and draft go into the big model \textbf{once}; a transformer returns a next-token guess
+      at \textbf{every} position. Each guess sees only the tokens to its left, so it is what the big
+      model would have said on its own.
+    \item Compare each guess with the next drafted token: same, same, differs. Keep ``on the'', write
+      ``floor'', drop the rest: \textbf{3 tokens for one big pass}. (Four matches would add a free
+      fifth.)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Where the time goes}
+  \begin{center}\includegraphics[width=\linewidth]{dec_spec_timeline.pdf}\end{center}
+  \vskip -4pt
+  \small
+  \begin{itemize}
+    \item Plain decoding: one big pass per token. Speculative: a few cheap draft steps, then one big
+      pass that keeps several tokens. A bad draft wastes only the cheap steps.
+    \item Toy costs above (a draft step costs a tenth of a big pass): 12 tokens in the time plain
+      decoding writes 4. Measured: Leviathan et al.
+      report \textbf{2-3$\times$} for T5-XXL, Chen et al. \textbf{2-2.5$\times$} for Chinchilla 70B.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{By hand: accept or reject}
@@ -786,24 +1011,103 @@ option: a filter on top of either.}
 \end{frame}
 
 \begin{frame}{Where the draft comes from}
+  \small
   \begin{itemize}
-    \item A small model of the same family, with the same tokenizer.
-    \item Extra prediction heads trained on top of the big model itself.
-    \item Copying: in summaries and code edits the next tokens are often already in the prompt.
-    \item Multi-token prediction: models trained to guess several tokens at once (LLM-14).
+    \item \textbf{A small model of the same family}, with the same tokenizer: T5-small drafting for
+      T5-XXL (Leviathan et al.), a 4B model for Chinchilla 70B (Chen et al.).
+    \item \textbf{Copying from the prompt}, no model at all: \emph{prompt lookup decoding} (Saxena,
+      2023) finds the last few tokens earlier in the context and proposes whatever followed them.
+      Summaries, code edits and document questions repeat the prompt a lot.
+    \item \textbf{Extra heads on the big model itself}: Medusa, EAGLE - next slide.
+    \item \textbf{Multi-token prediction}: the model is trained from the start to also guess the token
+      after next, and that guess becomes the draft (DeepSeek-V3; details in LLM-14).
   \end{itemize}
-  \vskip 10pt
+\end{frame}
+
+\begin{frame}{Draft heads: no second model needed}
+  \begin{center}\includegraphics[width=0.95\linewidth]{dec_spec_heads.pdf}\end{center}
+  \vskip -6pt
+  \scriptsize
+  \begin{itemize}
+    \item \textbf{Medusa} (Cai et al., ICML 2024): extra heads on the big model's last vector, head $k$
+      guesses token $t + k + 1$, each one small layer. Their top guesses form a little tree, checked in
+      one pass. 2.2-2.8$\times$ on Vicuna 7B and 13B.
+    \item \textbf{EAGLE} (Li et al., 2024; EAGLE-3 at NeurIPS 2025): the drafter is one transformer
+      layer that reads the big model's internal features and drafts token by token. EAGLE-3: up to
+      6.5$\times$ (Vicuna 13B on code), 4.1$\times$ on Llama 3.3 70B.
+    \item \textbf{MTP} (DeepSeek-V3, Dec 2024): a module trained during pretraining to predict token
+      $t + 2$. Used as the drafter, its guess is accepted 85-90\% of the time: 1.8$\times$ the tokens
+      per second.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Speculative decoding in industry}
+  \small
+  \begin{tabular}{>{\raggedright\arraybackslash}p{3.3cm}>{\raggedright\arraybackslash}p{8.4cm}}
+    \textbf{who} & \textbf{what} (official docs and papers, checked 6 Nov 2026) \\
+    \hline
+    vLLM, SGLang, TensorRT-LLM & the big serving engines: EAGLE-3, MTP, a separate draft model,
+      n-gram / prompt lookup \\[2pt]
+    llama.cpp & on a laptop: a draft model (\texttt{-md}), EAGLE-3, MTP, n-gram lookups \\[2pt]
+    Hugging Face & \texttt{generate(assistant\_model=...)}, \texttt{prompt\_lookup\_num\_tokens=...} \\[2pt]
+    Google & AI Overviews in Search (Google Research blog, Dec 2024) \\[2pt]
+    Meta & Llama 4 Maverick served with EAGLE drafts, about 4 ms per token (2025) \\[2pt]
+    model releases & DeepSeek-V3, Qwen3-Next and GLM-4.5 ship MTP layers; Gemma 4 ships an official
+      drafter (``up to 3$\times$''); NVIDIA publishes an EAGLE-3 head for gpt-oss-120b \\
+  \end{tabular}
+  \vskip 8pt
   \takebox{Speculative decoding changes \textbf{how fast} tokens come out, never \textbf{which}
-  tokens come out. That is why serving systems can switch it on silently: Google's AI Overviews
-  in Search use it (2024), and Meta serves Llama 4 with it (2025).}
+  tokens come out. That is why providers switch it on without telling anyone.}
+\end{frame}
+
+\begin{frame}{Prompt caching: pay less for a repeated beginning}
+  \begin{center}\includegraphics[width=0.86\linewidth]{dec_prompt_cache.pdf}\end{center}
+  \vskip -8pt
+  \small
+  \begin{itemize}
+    \item Before writing, the model reads the whole prompt; the provider keeps that work for a few
+      minutes (what it keeps is the KV cache, LLM-14).
+    \item A request that \textbf{starts with exactly the same tokens} reuses it: cheaper, and a faster
+      first token. The stored work for each token depends on every token before it, so one changed
+      token at the top and nothing after it matches.
+    \item So: fixed things first (instructions, documents, examples), the changing question last.
+      Never put today's date or the user's name at the top.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Prompt caching: the rules, and real numbers}
+  \footnotesize
+  \begin{tabular}{>{\raggedright\arraybackslash}p{2.3cm}>{\raggedright\arraybackslash}p{5.6cm}%
+                  >{\raggedright\arraybackslash}p{3.6cm}}
+    \textbf{provider} & \textbf{how it switches on} & \textbf{a cached token costs} \\
+    \hline
+    OpenAI & automatic, prompts of 1,024 tokens or more & 0.5$\times$ (GPT-4o mini), 0.1$\times$
+      (GPT-5 nano) \\[2pt]
+    Anthropic & you mark the end of the prefix (\texttt{cache\_control}); writing costs 1.25$\times$
+      (5 minutes) or 2$\times$ (1 hour) & 0.1$\times$ (Haiku 5.5) \\[2pt]
+    Gemini 2.5+ & automatic (``implicit''), lives about 3-5 minutes & 0.1$\times$ (2.5 Flash) \\
+  \end{tabular}
+  \vskip 2pt
+  {\scriptsize\color{gray}OpenRouter's caching guide and price list, 6 Nov 2026. OpenRouter also sends
+  your next request to the provider that holds your cache.}
+  \vskip 2pt
+  \small
+  Real run (the API notebook): our first 25 slides as context, 3,310 tokens, GPT-4o mini.
+  \begin{itemize}
+    \item Request 1: \$0.000520. Requests 2 and 3: 3,200 tokens read from the cache, \$0.000276 (53\%).
+    \item Request 4, one sentence added at the top: 0 tokens cached, \$0.000520 again.
+    \item Claude Haiku 5.5 with a marked prefix: the second request cost 0.30 of the first.
+  \end{itemize}
+  \keybox{Long system prompt or long chat: order the prompt well and caching cuts the bill.}
 \end{frame}
 
 \begin{frame}{Watermarking lives in the sampler}
   \small
   SynthID-Text (Dathathri et al., \emph{Nature}, 2024), used in Google's Gemini:
   \begin{itemize}
-    \item When several candidate tokens are about equally good, a secret, keyed function
-      decides which one wins. The model itself is untouched; only the sampling step changes.
+    \item When several candidate tokens are about equally good, a secret function of the key and
+      the last few tokens decides which one wins. The model itself is untouched; only the sampling
+      step changes.
     \item Anyone with the key can score a text: if its token choices agree with the keyed
       function far more often than chance, it is watermarked. Toy: the function prefers half of
       all candidates, so ordinary text hits a preferred token about 50\% of the time;
@@ -820,26 +1124,39 @@ option: a filter on top of either.}
 
 \begin{frame}{Recap}
   \begin{itemize}
-    \item The model hands over a probability for every token; \textbf{decoding} picks one. Stop
-      on an end token, a length limit or a stop string.
-    \item \textbf{Take the most likely}: greedy (loops, short-sighted), beam search (looks ahead;
-      right for one-right-answer tasks, bland for open-ended text).
+    \item The model hands over a probability for every token; \textbf{decoding} picks one, and the
+      loop is \textbf{autoregressive}. Stop on an end token (the model's choice), a length limit (your
+      budget) or a stop string (your format's boundary). Work in log-probabilities.
+    \item \textbf{Take the most likely}: greedy (loops, short-sighted), beam search (keeps $B$ options;
+      right for one-right-answer tasks, bland for open-ended text, and wider is not better).
     \item \textbf{Sample}: temperature reshapes; top-k, top-p and min-p cut the tail; penalties
       discourage loops. Libraries differ in the order. Sampling many and voting
       (self-consistency) helps one-right-answer tasks.
     \item \textbf{Constrain}: masks guarantee a format, not the truth.
     \item \textbf{Real systems}: temperature 0 can still drift; speculative decoding is free
-      speed; a watermark can hide in the sampler.
+      speed (a draft, checked in one pass); a repeated prompt beginning is cached and billed less;
+      a watermark can hide in the sampler.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Next on the map}
-  \begin{center}\includegraphics[width=\linewidth]{roadmap_pretraining_life.pdf}\end{center}
-  \vskip -2pt
-  {\small Next (LLM-7): where these probabilities come from - pretraining.}
+\begin{frame}{Next: a real model, through an API}
+  \vskip 20pt
+  \begin{center}
+    {\Large\color{popblue}\textbf{Next we call a real model through an API,\\[4pt]
+    and treat everything inside it as magic for now.}}
+  \end{center}
+  \vskip 18pt
+  \keybox{Every knob from today is a field in that request: \texttt{temperature},
+  \texttt{top\_p}, \texttt{top\_k}, \texttt{min\_p}, \texttt{seed}, \texttt{stop},
+  \texttt{max\_tokens}, \texttt{logprobs}, \texttt{response\_format}, \texttt{stream}.}
+  \vskip 8pt
+  {\small The notebook \texttt{xx\_llm\_api\_solution.ipynb} does every one of them live, plus usage
+  and cost, providers, streaming, prompt caching and hidden reasoning tokens.}
+  \vskip 6pt
+  {\small Later, LLM-2 to LLM-5 open the box: where the probabilities come from.}
 \end{frame}
 
-\begin{frame}{Sources \& further reading}
+\begin{frame}{Sources \& further reading (1/2): decoding}
   \scriptsize
   \begin{itemize}
     \item \textbf{Read:} von Platen (2020), \link{https://huggingface.co/blog/how-to-generate}{How
@@ -847,6 +1164,8 @@ option: a filter on top of either.}
       \link{https://artefact2.github.io/llm-sampling/}{artefact2.github.io/llm-sampling}.
     \item Holtzman, Buys, Du, Forbes \& Choi (2020), ``The Curious Case of Neural Text
       Degeneration'', ICLR (the probability trap, top-p).
+    \item Koehn \& Knowles (2017), ``Six Challenges for Neural Machine Translation''; Stahlberg \&
+      Byrne (2019), ``On NMT Search Errors and Model Errors: Cat Got Your Tongue?'', EMNLP.
     \item Wang et al. (2023), ``Self-Consistency Improves Chain of Thought Reasoning in Language
       Models'', ICLR. Nasr et al. (2023), ``Scalable Extraction of Training Data from (Production)
       Language Models'', arXiv; ICLR 2025.
@@ -857,17 +1176,32 @@ option: a filter on top of either.}
       (presence and frequency penalties).
     \item Nguyen et al. (2025), ``Turning Up the Heat: Min-p Sampling'', ICLR; ``Min-p, Max
       Exaggeration'' (2025), arXiv 2506.13681.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Sources \& further reading (2/2): real systems}
+  \scriptsize
+  \begin{itemize}
     \item He / Thinking Machines Lab (10 Sept 2025), ``Defeating Nondeterminism in LLM
       Inference''.
     \item Leviathan, Kalman \& Matias (2023), ``Fast Inference from Transformers via Speculative
       Decoding'', ICML; Chen et al. (2023), ``Accelerating Large Language Model Decoding with
       Speculative Sampling''.
+    \item Cai et al. (2024), ``Medusa'', ICML; Li et al., EAGLE (2024) and EAGLE-3 (NeurIPS 2025);
+      DeepSeek-AI (2024), ``DeepSeek-V3 Technical Report'' (MTP); Saxena (2023), prompt lookup
+      decoding (GitHub); Leviathan, Kalman \& Matias (Dec 2024), ``Looking back at speculative
+      decoding'', Google Research blog; Meta (2025), arXiv 2508.08192 (EAGLE for Llama 4).
+    \item vLLM, SGLang, TensorRT-LLM and llama.cpp documentation on speculative decoding (read 6 Nov
+      2026).
+    \item OpenRouter documentation: prompt caching, usage accounting, provider routing (read 6 Nov
+      2026).
     \item Dathathri et al. (2024), ``Scalable watermarking for identifying large language model
       outputs'', \emph{Nature}.
   \end{itemize}
   \vskip 2pt
   \src{Figures: \texttt{py\_src/decoding\_figs.py} (toy numbers; GPT-2's greedy output and the
-  map's top five are the only real ones).}
+  map's top five are the only real ones). Real API outputs: \texttt{xx\_llm\_api\_solution.ipynb}
+  (6 Nov 2026).}
 \end{frame}
 
 \end{document}
@@ -945,4 +1279,58 @@ option: a filter on top of either.}
 %   found no canonical sampling video; the 3b1b segment is linked instead.
 %   2026-10-28: the causal mask moved from LLM-4 to LLM-3; the speculative-decoding callback now says
 %   LLM-3.
+%   MOVED UP 2026-11-06 (DECISIONS #109; instructor: "like we did input now lets do output story",
+%   then "use llms via api by considering them magic for now"): taught right after LLM-1 and its
+%   practical, before LLM-2 to LLM-5. Edits: title-page line; the map caption (middle faded,
+%   a black box until LLM-2 to LLM-5); the recap calls back to [54]'s generation loop instead of
+%   LLM-5; speculative decoding says "a transformer predicts at every position at once (how:
+%   LLM-3)" instead of naming the causal mask (instructor: speculative decoding stays here);
+%   the Transformer Explainer link lost its "(LLM-3's)"; the closing frame points to the first
+%   API session (B0, format still open) instead of LLM-7. The roadmap's SESSIONS order changed
+%   in llm_roadmap.py, so the map shows Tokenizer done, Decoding lit, the rest faded.
+%   INSTRUCTOR REVIEW 2026-11-06 (nine points; DECISIONS #111), 59 -> 74 pages:
+%   (1) "autoregressive" named on "One step, one distribution" and in the recap; (2) "When to stop"
+%   says who decides each rule, new "Why stop strings, if the model has an end token?" with the real
+%   ReAct run (Llama 3.1 8B invents "Observation: ... 107,000 people"; stop=["Observation:"] ends
+%   after Action); (3) log-probabilities as two frames: dec_logprob.pdf (float32 product = 0 from
+%   token 46, asserted) and "what logs buy" (sum, monotone, the training loss, API logprobs, a
+%   probability -> log table); (4) beam search: "the idea" (+ pseudo-code, 50,257^10 ~ 10^47
+%   asserted), three step frames dec_beam_step1-3.pdf on a 3-step toy (TREE "on a" 0.3 -> 0.25 to
+%   break the old tie; TREE3 adds step 3; every candidate's log asserted in QUOTED beam3; winner
+%   "in a box" 0.18 vs greedy "on the mat" 0.09), "the cost and the catch"; dec_beam_tree.pdf
+%   retired; (5) the probability-trap frame says Holtzman's plot gives no beam width (their
+%   examples b = 16, 32), new "Does the beam width matter?" (b >= 64: GPT-2 Large/XL stop at once;
+%   Koehn & Knowles 2017; Stahlberg & Byrne 2019: 51.8% empty; defaults fairseq 5, Whisper CLI 5,
+%   Marian 12; all from primary sources via a research agent); (6) temperature: by-hand table
+%   T -> 0, 0.1 ... 100, -> inf (asserted), dec_temperature.pdf with T = 0.1/0.5/1/2/10 (0.79 at
+%   0.1, spread < 0.01 at 10, asserted), "Temperature on a real model" and "A real model at
+%   temperature 2: which cut-off saves it?" from the API notebook's run (top-k 5 and min-p 0.1
+%   coherent, top-p 0.9 garbage); (7) the ayb streaming frame and dec_ayb_bytes.pdf removed;
+%   (8) speculative decoding: "How one pass checks four tokens" (dec_spec_verify.pdf), "Where the
+%   time goes" (dec_spec_timeline.pdf, toy 12 vs 4 tokens asserted), "Where the draft comes from"
+%   with names, "Draft heads" (dec_spec_heads.pdf: Medusa, EAGLE/EAGLE-3, DeepSeek-V3 MTP numbers),
+%   "Speculative decoding in industry" (engines, Google, Meta, model releases); (9) prompt caching:
+%   dec_prompt_cache.pdf + "the rules, and real numbers" (OpenRouter docs and price list; the API
+%   notebook's GPT-4o mini 53% and Haiku 0.30 runs). Sources split in two.
+%   STUDENT REVIEW 3 2026-11-06 (one Sonnet agent, rendered PNGs only, pedagogy brief + probes for
+%   the new place before LLM-2; ~150k tokens, 5 min). Applied: the 98% "for real" overclaim on
+%   "Temperature on a real model" -> "the long-tail toy's lesson"; the cut-off frame names DeepInfra
+%   and reconciles with the min-p critique (+ practical advice); the overview figure now uses the
+%   same example as the one-pass frame (2 accepted + "floor", 3 tokens), and the one-pass figure says
+%   where each guess was made; "an RNN could not" contrast; why a pass of k costs about one (weights
+%   read once per pass; prefill vs decode in one clause); why caching needs an identical prefix; the
+%   watermark keys on the last few tokens; negative logits in the penalty, why; length correction
+%   vs the 51.8% empty result (raw score); "agent" defined; perplexity linked to [47]; "Not the
+%   model's free choice" under constrained decoding; the cold open defines "the map's sentence";
+%   the detectors' small-text and footer flags (exponents, the one-pass figure). Not applied
+%   (offered): a real probability-trap figure, worked examples (beam with an end token, penalty on
+%   probabilities, a vote), cutting the poem and seed frames. Not applied (instructor asked for them):
+%   cutting the temperature-extremes figure and the industry table.
+%   INSTRUCTOR ANSWERS 2026-11-06 (interview): "The probability trap" now shows Holtzman et al.'s real
+%   Figure 2 (00_shared/fig/borrowed/paper/holtzman2020_fig2_probvar.pdf from the arXiv source,
+%   plot cropped with trim so its ticks stay >= 5.5 pt; the two text samples typeset from the figure);
+%   dec_prob_trap.pdf and fig_prob_trap retired. No by-hand worked examples ("I don't wanna hand by
+%   hand calculations do more visual stuff ... for the penalty one"): new frame "Repetition
+%   penalties, seen" (dec_penalty.pdf: toy after the cold open's real "I'm sorry" loop, both
+%   definitions, every bar asserted). Poem frame kept; "Seeds" folded into the temperature-0 takebox.
 % ============================================================================

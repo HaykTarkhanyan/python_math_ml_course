@@ -9,6 +9,106 @@ this file holds the choice and a pointer.
 
 ---
 
+## #111 - B0 is a notebook (`xx_llm_api_solution.ipynb`) on pinned providers; LLM-6 answers a nine-point instructor review and gains prompt caching
+
+**Date:** 2026-11-06 · **Status:** active; answers #109's open "B0 format" (instructor: "actually no, just build a
+small notebook which well use and add a few notes on openrouter there").
+
+**Decision.** B0 is `llms/06_decoding/xx_llm_api_solution.ipynb`, built and executed by `py_src/build_api_nb.py`
+(the practical 02 pattern: solution only, many small cells, prose written after the run, ledger in
+`results/xx_api_ledger.json`, HTML export). Ten sections: first call (raw HTTP, SDK, generation stats), OpenRouter
+and its providers, tokens and cost (Armenian), stateless chat, every LLM-6 knob live, streaming, prompt caching,
+locked knobs and reasoning tokens, errors, the cost summary and field table. **Experiments that compare answers
+pin one provider with fallbacks off** (instructor endorsed the "you should know" note: routed calls can reach
+different companies). LLM-6 grows from 59 to 74 pages: "autoregressive" named; why stop strings (a real agent run);
+log-probabilities in two frames; beam search step by step (3-step toy) plus "does the beam width matter"; temperature
+extremes (table, five-panel figure, real outputs); the ayb streaming frame removed; four new speculative-decoding
+frames; two prompt-caching frames.
+
+**Why.** Measured before writing (2026-11-06, $0.005 of exploration, then $0.003 for the notebook run): Llama 3.1 8B
+is served by four providers with different weights (fp8 / bf16), knobs and prices (up to 11x); at temperature 0,
+routed calls split by provider (Cloudflare vs DeepInfra) and a pinned provider still gave 2 answers in 8; Llama
+falls apart already at T = 1.5, and at T = 2 top-k 5 and min-p 0.1 rescue it while top-p 0.9 does not; without a
+stop string Llama invents the tool's "Observation"; GPT-4o mini's cache cut a repeated 3,310-token prompt to 53% of
+the price, one changed sentence at the top to 0% cached. Speculative-decoding and beam-width facts from primary
+sources (one research agent, ~180k tokens): Holtzman's Figure 2 states no beam width (examples b = 16, 32);
+Stahlberg & Byrne: 51.8% of sentences have the empty translation as the model's best.
+
+**Student review (same day, instructor: "pls do a review first").** One Sonnet agent on the rendered PNGs (~150k
+tokens). Applied: an overclaim ("the previous slide's 98%, for real"), the unnamed provider behind the knob-order
+inference, two speculative-decoding figures that used different examples, and seven missing one-clause "whys"
+(pass cost, identical prefix, watermark key, negative-logit penalty, length correction vs the raw-score 51.8%,
+"agent", perplexity). Offered, not applied: a real probability-trap figure, three worked examples, two cuts.
+Rejected: cutting the temperature-extremes figure and the industry table, which the instructor asked for.
+Then, by interview: the probability-trap schematic replaced by Holtzman et al.'s real Figure 2 (from the arXiv
+source, `00_shared/fig/borrowed/paper/`); no by-hand worked examples, one visual instead ("Repetition penalties,
+seen"); the poem frame kept and the seed frame folded into temperature 0; the API notebook stays solution-only.
+
+**Alternatives rejected.** OpenRouter code and outputs as slides (the instructor's first idea, withdrawn in the same
+message for a notebook). Routed (unpinned) calls for the temperature-0 and seed demos: they mix two effects. Keeping
+the one-picture beam tree: it showed the result, not the procedure the instructor asked to see.
+
+**What would change this.** A re-run whose sampled texts no longer match the prose (the builder's docstring says to
+re-read and fix it); OpenRouter dropping a model or the provider that supports logprobs (`cheapest()` then raises).
+
+---
+
+## #110 - The first API session (B0) calls models through OpenRouter with the `openai` SDK
+
+**Date:** 2026-11-06 · **Status:** active; answers #105's Q3 for B0 (instructor picked it from three options).
+B0's format (notebook, deck or both) and its contents are still open.
+
+**Decision.** B0, the first session where students call a model API (right after LLM-6, #109), uses the `openai`
+Python SDK pointed at OpenRouter (`base_url="https://openrouter.ai/api/v1"`), one OpenRouter key.
+
+**Why.** One key reaches open models, where every LLM-6 knob is a real request field, and closed ones, where the
+knobs are locked. OpenRouter's parameter list (docs read via Context7, 2026-11-06) includes `temperature`,
+`top_p`, `top_k`, `min_p`, `repetition_penalty`, `frequency_penalty`, `presence_penalty`, `seed`, `stop`,
+`max_tokens`, `logprobs`, `top_logprobs`, `response_format`, `structured_outputs`. Practical 02 already calls
+models this way (#104). The same client later points at a local server (Ollama, llama.cpp and vLLM all speak
+the OpenAI-style interface), so the interface survives a switch of provider.
+
+**Watch-out for the build.** OpenRouter's docs say a provider that does not support a parameter **ignores it
+silently** unless the request sets `provider.require_parameters: true`; Claude Opus 4.7 and Sonnet 5 silently
+ignore `temperature`, `top_p` and `top_k`, and Haiku 5.5 rejects any non-default temperature. B0 must set
+`require_parameters` for the knob demos, and the silent ignore is itself worth showing.
+
+**Alternatives rejected.** OpenAI directly: students know the SDK from `python_libs/01`, but there is no
+`top_k` or `min_p` and only OpenAI's models. Local only (Ollama or llama.cpp): free and every knob works, but slow
+on student laptops, and it reopens #74.
+
+**What would change this.** Students having to make the calls themselves without paying (then a free tier or a
+local runtime); OpenRouter dropping the open models whose providers support `logprobs`, `top_k` and `min_p`.
+
+---
+
+## #109 - LLM-6 Decoding is taught right after LLM-1 and its practical: the input side, then the output side
+
+**Date:** 2026-11-06 · **Status:** active; reopens #67's left-to-right order for this one deck and changes the
+shared trunk of #105 (LLM-1, practical 02, LLM-2, LLM-6, B0 -> LLM-1, practical 02, LLM-6, B0). What follows B0
+is open (instructor: "decide later").
+
+**Decision.** Order: LLM-1 Tokenization -> practical 02 -> LLM-6 Decoding -> B0, a first API call that treats the
+model as magic (#110). LLM-2 to LLM-5 open the box afterwards. Edits: `llm_roadmap.py` puts `decoding` second in
+`SESSIONS` (maps re-rendered, and the script now saves without `CreationDate`); LLM-6's map caption, title line,
+recap ([54]'s generation loop instead of LLM-5), speculative-decoding line ("a transformer predicts at every
+position at once (how: LLM-3)") and closing frame (B0 instead of LLM-7); LLM-1's closing frame points to
+LLM-6; LLM-5's closing frame points to LLM-7 and one "starts" became "started".
+
+**Why.** Instructor: "kind of like we did input now lets do output story + after this we can use llms via api by
+considering them magic for now". LLM-6 already treats the model as a box that hands back a distribution; only
+four spots leaned on LLM-3 to LLM-5 (counted 2026-11-06), and the faded middle of the map shows the black box.
+Students get to the API two sessions sooner, and every request field is then something they have seen.
+
+**Alternatives rejected.** #105's trunk with LLM-2 before LLM-6 (the instructor chose decoding straight after the
+practical). Moving speculative decoding out of LLM-6 to after LLM-3, since it uses "all positions in one pass":
+instructor, "regarding speculative decoding, i want it here"; it keeps a forward pointer instead.
+
+**What would change this.** Students in LLM-6 stalling on "where do the logits come from" (then one recap frame on
+the box's output, or LLM-2 first after all).
+
+---
+
 ## #108 - LLM-3 gets the creature toy as real matrices (d_k = 2), after three declined offers
 
 **Date:** 2026-10-28 · **Status:** active; revisits the "not applied" lines of #101 and #103 (the
@@ -34,6 +134,108 @@ GPT-2's real $W_Q$: not by hand, and the shapes frames already cover the sizes.
 
 **What would change this.** If students in the room lose the thread at the matrix frames, keep the
 whole-line frame and the code run, and cut the two piece-1 frames.
+
+---
+
+## #107 - Three more LLM projects join #106's six: an Armenian embedding fine-tune, a 1B model taught to call tools (both on a rented GPU), and an MCP server for the "great sketch show"
+
+**Date:** 2026-10-28 · **Status:** active, extends #106 (instructor, by phone through a voice bot, picking from a
+second list of ten ideas). Written down only; nothing built.
+
+**Decision.**
+
+7. **Fine-tune an Armenian embedding model** - a small embedding model trained on Armenian question-passage pairs
+   with the contrastive loss from L41, compared with off-the-shelf models on recall@k. Feeds #106's textbook RAG.
+8. **Teach a 1B model to call tools** - fine-tune a tiny model to emit valid tool calls, compared with prompting a
+   big model on accuracy and cost. Links fine-tuning, tool calling and #106's on-prem project.
+9. **MCP server for the "great sketch show"** - the instructor's words; the voice bot heard "Garkin Haortum" and the
+   instructor spelled "K-A-R-G...", read here as Kargin Haghordum (Կարգին հաղորդում), the Armenian sketch comedy
+   show. Instructor: "I'll understand later". Scope (episodes, sketches, quotes, search) not discussed yet.
+
+Projects 7 and 8 include **renting a GPU in the cloud** as a skill in its own right ("how can we rent a GPU from
+RunPod, for example"). RunPod is the instructor's example, not a chosen provider; #96's Colab T4 route is the one
+already used in this repo.
+
+**Why.** From the job snapshot (`_knowledge/ml_job_market/`): embeddings in 44% and fine-tuning in 55% of worldwide
+LLM jobs (by company), MCP already at 8 of 23 Armenian ML employers, tool calling at 32% of worldwide LLM jobs.
+Renting a GPU is what fine-tuning takes once a laptop is not enough, which is the case on this course's machines.
+
+**Alternatives not picked (same list).** An Armenian speech-to-text benchmark, a synthetic data factory, a cost
+router with a semantic cache, Armenian personal-data redaction, a RAG hallucination checker, a homework auto-grader,
+call-center analytics.
+
+**Still open.** Project 9's subject and scope (confirm the reading above). The GPU provider and a spending cap per
+student. The base models for 7 and 8, and where the Armenian question-passage pairs and the tool-call training data
+come from.
+
+**What would change this.** Project 9's subject read wrongly (rename the entry). GPU rental too costly or too
+fiddly for students to do themselves (then the instructor runs the jobs, students get the notebooks).
+
+---
+
+## #106 - The LLM part's student projects: textbook RAG, an Armenian voice prep assistant, a text-to-SQL agent, an Armenian benchmark, a QLoRA translit fixer, and something on-prem
+
+**Date:** 2026-10-28 · **Status:** active (instructor, by phone, picking from fifteen ideas offered after the
+job-market snapshot). Each project's details are still open (below).
+
+**Decision.** Six portfolio projects, each tied to stream-B sessions (#105):
+
+1. **RAG on a textbook** - questions answered from one textbook, with citations to the section and an eval set (B3 to B5).
+2. **Voice AI prep assistant, in Armenian** - a spoken prep assistant over materials the course provides, so students
+   can use it themselves too (B7, built on B4 and B6).
+3. **SQL analytics agent** - natural-language questions to SQL on a database, read-only, checked by a question set (B2, B6).
+4. **A small Armenian benchmark** - Armenian questions with reference answers, an LLM judge checked against human
+   labels, several models compared (B5, LLM-11).
+5. **QLoRA translit fixer** - fine-tune a small model to turn Latin-typed Armenian into Armenian script, measured by
+   character error rate before and after (B10, LLM-13). Tentative: "maybe something else, but perhaps this one".
+6. **Something on-prem** - an LLM app on local hardware, compared with a hosted API on quality, latency and cost
+   (B9, LLM-12).
+
+**Why.** The 2026-10-28 snapshot (`_knowledge/ml_job_market/`, 74 Armenian ML/AI/DS postings from 23 companies):
+by share of companies, LLMs 65%, CI/CD 57%, agents 52%, SQL 48%, RAG 43%, fine-tuning 26% (55% of worldwide LLM
+jobs), evals 26% (49%). Only 4 of the 74 are entry level, so the projects have to read as work samples. Each one
+carries an Armenian angle (Armenian content, Latin-typed Armenian, Armenian evaluation). Voice is the exception:
+speech appears in only 4 Armenian postings; the instructor picked it anyway, as a tool students will use.
+
+**Alternatives not picked (offered the same day).** Bank-support agent with MCP tools, a classic model in production,
+an analyst-track project, an LLM skill extractor for job ads, a CV-to-job matcher, multilingual support triage, an
+LLM observability dashboard, a PR review bot, a prompt-injection red-team lab. The lecture-companion idea partly lives
+on inside project 2 (course materials); the local-vs-API comparison is project 6.
+
+**Still open.** Which textbook. Whether "prep" means exam prep over course materials or interview prep, and the voice
+stack (#105's Q7). The database for the SQL agent. Benchmark size and which models. Whether the translit fixer stays.
+The on-prem runtime: project 6 meets #74's own trigger ("a practical that has students run a model locally: it then
+needs one named runtime"). Model access for all six (#105's Q3; #104 already calls models through OpenRouter).
+
+**What would change this.** Armenian speech-to-text measuring too poor for a usable assistant (then project 2 goes
+text-first, voice optional). Too little Latin-typed Armenian data to show a gain (then project 5 is swapped). A later
+job snapshot where an unpicked skill (MCP, observability) clearly overtakes a picked one in Armenian ads.
+
+---
+
+## #105 - After LLM-6 the LLM part splits into two alternating streams: A (theory, the built decks) and B (applied workshops)
+
+**Date:** 2026-10-28 · **Status:** active, direction only (instructor: "lgtm" on `llms/TWO_STREAMS_PROPOSAL.html`).
+That page's Q1 to Q8 are open and no deck has been moved: each move (LLM-6 up, LLM-10 into B1, LLM-11's judge
+frames into B5) waits for its own yes.
+
+**Decision.** A shared trunk (LLM-1, the tokenization practical of #104, LLM-2, LLM-6 moved up from session 6 to 4,
+then B0: a first real API call where every LLM-6 knob is a request field), then two streams, one session each:
+A keeps the built theory decks LLM-3 to LLM-14 in order; B is a workshop line (prompting, structured outputs and MCP,
+search, RAG, evals, agents, voice, local models, QLoRA, capstone) that reuses LLM-10 and L41 to L44 as slides.
+
+**Why.** Instructor: "i dont like that we dont really have much opportunity for practicals that are relevant to
+industry". The plan had 17 lectures, two unbuilt practicals, no session where students call a model API, and RAG at
+session 12. The split mirrors mlabonne/llm-course's "LLM Scientist" / "LLM Engineer" tracks, and the job snapshot
+(#106) backs stream B's content. LLM-6 leans on the attention decks in only three places (lines 118 and 713, one
+link label), so moving it is cheap.
+
+**Alternatives rejected.** The single line with two practicals. Stream B as one block after A (no API until the
+end). Students choosing one stream (still open as Q1).
+
+**What would change this.** No free practical slot each week (#96 said there was none for the RNN practical): then
+stream B gets cut, not squeezed. Moving LLM-6 before attention, if approved, reopens #67's left-to-right order for
+that one deck.
 
 ---
 
@@ -474,6 +676,76 @@ frame, the next step is the numbered backward pass that was offered and not buil
 
 ---
 
+## #91 - ch19 decks 01-02 polish: layers are "after layer L" counted from 0 on every axis, the attention strip becomes two frames, deck 3's puzzle stays hidden
+
+**Date:** 2026-10-17 · **Status:** active (made autonomously on the instructor's "improve the first
+2 chapters", to be reviewed)
+
+**Decision.** (1) Every layer axis in ch19 reads "emb, 0, 1, ..., 11" = the residual stream
+*after* layer L, layers counted from 0 like the head names (L9H9); `mi_common.stream_ticks()`
+converts TransformerLens's `accumulated_resid` labels and raises on anything unexpected. (2) In
+`02_opening_the_box`, the four-head attention strip becomes two frames: one full pattern (L9H9,
+how to read a heatmap) and the last row of all four heads, with L10H7's direct logit attribution
+on the same sentence as the "same picture, opposite effect" example. (3) L9H8's measured
+attribution (+0.10) stays off deck 2's slides. (4) `01_mech_interp_intro` gains a by-hand bridge
+frame, "A neuron is a direction too". (5) Every figure in both decks is drawn at its slot size.
+
+**Why.** (1) The raw labels caused a real error: the Apple logit-lens frame read "first after
+layer 9" off a bar that is the stream after layer 8 (`l45_easy_figs.json`: rank 22 at `8_pre`,
+first at `9_pre`), so the slide claimed the fact arrives in the same layer as the IOI answer when
+it arrives one layer earlier. (2) The strip rendered at 2.7 pt and had no caption saying what to
+look at; it also came *after* a frame that called it "the four on the last slide". Measured on
+the running sentence: L9H9 93% on " William", DLA +3.81; L10H7 92%, DLA -2.59. (3) Deck 3's cold
+open asks which of L9H9/L9H6/L9H8 does nothing; printing L9H8's number in deck 2 would answer it
+a lecture early. (4) The intro went from "each neuron is one feature" (the toy) straight to "a
+feature is a direction" (GPT-2) without saying that a neuron is the special case of a direction.
+(5) `detect_small_figure_text.py` (added 2026-10-01, after these decks were built) flagged 10
+pages at 2.7-5.3 pt; after the redraw both decks report 0.
+
+**Alternatives rejected.** *1-based "layers passed through" axes* (what `l45_lens_fact.pdf`
+used) - clashes with the head names every later deck uses. *Keep the four full patterns and just
+enlarge them* - 16 token labels per panel cannot reach 5.5 pt with four panels across a slide.
+*Use L9H8 as the opposite-effect example* - spoils deck 3. *Re-run GPT-2 for every redraw* -
+`l45_figs.py`, `l45_extra_figs.py` and `l45_residual_stream.py` gained `--plot-only`; the one
+re-measurement needed (attention patterns, the 12x12 induction matrix and per-head attribution
+were not saved before) reproduced every saved number to 0.0.
+
+**What would change this.** If the instructor prefers 1-based layer counting on slides, change
+`stream_ticks()` and the head-name convention together, never one alone. If a student review
+finds the two-frame attention section slower than the old single strip, merge them back at a
+readable size.
+
+---
+
+## #90 - The ch19 mech-interp decks are numbered `01_`-`08_`, the four core decks first, before delivery
+
+**Date:** 2026-10-17 · **Status:** active (instructor) · **Supersedes #37**
+
+**Decision.** The eight `xx_` decks in `ml/ch19_mech_interp/` get a chapter-local number, core
+decks first and the optional add-ons after them: `01_mech_interp_intro`, `02_opening_the_box`,
+`03_does_it_actually_do_that`, `04_features` (core), `05_vision_circuits`,
+`06_transformer_circuits`, `07_where_facts_live`, `08_personas_and_diffing` (add-ons)
+(`.tex` + `.pdf`, `git mv`). The `mech_interp.qmd` list, the intro deck's plan table and the
+decks' "Next" boxes follow this order.
+
+**Why.** Instructor's ask (2026-10-17): replace `xx_` with 01, 02, ... in a logical order, then
+"lets do all core then add ons". The first rename the same day used the interleaved order of the
+`EXTENSION_PLAN.md` table (each add-on right after the core deck it builds on); the instructor
+switched it to core-first. Core-first keeps the core path gap-free (01-04) when add-ons are
+dropped, and every add-on still has all its prerequisites before it. The cost: the add-ons'
+"Next" boxes and forward references to core decks ("the features lecture asks...") had to be
+reworded, since under core-first those core lectures come earlier.
+
+**Alternatives rejected.** *Interleaved (1, add-on, 2, add-on, ...)* - the first version of this
+entry; replaced by the instructor. *Keep `xx_` until delivery (#37)* - overruled by the instructor.
+
+**What would change this.** `01_`-`08_` are chapter numbers, while `NN_` elsewhere in `ml/` is the
+course-wide lecture number (`ml/01_regression_intro/02_linear_regression_derivations.tex` is
+lecture 2). When a ch19 deck is delivered and gets a slot in `ml/00_plan.md`, decide whether it
+takes its delivery number per `CONVENTIONS.md` or keeps the chapter number.
+
+---
+
 ## #89 - The per-chapter Google Form quizzes are dropped
 
 **Date:** 2026-10-17 · **Status:** active (instructor: "we wont be doing google forms anymore";
@@ -831,6 +1103,32 @@ less, more deeply; three keep the parts short.
 **What would change this.** Readers reporting that the click-to-open blocks do not render in
 their viewer (Colab, VS Code) - then move answers to an appendix at the end; the practical being
 taught live again - then restore the room-count steps from #65.
+
+---
+
+## #79 - Robot-learning study guides and quizzes are one Markdown file per week, parsed into the browser
+
+**Date:** 2026-10-13 · **Status:** active.
+
+**Decision.** Each `learning/robot-learning/weekNN_*/study.md` holds the extra comments and the
+quiz for that week's lecture and guest talk, in plain Markdown with a fixed convention (`## Lecture`,
+`## Lecture quiz`, `## Guest talk`, `## Guest talk quiz`; `### Qn`, options `- A) ...`, the answer in
+a `<details>` block starting `**X.**`). `scripts/build_browser.py` parses it strictly (unknown
+sections, missing answers, bad option letters, slide numbers or timestamps that do not exist all
+raise) and renders it with one pandoc call per file, with pandoc's smart typography off so straight
+quotes and hyphens stay as written. The browser shows a Study guide card and a clickable Quiz card.
+
+**Why.** The content has a lot of LaTeX; writing it inside JSON strings would need every backslash
+doubled, which is the mistake this repo already makes too often (the heredoc learning). Markdown
+also reads fine on GitHub, with the answers folded. Requested 2026-10-12: "add quizes and helpful
+extra commetns i can read up for the videos".
+
+**Alternatives rejected.** Quiz data in `browser_content.json` (escaping, unreadable on GitHub);
+rendering the quiz as static Markdown only (no click-to-answer, which was the point); shuffling
+option order in the browser (the explanations refer to options by letter).
+
+**What would change this.** Wanting quizzes outside the browser (for example as Anki cards or a
+printable PDF): then generate those from the same `study.md` files rather than adding a second source.
 
 ---
 
@@ -1700,6 +1998,31 @@ byte-level vocabulary.
 
 ---
 
+## #45 - The `youtube-reference` skill moves to user-global; this repo keeps only its overrides
+
+**Date:** 2026-09-28 · **Status:** active (instructor's call)
+
+**Decision.** The skill and its three scripts move from `.claude/skills/youtube-reference/` to
+`~/.claude/skills/youtube-reference/` (backed up in the notes repo under
+`.claude/global_skills/`). The course-specific rules it carried move into the `CONVENTIONS.md`
+section "Borrowed video material", which the skill's new step 0 reads before fetching.
+
+**Why.** The instructor wants the same video flow in other projects. About half the old skill was
+course policy (`ml/<chapter>/` storage, `slide-style`, `% Provenance:` blocks, the `ma` venv), which
+would have been wrong advice anywhere else. The move also dropped a stale rule (the "legacy L14/L15
+vs `dl_*`" deck split - no L14/L15 files exist any more) and fixed the contact-sheet snippet, which
+wrote to `$CLAUDE_JOB_DIR/tmp`: that variable is unset, so it silently landed in Git Bash `/tmp`,
+the exact trap the skill's own gotchas warn about.
+
+**Alternatives rejected.** *Copy, keep both* - two same-named skills drift apart and only one
+wins when invoked. *Global skill plus a same-named project overlay skill* - same shadowing problem;
+a doc section that the skill reads is simpler and is already where the storage convention lived.
+
+**What would change this.** A second repo that needs its own long list of overrides - then the
+override mechanism may deserve a dedicated file per repo instead of a `CONVENTIONS.md` section.
+
+---
+
 ## #44 - The name-inventor comparison shrinks to K x h with a measured noise floor; torch runs on one thread
 
 **Date:** 2026-09-26 · **Status:** revisited 2026-09-28 by #47 (K range widened to 1-8, plain one-hot MLP added; "K=5 ties K=3" did not generalize)
@@ -1818,7 +2141,7 @@ decks rebuild without rerunning anything.
 
 ## #40 - The RNN chapter gets one CPU-light practical, merging the two June homework designs
 
-**Date:** 2026-09-23 · **Status:** active · **Reverses** the "No homework this chapter" lock in
+**Date:** 2026-09-23 · **Status:** superseded by #96 (2026-10-24) · **Reverses** the "No homework this chapter" lock in
 `ml/ch7_rnn/RNN_CHAPTER_PLAN.md` (2026-07-13)
 
 **Decision.** `ml/ch7_rnn/xx_rnn_memory_solution.ipynb` (+ the derived task version
@@ -1902,7 +2225,7 @@ reordered schedule), restore the three frames from git.
 
 ## #37 - ch19 decks drop the L45-L47 names for `xx_` names until delivery
 
-**Date:** 2026-09-22 · **Status:** active · **Supersedes #13**
+**Date:** 2026-09-22 · **Status:** superseded by #90 (2026-10-17) · **Supersedes #13**
 
 **Decision.** The three v1 mech-interp decks are renamed `L45_opening_the_box` ->
 `xx_opening_the_box`, `L46_does_it_actually_do_that` -> `xx_does_it_actually_do_that`,
