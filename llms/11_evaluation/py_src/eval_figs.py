@@ -1,7 +1,7 @@
 """Figures for LLM-11 "Evaluation and hallucination" (llms/11_evaluation/LLM11_evaluation.tex).
 
 Real numbers only from what is local or published:
-  --gpt2   the cached GPT-2 (HF_HUB_OFFLINE=1, no download) on LLM-4's two prompts, "Lionel Messi
+  --gpt2   the cached GPT-2 (HF_HUB_OFFLINE=1, no download) on LLM-5's two prompts, "Lionel Messi
            plays the sport of" and "Henrikh Mkhitaryan plays the sport of": the exact next-token
            distribution (top 5, entropy) and 20 samples of 3 tokens at temperature 1 (seed 509)
            -> results/eval_gpt2.json (~30 s)

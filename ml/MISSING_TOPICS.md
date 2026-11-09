@@ -36,7 +36,7 @@
 > - **CNNs** → `12_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
 > - **RNN / LSTM** → `13_rnns/` L20, L21
 > - **Modern optimizers, init, BatchNorm** → `11_neural_networks/44_optimization` + `45_optimization_init_activations`
-> - **Attention** → `llms/03_attention/` (LLM-3, was L24) (partial — see "still open")
+> - **Attention** → `llms/04_attention/` (LLM-3, was L24) (partial — see "still open")
 > - **Autoencoders / VAE** → `ch8_autoencoders/` L22, L23
 > - **GANs** → `ch8b_gans/` L23b, L23c
 > - **Diffusion** → `ch10_diffusion/` L27–L31
@@ -57,7 +57,7 @@
 >   pipeline. 182 pages, 52 generated figures, 6 source papers in `ch17_rag/papers/`.
 > - **Chapter pages for the 4 folders** listed as open on 2026-08-04 — all now exist and are
 >   registered in `_quarto.yml`: `06_feature_engineering.qmd`, `07_classic_methods.qmd`,
->   `13_rnns/rnn.qmd`, `llms/03_attention/attention.qmd`.
+>   `13_rnns/rnn.qmd`, `llms/04_attention/attention.qmd`.
 > - **Reinforcement learning** → `ch11_rl/L32`, plus the alignment track in `llm_training/`
 > - **Vision-language models** → `ch12_vlm/` L33, L34; **audio** → `ch13_audio/` L35, L36
 > - **Tabular foundation models** → `ch14_tabular_fm/L37`; **vision-language-action** →

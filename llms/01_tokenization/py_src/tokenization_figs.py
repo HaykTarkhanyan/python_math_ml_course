@@ -1,4 +1,4 @@
-"""Figures for LLM-1 "Tokenization: from text to token IDs" (llms/01_tokenization/LLM1_tokenization.tex).
+"""Figures for LLM-1 "Tokenization: from text to token IDs" (llms/01_tokenization/01_tokenization.tex).
 
 Every token split on the slides is measured here, never typed by hand:
   tiktoken  gpt2 (GPT-2), cl100k_base (GPT-4), o200k_base (GPT-4o)

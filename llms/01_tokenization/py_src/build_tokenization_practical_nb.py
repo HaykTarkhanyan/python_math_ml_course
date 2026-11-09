@@ -777,8 +777,8 @@ md(r"""
 # Part 3 - Hunt a glitch
 
 LLM-1 met ` SolidGoldMagikarp`: a token in GPT-2's vocabulary that almost never appeared in the text
-the model was trained on, so the model never learned what to do with it. LLM-2 showed why: a row of the
-embedding table gets a gradient only when its token shows up.
+the model was trained on, so the model never learned what to do with it. LLM-3 will show why: a row of
+the embedding table gets a gradient only when its token shows up.
 
 ## 3.1 Tokens that never come out
 
@@ -1053,8 +1053,8 @@ It never saw the word. In the saved run it keeps calling it "բրյ" - three let
 > **Remember:** a token that real text never produces gets no training. The model can then neither
 > read it nor write it - and the fix is not in the model but in the vocabulary.
 
-**Next (LLM-2):** what the model does with a token once it has one - the embedding table, and why a
-row that never gets a gradient stays where it started.
+**Next (LLM-2):** the other end of the model - how its probabilities become text (decoding). The embedding
+table, and why a row that never gets a gradient stays where it started, come in LLM-3.
 """)
 
 code(r"""

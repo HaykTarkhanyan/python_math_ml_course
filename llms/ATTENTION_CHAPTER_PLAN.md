@@ -1,8 +1,8 @@
 # Attention chapter (ch9) - Attention & Transformers - plan + outline
 
 > **Renamed 2026-10-05 (DECISIONS #71):** the LLM chapter is numbered in teaching order. L24 is now
-> **LLM-3** (`LLM3_attention.tex`), L25 is **LLM-4** (`LLM4_transformer_block.tex`), L26 is
-> **LLM-5** (`LLM5_transformers_in_the_world.tex`). This plan is the July record and keeps the old
+> **LLM-3** (`LLM4_attention.tex`), L25 is **LLM-4** (`LLM5_transformer_block.tex`), L26 is
+> **LLM-5** (`LLM6_transformers_in_the_world.tex`). This plan is the July record and keeps the old
 > names below; the live plan is `LLM_CHAPTER_PLAN.md`.
 
 Drafted 2026-07-19; **scope approved by the instructor 2026-07-19** (see "Decisions" below).

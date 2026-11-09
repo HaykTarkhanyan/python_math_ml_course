@@ -39,6 +39,10 @@ Last updated: 2026-09-28
   chapter by topic in any student-visible text, not by bare number. Same for
   `ml/11_neural_networks/` (converted 2026-09-16) and `ml/ch11_rl/` (legacy), and for
   `ml/12_cnn/` (converted 2026-09-30, DECISIONS #55) and `ml/ch12_vlm/` (legacy).
+- **`llms/` folders** follow the topic order, `NN_topic/` (`02_decoding/` = LLM-2, the second topic). Inside, a
+  taught deck carries its YouTube playlist number (`02_decoding/03_decoding.tex`: video 03, after the
+  tokenization lecture 01 and practical 02); an untaught deck keeps its label `LLMn_topic.tex` until delivery.
+  The label LLM-n in slides is the topic order too (DECISIONS #113, 2026-11-09).
 - **Two-part lectures** use `NN_1_` / `NN_2_` (first seen 2026-09-16: `41_1_neuron_to_network`,
   `41_2_multilayer_nets` in `ml/11_neural_networks/`).
 

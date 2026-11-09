@@ -22,7 +22,7 @@ foundations, [49] architectures, [50] transfer learning, [51] vision tasks.
 | ~~**Oct 14**~~ | Wed | [50] + [51] | ✅ Transfer learning + Vision tasks - **delivered**, notes exported | `12_cnn/50_transfer_learning` (32 frames) · `12_cnn/51_vision_tasks` (49 frames) | Clean PDFs recompiled 2026-10-15; both notes PDFs linked on the chapter page |
 | **Oct 16** | Fri | [52] | *Practical* - Gesture Snake | `12_cnn/52_gesture_snake/52_gesture_snake_solution.ipynb` · `STUDENT_GUIDE.md` | Built 2026-10-01; Part 8b (fine-tuning) added 2026-10-17; folder renamed at the chapter wrap-up (DECISIONS #88) |
 | **Oct 18** | Sun | [53] + [54] | RNN foundations + The road to attention | `13_rnns/53_rnn_foundations` · `13_rnns/54_road_to_attention` | [53] delivered 2026-10-21, [54] 2026-10-23 (both notes PDFs in); both renamed from `L20_`/`L21_` that day, labels to [53]/[54] |
-| **Oct 21** | Wed | [55] | LLMs, session 1 | `llms/01_tokenization/LLM1_tokenization` (40 frames), if the chapter order holds - see risk 5 | Built 2026-10-04, not student-reviewed (LLM-3 to LLM-5 were) |
+| **Oct 21** | Wed | [55] | LLMs, session 1 | `llms/01_tokenization/01_tokenization` (40 frames), if the chapter order holds - see risk 5 | Built 2026-10-04, not student-reviewed (LLM-3 to LLM-5 were) |
 
 ### Risks and open questions (critique of this plan)
 

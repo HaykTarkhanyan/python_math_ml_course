@@ -1,5 +1,12 @@
 # 14 LLMs - chapter plan (draft for approval)
 
+> **Renumbered 2026-11-09 (DECISIONS #113).** Labels in this plan are the ones in use when each part was
+> written. Today: old LLM-6 decoding = **LLM-2** (`02_decoding/`, deck `03_decoding.tex`, taught as video 03);
+> old LLM-2 embeddings = **LLM-3** (`03_embeddings_position/`); old LLM-3 attention = **LLM-4**
+> (`04_attention/`); old LLM-4 block = **LLM-5** (`05_transformer_block/`); old LLM-5 transformers = **LLM-6**
+> (`06_transformers_in_the_world/`). LLM-1 (deck `01_tokenization.tex`) and LLM-7 onward are unchanged. Folder
+> paths below are already updated.
+
 Drafted 2026-10-02; folder, order and map decided 2026-10-04 (DECISIONS #66, #67); numbered in
 teaching order, LLM-1 to LLM-14, on 2026-10-05 (#71: L24-L26 became LLM-3 to LLM-5). **Not approved
 yet** - the open decisions in section 1 come first. Follows the house new-chapter workflow
@@ -155,13 +162,13 @@ match the table below.
 
 | # | Session | Map boxes | `roadmap_` key | Status |
 |---|---|---|---|---|
-| 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`LLM1_tokenization.tex`); delivered, then practical 02 (#104) |
-| 2 | LLM-6 Decoding | Decoding | `decoding` | **moved up 2026-11-06 (#109):** taught right after LLM-1 and its practical, then B0, the first API call (#110): `llms/06_decoding/xx_llm_api_solution.ipynb` (#111); instructor review applied the same day, 74 pages (#111); see its row below |
-| 3 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM2_embeddings_position.tex`); what follows B0 is open (#109) |
-| 4 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM3_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM3_attention_OUTLINE.md`); reworked 2026-10-28: equation first, milestones, figures for the toy, a masking section with CLM/MLM (65 pages, #103) |
-| 5 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM4_transformer_block.tex`, 43 pages; critique, interview, `LLM4_transformer_block_OUTLINE.md`) |
-| 6 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM5_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
-| (2) | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`LLM6_decoding.tex` since #71); grammar-table frame added 2026-10-06; taught as session 2 since 2026-11-06 (#109), so in `SESSIONS` it sits right after `tokenization` |
+| 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`01_tokenization.tex`); delivered, then practical 02 (#104) |
+| 2 | LLM-6 Decoding | Decoding | `decoding` | **moved up 2026-11-06 (#109):** taught right after LLM-1 and its practical, then B0, the first API call (#110): `llms/02_decoding/xx_llm_api_solution.ipynb` (#111); instructor review applied the same day, 74 pages (#111); see its row below |
+| 3 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM3_embeddings_position.tex`); what follows B0 is open (#109); reviewed after the reorder 2026-11-09, callbacks follow LLM-6, eight new pictures, 90 pages (#112) |
+| 4 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM4_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM4_attention_OUTLINE.md`); reworked 2026-10-28: equation first, milestones, figures for the toy, a masking section with CLM/MLM (65 pages, #103) |
+| 5 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM5_transformer_block.tex`, 43 pages; critique, interview, `LLM5_transformer_block_OUTLINE.md`) |
+| 6 | LLM-5 Transformers in the world | LM head | `transformers` | built as L26 (`LLM6_transformers_in_the_world.tex`); map frames added 2026-10-04; restructured and student-reviewed 2026-10-06 (the LM head by hand on GPT-2, three-mask cold open, 27 pages) |
+| (2) | LLM-6 Decoding | Decoding | `decoding` | built 2026-10-05 as LLM-3 (`03_decoding.tex` since #71); grammar-table frame added 2026-10-06; taught as session 2 since 2026-11-06 (#109), so in `SESSIONS` it sits right after `tokenization` |
 | 7 | LLM-7 Pretraining | Pretrain | `pretraining` | built and student-reviewed 2026-10-06 (`LLM7_pretraining.tex`, 35 pages; `LLM7_pretraining_OUTLINE.md`) |
 | 8 | LLM-8 Scaling and emergence | Scale | `scaling` | built and student-reviewed 2026-10-06 (`LLM8_scaling.tex`, 25 pages; `LLM8_scaling_OUTLINE.md`) |
 | 9 | LLM-9 Post-training | Post-train | `post_training` | built and student-reviewed 2026-10-06 (`LLM9_post_training.tex`, 24 pages; `LLM9_post_training_OUTLINE.md`) |
@@ -185,7 +192,7 @@ word list ("Tokens, minimally"); what should a token be? Build the tokenizer eve
 uses. It ends at **token IDs** and hands over to LLM-2, whose first job is "an ID becomes a vector"
 (#68). It must not lean on embeddings or attention: they come next.
 
-**Interviewed 2026-10-04** - outline: `LLM1_tokenization_OUTLINE.md` (37 frames; its three open
+**Interviewed 2026-10-04** - outline: `01_tokenization_OUTLINE.md` (37 frames; its three open
 decisions answered the same day - ready to build).
 
 - **Cold open:** "How many r's in strawberry?" (instructor's pick over the Armenian-cost hook).
@@ -213,7 +220,7 @@ decisions answered the same day - ready to build).
   and frame text (`git show 6013bcc:ml/ch7_rnn/L21_road_to_attention.tex`). Chat tokens move to
   LLM-9. Optional 1 frame from llm_training 05 (BPE-dropout). Source copy:
   `sources/dl4nlp/03_tokenization.tex` (its PDF was 0 bytes; recompiled 2026-10-04).
-- **Built 2026-10-04:** `LLM1_tokenization.tex`, figures from `py_src/tokenization_figs.py` (every
+- **Built 2026-10-04:** `01_tokenization.tex`, figures from `py_src/tokenization_figs.py` (every
   split measured; numbers quoted in prose asserted). Self-review + Sonnet student review the same
   day; after the instructor's "I prefer proper decks" (frame count never matters, see
   `ml/SLIDE_STYLE.md`) it gained five worked frames: UTF-8 by hand, BPE on the 689 surnames' bytes
@@ -233,8 +240,8 @@ token IDs, and an ID is only a row number. This session builds the vector the bl
 `wte[id] + wpe[pos]`, and hands over to LLM-3 with one promise: the next layer weighs vectors by their
 content, and a weighted sum ignores order. LLM-3 proves it.
 
-**Interviewed 2026-10-04** - outline: `LLM2_embeddings_position_OUTLINE.md`. **Built the same day:**
-`LLM2_embeddings_position.tex`, figures from `py_src/embeddings_position_figs.py` (GPT-2's weights
+**Interviewed 2026-10-04** - outline: `LLM3_embeddings_position_OUTLINE.md`. **Built the same day:**
+`LLM3_embeddings_position.tex`, figures from `py_src/embeddings_position_figs.py` (GPT-2's weights
 via safetensors, every quoted number asserted; `save()` refuses any text outside its figure).
 
 - **Cold open:** "The dog bites the man" vs "The man bites the dog" (instructor's pick over "word
@@ -381,7 +388,7 @@ interview.
   one analogy (the soft dictionary lookup); duplicate stills dropped (`fs_creature.jpg` among them:
   the frame before it already shows the creature, so no re-grab); one "try it" link to Transformer
   Explainer.
-- **Outline:** `LLM3_attention_OUTLINE.md` (drafted 2026-10-05). Its four open questions were
+- **Outline:** `LLM4_attention_OUTLINE.md` (drafted 2026-10-05). Its four open questions were
   answered the same day: a one-number query/key space in the by-hand frame, sections named after
   the two walls, the July "Donkey" sentence as the shapes frame's example (9 GPT-2 tokens), and
   L21's alignment grid confirmed correct by the instructor.
@@ -480,7 +487,7 @@ Aznavour -> writer):
   **Final (instructor's pick):** Messi -> football 35.1% (stored); Mkhitaryan -> hockey (missing);
   Ella Fitzgerald and Elliott Smith as the music pair, both missed but to different degrees
   (singer 6.6% vs 2.9%): facts are stored, half-stored or missing.
-- **Outline:** `LLM4_transformer_block_OUTLINE.md` (drafted 2026-10-05, 39 frames). Its two open
+- **Outline:** `LLM5_transformer_block_OUTLINE.md` (drafted 2026-10-05, 39 frames). Its two open
   questions were answered the same day: the neuron writes a new fifth slot, "cute"; head 2 asks
   "what colour?".
 - **Real heads: GPT-2, one local run** (the cached model, the creature sentence); the e5 figures go.
@@ -626,7 +633,7 @@ supports min-p and grammar-constrained output.
   oral and the fair-comparison result).
 - **Hands-on: not in the slides** (like LLM-1). D4 stays open; nothing in this deck depends on a
   runtime choice.
-- **Outline:** `LLM6_decoding_OUTLINE.md`. **Built 2026-10-05:** `LLM6_decoding.tex` (53 pages after the student review), figures from `py_src/decoding_figs.py` (toy numbers; GPT-2 only for the cold open, via `--gpt2`).
+- **Outline:** `03_decoding_OUTLINE.md`. **Built 2026-10-05:** `03_decoding.tex` (53 pages after the student review), figures from `py_src/decoding_figs.py` (toy numbers; GPT-2 only for the cold open, via `--gpt2`).
 - **Open (2026-10-05):** the three student-review suggestions not applied (cut the draft-sources
   frame; a grammar state table for constrained decoding; a mechanism for self-reinforcing loops)
   are questions in `INTERVIEW_QUEUE.md`, section LLM-6. After the renumber the deck's labels were

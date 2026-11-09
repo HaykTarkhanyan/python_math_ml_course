@@ -1,6 +1,6 @@
 # 3Blue1Brown borrowed frames (GenAI chapter)
 
-> **Deck names changed 2026-10-05 (DECISIONS #71):** L24 -> LLM-3 (`LLM3_attention.tex`), L25 ->
+> **Deck names changed 2026-10-05 (DECISIONS #71):** L24 -> LLM-3 (`LLM4_attention.tex`), L25 ->
 > LLM-4, L26 -> LLM-5. The "used in" notes below keep the old names. Known defect:
 > `fs_creature.jpg` (04:12) is a second grab of the murder-mystery scene, not the creature; the
 > LLM-3 restructure drops it (the frame before it already shows the creature). Likewise

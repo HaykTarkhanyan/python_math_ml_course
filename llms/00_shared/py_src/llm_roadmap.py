@@ -1,6 +1,6 @@
 """The chapter's "you are here" map, as two illustrated frames per session.
 
-Frame "pass" - one forward pass of a real model (GPT-2 small) on LLM-3's sentence "The cat sat on the",
+Frame "pass" - one forward pass of a real model (GPT-2 small) on LLM-4's sentence "The cat sat on the",
 drawn the way Transformer Explainer (poloclub.github.io/transformer-explainer) does it: one row per
 token, flowing left to right. Text -> token chips with their real IDs -> embedding vectors (real
 values) -> + position vectors (real values; own stage since DECISIONS #68) -> a stack of N layers (attention arcs from the last token, real weights of one head; an
@@ -69,11 +69,11 @@ LIFE_STAGES = [("pre", "Pretrain"), ("scale", "Scale"), ("post", "Post-train"), 
 # 2026-11-06): the input side, then the output side, with the middle of the pass still faded.
 SESSIONS = [
     ("tokenization", "LLM-1", {"tok"}),
-    ("decoding", "LLM-6", {"dec"}),
-    ("embeddings", "LLM-2", {"emb", "pos"}),
-    ("attention", "LLM-3", {"attn"}),
-    ("block", "LLM-4", {"attn", "mlp"}),
-    ("transformers", "LLM-5", {"head"}),
+    ("decoding", "LLM-2", {"dec"}),
+    ("embeddings", "LLM-3", {"emb", "pos"}),
+    ("attention", "LLM-4", {"attn"}),
+    ("block", "LLM-5", {"attn", "mlp"}),
+    ("transformers", "LLM-6", {"head"}),
     ("pretraining", "LLM-7", {"pre"}),
     ("scaling", "LLM-8", {"scale"}),
     ("post_training", "LLM-9", {"post"}),
@@ -183,7 +183,7 @@ def strip(ax, x, y, vals, cell=0.05, h=0.13, alpha=1.0, vmax=None):
 
 def label(ax, x, y, text, state, size=FS):
     """Stage name. This session's stages: blue with an underline, not bold - bold makes
-    "Embedding" and "Attention" collide when both are lit (LLM-3)."""
+    "Embedding" and "Attention" collide when both are lit (LLM-4)."""
     color = {"now": POPBLUE, "done": INK, "later": "#AAAAAA"}[state]
     ax.text(x, y, text, ha="center", va="center", fontsize=size, color=color, zorder=6)
     if state == "now":

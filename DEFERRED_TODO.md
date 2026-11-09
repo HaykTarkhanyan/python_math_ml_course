@@ -9,7 +9,7 @@ Last updated: 2026-11-06
 ## LLM part: what comes after B0?
 
 The order is now LLM-1 -> practical 02 -> LLM-6 Decoding -> B0, the first API session
-(`llms/06_decoding/xx_llm_api_solution.ipynb`) (DECISIONS #109-#111). The instructor wants to decide later what
+(`llms/02_decoding/xx_llm_api_solution.ipynb`) (DECISIONS #109-#111). The instructor wants to decide later what
 follows B0: LLM-2 (opening the box) with B workshops alternating, as in DECISIONS #105 and
 `llms/TWO_STREAMS_PROPOSAL.html`, or more workshops first. Its open questions Q1-Q8 are still open apart from
 Q3 (OpenRouter, #110) and Q5's LLM-6 move (#109). Decide before B0 is taught.

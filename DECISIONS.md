@@ -9,6 +9,96 @@ this file holds the choice and a pointer.
 
 ---
 
+## #113 - The LLM part is renumbered to teaching order: decoding is LLM-2 in `llms/02_decoding/`, delivered decks take their playlist number
+
+**Date:** 2026-11-09 · **Status:** active; follows #109 (decoding taught second). Supersedes the labels of
+#68/#71 for LLM-2 to LLM-6 (the decks themselves are unchanged).
+
+**Decision.** After teaching decoding (YouTube video 03, after 01 the tokenization lecture and 02 the tokenization
+practical), the instructor asked that "tokenization [decoding] is actually 2nd and not 6th ... prefix should be
+03_" and picked, by interview: folder `llms/06_decoding/` -> `llms/02_decoding/` with the deck files
+`03_decoding.{tex,pdf}` + `03_decoding_notes.pdf`; the next four folders shift up by one (`03_embeddings_position`,
+`04_attention`, `05_transformer_block`, `06_transformers_in_the_world`), their decks renamed `LLM3_` to `LLM6_`;
+every LLM-x label renumbered to teaching order (decoding LLM-2, embeddings LLM-3, attention LLM-4, block LLM-5,
+transformers LLM-6; LLM-1 and LLM-7 onward unchanged); the delivered tokenization deck renamed `01_tokenization.*`
+(CONVENTIONS: taught decks carry their playlist number); the API notebook keeps `xx_` until it is taught. A
+website page "03 Decoding" (`llms/02_decoding/decoding.qmd`) joins the LLM part.
+
+**How.** Plain `mv` (not `git mv`, so another session's staged ch19 renames stay untouched in the index). A script
+replaced folder paths and deck stems in every live pointer, and LLM-2..6 labels (simultaneous mapping) in slides
+outside `%` comments, live scripts, website pages, both notebooks and their builders, and `llms/README.md`. Left
+as written, because they record what was true then: this file, `_learnings/`, `_work_sessions/`, dated provenance
+comments in the decks, the plans and outlines (`LLM_CHAPTER_PLAN.md` got a mapping note at the top),
+`llms/00_shared/archive` and `sources`, `TWO_STREAMS_PROPOSAL.html`. Four figures with a drawn-in label were
+redrawn (decoding, block, head scripts). Twelve decks recompiled; LLM-14 had only its labels changed (another
+session has uncommitted edits in it, so its PDF was not rebuilt). Annotated notes PDFs (tokenization 653 strokes,
+decoding 872) were moved, never rewritten, so they keep the old labels inside. The practical's "Next (LLM-2)" now
+points to decoding.
+
+**Alternatives rejected.** `03_decoding/` as the folder (the instructor wanted the topic number in the folder and
+the playlist number on the files); renaming only the files (folder numbers out of teaching order); keeping the
+LLM-x labels (they would contradict the order everywhere).
+
+**What would change this.** Another reorder of the trunk (#105/#109); a decision to number folders by playlist
+position instead of topic.
+
+---
+
+## #112 - LLM-2 is reviewed after the reorder: its callbacks follow LLM-6, and eight text-only spots become pictures (82 -> 90 pages)
+
+**Date:** 2026-11-09 (work started 2026-11-06) · **Status:** active; follows #109 (LLM-2 now comes after
+LLM-6 and B0). Reopens two "offered, not picked" items of #101: the gradient-step toy (offered 2026-10-27)
+is now built; YaRN still gets no numbers or formulas (pictures only, per 2026-10-04).
+
+**Decision.** The instructor asked to "check the embeddings chapter and similar to what we did here try
+to improve it, no need for code parts". After a full review of the rendered deck, the instructor picked
+every offered visual (interview, 2026-11-06):
+- *Embedding half:* "Random at the start, organised at the end" (` coffee`, ` seven` in a random table,
+  normal with spread 0.02, vs GPT-2's); "Why the pushes line up: a toy" (2-D bigram toy, output rows held
+  still: Monday and Tuesday get the same first push, cosine -0.85 -> 0.99 after 200 steps);
+  "Measured: same row in, different vectors out" (real GPT-2: 12 six-token sentences ending in ` bank`,
+  1.00 going in, 0.80 within a meaning vs 0.54 across after block 12, each layer centred);
+  "Not this deck: embedding models" (OpenAI text-embedding-3 1,536 / 3,072 numbers at $0.02 / $0.13 per
+  1M tokens; Qwen3-Embedding-8B up to 4,096, top of multilingual MTEB in June 2025).
+- *Position half:* "Stretch the clock" drawn (position interpolation slows every hand 8x, neighbours 57
+  -> 7 degrees; YaRN slows only the slow hands) plus "Stretching in practice"; ALiBi (8 slopes 1/2 to
+  1/256, from the paper's section 3) and NoPE (the look-back triangle) as two frames; a RULER chart
+  (claimed vs effective length) plus "Context rot, and what to take away"; attention sinks as two frames,
+  StreamingLLM's real Figure 2 (layer 0 and layer 2 heatmaps cropped from the arXiv source) and its
+  Table 1 perplexities as bars (5.40 / 5.60 / 5,158).
+- *Fixes without asking:* title and map caption say "after LLM-6"; the tying frame pays off LLM-6's
+  promise (its 50,257 logits are h times every row); NoPE links to LLM-6's one-token-at-a-time
+  generation; why neighbours use the angle (row lengths 2.45 to 6.32); why RoPE leaves v alone; the
+  overview figure's overlapping y label; View 1-3 redrawn as single panels instead of crops; the
+  address-leak label that sat on its axis. `save()` now writes PDFs without CreationDate.
+
+**Why.** The order change made "LLM-1 ended with integers ... (LLM-5, then LLM-6)" stale, and LLM-6
+promised (slide 119) that LLM-2 to LLM-5 explain where its logits come from. Six frames were text where a
+picture shows the mechanism (the same complaint the instructor made about LLM-6's speculative-decoding
+frames). Students meet "embeddings" next as embedding APIs for RAG, a different thing from the input
+table, so one frame separates the two. GPT-2's weights were downloaded again (~550 MB, HF cache;
+`HF_HUB_DISABLE_XET=1` was needed: the xet path returned 404 for the `gpt2` alias).
+
+**Alternatives rejected.** Measuring "bank" on raw cosines: every last-layer vector of GPT-2 points the
+same way (river vs money 0.99 raw), so each layer's average over an ordinary paragraph is subtracted, and
+the slide says so. The RULER chart with only the RULER team's own rows: all 2023-2024, it read as if 2024
+were today (a "you should know" note, checked against the leaderboard); two 2025 rows the model makers
+reported (Qwen2.5-14B-1M >128K, Qwen3-8B 64K) are added, hatched and marked. ` Monday` for the
+random-vs-trained picture: the next frame asks students to predict Monday's neighbours. The paper's small
+layer 9-31 panels: they would print below 5 pt.
+
+**Student review (2026-11-09, applied).** One Sonnet agent on the rendered slides (~179k tokens). Fixed: the
+"never moves" vs drifting-glitch-token contradiction, mixed 0/1-based slot numbers, RoPE's "two reasons it
+won" (sinusoids are parameter-free too), Llama 3.1's factor 8 from 8,192 (= 65,536, not its 131,072), the
+sinks figure's pre-softmax scores, NoPE's look-back pointer, and short whys (128-number queries, the base,
+NoPE's count via attention variance, Chi et al. 2023; Test 2 holds even for slot 0, 1,997 of 2,000). Not
+applied: cuts the instructor rejected before. The deck is LLM-3 since #113.
+
+**What would change this.** A new frame proving confusing in class; the embedding prices or leaderboard
+changing before delivery (recheck); the course moving embeddings before decoding again.
+
+---
+
 ## #111 - B0 is a notebook (`xx_llm_api_solution.ipynb`) on pinned providers; LLM-6 answers a nine-point instructor review and gains prompt caching
 
 **Date:** 2026-11-06 · **Status:** active; answers #109's open "B0 format" (instructor: "actually no, just build a
