@@ -1,4 +1,4 @@
-"""Assemble and execute llms/02_decoding/xx_llm_api_solution.ipynb - the first API session after LLM-2
+"""Assemble and execute llms/02_decoding/04_llm_api.ipynb - the first API session after LLM-2
 (B0 in DECISIONS #105, #110): call real models through OpenRouter with the `openai` SDK and meet every
 decoding knob from the lecture as a request field, plus what real work needs: usage and cost, providers,
 streaming, prompt caching, locked knobs, reasoning tokens, errors.
@@ -8,13 +8,13 @@ Instructor-run solution notebook (the practical 02 pattern, DECISIONS #104). Str
 number it quotes is printed by a cell (_learnings/2026-08-13-2015_write-the-practical-after-measuring-not-before.md).
 
 Needs OPENROUTER_API_KEY in the repository's .env (read with python-dotenv, never printed). 66 calls on cheap
-models, $0.003 per run (measured 2026-11-06); every call goes to results/xx_api_ledger.json. The prose quotes the
+models, $0.003 per run (measured 2026-11-06); every call goes to results/04_api_ledger.json. The prose quotes the
 2026-11-06 run's outputs: after a re-execution, re-read them and fix the prose (sampled texts change).
 
 Run with the project venv (builds, then executes; 142 s measured 2026-11-06):
     ./ma/Scripts/python.exe llms/02_decoding/py_src/build_api_nb.py
     ./ma/Scripts/python.exe llms/02_decoding/py_src/build_api_nb.py --markdown-only
-Both write xx_llm_api_solution.html next to the notebook (non_essential/notebook_to_html.py).
+Both write 04_llm_api.html next to the notebook (non_essential/notebook_to_html.py).
 --markdown-only copies edited prose into the executed notebook without rerunning it (no API calls).
 """
 import argparse
@@ -29,7 +29,7 @@ import nbformat as nbf
 HERE = Path(__file__).resolve()
 CH = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
-OUT = CH / "xx_llm_api_solution.ipynb"
+OUT = CH / "04_llm_api.ipynb"
 LOGS_DIR = REPO_ROOT / "logs"
 CELLS = []
 
@@ -64,7 +64,7 @@ inside comes later (LLM-3 to LLM-6). Today is about what you control from the ou
 10. **What it all cost**, and the field table.
 
 **Running it:** about 2.5 minutes and 66 calls to cheap models, $0.003 in total (measured 2026-11-06). It needs
-`OPENROUTER_API_KEY` in the repository's `.env` file. Every call is written to `results/xx_api_ledger.json`.
+`OPENROUTER_API_KEY` in the repository's `.env` file. Every call is written to `results/04_api_ledger.json`.
 """)
 
 md(r"""
@@ -103,7 +103,7 @@ HAIKU = "anthropic/claude-haiku-5.5"           # a 2026 closed model that takes 
 NANO = "openai/gpt-5-nano"                     # a small reasoning model: it thinks before it answers
 
 RESULTS = Path("results")
-LEDGER = RESULTS / "xx_api_ledger.json"
+LEDGER = RESULTS / "04_api_ledger.json"
 pd.set_option("display.max_colwidth", 120)
 """)
 

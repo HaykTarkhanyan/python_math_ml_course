@@ -163,7 +163,7 @@ match the table below.
 | # | Session | Map boxes | `roadmap_` key | Status |
 |---|---|---|---|---|
 | 1 | LLM-1 Tokenization | Tokenizer | `tokenization` | built 2026-10-04 (`01_tokenization.tex`); delivered, then practical 02 (#104) |
-| 2 | LLM-6 Decoding | Decoding | `decoding` | **moved up 2026-11-06 (#109):** taught right after LLM-1 and its practical, then B0, the first API call (#110): `llms/02_decoding/xx_llm_api_solution.ipynb` (#111); instructor review applied the same day, 74 pages (#111); see its row below |
+| 2 | LLM-6 Decoding | Decoding | `decoding` | **moved up 2026-11-06 (#109):** taught right after LLM-1 and its practical, then B0, the first API call (#110): `llms/02_decoding/04_llm_api.ipynb` (#111); instructor review applied the same day, 74 pages (#111); see its row below |
 | 3 | LLM-2 Embeddings and position | Embedding, Position | `embeddings` | built 2026-10-04 (`LLM3_embeddings_position.tex`); what follows B0 is open (#109); reviewed after the reorder 2026-11-09, callbacks follow LLM-6, eight new pictures, 90 pages (#112) |
 | 4 | LLM-3 Attention | Attention | `attention` | built as L24; restructured and student-reviewed 2026-10-05 (`LLM4_attention.tex`, 41 pages; critique + interview in the LLM-3 to LLM-5 section, `LLM4_attention_OUTLINE.md`); reworked 2026-10-28: equation first, milestones, figures for the toy, a masking section with CLM/MLM (65 pages, #103) |
 | 5 | LLM-4 The Transformer block | Attention, MLP | `block` | built as L25; restructured and student-reviewed 2026-10-05 (`LLM5_transformer_block.tex`, 43 pages; critique, interview, `LLM5_transformer_block_OUTLINE.md`) |

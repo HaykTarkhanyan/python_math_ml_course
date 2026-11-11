@@ -101,7 +101,9 @@ changing before delivery (recheck); the course moving embeddings before decoding
 
 ## #111 - B0 is a notebook (`xx_llm_api_solution.ipynb`) on pinned providers; LLM-6 answers a nine-point instructor review and gains prompt caching
 
-**Date:** 2026-11-06 · **Status:** active; answers #109's open "B0 format" (instructor: "actually no, just build a
+**Date:** 2026-11-06 · **Status:** active, revisited 2026-11-11 (renamed `llms/02_decoding/04_llm_api.ipynb` after
+it was taught as video 04, the playlist-number prefix of CONVENTIONS; "solution" dropped at the instructor's word; the
+ledger became `results/04_api_ledger.json` too); answers #109's open "B0 format" (instructor: "actually no, just build a
 small notebook which well use and add a few notes on openrouter there").
 
 **Decision.** B0 is `llms/06_decoding/xx_llm_api_solution.ipynb`, built and executed by `py_src/build_api_nb.py`

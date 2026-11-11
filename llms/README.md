@@ -5,7 +5,7 @@ Moved out of `ml/14_llms/` on 2026-10-28 (instructor: one folder per deck; DECIS
 | Folder | Deck | What is in it |
 |---|---|---|
 | `01_tokenization/` | LLM-1 Tokenization | deck, outline, `tokenization.qmd` (the website page), `fig/`, `py_src/`, `results/` |
-| `02_decoding/` | LLM-2 Decoding (taught as video 03: deck `03_decoding.tex`) | same layout, plus `decoding.qmd` (website page) and the API notebook `xx_llm_api_solution.ipynb` |
+| `02_decoding/` | LLM-2 Decoding (taught as video 03: deck `03_decoding.tex`) | same layout, plus `decoding.qmd` (website page) and the API notebook `04_llm_api.ipynb` |
 | `03_embeddings_position/` | LLM-3 Embeddings and position | same layout (`long_context_figs.py` also lives here) |
 | `04_attention/` | LLM-4 Attention | same layout, plus `attention.qmd` (the older page covering LLM-4 to LLM-6) |
 | `05_transformer_block/` | LLM-5 The Transformer block | same layout |
