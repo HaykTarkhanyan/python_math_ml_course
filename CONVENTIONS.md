@@ -129,6 +129,15 @@ resources:
 
 If a section's content doesn't exist yet, mark it `TBD` rather than omitting — visible TBDs prevent silent gaps. Plain text only: never an empty link like `[📺 Video]()` (see Links on rendered pages).
 
+**Lists, not paragraphs** (instructor, 2026-11-12: "i dont like that pdf video and so on are just as last line
+of a long paragraph and overall i dont like long paragraphs use lists pls"). Each lesson gets its own `##`
+heading; right under it, its links on their own list lines (📺 video, 🎞️ slides, 📝 notes, the notebook); then
+the topics as a list. Model: `llms/02_decoding/decoding.qmd`. The LLM pages follow it since 2026-11-12; the ML
+chapter pages still use the older one-paragraph bullets.
+
+**Page title = the topic number** (the folder's), not the video or file number: `llms/02_decoding/decoding.qmd`
+is "02 Decoding" although its lecture is video [03] (instructor, 2026-11-12).
+
 ---
 
 ## Per-chapter folder layout
