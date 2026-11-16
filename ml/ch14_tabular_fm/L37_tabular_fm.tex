@@ -150,14 +150,12 @@
 \begin{frame}{The same weights, three different datasets}
   \small
   \begin{center}
-    \includegraphics[width=0.86\textwidth]{one_model_many_datasets.pdf}
+    \includegraphics[width=0.72\textwidth]{one_model_many_datasets.pdf}
   \end{center}
   \vskip -4pt
   \fcolorbox{armblue}{armblue!8}{\parbox{0.97\linewidth}{\footnotesize
-    If you handed these three tables to a decision tree you would get three trees, after three
-    training runs. Here there is \textbf{one network}, its weights identical in all three
-    cases, and the difference in behaviour comes entirely from \textbf{what you put in the
-    context}. Nothing is fitted, and yet each dataset gets its own answer.}}
+    A decision tree would need three training runs. Here \textbf{one frozen network} gives
+    three different answers because each dataset supplies a different context.}}
 \end{frame}
 
 \begin{frame}{The recipe, in four steps}
@@ -178,9 +176,9 @@
 
 \begin{frame}{At inference there is no fitting at all}
   \small
-  You do not call \texttt{fit} in the usual sense. Your \textbf{entire training table} goes into
-  the model's context, the test rows follow it, and the answer comes out of \textbf{one forward
-  pass}.
+  You do not call \texttt{fit} in the usual sense. Labelled training rows provide the
+  \textbf{context}; test rows have no labels. A base model predicts with \textbf{frozen
+  weights}. Implementations may select rows, cache context or ensemble passes.
   \vskip 2pt
   \begin{center}
     \includegraphics[width=0.94\textwidth]{incontext_layout.pdf}
@@ -201,9 +199,9 @@
       weight update. Here the "prompt" is a spreadsheet.}}
     \column{0.48\textwidth}
     \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
-      \textbf{Consequence:} there are no epochs, no learning rate, no early stopping, and
-      nothing to tune. There is also no fitted object to save - reuse means feeding the training
-      table through again.}}
+      \textbf{Consequence:} there are no task-specific gradient steps, epochs or learning-rate
+      schedule. Implementations can still preprocess and cache the training context, and can
+      save a fitted estimator for reuse.}}
   \end{columns}
 \end{frame}
 
@@ -217,6 +215,86 @@
   \end{center}
 \end{frame}
 
+\begin{frame}{A structural causal model: a table-making machine}
+  \small
+  A \textbf{structural causal model (SCM)} has three ingredients:
+  \begin{enumerate}\itemsep 5pt
+    \item A \textbf{directed graph}: arrows say which variables may directly affect which.
+    \item One \textbf{equation per node}: a variable is computed from its parents.
+    \item A fresh \textbf{noise draw per row}: otherwise every row would be identical.
+  \end{enumerate}
+  \vskip 7pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.91\linewidth}{\small\centering
+      $z_1=\epsilon_1,\quad z_2=\epsilon_2,\quad
+       x_3=\tanh(1.7z_1-0.9z_2)+\epsilon_3,\quad
+       y=\mathbf{1}[0.8x_3+0.5z_2+\epsilon_y>0]$}}
+  \end{center}
+  \vskip 7pt
+  Draw the graph and equations \emph{once}; draw new noise for each row. That gives one
+  dataset. Draw a new graph, equations and noise to get the next dataset.
+  \vskip 4pt
+  \footnotesize
+  These are \emph{synthetic causal stories}; the model is not discovering causal arrows in
+  your real table. (Hollmann et al., 2025, Methods.)
+\end{frame}
+
+\begin{frame}{Where the Bayesian neural network enters}
+  \small
+  In a \textbf{Bayesian neural network (BNN)}, weights are uncertain: draw weights
+  $\theta\sim p(\theta)$, then a function $f_\theta$ maps inputs to outputs.
+  \vskip 5pt
+  \begin{center}
+    \includegraphics[width=0.74\textwidth]{bnn_prior.pdf}
+  \end{center}
+  \vskip -3pt
+  \footnotesize
+  \textbf{Two draws:} sampled weights choose a function for a \emph{dataset}; input and noise
+  draws make its \emph{rows}. The original TabPFN mixed BNN and SCM generators
+  (Hollmann et al., 2023). Nature v2 uses an SCM-based generator with neural mechanisms
+  (Hollmann et al., 2025).
+\end{frame}
+
+\begin{frame}{Why that network is Bayesian}
+  \small
+  An ordinary trained neural network usually keeps one fitted weight vector
+  $\hat\theta$. A BNN starts with a \textbf{distribution over weights} and updates that
+  distribution after seeing labelled examples $D$:
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.9\linewidth}{\small\centering
+      $p(\theta\mid D)\;\propto\;p(D\mid\theta)\,p(\theta)$
+      \qquad and \qquad
+      $p(y_*\mid x_*,D)=\int p(y_*\mid x_*,\theta)\,p(\theta\mid D)\,d\theta$}}
+  \end{center}
+  \vskip 8pt
+  The prediction averages over plausible functions instead of betting on one set of weights.
+  Exact integration is usually hard. A PFN is pre-trained on many draws from a prior so its
+  forward pass \emph{approximates} a posterior predictive rule for new tasks.
+  \vskip 4pt
+  \footnotesize
+  The PFN is not itself a BNN with weights updated on your table. The BNN is one possible
+  \emph{generator of pre-training tasks}. (M\"uller et al., 2022; Hollmann et al., 2023.)
+\end{frame}
+
+\begin{frame}{A prior over datasets, not a prior over one answer}
+  \small
+  A single draw might yield a nearly linear table; another might yield thresholds,
+  irrelevant columns or missing values. Pre-training repeatedly hides some labels and
+  asks the transformer to predict them from the remaining rows.
+  \vskip 8pt
+  \begin{center}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.92\linewidth}{\small\centering
+      $\text{sample a data-making process}\;\longrightarrow\;
+       \text{sample a table}\;\longrightarrow\;
+       \text{hide labels}\;\longrightarrow\;
+       \text{predict them}$}}
+  \end{center}
+  \vskip 8pt
+  The PFN learns a predictor \emph{across tasks}. When your table arrives, its labels provide
+  evidence about which synthetic patterns are useful. They do not update the network weights.
+\end{frame}
+
 \begin{frame}{Why invent the data at all?}
   \small
   It is a strange thing to do. Three reasons it is not a hack:
@@ -228,35 +306,33 @@
       the right shape. There are unlimited synthetic ones.}}
     \column{0.33\textwidth}
     \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\footnotesize
-      \textbf{You know the truth.} You generated it, so you know the causal structure exactly -
-      and can train the model to give the \emph{Bayes-optimal} answer for that prior.}}
+      \textbf{You know the labels.} You generated the table, so you can hide labels and train
+      directly on the prediction task. The PFN aims to approximate the posterior predictive
+      answer for the prior.}}
     \column{0.33\textwidth}
     \fcolorbox{armorange}{armorange!12}{\parbox{0.95\linewidth}{\footnotesize
-      \textbf{No leakage.} It cannot have memorised your test set, because it never saw a real
-      dataset at all.}}
+      \textbf{Less pre-training contamination.} The synthetic training corpus has no copied
+      benchmark rows. Model selection and evaluation still need leakage checks.}}
   \end{columns}
   \vskip 10pt
   \centering
   \fcolorbox{armred}{armred!8}{\parbox{0.94\linewidth}{\footnotesize\centering
-    And the bill for all three: \textbf{whatever the prior does not generate, the model has
-    never seen.} Hold that thought - the rest of the lecture keeps cashing it in.}}
+    And the bill: \textbf{patterns rare under the prior may be harder to predict.}
+    Hold that thought - it connects to shift and benchmarking later.}}
 \end{frame}
 
 \begin{frame}{The prior, part 1: what is actually in it}
   \small
-  Pre-training data is \textbf{synthetic}. Datasets are sampled from a prior built on
-  \textbf{structural causal models} (\textbf{SCMs}) and \textbf{Bayesian neural networks}
-  (\textbf{BNNs}): draw a random causal graph, draw random mechanisms, push noise through,
-  read off features and a label.
+  Here are four draws from a small SCM generator. Each panel is a \emph{different task}:
+  a new graph, new functions and new noise. Colors are generated labels.
   \vskip 2pt
   \begin{center}
-    \includegraphics[width=0.94\textwidth]{prior_samples.pdf}
+    \includegraphics[width=0.77\textwidth]{prior_samples.pdf}
   \end{center}
   \vskip -3pt
   \footnotesize
   \centering
-  Schematic draws from a small prior of this kind, generated for this slide - not TabPFN's
-  actual prior, which is far richer.
+  Schematic draws generated for this slide, not samples from TabPFN's actual prior.
 \end{frame}
 
 \begin{frame}{The prior, part 2: the prior \emph{is} the inductive bias}
@@ -276,9 +352,9 @@
     Three later frames are just this fact reappearing:
     \vskip 4pt
     \begin{itemize}\itemsep 2pt
-      \item shift needs its \textbf{own prior} to be handled;
-      \item the prior's bias \textbf{does not wash out} with more data;
-      \item benchmarks that resemble the prior \textbf{flatter the model}.
+      \item modelling shift can be helped by changing the prior;
+      \item prior-induced bias can persist in some causal tasks;
+      \item benchmarks resembling the prior may flatter the model.
     \end{itemize}
   \end{columns}
   \vskip 8pt
@@ -338,6 +414,27 @@
   are \textbf{two} distinct attention operations per layer rather than one.
 \end{frame}
 
+\begin{frame}{What attention computes for one cell}
+  \small
+  Every cell starts as a vector $h_{ij}$, where $i$ names a row and $j$ a feature.
+  Attention replaces that vector with a learned \textbf{weighted mixture} of other vectors.
+  \vskip 7pt
+  \begin{center}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.92\linewidth}{\small\centering
+      $h^{\rm row}_{ij}=\sum_{k=1}^{m}a_{ijk}V(h_{ik})$
+      \qquad then \qquad
+      $h^{\rm col}_{ij}=\sum_{r=1}^{n}b_{ijr}V(h^{\rm row}_{rj})$}}
+  \end{center}
+  \vskip 7pt
+  The weights $a$ and $b$ depend on the current cell and what it attends to.
+  One layer therefore first combines features \emph{within a person}, then compares
+  that result with the \emph{same feature across people}. Later layers repeat this.
+  \vskip 5pt
+  \footnotesize
+  Diagram next: the highlighted cell is the query; orange cells are possible sources.
+  (Hollmann et al., 2025, Methods.)
+\end{frame}
+
 \begin{frame}{What each direction is actually for}
   \small
   The two directions are not symmetric bookkeeping. They answer two different questions about
@@ -357,24 +454,24 @@
   \end{columns}
   \vskip 4pt
   \begin{center}
-    \includegraphics[width=0.72\textwidth]{column_meaning.pdf}
+    \includegraphics[width=0.82\textwidth]{column_meaning.pdf}
   \end{center}
 \end{frame}
 
 \begin{frame}{And that is why there is no scaler}
   \small
-  In chapter 6 you standardised columns by hand, because a model that sees raw numbers cannot
-  know that 37 is old for a column of ages and nothing for a column of salaries.
+  In chapter 6 you standardised columns by hand. Here column attention can compare a value
+  with other values in its feature; the implementation \emph{also} normalises numerical
+  columns before the transformer.
   \vskip 8pt
   \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.97\linewidth}{\small
-    Column attention gives the model that comparison \textbf{as a built-in operation}. It can
-    work out a value's position within its own column from the context, on the fly, for a column
-    it has never seen before. \textbf{The preprocessing step became part of the architecture.}}}
+    The user usually need not run a separate scaler. The model's input pipeline handles
+    normalisation, while attention can learn further comparisons within a column.}}
   \vskip 8pt
   \centering
   \footnotesize
-  This is the same move as ch6's transfer learning, one level further in: not "reuse learned
-  features" but \textbf{"reuse the learned habit of computing features"}.
+  Do not claim attention alone makes scaling unnecessary. The Nature paper explicitly describes
+  z-normalisation before the cell values are encoded (Hollmann et al., 2025, Methods).
 \end{frame}
 
 \begin{frame}{Two-way attention}
@@ -386,6 +483,37 @@
   \centering
   Then an MLP sublayer, with residual connections and normalisation, exactly as in ch9. Nothing
   about the transformer block itself is new here. What is new is \textbf{what attends to what}.
+\end{frame}
+
+\begin{frame}{Follow one prediction through both directions}
+  \small
+  Predict whether a patient has condition $y$ from age, blood pressure and a test result.
+  \vskip 3pt
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{attention_walkthrough.pdf}
+  \end{center}
+  \vskip -2pt
+  \footnotesize
+  Row attention can combine \emph{this patient's} measurements. Column attention can compare
+  each transformed measurement with \emph{other patients}, including labelled examples.
+  Test labels are masked; test rows cannot pass information to each other in the Nature model.
+\end{frame}
+
+\begin{frame}{Why this is different from other attention}
+  \small
+  \begin{tabular}{>{\raggedright\arraybackslash}p{2.15cm}>{\raggedright\arraybackslash}p{4.55cm}>{\raggedright\arraybackslash}p{4.7cm}}
+    \toprule
+    & \textbf{What can attend?} & \textbf{Order assumption} \\
+    \midrule
+    Text transformer & A token sees earlier tokens (or all tokens in an encoder). & Position matters: swapping words changes a sentence. \\
+    Flat table transformer & Every one of $nm$ cell tokens can see every other cell. & Needs care to avoid inventing row/column order. \\
+    TabPFN v2 & A cell sees its row, then its column; test labels stay hidden. & Row and feature permutations are built into the design. \\
+    \bottomrule
+  \end{tabular}
+  \vskip 7pt
+  \footnotesize
+  "Two-way" means \textbf{two axes of a table}, not bidirectional language attention.
+  The effective context is still the labelled training set.
 \end{frame}
 
 \begin{frame}{Predict first}
@@ -417,7 +545,7 @@
   learn its way out of that. This one cannot express it in the first place.
 \end{frame}
 
-\begin{frame}{Worked numbers: why the factorisation is not just tidy}
+\begin{frame}{Worked numbers: why the factorisation matters}
   \small
   Suppose $n$ rows and $m$ features, so $n \cdot m$ cells.
   \vskip 4pt
@@ -427,10 +555,10 @@
     \textbf{Naive:} one sequence of all $n\cdot m$ cells. Attention is quadratic in sequence
     length, so $(n \cdot m)^2$ pairs.
     \vskip 5pt
-    \textbf{Two-way:} across a row is $m$ wide, down a column is $n$ tall. The paper states the
-    result as
-    $$\mathcal{O}(n^2 + m^2) \text{ compute}, \qquad \mathcal{O}(n \cdot m) \text{ memory}.$$
-    Quadratic in each dimension \textbf{separately}, not in the product.
+    \textbf{Two-way:} $n$ row attentions of length $m$, then $m$ column attentions of length $n$:
+    $$n m^2 + m n^2 = nm(n+m) \text{ attention pairs.}$$
+    The Nature paper summarises the separate quadratic dependence on $n$ and $m$ as
+    $O(n^2+m^2)$ when describing scaling along either axis.
     \column{0.5\textwidth}
     \vskip 2pt
     \footnotesize
@@ -440,29 +568,28 @@
       \begin{tabular}{lr}
         \toprule
         naive & $10^{12}$ \\
-        two-way & $10^{8}$ \\
+        two-way & $1.01\times10^{10}$ \\
         \midrule
-        \textbf{ratio} & $\mathbf{\approx 10{,}000\times}$ \\
+        \textbf{ratio} & $\mathbf{\approx 99\times}$ \\
         \bottomrule
       \end{tabular}
     \end{center}
     \vskip 4pt
     \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.95\linewidth}{\scriptsize
-      The architecture is not only about invariance. It is what makes putting a whole dataset in
-      a context window \textbf{affordable at all}.}}
+      These are counts of possible attention pairs, not wall-clock speed or GPU memory.
+      Optimised inference and caching matter too.}}
   \end{columns}
 \end{frame}
 
 \begin{frame}{The cost, plotted}
   \begin{center}
-    \includegraphics[width=0.68\textwidth]{context_cost.pdf}
+    \includegraphics[width=0.79\textwidth]{context_cost.pdf}
   \end{center}
   \vskip -2pt
   \footnotesize
   \centering
-  Memory is linear, $\mathcal{O}(n\cdot m)$, and the paper reports under 1,000 bytes per cell
-  after optimisation. \textbf{The binding constraint is rows}, which is exactly where the
-  10,000 in the headline came from - and why the next section is mostly about rows.
+  The paper reports optimised inference memory scaling with $nm$, under 1,000 bytes per cell.
+  Its 10,000-row result is an \emph{accuracy benchmark boundary}, not a hard context limit.
 \end{frame}
 
 % ================================================================
@@ -479,11 +606,11 @@
   \vfill
 \end{frame}
 
-\begin{frame}{The line, and the neighbours}
+\begin{frame}{The TabPFN line}
   \small
   \begin{center}
     \footnotesize
-    \begin{tabular}{llp{5.6cm}}
+    \begin{tabular}{ll>{\raggedright\arraybackslash}p{5.4cm}}
       \toprule
       \textbf{When} & \textbf{What} & \textbf{Rows it claims to handle} \\
       \midrule
@@ -492,30 +619,98 @@
       \rowcolor{armred!12}
       2025 & \textbf{TabPFN v2} (Nature) & \textbf{wins up to 10,000} - peer reviewed \\
       2025 & TabPFN-2.5 & 50,000 x 2,000 \\
-      2026 & TabPFN-3 (current default) & up to \textbf{1,000,000} x 200 - vendor benchmark \\
+      2026 & TabPFN-3 & up to \textbf{1,000,000} x 200 - vendor benchmark \\
+      2026 & TabPFN-3.5 (current default) & up to 1M rows x 20k features - recommended limit \\
       \bottomrule
     \end{tabular}
   \end{center}
-  \vskip 8pt
-  \footnotesize
-  It is not a monopoly. The alternatives differ on the two axes that actually matter -
-  \textbf{where the pre-training data comes from} and \textbf{how many rows fit}:
   \vskip 4pt
-  \begin{itemize}\footnotesize\itemsep 2pt
+  \footnotesize
+  \textbf{Do not read the last column as one benchmark.} Nature v2's 10,000 is a
+  peer-reviewed accuracy claim; later numbers mix vendor benchmarks and supported sizes.
+  The default and limits were checked in the Prior Labs documentation, October 2026.
+\end{frame}
+
+\begin{frame}{The neighbours}
+  \small
+  TabPFN is not the only table foundation model. Alternatives differ in where
+  pre-training data comes from and how many rows they handle.
+  \vskip 9pt
+  \footnotesize
+  \begin{itemize}\itemsep 8pt
     \item \textbf{TabICL} (Tabular In-Context Learning) and TabICLv2 - built for larger tables,
       and open.
     \item \textbf{TabDPT} - pre-trains on \textbf{real} data instead of a purely synthetic prior.
     \item \textbf{LimiX} - a further entrant, 2026.
   \end{itemize}
-  \vskip 3pt
+  \vskip 6pt
+  The idea also extends to time-series forecasting, relational tables and mixed modalities.
+  These extensions often use different checkpoints or pipelines.
+\end{frame}
+
+\begin{frame}{What prediction task are you asking it to solve?}
+  \small
+  The standard interface is \textbf{supervised prediction}: each training row has features
+  and a target; the model predicts targets for new rows.
+  \vskip 6pt
+  \begin{tabular}{>{\raggedright\arraybackslash}p{3.2cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}p{4.0cm}}
+    \toprule
+    \textbf{Target} & \textbf{Example} & \textbf{Interface} \\
+    \midrule
+    Binary class & fraud / no fraud & classifier, probabilities \\
+    Multiple classes & one of several diagnoses & classifier, class probabilities \\
+    Continuous value & house price & regressor, value or distribution \\
+    \bottomrule
+  \end{tabular}
+  \vskip 8pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.94\linewidth}{\footnotesize
+    v1 was classification only. The Nature v2 paper added regression. Time-series,
+    relational and text-heavy tasks use later checkpoints or specialised workflows;
+    they are not implied by the simple classifier call.}}
+\end{frame}
+
+\begin{frame}{Can I give it categorical, missing or text fields?}
   \footnotesize
-  The idea also extends: time-series forecasting, distribution shift, wide tables, synthetic
-  data generation, multitask.
+  \begin{tabular}{>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{4.45cm}>{\raggedright\arraybackslash}p{4.8cm}}
+    \toprule
+    \textbf{Input} & \textbf{Practical answer} & \textbf{Boundary} \\
+    \midrule
+    Numbers & Yes: ages, prices, counts. & Usually leave scaling to the pipeline. \\
+    Categories & Yes in v2 and later: e.g. city, plan type. & Preserve category meaning; do not treat codes as ordered numbers. \\
+    Missing cells & Yes in v2 and later. & Investigate the missingness mechanism; support is not a guarantee of accuracy. \\
+    Free text & For meaning, use text embeddings or a text-capable 3.5 workflow. & Base 3.5 benchmark encodes strings; Plus/Thinking process raw text directly. \\
+    Images & Use an image encoder or a multimodal workflow. & A path or raw pixel array is not a semantic tabular feature. \\
+    Dates & Use valid datetime input or derived time features. & A date-looking string may be treated as text/category. \\
+    \bottomrule
+  \end{tabular}
+  \vskip 5pt
+  \scriptsize
+  Sources: Hollmann et al. (2025); J\"ager et al., TabPFN-3.5 report (2026);
+  Prior Labs current documentation. Check the exact checkpoint and API before teaching a demo.
+\end{frame}
+
+\begin{frame}{What the simple table interface does not solve for you}
+  \small
+  \begin{itemize}\itemsep 6pt
+    \item \textbf{Evaluation design:} split by time or group when deployment will; random row
+      splits can flatter any model.
+    \item \textbf{Information missing from the table:} joins and domain features still matter.
+    \item \textbf{Scale and hardware:} recommended row/feature limits depend on checkpoint;
+      a GPU is strongly preferred for large tables.
+    \item \textbf{Target structure:} ordinary classification/regression is the core API.
+      Forecasting, relational prediction and other tasks need specialised pipelines.
+    \item \textbf{Use rights:} code and model weights have separate licences.
+  \end{itemize}
+  \vskip 4pt
+  \footnotesize
+  A useful default is to benchmark TabPFN against a tuned tree model on \emph{your}
+  validation split and check memory, latency and licence for the chosen checkpoint.
 \end{frame}
 
 \begin{frame}{Using it}
   \small
-  The whole interface, for the model that beat four hours of tuning in 2.8 seconds:
+  The current default interface (TabPFN-3.5). The 2.8-second comparison earlier in the
+  deck was for \emph{TabPFN v2}, not this checkpoint.
   \vskip 8pt
   \begin{center}
     \fcolorbox{lightbg}{lightbg}{\parbox{0.86\linewidth}{\ttfamily\small
@@ -527,9 +722,9 @@
   \end{center}
   \vskip 8pt
   \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
-    \texttt{fit} here does \textbf{not} train anything. It stores your table so it can be fed
-    into the context at \texttt{predict} time. The scikit-learn interface is a courtesy, and it
-    hides the fact that all the work happens in \texttt{predict}.}}
+    \texttt{fit} does \textbf{not update the foundation model's weights}. It validates and
+    preprocesses data and may prepare or cache the training context. \texttt{predict} uses
+    that context to answer new rows. The first run may download weights.}}
 \end{frame}
 
 % ================================================================
@@ -589,21 +784,18 @@
   \vfill
 \end{frame}
 
-\begin{frame}{Six papers exist only to make it take more rows}
+\begin{frame}{Papers that extend the context}
   \begin{center}
-    \includegraphics[width=0.80\textwidth]{scaling_timeline.pdf}
+    \includegraphics[width=0.86\textwidth]{scaling_timeline.pdf}
   \end{center}
   \vskip -4pt
   \footnotesize
-  Nobody writes papers to let a random forest read more rows. Here it took a whole literature -
-  which tells you the row limit is not incidental, it is \textbf{structural}: the context has to
-  hold your dataset.
+  The methods select or distil rows, chunk long contexts, or handle many features.
+  Table size is a real \textbf{computational constraint}.
   \vskip 3pt
   \fcolorbox{armorange}{armorange!12}{\parbox{0.97\linewidth}{\footnotesize
-    \textbf{And it worked.} Between the Nature paper (10,000 rows, January 2025) and TabPFN-3
-    (a claimed 1,000,000 rows, 2026), the ceiling moved about \textbf{100x in eighteen months}.
-    Any threshold this lecture gives you has a short shelf life. \textbf{Check the current
-    number before you use it as a rule.}}}
+    \textbf{The boundary moved.} Nature v2 won up to 10,000 rows (2025); the vendor reports
+    one million for TabPFN-3 (2026). Compare on your own validation split.}}
 \end{frame}
 
 \begin{frame}{Distribution shift needed its own model}
@@ -617,14 +809,15 @@
       \textbf{into the prior}: pre-train on synthetic datasets that already drift.}}
     \column{0.5\textwidth}
     \fcolorbox{armred}{armred!8}{\parbox{0.95\linewidth}{\footnotesize
-      Elegant - and it tells you plainly that \textbf{the base model does not handle it}. If a
-      phenomenon is not in the prior, it is not in the model.}}
+      This shows why the \textbf{evaluation split matters}. The Nature v2 benchmark does not
+      establish robustness to future distribution shift. Later models improve this, but
+      check on the shift you expect.}}
   \end{columns}
   \vskip 10pt
   \centering
   \footnotesize
-  This is the cleanest illustration of the frame you were told to hold on to. Capability is
-  bought by editing the generative process, not by collecting more of your data.
+  The prior can be changed to include shift, and newer training recipes can help; neither
+  removes the need for a time-aware test on your problem.
 \end{frame}
 
 \begin{frame}{The benchmark problem}
@@ -681,7 +874,7 @@
   This one changes what you are allowed to build, so it is not a footnote.
   \vskip 6pt
   \fcolorbox{armred}{armred!8}{\parbox{0.97\linewidth}{\small
-    The \textbf{model weights} (2.5, 2.6 and 3 alike) are released under \textbf{non-commercial}
+    The \textbf{model weights} (2.5, 2.6, 3 and 3.5) are released under \textbf{non-commercial}
     licences: research and internal evaluation are fine, commercial and production use are
     \textbf{not} - explicitly including the model's \textbf{outputs}.
     \vskip 3pt
@@ -714,13 +907,13 @@
     \begin{enumerate}\footnotesize\itemsep 3pt
       \item A prior-data fitted network is trained on a \textbf{prior over datasets}, not on
         your dataset. Your table is context, not training data.
-      \item \textbf{The prior is the inductive bias.} Everything else follows: drift needs its
-        own prior, benchmark flattery, bias that will not wash out.
-      \item Two-way attention gives \textbf{order invariance by construction} and
-        $\mathcal{O}(n^2+m^2)$ instead of $\mathcal{O}((nm)^2)$ - about $10{,}000\times$ at
-        $n{=}10{,}000$.
-      \item It genuinely beats four hours of tuning in 2.8 seconds - and the size limit has
-        been \textbf{moving fast}, about $100\times$ in eighteen months.
+      \item \textbf{The prior is an inductive bias.} Shift and benchmark design matter;
+        some causal estimands can retain prior-induced bias.
+      \item Two-way attention gives \textbf{order invariance by construction}; counting all
+        attention pairs gives $nm(n+m)$ instead of $(nm)^2$ - about $99\times$ fewer at
+        $n{=}10{,}000$, $m{=}100$.
+      \item The Nature v2 model beat four hours of tuning in 2.8 seconds on its benchmark;
+        newer versions handle larger tables and more input types.
       \item Nobody agrees on what it is doing, including its authors.
     \end{enumerate}
     \column{0.46\textwidth}
@@ -731,8 +924,8 @@
       On a small clean table, \textbf{try the forward pass first}. It costs seconds, and
       chapter 4's four hours of tuning is what you are saving.
       \vskip 4pt
-      Keep boosting for shift, for messy or very wide data, and anywhere you must ship
-      commercially.
+      Compare with tuned boosting on your own split, especially under shift, with messy
+      data or with deployment constraints.
       \vskip 4pt
       \textbf{Do not memorise a row threshold.} Look up the current one - it has moved every
       year so far.}}
@@ -747,76 +940,18 @@
 
 % ================================================================
 % Provenance:
-%   Deck: L37 Tabular Foundation Models (ch14_tabular_fm). Built 2026-08-08.
-%   Plan: ml/ch14_tabular_fm/TABULAR_FM_CHAPTER_PLAN.md (rev 2, after independent
-%     pedagogical review; review kept at _knowledge/tabular_foundation_models/review_pedagogy.md).
-%   Research: _knowledge/tabular_foundation_models/ (9 files), distilled from the instructor's
-%     own mech_interp repo (39 title-verified TabPFN papers) plus web checks 2026-08-07/08.
-%
-%   Primary source read directly for this deck (NOT taken from summaries):
-%     Hollmann, Muller, Purucker, Krishnakumar, Korfer, Hoo, Schirrmeister & Hutter,
-%     "Accurate predictions on small data with a tabular foundation model", Nature 637,
-%     9 January 2025, p.319. Verbatim: "up to 10,000 samples"; "In 2.8 s, TabPFN outperforms
-%     an ensemble of the strongest baselines tuned for 4 h"; "gradient-boosted decision trees
-%     have dominated tabular data for the past 20 years"; "a separate representation to each
-%     cell"; "two-way attention"; "invariant to the order of both samples and features";
-%     "O(n^2 + m^2)" compute and "O(n . m)" memory; "less than 1,000 bytes per cell";
-%     50 million cells (5M rows x 10 features) on one H100.
-%
-%   Figures (Python-generated, py_src/l37_tabular_figs.py -> fig/):
-%     pfn_inversion.pdf, prior_samples.pdf, two_d_attention.pdf, context_cost.pdf,
-%     scaling_timeline.pdf.
-%   NOTHING IS TRAINED, DOWNLOADED OR INSTALLED (instructor decision). prior_samples is a
-%   labelled schematic; context_cost is exact arithmetic verified against the paper's stated
-%   complexity.
-%
-%   Pedagogical decisions:
-%     - Intuition-first, NOT full derivations (instructor decision; deviates from
-%       ml/SLIDE_STYLE.md deliberately, matching ch11, ch12, ch13).
-%     - The thesis targets ch04, NOT ch02's hyperparameter-tuning deck. Rev 1 targeted ch02
-%       and was wrong: that deck is model-agnostic, never claims tuning is mandatory, and
-%       already concedes its own limits ("on a small 2-HP space no method works magic",
-%       "within 1% of fully-tuned"). ch04's closing box says "Trees + ensembles dominate
-%       tabular data", which is the claim this deck bounds. Caught by independent review.
-%     - Frame 20 (feature engineering) is a CALLBACK to ch06's own measured numbers
-%       (+81.5 MAE to Ridge, -4.3 to a forest; "not dead - it moved"), not a correction of
-%       ch06. Rev 1 argued with a strawman here; also caught by review.
-%     - Evidence precedes mechanism: the Nature result and its 10,000-row scope land in the
-%       cold open, because students have been taught by ch04 to disbelieve the claim.
-%     - The worked-numbers frame corrects a planning error: attention is O(n^2 + m^2), NOT
-%       quadratic in the cell count O((nm)^2). The factorisation is exactly what avoids that,
-%       which makes the architecture section pay for itself.
-%     - "10,000 samples" (where it wins) is kept distinct on-slide from "50 million cells on
-%       an H100" (what it can run). Merging them would be a real error.
-%     - No homework frame (house rule: homework lives on the .qmd).
-%
-%   Fact-check pass, 2026-08-08 (primary PDFs + web). Four corrections applied:
-%     1. THE SCOPE CONDITION WAS OUT OF DATE - the serious one. The deck taught "wins up to
-%        ~10,000 rows" and advised "above ~10k rows reach for boosting". True of the Nature
-%        paper (Jan 2025), no longer true of the current line: TabPFN-3 (2026, the current
-%        default) claims to beat 8-hour-tuned GBDT baselines up to 1,000,000 rows x 200
-%        features. The ceiling moved ~100x in 18 months. Frame 25 had said the scaling
-%        literature showed "the shape of the method, not a frontier" - actively wrong.
-%        Reframed: it WAS a frontier and it got pushed. The recap no longer gives a row
-%        threshold at all; it tells students to look up the current one.
-%        The two figures are NOT equal evidence - 10,000 is peer-reviewed (Nature), 1,000,000
-%        is the vendor on its own benchmarks. That asymmetry is now taught on the
-%        benchmark-problem frame, which it strengthens.
-%     2. Licence frame was pinned to TabPFN-2.5 and missed the code/weights split. Weights for
-%        2.5, 2.6 and 3 are all non-commercial; the CODE is Apache 2.0 plus attribution.
-%        "Free code, restricted weights" is now taught as the pattern.
-%     3. Melnychuk et al. verified verbatim ("prior-induced confounding bias: the prior is not
-%        asymptotically overwritten by data") but the deck overstated it: the paper says PFNs
-%        "can exhibit" this, scopes it to ATE estimation, and gives a correction that restores
-%        consistency. All three qualifiers added.
-%     4. Code snippet used predict_proba, which the upstream README does not show. Changed to
-%        predict, which it does.
-%   Nagler (2305.11097) verified verbatim: "a purely frequentistic interpretation of PFNs as
-%     pre-tuned, but untrained predictors explains their behavior... The transformer
-%     architecture used in current PFN implementations ensures only the former." The puzzle is
-%     real: TabPFN v1 saw sizes up to ~1,000 in pre-training and improves beyond that.
-%   The scaling_timeline figure title was also changed - it still said "not a frontier" and
-%     would have contradicted its own slide.
-%
-%   Next: no further deck in the L-sequence; the recap points back to ch04 WITHOUT a hard row
-%   threshold, since the threshold has moved every year so far.
+%   Deck: L37 Tabular Foundation Models. Original 2026-08-08; revised 2026-10-14.
+%   Primary papers: Hollmann et al. (ICLR 2023, arXiv:2207.01848),
+%     Hollmann et al. (Nature 2025, DOI:10.1038/s41586-024-08328-6),
+%     Prior Labs TabPFN-3 report (arXiv:2605.13986), and Jager et al.
+%     TabPFN-3.5 report (arXiv:2609.17895). PDFs in papers/.
+%   Current model/API/licence details: github.com/PriorLabs/TabPFN,
+%     checked 2026-10-14. Version-specific limits may change.
+%   Figures: py_src/l37_tabular_figs.py -> fig/. Illustrative synthetic
+%     plots and diagrams, never measured TabPFN outputs.
+%   Revision: expands SCMs and BNNs; works through axial attention;
+%     distinguishes basic tasks and input types across versions; updates 3.5;
+%     corrects attention-pair arithmetic to nm(n+m), not n^2+m^2 total.
+%   The Nature paper describes scaling as O(n^2+m^2) along the two axes;
+%     the per-row and per-column counts across the full table retain
+%     multiplicities n and m. At n=10,000,m=100, 10^12/1.01e10 ~ 99.

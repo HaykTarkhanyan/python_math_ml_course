@@ -1,4 +1,4 @@
-"""Gate G5 + figures for the optional deck "Where facts live" (xx_where_facts_live.tex), part 1.
+"""Gate G5 + figures for the optional deck "Where facts live" (07_where_facts_live.tex), part 1.
 
 GPT-2 small on a GPU when present (committed results: Colab T4, DECISIONS #41), else CPU with 2
 threads. Three measurements:

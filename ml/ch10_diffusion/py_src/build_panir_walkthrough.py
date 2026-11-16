@@ -1,7 +1,7 @@
 """Build and execute panir_diffusion_solution.ipynb - the ch10 project walkthrough.
 
 A complete worked notebook: every cell is filled in and executed, matching how
-05_interpretability/25_startup_success_solution.ipynb and ch5_neural_networks/
+05_interpretability/25_startup_success_solution.ipynb and 11_neural_networks/
 nn_practical_solution.ipynb ship. Nothing is left as an exercise.
 
 The notebook is generated from this script rather than hand-edited, following

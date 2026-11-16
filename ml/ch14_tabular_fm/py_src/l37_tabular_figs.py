@@ -9,7 +9,9 @@ Generates into ml/ch14_tabular_fm/fig/:
   pfn_inversion.pdf   -- fit-to-your-data vs fit-to-a-prior-over-datasets
   prior_samples.pdf   -- real draws from a small structural-causal-model prior
   two_d_attention.pdf -- the two-way attention: across a row, then down a column
-  context_cost.pdf    -- O((n.m)^2) naive vs O(n^2 + m^2) factorised, exact
+  context_cost.pdf    -- total attention-pair count: flat vs row/column attention
+  bnn_prior.pdf       -- random network weights define different functions
+  attention_walkthrough.pdf -- a test row's cell attends across features, then examples
   scaling_timeline.pdf-- the six papers that exist only to make it take more rows
 
 Run with the project venv:
@@ -51,7 +53,7 @@ log = build_logger()
 # ---------------------------------------------------------------------------------------
 def fig_pfn_inversion():
     """The whole chapter in one picture: what gets fitted to what."""
-    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.0))
+    fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.2))
 
     def box(ax, x, y, w, h, text, fc, ec, fs=9, weight="normal"):
         ax.add_patch(Rectangle((x, y), w, h, facecolor=fc, edgecolor=ec, lw=1.6,
@@ -116,8 +118,8 @@ def fig_prior_samples(n_show=4, n=120):
         y = (x @ beta + rng.normal(scale=0.4, size=n) > 0).astype(int)
         return x, y, act
 
-    fig, axes = plt.subplots(1, n_show, figsize=(11.0, 2.9))
-    for k, ax in enumerate(axes):
+    fig, axes = plt.subplots(2, 2, figsize=(6.2, 3.5), constrained_layout=True)
+    for k, ax in enumerate(axes.flat):
         # The prior really does emit degenerate draws, but a panel that is 97% one class shows
         # the viewer nothing about mechanism diversity, which is what this figure is for.
         for attempt in range(200):
@@ -126,14 +128,12 @@ def fig_prior_samples(n_show=4, n=120):
                 break
         else:
             raise RuntimeError("no balanced draw in 200 attempts - prior or filter is wrong")
-        ax.scatter(x[y == 0, 0], x[y == 0, 1], s=11, c=BLUE, alpha=0.75, linewidths=0)
-        ax.scatter(x[y == 1, 0], x[y == 1, 1], s=11, c=RED, alpha=0.75, linewidths=0)
+        ax.scatter(x[y == 0, 0], x[y == 0, 1], s=12, c=BLUE, alpha=0.75, linewidths=0)
+        ax.scatter(x[y == 1, 0], x[y == 1, 1], s=12, c=RED, alpha=0.75, linewidths=0)
         ax.set_xticks([]); ax.set_yticks([])
-        ax.set_title(f"synthetic dataset {k + 1}\n({act} mechanism)", fontsize=8.5)
+        ax.set_title(f"Task {k + 1}: {act} mechanism", fontsize=10, loc="left")
+        ax.spines[["top", "right"]].set_visible(False)
         log.info(f"prior sample {k + 1}: mechanism={act}, class balance={y.mean():.2f}")
-    fig.suptitle("Draws from a prior over structural causal models - "
-                 "TabPFN pre-trains on millions of these, and on no real tables",
-                 fontsize=11, y=1.06)
     out = FIG / "prior_samples.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     log.info(f"wrote {out}")
@@ -142,7 +142,7 @@ def fig_prior_samples(n_show=4, n=120):
 # ---------------------------------------------------------------------------------------
 def fig_two_d_attention(n=6, m=5):
     """Two-way attention: across a row (features), then down a column (samples)."""
-    fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.0))
+    fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.2))
     focus = (2, 2)
 
     for ax, mode in zip(axes, ["features", "samples"]):
@@ -161,17 +161,17 @@ def fig_two_d_attention(n=6, m=5):
         title = ("1. Attention over FEATURES\na cell attends across its own row"
                  if mode == "features" else
                  "2. Attention over SAMPLES\nthe same cell attends down its own column")
-        ax.set_title(title, fontsize=10)
-        ax.set_xlabel("features (m)", fontsize=9)
+        ax.set_title(title, fontsize=10.5)
+        ax.set_xlabel("features (m)", fontsize=10)
         if mode == "features":
-            ax.set_ylabel("samples (n)", fontsize=9)
+            ax.set_ylabel("samples (n)", fontsize=10)
         ax.set_xlim(-0.4, m + 0.4); ax.set_ylim(-n + 0.6, 1.4)
         ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
         for s in ax.spines.values():
             s.set_visible(False)
 
-    fig.suptitle("Every cell gets its own representation, and attends twice per layer",
-                 fontsize=11.5, y=1.02)
+    fig.suptitle("Each cell has its own vector; each layer attends along two axes",
+                 fontsize=11, y=1.04)
     fig.tight_layout()
     out = FIG / "two_d_attention.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
@@ -180,37 +180,34 @@ def fig_two_d_attention(n=6, m=5):
 
 # ---------------------------------------------------------------------------------------
 def fig_context_cost():
-    """Exact arithmetic: flattening all cells vs the two-way factorisation.
+    """All attention pairs: flat (nm)^2 vs n*m^2 + m*n^2 for axial attention.
 
-    Nature (Hollmann et al. 2025): compute is O(n^2 + m^2), memory O(n.m). A naive transformer
-    over all n*m cells as one sequence would be O((n*m)^2).
+    The Nature paper abbreviates scaling along each axis as O(n^2 + m^2), but that is not
+    the total pair count across every row and column. Never divide totals by per-axis counts.
     """
     m = 100
     ns = np.array([100, 500, 1000, 5000, 10000])
     naive = (ns * m) ** 2.0
-    fact = ns ** 2.0 + m ** 2.0
+    fact = ns * m ** 2.0 + m * ns ** 2.0
     for n, a, b in zip(ns, naive, fact):
         log.info(f"n={n:6d} m={m}: naive={a:.3e}  factorised={b:.3e}  ratio={a / b:,.0f}x")
 
-    fig, ax = plt.subplots(figsize=(7.6, 4.3))
-    ax.plot(ns, naive, "o-", color=RED, lw=2.2, ms=7,
-            label=r"naive: all $n\cdot m$ cells in one sequence, $(n\cdot m)^2$")
-    ax.plot(ns, fact, "s-", color=BLUE, lw=2.2, ms=7,
-            label=r"TabPFN two-way attention, $O(n^2+m^2)$")
+    fig, ax = plt.subplots(figsize=(6.2, 3.1), constrained_layout=True)
+    ax.plot(ns, naive, "o-", color=RED, lw=2.2, ms=6,
+            label=r"Flat: $(nm)^2$")
+    ax.plot(ns, fact, "s-", color=BLUE, lw=2.2, ms=6,
+            label=r"Row + column: $nm(n+m)$")
     ax.set_xscale("log"); ax.set_yscale("log")
-    ax.set_xlabel("rows $n$  (features $m=100$ throughout)", fontsize=10)
-    ax.set_ylabel("attention pairs (log scale)", fontsize=10)
+    ax.set_xlabel("Rows $n$  (100 features throughout)", fontsize=10)
+    ax.set_ylabel("Total attention pairs", fontsize=10)
     ratio = naive[-1] / fact[-1]
-    ax.annotate(f"at $n$=10,000:\n{ratio:,.0f}x cheaper",
-                xy=(ns[-1], fact[-1]), xytext=(1200, fact[-1] * 0.02),
-                fontsize=10, color=BLUE, fontweight="bold",
-                arrowprops=dict(arrowstyle="->", color=BLUE, lw=1.5))
-    ax.set_title("Why the factorisation is not just tidy\n"
-                 "quadratic in each dimension separately, not in their product", fontsize=11)
-    ax.legend(fontsize=9, loc="upper left")
-    ax.grid(alpha=0.25, which="both")
+    ax.annotate(f"{ratio:,.0f}x fewer pairs", xy=(ns[-1], fact[-1]),
+                xytext=(1200, fact[-1] * 0.24), fontsize=10, color=BLUE,
+                fontweight="bold", arrowprops=dict(arrowstyle="->", color=BLUE, lw=1.5))
+    ax.legend(fontsize=9, loc="upper left", frameon=False)
+    ax.tick_params(labelsize=12)
+    ax.grid(alpha=0.18, which="major")
     ax.spines[["top", "right"]].set_visible(False)
-    fig.tight_layout()
     out = FIG / "context_cost.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     log.info(f"wrote {out}")
@@ -228,23 +225,21 @@ def fig_scaling_timeline():
         ("2025-10", "TabPFN-Wide\n(many features)"),
     ]
     xs = np.arange(len(papers))
-    fig, ax = plt.subplots(figsize=(10.2, 3.4))
+    fig, ax = plt.subplots(figsize=(6.3, 2.7))
     ax.plot(xs, np.zeros_like(xs), "-", color="0.75", lw=2, zorder=1)
     for i, (date, name) in enumerate(papers):
         ax.scatter([i], [0], s=150, color=BLUE, zorder=3)
         up = 1 if i % 2 == 0 else -1
         ax.annotate(name, xy=(i, 0), xytext=(i, 0.42 * up),
-                    ha="center", va="bottom" if up > 0 else "top", fontsize=9,
+                    ha="center", va="bottom" if up > 0 else "top", fontsize=10,
                     arrowprops=dict(arrowstyle="-", color="0.6", lw=1.0))
         ax.text(i, -0.18 * up, date, ha="center",
-                va="top" if up > 0 else "bottom", fontsize=8, color="0.4")
+                va="top" if up > 0 else "bottom", fontsize=9, color="0.4")
     ax.set_ylim(-1.15, 1.15); ax.set_xlim(-0.6, len(papers) - 0.4)
     ax.axis("off")
     # NB: the title deliberately does NOT say "the shape of the method, not a frontier" - the
     # ceiling moved ~100x between the Nature paper and TabPFN-3, so that framing is wrong and
     # would contradict the slide's own callout.
-    ax.set_title("Six papers whose whole purpose is fitting more rows into the context",
-                 fontsize=11)
     fig.tight_layout()
     out = FIG / "scaling_timeline.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
@@ -267,7 +262,7 @@ def _arrow(ax, x0, y0, x1, y1, color="0.4", lw=1.2):
                 arrowprops=dict(arrowstyle="-|>", color=color, lw=lw))
 
 
-def fig_scm_walkthrough(n=8):
+def fig_scm_walkthrough(n=5):
     """ONE synthetic dataset being born, step by step.
 
     The deck previously said "draw a random causal graph, draw random mechanisms, push noise
@@ -284,7 +279,7 @@ def fig_scm_walkthrough(n=8):
     x3 = np.tanh(1.7 * z1 - 0.9 * z2) + rng.normal(scale=0.15, size=n)
     y = ((0.8 * x3 + 0.5 * z2 + rng.normal(scale=0.3, size=n)) > 0).astype(int)
 
-    fig = plt.figure(figsize=(11.2, 3.5))
+    fig = plt.figure(figsize=(8.2, 2.9))
     gs = fig.add_gridspec(1, 3, width_ratios=[1.05, 1.05, 1.25], wspace=0.25)
 
     # panel 1: the graph
@@ -320,7 +315,7 @@ def fig_scm_walkthrough(n=8):
     tbl = ax.table(cellText=[[f"{a:.2f}", f"{b:.2f}", f"{c:.2f}", str(d)]
                              for a, b, c, d in zip(z1, z2, x3, y)],
                    colLabels=cols, loc="center", cellLoc="center")
-    tbl.auto_set_font_size(False); tbl.set_fontsize(7.5); tbl.scale(1.0, 1.02)
+    tbl.auto_set_font_size(False); tbl.set_fontsize(9); tbl.scale(1.0, 1.12)
     for k in range(len(cols)):
         tbl[0, k].set_facecolor("#dfe6f2")
     for r in range(1, n + 1):
@@ -334,12 +329,12 @@ def fig_scm_walkthrough(n=8):
 
 def fig_incontext_layout():
     """What actually goes into the context window: the training table IS the prompt."""
-    fig, ax = plt.subplots(figsize=(10.8, 3.4))
+    fig, ax = plt.subplots(figsize=(8.0, 2.8))
     ax.set_xlim(0, 10.8); ax.set_ylim(0, 3.4); ax.axis("off")
 
     # the training block
     ax.add_patch(Rectangle((0.2, 1.15), 3.3, 1.75, fc=BLUE, ec=BLUE, alpha=0.10, lw=1.4))
-    ax.text(1.85, 3.0, "your ENTIRE training table", ha="center", fontsize=9, color=BLUE)
+    ax.text(1.85, 3.0, "training rows", ha="center", fontsize=9, color=BLUE)
     for r in range(5):
         for c in range(4):
             ax.add_patch(Rectangle((0.45 + c * 0.62, 2.5 - r * 0.3), 0.55, 0.24,
@@ -347,17 +342,15 @@ def fig_incontext_layout():
         ax.add_patch(Rectangle((0.45 + 4 * 0.62, 2.5 - r * 0.3), 0.55, 0.24,
                                fc=RED, ec="white", alpha=0.5, lw=0.6))
     ax.text(3.25, 2.62, "y", fontsize=8, color=RED, ha="center")
-    ax.text(1.85, 1.32, "features + LABELS", ha="center", fontsize=8, color="0.3")
 
     # the test block
     ax.add_patch(Rectangle((3.75, 1.15), 2.2, 1.75, fc=ORANGE, ec=ORANGE, alpha=0.10, lw=1.4))
-    ax.text(4.85, 3.0, "the rows you want answered", ha="center", fontsize=9, color="#B07800")
+    ax.text(4.85, 3.0, "test rows", ha="center", fontsize=9, color="#B07800")
     for r in range(3):
         for c in range(4):
             ax.add_patch(Rectangle((3.95 + c * 0.42, 2.4 - r * 0.3), 0.36, 0.24,
                                    fc=ORANGE, ec="white", alpha=0.45, lw=0.6))
         ax.text(5.72, 2.52 - r * 0.3, "?", fontsize=9, color=RED, ha="center", va="center")
-    ax.text(4.85, 1.32, "features only", ha="center", fontsize=8, color="0.3")
 
     _arrow(ax, 6.05, 2.0, 6.55, 2.0)
     _box(ax, 6.6, 1.35, 1.9, 1.3, "one frozen\ntransformer\n\nONE forward pass", "#7832A0",
@@ -391,7 +384,7 @@ def fig_one_model_many_datasets(n=90):
     xor = rng.uniform(-1.5, 1.5, (2 * n, 2))
     xor_y = ((xor[:, 0] > 0) ^ (xor[:, 1] > 0)).astype(float)
 
-    fig = plt.figure(figsize=(10.6, 3.6))
+    fig = plt.figure(figsize=(7.9, 3.0))
     gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 1.25], wspace=0.3)
     for k, (X, y, name) in enumerate([(moons, moons_y, "dataset A"),
                                       (blobs, blobs_y, "dataset B"),
@@ -404,14 +397,14 @@ def fig_one_model_many_datasets(n=90):
 
     ax = fig.add_subplot(gs[3])
     ax.axis("off")
-    _box(ax, 0.05, 0.42, 0.9, 0.3, "ONE frozen network\nidentical weights\nfor all three",
-         "#7832A0", fs=8.5)
+    _box(ax, 0.05, 0.42, 0.9, 0.3, "Frozen network\nsame weights",
+         "#7832A0", fs=10)
     for k in range(3):
         ax.annotate("", xy=(0.05, 0.57), xytext=(-0.25 - k * 0.02, 0.85 - k * 0.22),
                     xycoords="axes fraction", textcoords="axes fraction",
                     arrowprops=dict(arrowstyle="-|>", color="0.55", lw=1.1))
-    ax.text(0.5, 0.24, "three different\ndecision rules,\nno weight ever updated",
-            ha="center", fontsize=8.5, transform=ax.transAxes, color="0.25")
+    ax.text(0.5, 0.24, "three datasets,\nthree rules",
+            ha="center", fontsize=10, transform=ax.transAxes, color="0.25")
     fig.suptitle("What is learned is not a decision boundary. It is the RULE that turns a "
                  "table into one.", fontsize=9.5, y=0.02)
     out = FIG / "one_model_many_datasets.pdf"
@@ -425,22 +418,86 @@ def fig_column_meaning():
     age = rng.normal(37, 9, 400)
     salary = rng.lognormal(mean=np.log(2200), sigma=0.5, size=400)
 
-    fig, axes = plt.subplots(1, 2, figsize=(9.8, 3.0))
+    fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.4), constrained_layout=True)
     for ax, data, name, unit in [(axes[0], age, "column: age", "years"),
                                  (axes[1], salary, "column: monthly pay", "currency")]:
-        ax.hist(data, bins=30, color=BLUE, alpha=0.55)
+        ax.hist(data, bins=24, color=BLUE, alpha=0.65)
         ax.axvline(37, color=RED, lw=2.2)
         pct = (data < 37).mean() * 100
-        ax.text(37, ax.get_ylim()[1] * 0.92, f"  the value 37\n  sits at the {pct:.0f}th pct",
-                color=RED, fontsize=8.5, va="top")
-        ax.set_title(name, fontsize=9.5)
-        ax.set_xlabel(unit, fontsize=8.5)
+        ax.text(0.98, 0.96, f"37: {pct:.0f}th percentile", color=RED, fontsize=9,
+                va="top", ha="right", transform=ax.transAxes,
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=1.5))
+        ax.set_title(name, fontsize=10.5)
+        ax.set_xlabel(unit, fontsize=10)
         ax.set_yticks([])
+        ax.spines[["top", "right", "left"]].set_visible(False)
         log.info(f"column-meaning figure: 37 is at the {pct:.0f}th percentile of {name}")
-    fig.suptitle("The SAME number, 37, in two columns. Attending down a column is how a cell "
-                 "finds out which of these it is in.", fontsize=9.5, y=0.02)
-    fig.tight_layout()
     out = FIG / "column_meaning.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_bnn_prior():
+    """Two weight draws from one small neural-network family give two task functions."""
+    rng = np.random.default_rng(SEED + 37)
+    x = np.linspace(-2.6, 2.6, 160)
+    fig, ax = plt.subplots(figsize=(6.2, 2.5), constrained_layout=True)
+    colors = [BLUE, RED]
+    for k, color in enumerate(colors):
+        w_in = rng.normal(size=(1, 8))
+        bias = rng.normal(size=8)
+        w_out = rng.normal(size=8)
+        y = np.tanh(x[:, None] * w_in + bias) @ w_out
+        y = y / np.std(y)
+        ax.plot(x, y, color=color, lw=2.5, label=f"Draw weights {chr(65+k)}: one function")
+        samples = np.array([-2.1, -1.2, -0.3, 0.6, 1.6, 2.3])
+        values = np.interp(samples, x, y) + rng.normal(0, 0.12, len(samples))
+        ax.scatter(samples, values, s=25, color=color, edgecolor="white", lw=0.5, zorder=3)
+    ax.axhline(0, color="0.75", lw=0.8)
+    ax.set_xlabel("input x", fontsize=10)
+    ax.set_ylabel("target y", fontsize=10)
+    ax.set_title("Two sampled functions from the same network family", fontsize=11)
+    ax.legend(frameon=True, facecolor="white", framealpha=0.9, fontsize=9, loc="lower left")
+    ax.grid(axis="y", alpha=0.15)
+    ax.spines[["top", "right"]].set_visible(False)
+    out = FIG / "bnn_prior.pdf"
+    fig.savefig(out, bbox_inches="tight"); plt.close(fig)
+    log.info(f"wrote {out}")
+
+
+def fig_attention_walkthrough():
+    """A worked table: row comparison, then column comparison with masked test label."""
+    rows = [
+        ("train 1", "24", "112", "negative", "no"),
+        ("train 2", "61", "155", "positive", "yes"),
+        ("train 3", "43", "128", "negative", "no"),
+        ("test", "58", "150", "positive", "?"),
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.0), constrained_layout=True)
+    headers = ["age", "pressure", "test", "label"]
+    for stage, ax in enumerate(axes):
+        ax.set_xlim(-0.9, 4.1); ax.set_ylim(-4.4, 0.9); ax.axis("off")
+        ax.set_title("1  Compare features in the test row" if stage == 0 else
+                     "2  Compare this feature across rows", fontsize=10, loc="left")
+        for c, header in enumerate(headers):
+            ax.text(c + 0.5, 0.36, header, ha="center", va="center", fontsize=8.5,
+                    fontweight="bold", color="0.2")
+        for r, vals in enumerate(rows):
+            ax.text(-0.08, -r - 0.5, vals[0], ha="right", va="center", fontsize=8.5)
+            for c, value in enumerate(vals[1:]):
+                focus = r == 3 and c == 2
+                context = (stage == 0 and r == 3 and c < 3) or (stage == 1 and c == 2 and r < 3)
+                fc = RED if focus else ("#FCE8B2" if context else "#F2F4F7")
+                ax.add_patch(Rectangle((c, -r - 1), 0.98, 0.94,
+                                       facecolor=fc, edgecolor="white", lw=1.4))
+                ax.text(c + 0.49, -r - 0.53, value, ha="center", va="center",
+                        fontsize=9, color="white" if focus else "0.18",
+                        fontweight="bold" if focus else "normal")
+        ax.text(1.95, -4.18,
+                "Combine 58, 150 and positive" if stage == 0 else
+                "Compare positive test results and known labels",
+                ha="center", va="center", fontsize=8.5, color=BLUE)
+    out = FIG / "attention_walkthrough.pdf"
     fig.savefig(out, bbox_inches="tight"); plt.close(fig)
     log.info(f"wrote {out}")
 
@@ -456,4 +513,6 @@ if __name__ == "__main__":
     fig_incontext_layout()
     fig_one_model_many_datasets()
     fig_column_meaning()
-    log.info("done - 9 figures")
+    fig_bnn_prior()
+    fig_attention_walkthrough()
+    log.info("done - 11 figures")

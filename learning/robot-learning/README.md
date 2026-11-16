@@ -12,10 +12,11 @@ Personal study copy of the course materials, in machine-readable form.
 
 **Local only.** It was briefly deployed under the course site's GitHub Pages on 2026-10-05 and taken down the same day (DECISIONS #69, #70): this repo's one Pages site belongs to the student course site.
 
-One page per week: summary and key ideas, the lecture and guest talk with a clickable contents list (YouTube chapters, or estimated from the slides for weeks 1, 3, 8, 9, 11) and a transcript that follows the video, slide text with the original frames, transcriber notes, and a personal notes box. Search covers all transcripts and slides.
+One page per week: summary and key ideas, the lecture and guest talk with a clickable contents list (YouTube chapters, or estimated from the slides for weeks 1, 3, 8, 9, 11) and a transcript that follows the video, a study guide and a clickable quiz per video, slide text with the original frames, transcriber notes, and a personal notes box. Search covers all transcripts and slides.
 
 - Your notes are kept only in your browser's local storage: not in the repo, not online. Use **Export notes** to download them.
-- Rebuild after changing any transcript, `slides.md` or `scripts/browser_content.json` (~1 min): `./ma/Scripts/python.exe learning/robot-learning/scripts/build_browser.py`, then commit `browser/data.js` (and `browser/frames/` if slides changed). Nothing deploys it; `publish.yml` no longer copies it.
+- Rebuild after changing any transcript, `slides.md`, `study.md` or `scripts/browser_content.json` (~40 s): `./ma/Scripts/python.exe learning/robot-learning/scripts/build_browser.py`, then commit `browser/data.js` (and `browser/frames/` if slides changed). Nothing deploys it; `publish.yml` no longer copies it.
+- After a rebuild, hard-refresh the open page (Ctrl+F5). `http.server` sends no cache headers, so the browser keeps reusing the old `data.js` on a normal reload (seen 2026-10-13).
 - Locally: open `browser/index.html`; for the embedded player run `python -m http.server 8765 -d learning/robot-learning/browser` and open http://localhost:8765 (YouTube refuses `file://` pages).
 - Estimated contents lists were checked on weeks 9 and 11 against the videos: the right slide is on screen at the estimated minute 76-81% of the time, within one slide 93-98%.
 
@@ -27,6 +28,7 @@ weekNN_topic/
   transcript_guest_<name>.md       guest talk transcript (weeks 2-11)
   slides.pdf                       image-only slide frames (gitignored, ~35 MB total)
   slides.md                        slide text with LaTeX math (all 11 weeks)
+  study.md                         study guide + quiz per video, written by Claude (all 11 weeks)
 homework/                          assignment READMEs hw1-hw4 from the official repo
 browser/                           the course browser (index.html, app.js, style.css hand-written;
                                    data.js and frames/ generated, 800px)
@@ -71,4 +73,5 @@ Images and relative links inside these READMEs point into the original repo and 
 
 - **Transcripts** are YouTube's auto-generated English captions (the uploads have no manual subtitles), with the rolling duplicate lines removed and one paragraph per minute. Names and jargon contain speech-recognition errors. 21 videos, ~160k words. Rebuild with `python learning/robot-learning/scripts/fetch_transcripts.py` (`--rebuild` re-renders from `_raw/` without network).
 - **Slides**: the official PDFs on the course page are AES-256 encrypted with a user password (poppler: "Incorrect password"), so the source here is a student's frame grabs from the lecture recordings. They are images with no text layer and include animation builds as separate frames. Weeks 1-8 come from that repo at 1280x720. Its weeks 9-11 were only 640x360, so those three were re-extracted on 2026-10-04 from the 720p YouTube recordings with the repo's own `lectures/extract_slides.py` (default settings), giving 1280x720 frames; their frame numbering differs from the repo's PDFs.
+- **study.md** (all 11 weeks, 156 quiz questions) is Claude's own material, not the course's: per video, a "before you watch" note, extra comments (explanations, worked numbers, links between weeks, caption errors corrected), further reading, and a multiple-choice quiz with explained answers. Written 2026-10-12 from the slide text, the transcripts and general background; facts that postdate the model's knowledge are taken from the talks themselves. Every arXiv link was checked against the arXiv API (84 papers) and every other link for a live response. Format (parsed by `build_browser.py`): sections `## Lecture`, `## Lecture quiz`, `## Guest talk`, `## Guest talk quiz`; each question is `### Qn`, a stem, options `- A) ...` as its last lines, then a `<details><summary>Answer</summary>` block starting with `**X.**`. Links `slides.md#slide-N` and `youtu.be/<this week's video>?t=S` become in-page slide and seek links in the browser.
 - **slides.md** (all 11 weeks) was transcribed from the frame images by Claude: text verbatim, equations in LaTeX, figures described in brackets, animation builds and embedded-video frames merged, `[Note: ...]` for transcriber remarks (slide errors, missing slide numbers). Anything in square brackets, headings included, is the transcriber's wording; everything else is on the slide. Every file's equations compile (checked with pandoc + xelatex), and every frame is covered exactly once. TA e-mail addresses on week 1's staff slide are left out.

@@ -1,0 +1,311 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{Lecture 37b: TabPFN After the Original Paper}
+\subtitle{Scale, new data types, and the cost of a forward pass}
+\date{}
+
+\begin{document}
+
+\begin{frame}\titlepage\end{frame}
+
+\begin{frame}{The row limit in L37 was a snapshot}
+  \small
+  The Nature 2025 paper made its central quality claim on tables with up to
+  \textbf{10,000 rows}. It did not establish a permanent limit for prior-data fitted networks.
+  \vskip 12pt
+  \begin{center}
+  \begin{tabular}{lccc}
+    \textbf{Release} & \textbf{v2} & \textbf{2.5} & \textbf{3 / 3.5}\\[3pt]
+    Design scale reported & 10k & 50k & up to 1m\\
+    Core story & small tables & wider tables & cached, chunked inference
+  \end{tabular}
+  \end{center}
+  \vskip 10pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\small
+    A design range, a hardware capacity, and a benchmark win are three different claims.
+    Each number on the following slides keeps its paper and comparison attached.}}
+  \vskip 5pt
+  {\scriptsize Sources: Hollmann et al. (2025); Prior Labs (2025, 2026a, 2026b).}
+\end{frame}
+
+\begin{frame}{Outline}\tableofcontents\end{frame}
+
+\section{The release line}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{The release line}}\\[9pt]
+  {\small What was actually changed after the first useful model?}
+  \vfill
+\end{frame}
+
+\begin{frame}{Five checkpoints, three distinct questions}
+  \small
+  \begin{tabular}{L{0.16\linewidth}L{0.29\linewidth}L{0.43\linewidth}}
+    \textbf{Paper} & \textbf{Problem targeted} & \textbf{Main development}\\[3pt]\hline
+    v1, 2022 & tiny numerical classification & proof that prior-data fitting works\\[3pt]
+    v2, 2025 & practical small tables & cell representations and two-way attention\\[3pt]
+    2.5, 2025 & more rows and features & stronger predictor and output distillation\\[3pt]
+    3, 2026 & large contexts and new tasks & cache, row chunking, many-class decoder\\[3pt]
+    3.5, 2026 & messy and shifted tables & revised encodings, prior, and model width
+  \end{tabular}
+  \vskip 10pt
+  \textbf{Ask separately:} How large a context fits? Which input types work? What wins on a specified split?
+  \vskip 5pt
+  {\scriptsize Sources: Hollmann et al. (2022, 2025); Prior Labs (2025, 2026a, 2026b).}
+\end{frame}
+
+\section{TabPFN-2.5}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{TabPFN-2.5}}\\[9pt]
+  {\small More of the table fits in context.}
+  \vfill
+\end{frame}
+
+\begin{frame}{Fifty thousand rows and two thousand features}
+  \small
+  The TabPFN-2.5 report describes a model \textbf{built for up to 50,000 data points and 2,000
+  features}, a 20-fold increase in data cells over v2.
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Designed range}\par
+      50k rows, 2k features. These are model design targets, not a guarantee on every
+      device or dataset.}}
+    \column{0.49\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Benchmark reach}\par
+      The report also evaluates datasets with up to 100k rows. That is an empirical
+      result beyond the design target.}}
+  \end{columns}
+  \vskip 10pt
+  It reports strong default performance against XGBoost and compares with an AutoGluon
+  ensemble tuned for four hours. Those are \textbf{benchmark-specific} comparisons.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs, \emph{TabPFN-2.5} (2025), arXiv:2511.08667.}
+\end{frame}
+
+\begin{frame}{A fast fit can still have expensive repeated inference}
+  \small
+  TabPFN conditions on labeled rows when predicting. If an application scores many new rows,
+  repeated context processing can dominate latency.
+  The report distills the predictor into a multilayer perceptron (MLP) or tree ensemble.
+  \vskip 9pt
+  \begin{center}
+  \begin{tikzpicture}[>=stealth, node distance=1.35cm, every node/.style={font=\small}]
+    \node[draw=popblue,fill=armblue!8,rounded corners,minimum width=2.5cm,minimum height=.9cm] (p) {TabPFN-2.5};
+    \node[draw=armorange,fill=armorange!12,rounded corners,right of=p,xshift=2.3cm,minimum width=2.4cm,minimum height=.9cm] (d) {distillation};
+    \node[draw=paramgreen,fill=paramgreen!8,rounded corners,right of=d,xshift=2.3cm,minimum width=2.6cm,minimum height=.9cm] (s) {MLP or trees};
+    \draw[->,thick] (p) -- (d);
+    \draw[->,thick] (d) -- (s);
+  \end{tikzpicture}
+  \end{center}
+  \vskip 7pt
+  The report's \textbf{TabPFN-as-MLP/TreeEns} output engine trades some fidelity to
+  the teacher for much lower serving latency. Distillation creates a new predictor;
+  it is not the original forward pass made magically cheap.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs (2025), arXiv:2511.08667. Schematic, not measured latency.}
+\end{frame}
+
+\section{TabPFN-3}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{TabPFN-3}}\\[9pt]
+  {\small Reuse the work on the context; process rows in chunks.}
+  \vfill
+\end{frame}
+
+\begin{frame}{One million rows needs a different inference path}
+  \small
+  The TabPFN-3 report describes \textbf{row chunking} and a reduced key-value cache
+  that let a single H100 handle up to \textbf{one million training rows}.
+  \vskip 10pt
+  \begin{center}
+  \begin{tikzpicture}[>=stealth, every node/.style={font=\small}]
+    \node[draw=popblue,fill=armblue!8,rounded corners,minimum width=3.3cm,minimum height=.8cm] (a) at (0,0) {labeled table};
+    \node[draw=armorange,fill=armorange!12,rounded corners,minimum width=3.3cm,minimum height=.8cm] (b) at (4.2,0) {row chunks};
+    \node[draw=paramgreen,fill=paramgreen!8,rounded corners,minimum width=3.3cm,minimum height=.8cm] (c) at (8.4,0) {cached context};
+    \node[draw=popblue,fill=armblue!8,rounded corners,minimum width=3.3cm,minimum height=.8cm] (d) at (8.4,-1.5) {many test queries};
+    \draw[->,thick] (a) -- (b); \draw[->,thick] (b) -- (c); \draw[->,thick] (c) -- (d);
+  \end{tikzpicture}
+  \end{center}
+  \vskip 7pt
+  Cache the training context once, then reuse it while scoring test rows. This addresses
+  repeated inference cost. It does \emph{not} make a million-row table cheap on arbitrary hardware.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs, \emph{TabPFN-3} (2026), arXiv:2605.13986. Schematic.}
+\end{frame}
+
+\begin{frame}{The task frontier widened, but through different routes}
+  \small
+  \begin{tabular}{L{0.29\linewidth}L{0.62\linewidth}}
+    \textbf{Setting} & \textbf{What the TabPFN-3 report actually describes}\\[3pt]\hline
+    Many-class classification & A new decoder for larger class counts.\\[4pt]
+    Time series & A specialized checkpoint, TabPFN-TS-3; second on fev-bench in the report.\\[4pt]
+    Relational data & A TabPFN-based approach evaluated on RelBenchV1.\\[4pt]
+    Text in tables & TabPFN-3-Plus on TabSTAR, rather than a blanket claim for every checkpoint.
+  \end{tabular}
+  \vskip 11pt
+  \fcolorbox{armorange}{armorange!12}{\parbox{0.96\linewidth}{\small
+    A task-specific harness or Plus service is a different product path from giving raw text
+    to the base numerical/categorical model.}}
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs (2026), arXiv:2605.13986.}
+\end{frame}
+
+\begin{frame}{Thinking mode spends compute at prediction time}
+  \small
+  L37's basic prediction is one fixed forward pass. TabPFN-3 also introduces a
+  \textbf{Thinking} mode that spends more computation at inference to improve accuracy.
+  \vskip 12pt
+  \begin{center}
+  \begin{tikzpicture}[>=stealth, every node/.style={font=\small}]
+    \node[draw=popblue,fill=armblue!8,rounded corners,minimum width=3.7cm,minimum height=1cm] (a) at (0,0) {default forward pass};
+    \node[draw=armorange,fill=armorange!12,rounded corners,minimum width=3.7cm,minimum height=1cm] (b) at (5.3,0) {more test-time compute};
+    \draw[->,very thick] (a) -- (b);
+  \end{tikzpicture}
+  \end{center}
+  \vskip 12pt
+  The report's headline Thinking results describe an \textbf{API offering}. Keep its
+  accuracy and access claims separate from the local base checkpoint.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs (2026), arXiv:2605.13986.}
+\end{frame}
+
+\section{TabPFN-3.5}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{TabPFN-3.5}}\\[9pt]
+  {\small Test beyond clean, independent rows.}
+  \vfill
+\end{frame}
+
+\begin{frame}{The new target is the awkward real table}
+  \small
+  The 3.5 report explicitly targets failures revealed by broader benchmarks:
+  \vskip 8pt
+  \begin{itemize}\itemsep 7pt
+    \item \textbf{Grouped or temporal splits}: training and test rows are not interchangeable.
+    \item \textbf{Strings and high-cardinality categories}: simple numeric encodings lose information.
+    \item \textbf{Wide tables and mixed modalities}: many features, text and images complicate prediction.
+  \end{itemize}
+  \vskip 10pt
+  Its reported improvements do not erase the need to evaluate on the \emph{deployment split}.
+  A random split can make a method look better than a later-time or unseen-group test.
+  \vskip 5pt
+  {\scriptsize Source: Prior Labs, \emph{TabPFN-3.5} (2026), arXiv:2609.17895, introduction.}
+\end{frame}
+
+\begin{frame}{What changed inside 3.5?}
+  \small
+  The report names three changes behind the base model's gains:
+  \vskip 10pt
+  \begin{enumerate}\itemsep 8pt
+    \item \textbf{Revised per-cell encodings}: the representation of an individual value changes.
+    \item \textbf{Wider model}: model width doubles while the cache size stays unchanged.
+    \item \textbf{Revised synthetic prior}: pretraining emphasizes wide tables,
+      high-cardinality features, and grouped data.
+  \end{enumerate}
+  \vskip 10pt
+  These changes preserve L37's core idea: train on tasks sampled from a prior, then
+  condition on the user's table. The prior itself moves as the target data move.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs (2026), arXiv:2609.17895, introduction and Section 3.}
+\end{frame}
+
+\begin{frame}{Core, Fast, Plus and Thinking are different claims}
+  \small
+  \begin{tabular}{L{0.23\linewidth}L{0.34\linewidth}L{0.34\linewidth}}
+    \textbf{Variant} & \textbf{What it is for} & \textbf{Careful reading}\\[3pt]\hline
+    3.5 core & Standard classification and regression & One jointly trained checkpoint.\\[4pt]
+    3.5-Fast & Lower latency & Reported up to $3\times$ faster than 3, with most gains retained.\\[4pt]
+    3.5-Plus & Richer text/date handling & Additional multimodal and proprietary optimizations.\\[4pt]
+    3.5-Thinking & More inference computation & Different accuracy--latency point, not the base forward pass.
+  \end{tabular}
+  \vskip 8pt
+  \textbf{Input check:} numeric/categorical/missing values are core tabular inputs;
+  raw strings, text, images and dates require the appropriate pipeline or variant.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs (2026), arXiv:2609.17895, abstract and introduction.}
+\end{frame}
+
+\begin{frame}{How to read the seven-benchmark headline}
+  \small
+  The 3.5 report states \textbf{rank 1 on seven benchmark families}. The table's
+  leading TabPFN member is \emph{not the same checkpoint in every row}:
+  \vskip 8pt
+  \begin{tabular}{L{0.29\linewidth}L{0.63\linewidth}}
+    Standard TabArena and several other suites & 3.5-Thinking leads in the paper's summary.\\[5pt]
+    RelArena-$\alpha$ & A relational variant, TabPFN-Rel (3.5), leads.\\[5pt]
+    TALENT and ScoringBench & The base 3.5 model leads in the summary table.
+  \end{tabular}
+  \vskip 11pt
+  The paper also reports strong results on BeyondArena, STRABLE and MulTaBench.
+  These benchmarks probe different data types and split rules; a single rank cannot
+  predict which model wins on a new table.
+  \vskip 4pt
+  {\scriptsize Source: Prior Labs (2026), arXiv:2609.17895, Table 1.}
+\end{frame}
+
+\section{A follow-up for learning}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{A follow-up for learning}}\\[9pt]
+  {\small A smaller implementation helps us see the mechanism.}
+  \vfill
+\end{frame}
+
+\begin{frame}{nanoTabPFN makes the training loop inspectable}
+  \small
+  Pfefferle, Hog, Purucker and Hutter (2025) reimplement the \textbf{v2 architecture}
+  with a simpler training loop and pre-generated synthetic tasks.
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Use it to study}\par
+      How tasks are sampled, how examples enter context, and how one network learns
+      to predict labels on new tasks.}}
+    \column{0.49\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.94\linewidth}{\small
+      \textbf{Keep its claim bounded}\par
+      One minute of training on a GPU reaches traditional-baseline performance
+      \emph{in a restricted small-data setting}.}}
+  \end{columns}
+  \vskip 10pt
+  This is a teaching and research implementation, not a replacement for the
+  latest checkpoint or its reported benchmark performance.
+  \vskip 4pt
+  {\scriptsize Source: Pfefferle et al. (2025), arXiv:2511.03634.}
+\end{frame}
+
+\section*{Wrap-up}
+\begin{frame}{Recap}
+  \small
+  \begin{enumerate}\itemsep 7pt
+    \item \textbf{2.5} expanded the designed table size and offered distillation for serving.
+    \item \textbf{3} used caching and row chunking to reach million-row contexts on specified hardware.
+    \item \textbf{3.5} targeted less tidy data and revised its encodings and synthetic prior.
+    \item \textbf{Variants matter}: base, Fast, Plus, Thinking and task-specific harnesses
+      have different capabilities and access paths.
+    \item \textbf{nanoTabPFN} exposes the training recipe at educational scale.
+  \end{enumerate}
+  \vskip 7pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
+    \textbf{Next: L37c.} If a model can condition on a modified table in one pass,
+    what does that make possible for explanation?}}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+%   Sources: Hollmann et al. 2022 arXiv:2207.01848; Hollmann et al. 2025
+%   Nature DOI:10.1038/s41586-024-08328-6; Prior Labs 2025 arXiv:2511.08667;
+%   Prior Labs 2026 arXiv:2605.13986 and arXiv:2609.17895;
+%   Pfefferle et al. 2025 arXiv:2511.03634. PDFs are in papers/.
+%   Diagrams are schematic TikZ illustrations, not measured results.
+%   Forward pointer: L37c_tabpfn_explanations.tex.

@@ -61,14 +61,17 @@ recap at the start of each add-on.
 
 | Order | File | Title | Kind | Builds on |
 |---|---|---|---|---|
-| 1 | `xx_mech_interp_intro.tex` | What we are doing, and why | **new, core** | - |
-| 2 | `xx_vision_circuits.tex` | Seeing what a network sees | new, add-on | 1 |
-| 3 | `xx_opening_the_box.tex` | Opening the box (was L45) | **revise, core** | 1 |
-| 4 | `xx_transformer_circuits.tex` | Circuits you can read off the weights | new, add-on | 3 |
-| 5 | `xx_does_it_actually_do_that.tex` | Does it actually do that? (was L46) | **revise, core** | 3 |
-| 6 | `xx_where_facts_live.tex` | Where facts live | new, add-on | 5 |
-| 7 | `xx_features.tex` | Features (was L47) | **revise, core** | 5 |
-| 8 | `xx_personas_and_diffing.tex` | Personas, and what fine-tuning changed | new, add-on | 7 |
+| 1 | `01_mech_interp_intro.tex` | What we are doing, and why | **new, core** | - |
+| 2 | `02_opening_the_box.tex` | Opening the box (was L45) | **revise, core** | 1 |
+| 3 | `03_does_it_actually_do_that.tex` | Does it actually do that? (was L46) | **revise, core** | 2 |
+| 4 | `04_features.tex` | Features (was L47) | **revise, core** | 3 |
+| 5 | `05_vision_circuits.tex` | Seeing what a network sees | new, add-on | 1 |
+| 6 | `06_transformer_circuits.tex` | Circuits you can read off the weights | new, add-on | 2 |
+| 7 | `07_where_facts_live.tex` | Where facts live | new, add-on | 3 |
+| 8 | `08_personas_and_diffing.tex` | Personas, and what fine-tuning changed | new, add-on | 4 |
+
+(2026-10-17: reordered core-first, see `DECISIONS.md` #90. Until then the add-ons were interleaved,
+each right after the core deck it builds on: 1, 5, 2, 6, 3, 7, 4, 8 in today's numbers.)
 
 **Rules that keep the add-ons droppable:**
 
@@ -83,6 +86,9 @@ practical uses) and get their `NN_` number on delivery. L45-L47 are renamed to `
 since 2026-09-21 the delivered ch11 decks are `44_*` and `45_*`, so "L45" now names two different
 lectures. This reopens `DECISIONS.md` #13 - see the new entry there. Figure scripts keep their
 existing names (`l45_*.py` etc.) - they are internal and renaming them is churn with no reader.
+**2026-10-17:** the `xx_` decks were renamed `01_`-`08_` before delivery, core decks first, then
+the add-ons (`DECISIONS.md` #90, superseding #37). The build log below keeps the `xx_` names it was
+written with.
 
 **New script prefixes:** `intro_*.py`, `vision_*.py`, `circuits_*.py`, `facts_*.py`,
 `diffing_*.py`. Same conventions as v1: `py_src/*.py` -> `fig/*.pdf` + `results/*.json`, logs to
@@ -530,3 +536,26 @@ planned `vision_gates.py` / `vision_figs.py` split.
 **Figure sizing, applied to every add-on figure**: drawn at the size of their slot on the slide
 (text width ~5.5 in), fonts 7-9pt. Several first drafts were 7-9 in wide and landed at 4-5pt
 again, the same mistake the intro log records.
+
+**2026-10-17 - Renamed and reordered; decks 01 and 02 polished** (`DECISIONS.md` #90, #91). The
+`xx_` decks became `01_`-`08_`, core first. Visible text that assumed the interleaved order was
+reworded: the intro's plan table, and the add-ons' "Next core lecture" boxes (vision, circuits,
+facts now point to the next optional lecture). Then a review-and-fix pass on the two first decks:
+
+- **`01_mech_interp_intro`** (49 -> 52 pages; 0 errors, all three detectors 0). Fixed: "the
+  copying circuit turned up ... from one-layer toys" (induction needs two layers - Olsson et al.:
+  "every size (provided they have more than one layer)"), the 2023/2024 sparse-autoencoder dates,
+  the by-hand -45.9 (printed inputs give -45.95), "chapter 6" on the method map. Added "A neuron is
+  a direction too" and a predict-first before "Train it again".
+- **`02_opening_the_box`** (51 -> 52 pages; 0 errors, all three detectors 0, one 0.4 pt
+  overfull). Fixed: the Apple logit lens was read one layer late (see #91), "157 terms" vs "159",
+  stale "lecture 24 / 25" numbers, lecture 11's example, a backward "the four on the last slide",
+  the Step 2 box on the page number. The attention strip became two frames with L10H7's
+  measured DLA as the punchline.
+- **Small figure text**: 10 pages at 2.7-5.3 pt (the detector postdates these decks) -> 0. Every
+  figure in both decks is drawn at its slot size.
+- **`l45_figs.py`, `l45_extra_figs.py`, `l45_residual_stream.py` gained `--plot-only`.**
+  `l45_figs.json` now also stores the four attention patterns, per-head DLA on the running
+  sentence and the 12x12 induction matrix; the one re-run reproduced every old number exactly.
+- Not done: the opt-in Sonnet student review (ask first); decks 03-08 were only touched for the
+  reorder.

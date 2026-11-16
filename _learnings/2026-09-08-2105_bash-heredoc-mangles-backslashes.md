@@ -51,3 +51,23 @@ nothing.
 Related: this is the same class of problem as the `sed`/`grep` escaping quirks already
 noted for this machine, but heredocs hide it better because the script *looks* correct in
 the transcript.
+
+**Update 2026-10-02: a third, quieter failure - the assert does not catch it.** Two more
+heredoc patches in one session (ignoring this file) wrote *invisible control characters* into
+LaTeX: `"\\appendix"` became BEL + `ppendix` in `DECISIONS.md`, and `"\\par\\vskip 4pt"`
+became `\par` + vertical tab + `skip 4pt` in `L16_cnn_foundations.tex`, nine times. The search
+keys still matched (`\p`, `\c`, `\i` are not Python escapes, so they survive), only the
+*replacement* was corrupted, so every assert passed. pdflatex was the first thing to notice:
+
+```
+! LaTeX Error: Unicode character  (U+000B)
+               not set up for use with LaTeX.
+!  ==> Fatal error occurred, no output PDF file produced!
+```
+
+The escapes to fear in a replacement string are exactly Python's: `\a \b \f \n \r \t \v`
+(`\appendix`, `\begin`, `\frac`, `\newline`, `\right`, `\textbf`, `\vskip`). After any
+scripted patch, check for control characters, not just one of them:
+`python -c "import re,sys; s=open(sys.argv[1],encoding='utf-8').read(); print(re.findall(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', s))" FILE`
+(run from a Write-tool script, for the same reason). The fix is still the one above: Edit
+tool, or Write the script to a file.

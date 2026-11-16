@@ -1,4 +1,4 @@
-"""Figures for the intro deck (xx_mech_interp_intro.tex), everything except the toy MLP.
+"""Figures for the intro deck (01_mech_interp_intro.tex), everything except the toy MLP.
 
 Measured on GPT-2 small, CPU:
 
@@ -12,6 +12,9 @@ Drawn (no measurement, but Python per the house rule because each carries its fr
 
   intro_method_map.pdf       every interpretability method in the course placed by what it
                              needs from the model and whether it explains one prediction or the model.
+  intro_neuron_direction.pdf a two-neuron activation vector read along an axis (a neuron) and
+                             along a slanted feature direction - the by-hand bridge from the toy
+                             network's one-feature-per-neuron to GPT-2's features-as-directions.
 
 Raw numbers go to results/intro_figs.json first; the measured figures are drawn from it.
 
@@ -204,7 +207,8 @@ def fig_feature_direction(res: dict) -> None:
 
 
 def fig_method_map() -> None:
-    fig, ax = plt.subplots(figsize=(8.6, 4.2))
+    # Drawn at its slot size (0.9 of a 5.5 in text width): fonts here are fonts on the slide.
+    fig, ax = plt.subplots(figsize=(5.0, 2.25))
     cols = ["asks the model\nquestions", "reads its\ngradients", "reads its weights\nand activations"]
     rows = ["one prediction", "the whole model"]
     shade = ["#f3f3f3", "#eaf0fa", "#fbeaea"]
@@ -217,28 +221,76 @@ def fig_method_map() -> None:
         (1, 0): ["saliency maps", "integrated gradients", "Grad-CAM"],
         (1, 1): ["(rare)"],
         (2, 0): ["logit lens", "activation patching", "attribution graphs"],
-        (2, 1): ["circuits", "probes", "sparse autoencoder features",
+        (2, 1): ["circuits", "probes", "sparse autoencoder", "features",
                  "linear-model coefficients*"],
     }
     for (c, r), names in methods.items():
-        y0 = r + 0.5 + 0.13 * (len(names) - 1) / 2
+        step = 0.155
+        y0 = r + 0.5 + step * (len(names) - 1) / 2
         for k, n in enumerate(names):
             color = RED if c == 2 else (BLUE if c == 1 else "black")
-            ax.text(c + 0.5, y0 - 0.13 * k, n, ha="center", va="center", fontsize=11.5, color=color,
+            ax.text(c + 0.5, y0 - step * k, n, ha="center", va="center", fontsize=7.5, color=color,
                     style="italic" if n == "(rare)" else "normal")
     for c, lab in enumerate(cols):
-        ax.text(c + 0.5, 2.06, lab, ha="center", va="bottom", fontsize=11.5, fontweight="bold")
+        ax.text(c + 0.5, 2.06, lab, ha="center", va="bottom", fontsize=8.5, fontweight="bold")
     for r, lab in enumerate(rows):
-        ax.text(-0.04, r + 0.5, lab, ha="right", va="center", fontsize=11.5, fontweight="bold")
-    ax.text(0.5, -0.1, "chapter 5", ha="center", va="top", fontsize=10.5, color=GREY)
-    ax.text(1.5, -0.1, "chapter 6 + the vision lecture", ha="center", va="top", fontsize=10.5,
+        ax.text(-0.05, r + 0.5, lab, ha="right", va="center", fontsize=8.5, fontweight="bold")
+    ax.text(0.5, -0.08, "chapter 5", ha="center", va="top", fontsize=8, color=GREY)
+    ax.text(1.5, -0.08, "CNN chapter +\nvision lecture", ha="center", va="top", fontsize=8,
             color=BLUE)
-    ax.text(2.5, -0.1, "this chapter", ha="center", va="top", fontsize=10.5, color=RED,
+    ax.text(2.5, -0.08, "this chapter", ha="center", va="top", fontsize=8, color=RED,
             fontweight="bold")
-    ax.set_xlim(-0.75, 3.02); ax.set_ylim(-0.3, 2.35)
+    ax.set_xlim(-0.82, 3.02); ax.set_ylim(-0.42, 2.42)
     ax.axis("off")
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "intro_method_map.pdf", bbox_inches="tight"); plt.close(fig)
+    fig.tight_layout(pad=0.2)
+    fig.savefig(FIG_DIR / "intro_method_map.pdf", bbox_inches="tight",
+                metadata={"CreationDate": None}); plt.close(fig)
+
+
+# The by-hand numbers on the "A neuron is a direction too" frame. Asserted below so the slide's
+# printed arithmetic and the drawing cannot drift apart.
+TOY_H = np.array([3.0, 1.0])
+TOY_D = np.array([0.6, 0.8])
+
+
+def fig_neuron_direction() -> None:
+    """Drawn, not measured: a two-neuron activation vector read along an axis and along a slanted
+    direction. Bridges the toy (one feature per neuron) to GPT-2 (features as directions)."""
+    assert abs(np.linalg.norm(TOY_D) - 1) < 1e-12, "the feature direction must be unit length"
+    reading = float(TOY_H @ TOY_D)
+    assert abs(reading - (3 * 0.6 + 1 * 0.8)) < 1e-12 and abs(reading - 2.6) < 1e-12, reading
+
+    fig, ax = plt.subplots(figsize=(2.75, 2.35))
+    ax.set_aspect("equal")
+    ax.set_xlim(-0.3, 4.4); ax.set_ylim(-0.45, 3.3)
+    for spine in ("left", "bottom"):
+        ax.spines[spine].set_position("zero")
+    ax.set_xticks([1, 2]); ax.set_yticks([1, 2, 3])
+    ax.tick_params(labelsize=8)
+    ax.text(4.35, 0.08, "neuron 1", ha="right", va="bottom", fontsize=8)
+    ax.text(0.1, 3.28, "neuron 2", ha="left", va="top", fontsize=8)
+
+    # The slanted feature direction, drawn as a long line through the origin.
+    t = np.linspace(0, 3.9, 2)
+    ax.plot(t * TOY_D[0], t * TOY_D[1], color=RED, lw=1.2, ls="--")
+    ax.text(2.55, 2.95, "a feature\ndirection $d$", color=RED, fontsize=8, ha="left", va="center")
+
+    # The activation vector h and its two readings: the axis (neuron 1) and the feature direction.
+    ax.add_patch(FancyArrowPatch((0, 0), tuple(TOY_H), arrowstyle="-|>", mutation_scale=11,
+                                 color=BLUE, lw=1.6, shrinkA=0, shrinkB=0))
+    ax.text(TOY_H[0] + 0.12, TOY_H[1], "$h = (3, 1)$", color=BLUE, fontsize=8.5,
+            ha="left", va="center")
+    foot = reading * TOY_D
+    ax.plot([TOY_H[0], foot[0]], [TOY_H[1], foot[1]], color=GREY, lw=0.9, ls=":")
+    ax.plot([TOY_H[0], TOY_H[0]], [TOY_H[1], 0], color=GREY, lw=0.9, ls=":")
+    ax.scatter([foot[0], TOY_H[0]], [foot[1], 0], color=[RED, "black"], s=14, zorder=4)
+    ax.text(foot[0] - 0.12, foot[1] + 0.02, f"{reading:.1f}", color=RED, fontsize=8.5, ha="right",
+            va="bottom", fontweight="bold")
+    ax.text(TOY_H[0], -0.12, "3", color="black", fontsize=8.5, ha="center", va="top",
+            fontweight="bold")
+    fig.tight_layout(pad=0.2)
+    fig.savefig(FIG_DIR / "intro_neuron_direction.pdf", bbox_inches="tight",
+                metadata={"CreationDate": None}); plt.close(fig)
 
 
 def main() -> None:
@@ -253,7 +305,8 @@ def main() -> None:
     fig_three_hooks(res)
     fig_feature_direction(res)
     fig_method_map()
-    log.info("wrote intro_three_hooks / feature_direction / method_map")
+    fig_neuron_direction()
+    log.info("wrote intro_three_hooks / feature_direction / method_map / neuron_direction")
 
 
 if __name__ == "__main__":

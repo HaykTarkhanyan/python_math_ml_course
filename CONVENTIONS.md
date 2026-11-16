@@ -19,7 +19,11 @@ Last updated: 2026-09-28
 ### Notes PDFs — `NN_topic_name_notes.pdf`
 
 - Sits next to the slide PDF.
-- Hand-annotated version exported after class, not auto-generated.
+- Before class it is a plain copy of the clean PDF, written by every compile of a not-yet-taught
+  deck (instructor, 2026-10-23), so the instructor annotates this file live and the clean one stays
+  clean. A compile refreshes it only while it is byte-identical to the clean PDF; once it differs it
+  holds annotations and is never overwritten. Steps: the `compile-deck` skill, step 1b.
+- After class it is the hand-annotated version: not reproducible, committed once annotated.
 
 ### Homework notebooks — `NN_HWX_solution.ipynb`
 
@@ -162,7 +166,9 @@ data/                      # datasets used by this chapter's notebooks
 ## Borrowed video material — `_reference_<slug>/` in, `fig/borrowed/<source>/` out
 
 Used twice now (3Blue1Brown in `ml/ch9_attention`, Welch Labs in `ml/ch16_jepa`), so it is a
-convention rather than a one-off. Fetch with the `youtube-reference` skill.
+convention rather than a one-off. Fetch with the `youtube-reference` skill - user-global since
+2026-09-28 (`~/.claude/skills/youtube-reference/`, see DECISIONS #45). Its step 0 reads this
+section, and **everything here overrides the skill's generic defaults** for this repo.
 
 ```
 ml/<chapter>/_reference_<slug>/
@@ -176,6 +182,16 @@ ml/<chapter>/fig/borrowed/<source>/
   descriptive_name.jpg   # the stills a deck actually uses, renamed
 ```
 
+- **Check the video isn't already mined** - Grep `ml/` for the video id first. A deck may already
+  carry its transcript (`research/`) and frames (`fig/borrowed/`); reuse them and skip the re-download.
+- **Fetch straight into `ml/<chapter>/_reference_<slug>/`**, the sibling of the deck it supports -
+  not the scratchpad (the skill's default when a repo has no convention). Ask which chapter if unclear.
+- **Ground suggestions in the course pedagogy** - predict-first, worked numbers, trees-vs-nets
+  honesty - and in a real deck under `ml/`, a chapter `.qmd`, or a `py_src/` figure.
+- **Incorporate via the repo skills**: `slide-style` for decks, `make-figures` for redrawn figures,
+  `compile-deck` to compile twice and clean the aux files (`clean_latex.py`). Record the change in
+  the deck's `% Provenance:` block.
+- **Worked README example:** `ml/11_neural_networks/_reference_welchlabs/README.md`.
 - **Never commit the video.** `yt_fetch.sh` writes the `.gitignore`; keep it. ch16 carries ~355 MB
   of video locally and ~6 MB in git. The README's re-fetch command is the recovery path.
 - **Frames get descriptive names when they enter `fig/borrowed/`** (`jepa_core_arch.jpg`, not

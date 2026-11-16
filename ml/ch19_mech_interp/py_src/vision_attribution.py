@@ -1,4 +1,4 @@
-"""Gate G3 + attribution figures for the optional deck "Seeing what a network sees" (xx_vision_circuits.tex).
+"""Gate G3 + attribution figures for the optional deck "Seeing what a network sees" (05_vision_circuits.tex).
 
 torchvision ResNet-18 (ImageNet weights, the model from ch6's Grad-CAM), on a GPU
 when present (committed results: Colab T4, DECISIONS #41), else CPU with 2 threads. Measured:

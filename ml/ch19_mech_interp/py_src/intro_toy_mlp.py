@@ -236,27 +236,31 @@ def plot(res: dict, log) -> None:
         else:
             ax.set_xticks([]); ax.set_yticks([])
 
-    # --- the task and what the network learned
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.4))
+    # --- the task and what the network learned. Drawn at its slot size (0.9 of a 5.5 in text
+    # width), so 8-9 pt here is 8-9 pt on the slide.
+    fig, axes = plt.subplots(1, 2, figsize=(4.95, 2.45))
     rng = np.random.default_rng(SEED)
     pts = rng.uniform(-lim, lim, size=(700, 2))
     inside = np.abs(pts).sum(1) <= 1
     ax = axes[0]
-    ax.scatter(*pts[~inside].T, s=6, color=GREY, alpha=0.5, label="outside")
-    ax.scatter(*pts[inside].T, s=8, color=RED, label="inside")
-    diamond(ax, color="black", lw=1.2)
-    ax.set_title("the task: is the point inside?")
-    ax.legend(loc="upper right", fontsize=9, frameon=False)
+    ax.scatter(*pts[~inside].T, s=3, color=GREY, alpha=0.5, label="outside")
+    ax.scatter(*pts[inside].T, s=4, color=RED, label="inside")
+    diamond(ax, color="black", lw=1.0)
+    ax.set_title("the task: is the point inside?", fontsize=9)
+    ax.legend(loc="upper right", fontsize=8, frameon=True, framealpha=0.9, handletextpad=0.2,
+              borderpad=0.3, markerscale=2.5)
     ax = axes[1]
     main_h, main_pred = evaluate(main)
     assert abs((main_pred == TRUTH).mean() - main["grid_accuracy"]) < 2e-4, "weights do not reproduce"
     ax.imshow(main_pred.astype(int), origin="lower", extent=ext, cmap="Reds", vmin=0, vmax=1.6)
-    diamond(ax, color="black", lw=1.2, ls="--")
-    ax.set_title(f"what the trained network says ({main['grid_accuracy']:.1%} right)")
+    diamond(ax, color="black", lw=1.0, ls="--")
+    ax.set_title(f"the trained network ({main['grid_accuracy']:.1%} right)", fontsize=9)
     for a in axes:
         style(a, ticks=True)
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "intro_toy_task.pdf", bbox_inches="tight"); plt.close(fig)
+        a.tick_params(labelsize=8)
+    fig.tight_layout(w_pad=1.5)
+    fig.savefig(FIG_DIR / "intro_toy_task.pdf", bbox_inches="tight",
+                metadata={"CreationDate": None}); plt.close(fig)
 
     # --- each hidden unit over the plane
     edge_order = ["top-right", "top-left", "bottom-left", "bottom-right"]
@@ -282,42 +286,48 @@ def plot(res: dict, log) -> None:
     fig.tight_layout()
     fig.savefig(FIG_DIR / "intro_toy_ablation.pdf", bbox_inches="tight"); plt.close(fig)
 
-    # --- every seed: the learned lines
+    # --- every seed: the learned lines. Slot: the full 5.5 in text width; two-line titles so
+    # each fits over its own panel at 8 pt.
     seeds = res["seeds"]
-    fig, axes = plt.subplots(2, 4, figsize=(7.8, 4.3))
+    fig, axes = plt.subplots(2, 4, figsize=(5.3, 2.2))
     for ax, s in zip(axes.ravel(), seeds):
-        diamond(ax, color="black", lw=1.0, ls="--")
+        diamond(ax, color="black", lw=0.8, ls="--")
         draw_lines(ax, s["units"], BLUE if s["all_four_edges"] else ORANGE)
         if s["all_four_edges"]:
-            ax.set_title(f"seed {s['seed']}: four edges", fontsize=10)
+            ax.set_title(f"seed {s['seed']}\nfour edges", fontsize=8, color=BLUE)
         elif s["n_dead"]:
-            ax.set_title(f"seed {s['seed']}: {s['n_dead']} dead unit{'s' if s['n_dead'] != 1 else ''},"
-                         f" {s['grid_accuracy']:.0%} right", fontsize=10, color=RED)
+            ax.set_title(f"seed {s['seed']}\n{s['n_dead']} dead unit{'s' if s['n_dead'] != 1 else ''},"
+                         f" {s['grid_accuracy']:.0%}", fontsize=8, color=RED)
         else:
-            ax.set_title(f"seed {s['seed']}: messier, {s['grid_accuracy']:.0%} right",
-                         fontsize=10, color=RED)
+            ax.set_title(f"seed {s['seed']}\nmessier, {s['grid_accuracy']:.0%}", fontsize=8, color=RED)
         style(ax)
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "intro_toy_seeds.pdf", bbox_inches="tight"); plt.close(fig)
+    fig.tight_layout(h_pad=0.6, w_pad=0.4)
+    fig.savefig(FIG_DIR / "intro_toy_seeds.pdf", bbox_inches="tight",
+                metadata={"CreationDate": None}); plt.close(fig)
 
     # --- the stuck network: where its mistakes are
     stuck = next(s for s in seeds if not s["all_four_edges"])
     _, stuck_pred = evaluate(stuck)
     wrong = (stuck_pred != TRUTH).astype(float)
     assert abs(wrong.mean() - stuck["frac_grid_wrong"]) < 2e-4, "weights do not reproduce"
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.4))
+    fig, axes = plt.subplots(1, 2, figsize=(4.2, 1.8))
     ax = axes[0]
     diamond(ax, color="black", lw=1.0, ls="--")
     draw_lines(ax, stuck["units"], ORANGE)
-    ax.set_title(f"seed {stuck['seed']}: {N_HIDDEN - stuck['n_dead']} of {N_HIDDEN} units ever fire")
+    n_live = N_HIDDEN - stuck["n_dead"]
+    ax.set_title(f"seed {stuck['seed']}: {n_live} of {N_HIDDEN} units ever "
+                 f"{'fires' if n_live == 1 else 'fire'}", fontsize=9)
     style(ax, ticks=True)
     ax = axes[1]
     ax.imshow(wrong, origin="lower", extent=ext, cmap="Reds", vmin=0, vmax=1.3)
     diamond(ax, color="black", lw=1.0, ls="--")
-    ax.set_title(f"where it is wrong ({stuck['frac_grid_wrong']:.1%} of the plane)")
+    ax.set_title(f"where it is wrong ({stuck['frac_grid_wrong']:.1%})", fontsize=9)
     style(ax, ticks=True)
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "intro_toy_stuck.pdf", bbox_inches="tight"); plt.close(fig)
+    for a in axes:
+        a.tick_params(labelsize=8)
+    fig.tight_layout(w_pad=1.5)
+    fig.savefig(FIG_DIR / "intro_toy_stuck.pdf", bbox_inches="tight",
+                metadata={"CreationDate": None}); plt.close(fig)
     log.info("wrote intro_toy_task / _units / _ablation / _seeds / _stuck")
 
 

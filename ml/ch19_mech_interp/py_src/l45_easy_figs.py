@@ -1,4 +1,4 @@
-"""Easier-example figures for the revised "Opening the box" deck (xx_opening_the_box.tex).
+"""Easier-example figures for the revised "Opening the box" deck (02_opening_the_box.tex).
 
 Added 2026-09-22 in the ch19 extension (EXTENSION_PLAN.md, task 2). GPT-2 small, CPU, a handful of
 forward passes.
@@ -32,7 +32,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from mi_common import (BLUE, CHAPTER_DIR, FIG_DIR, GREY, RED, SEED, load_results, save_results,
-                       setup_logging)
+                       setup_logging, stream_ticks)
 
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False})
 
@@ -122,45 +122,53 @@ def run(log) -> dict:
 
 
 def fig_lens_fact(res: dict) -> None:
+    """Drawn at its slot size (0.85 of the text width). Same x axis as logit_lens.pdf: "emb", then
+    the stream after layer L, layers counted from 0 like the head names."""
     rows = res["lens_fact"]["rows"]
-    fig, ax = plt.subplots(figsize=(7.4, 3.3))
+    ticks = stream_ticks([r["label"] for r in rows])
+    fig, ax = plt.subplots(figsize=(4.7, 1.9))
     x = np.arange(len(rows))
     p = [r["p_answer"] for r in rows]
-    bars = ax.bar(x, p, color=[BLUE if r["top_token"] == FACT_ANSWER else GREY for r in rows])
-    ax.bar_label(bars, labels=[f"{v:.0%}" if v >= 0.005 else "" for v in p], padding=2, fontsize=9)
+    bars = ax.bar(x, p, color=[BLUE if r["top_token"] == FACT_ANSWER else GREY for r in rows],
+                  width=0.7)
+    ax.bar_label(bars, labels=[f"{v:.0%}" if v >= 0.005 else "" for v in p], padding=1.5, fontsize=7.5)
     for k, r in enumerate(rows):
-        ax.text(k, -0.14, r["top_token"].strip(), ha="center", va="top", fontsize=8.5,
+        ax.text(k, -0.2, r["top_token"].strip(), ha="center", va="top", fontsize=7, rotation=0,
                 transform=ax.get_xaxis_transform(),
                 color=BLUE if r["top_token"] == FACT_ANSWER else "black")
-    ax.text(-0.9, -0.14, "top\nguess:", ha="right", va="top", fontsize=8.5,
+    ax.text(-0.75, -0.2, "top guess:", ha="right", va="top", fontsize=7,
             transform=ax.get_xaxis_transform())
     ax.set_xticks(x)
-    ax.set_xticklabels(["0"] + [str(k) for k in range(1, len(rows))], fontsize=9)
-    ax.set_ylim(0, 1.0)
-    ax.set_ylabel('P(" Apple")')
-    ax.set_xlabel("layers the stream has passed through", labelpad=36)
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "l45_lens_fact.pdf", bbox_inches="tight"); plt.close(fig)
+    ax.set_xticklabels(ticks, fontsize=7.5)
+    ax.tick_params(axis="y", labelsize=7.5)
+    ax.set_ylim(0, 1.08)
+    ax.set_ylabel('P(" Apple")', fontsize=8.5)
+    ax.set_xlabel("residual stream after layer", fontsize=8.5, labelpad=16)
+    fig.tight_layout(pad=0.3)
+    fig.savefig(FIG_DIR / "l45_lens_fact.pdf", bbox_inches="tight", metadata={"CreationDate": None})
+    plt.close(fig)
 
 
 def fig_probe_picture(res: dict) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(7.4, 3.2))
+    """Drawn at its slot size (0.8 of the text width)."""
+    fig, axes = plt.subplots(1, 2, figsize=(4.4, 1.85))
     for ax, layer in zip(axes, PROBE_LAYERS):
         d = res["probe_picture"][str(layer)]
         x, y, lab = np.array(d["x"]), np.array(d["y"]), np.array(d["label"])
-        ax.scatter(x[lab == 0], y[lab == 0], s=16, color=GREY, label="three different names")
-        ax.scatter(x[lab == 1], y[lab == 1], s=16, color=RED, label="a name repeats")
-        ax.set_title(f"layer {layer}: {d['heldout_acc']:.0%} of unseen prompts right"
-                     + ("\n(chance is 50%)" if d["heldout_acc"] < 0.6 else "\n(trained on 64 prompts)"),
-                     fontsize=10.5)
-        ax.set_xlabel("position along the probe's direction")
+        ax.scatter(x[lab == 0], y[lab == 0], s=7, color=GREY, label="three different names")
+        ax.scatter(x[lab == 1], y[lab == 1], s=7, color=RED, label="a name repeats")
+        ax.set_title(f"layer {layer}: {d['heldout_acc']:.0%} right"
+                     + ("\n(chance is 50%)" if d["heldout_acc"] < 0.6 else "\n(probe trained on 64 prompts)"),
+                     fontsize=8)
+        ax.set_xlabel("position along the probe's direction", fontsize=7.5)
         ax.set_yticks([]); ax.set_xticks([])
-    axes[0].set_ylabel("another direction")
+    axes[0].set_ylabel("another direction", fontsize=7.5)
     handles, labs = axes[1].get_legend_handles_labels()
-    fig.legend(handles, labs, loc="lower center", ncol=2, fontsize=9, frameon=False,
-               bbox_to_anchor=(0.5, -0.06))
-    fig.tight_layout(rect=(0, 0.05, 1, 1))
-    fig.savefig(FIG_DIR / "l45_probe_picture.pdf", bbox_inches="tight"); plt.close(fig)
+    fig.legend(handles, labs, loc="lower center", ncol=2, fontsize=7.5, frameon=False,
+               bbox_to_anchor=(0.5, -0.07), markerscale=1.5)
+    fig.tight_layout(rect=(0, 0.06, 1, 1), pad=0.3)
+    fig.savefig(FIG_DIR / "l45_probe_picture.pdf", bbox_inches="tight", metadata={"CreationDate": None})
+    plt.close(fig)
 
 
 def main() -> None:

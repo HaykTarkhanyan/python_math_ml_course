@@ -103,6 +103,7 @@ function mountPlayers() {
   if (!mounts.length) return;
   loadYT().then(() => {
     for (const m of mounts) {
+      if (!document.body.contains(m)) continue; // page changed while the API was loading
       const slot = m.dataset.slot, vid = m.dataset.vid;
       const entry = { vid, ready: false, last: -1 };
       entry.player = new YT.Player(m.id, {
@@ -112,7 +113,7 @@ function mountPlayers() {
       });
       players[slot] = entry;
     }
-    followTimer = setInterval(follow, 700);
+    if (Object.keys(players).length && !followTimer) followTimer = setInterval(follow, 700);
   }).catch((err) => {
     console.error(err);
     mounts.forEach((m) => { m.outerHTML = posterHtml({ id: m.dataset.vid }, "The YouTube player could not load (are you offline?)."); });
@@ -256,6 +257,62 @@ function myNotesHtml(w) {
     <div class="savestate"></div>`;
 }
 
+function slotLabel(w, slot) {
+  return slot === "lecture" ? `Lecture &middot; ${esc(w.lecture.speaker)}` : `Guest talk &middot; ${esc(w.guests[+slot.slice(5)].speaker)}`;
+}
+
+function studyHtml(w) {
+  return `<p class="empty">Written by Claude from the slides and transcripts, plus general background. Not course material:
+    check anything that matters against the lecture. Time links play the video above at that moment.</p>
+    ${Object.entries(w.study).map(([slot, s]) => `<section class="study"><h3>${slotLabel(w, slot)}</h3>${s.notes_html}</section>`).join("")}`;
+}
+
+function quizHtml(w) {
+  return `<p class="empty">Pick an answer to see whether it is right and why. Nothing is stored; Reset starts over.</p>
+    ${Object.entries(w.study).map(([slot, s]) => `<section class="quiz">
+    <div class="qhead"><h3>${slotLabel(w, slot)}</h3><span class="score">${s.quiz.length} questions</span>
+      <button type="button" class="btn qreset">Reset</button></div>
+    <ol class="qs">${s.quiz.map((q) => `<li class="q" data-answer="${q.answer}">
+      <div class="stem">${q.stem_html}</div>
+      <div class="opts">${q.options_html.map((o, k) => `<button type="button" class="opt" data-k="${k}">
+        <span class="letter">${"ABCDEF"[k]}</span><span class="otext">${o}</span></button>`).join("")}</div>
+      <div class="explain" hidden>${q.explain_html}</div></li>`).join("")}</ol></section>`).join("")}`;
+}
+
+function quizCount(w) {
+  return w.study ? Object.values(w.study).reduce((n, s) => n + s.quiz.length, 0) : 0;
+}
+
+function answer(btn) {
+  const q = btn.closest(".q");
+  if (q.dataset.picked != null) return;
+  q.dataset.picked = btn.dataset.k;
+  $$(".opt", q).forEach((o) => {
+    o.disabled = true;
+    if (o.dataset.k === q.dataset.answer) o.classList.add("right");
+    else if (o === btn) o.classList.add("wrong");
+  });
+  $(".explain", q).hidden = false;
+  updateScore(q.closest(".quiz"));
+}
+
+function updateScore(quiz) {
+  const qs = $$(".q", quiz), done = qs.filter((q) => q.dataset.picked != null);
+  const right = done.filter((q) => q.dataset.picked === q.dataset.answer).length;
+  $(".score", quiz).textContent = done.length
+    ? `${right} of ${done.length} right${done.length < qs.length ? `, ${qs.length - done.length} to go` : ""}`
+    : `${qs.length} questions`;
+}
+
+function resetQuiz(quiz) {
+  for (const q of $$(".q", quiz)) {
+    delete q.dataset.picked;
+    $$(".opt", q).forEach((o) => { o.disabled = false; o.classList.remove("right", "wrong"); });
+    $(".explain", q).hidden = true;
+  }
+  updateScore(quiz);
+}
+
 /* ---------- views ---------- */
 let currentWeek = null;
 
@@ -267,6 +324,7 @@ function renderWeek(w, rest) {
     const sections = [["overview", "Overview"]];
     if (hasVideo) sections.push(["lecture", "Lecture"]);
     (w.guests || []).forEach((g, i) => sections.push([`guest${i}`, "Guest talk"]));
+    if (w.study) sections.push(["study", "Study guide"], ["quiz", "Quiz"]);
     if (w.slides) sections.push(["slides", "Slides"]);
     if (w.notes.length) sections.push(["notes", "Transcriber notes"]);
     sections.push(["mynotes", "My notes"]);
@@ -277,6 +335,8 @@ function renderWeek(w, rest) {
       ${card("overview", "Overview", overviewHtml(w))}
       ${hasVideo ? card("lecture", `Lecture &middot; ${esc(w.lecture.speaker)}`, videoHtml(w.lecture, "lecture"), `${esc(w.lecture.duration)} &middot; ${w.lecture.toc.length} entries`) : ""}
       ${(w.guests || []).map((g, i) => card(`guest${i}`, `Guest talk &middot; ${esc(g.speaker)}`, videoHtml(g, `guest${i}`), esc(g.duration))).join("")}
+      ${w.study ? card("study", "Study guide", studyHtml(w), "Claude's comments") : ""}
+      ${w.study ? card("quiz", "Quiz", quizHtml(w), `${quizCount(w)} questions`) : ""}
       ${w.slides ? card("slides", "Slides", slidesHtml(w), `${w.slides.sections.length} sections`) : ""}
       ${w.notes.length ? card("notes", "Transcriber notes", notesHtml(w), `${w.notes.length}`) : ""}
       ${card("mynotes", "My notes", myNotesHtml(w))}
@@ -314,7 +374,7 @@ function renderHome() {
     <p class="empty">Lectures, guest talks, transcripts, slide text and homework in one place. Search with <b>/</b>. Built ${esc(C.built)}.</p>
     <div class="grid">${weeks.map((w) => `<a class="weekcard" href="#w${w.key}">
       <div class="k">Week ${w.key} &middot; ${esc(w.date)}</div><h3>${esc(w.topic)}</h3><p>${esc(w.summary)}</p>
-      <div class="stats">${w.placeholder ? "no recording" : `${1 + w.guests.length} video${w.guests.length ? "s" : ""} &middot; ${w.slides.sections.length} slide sections &middot; ${Math.round(words(w) / 1000)}k transcript words`}</div></a>`).join("")}</div>
+      <div class="stats">${w.placeholder ? "no recording" : `${1 + w.guests.length} video${w.guests.length ? "s" : ""} &middot; ${w.slides.sections.length} slide sections &middot; ${Math.round(words(w) / 1000)}k transcript words${w.study ? ` &middot; ${quizCount(w)} quiz questions` : ""}`}</div></a>`).join("")}</div>
   </div>`;
 }
 
@@ -398,6 +458,13 @@ document.addEventListener("click", (e) => {
   const t = e.target.closest("button, a");
   if (!t) return;
   if (t.matches(".tocitem, .ts")) { seek(t.closest(".vid").dataset.slot, +t.dataset.t); }
+  else if (t.matches("a.seek")) {
+    e.preventDefault();
+    $(`#sec-${t.dataset.slot}`).open = true;
+    seek(t.dataset.slot, +t.dataset.t);
+  }
+  else if (t.matches(".opt")) { answer(t); }
+  else if (t.matches(".qreset")) { resetQuiz(t.closest(".quiz")); }
   else if (t.matches(".slidetime")) {
     const sec = $("#sec-lecture");
     if (sec) sec.open = true;

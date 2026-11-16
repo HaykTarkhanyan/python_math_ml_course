@@ -1,42 +1,48 @@
-"""Extra L45 figures for the pedagogical slow-down pass.
+"""Extra figures for "Opening the box" (02_opening_the_box.tex), formerly L45.
 
 The first draft of L45 *asserted* the two ideas the whole chapter rests on. This script measures
 them instead, so the slides can show rather than claim:
 
-* ``logit_decomposition.pdf`` - every component's contribution to one sentence's logit
-  difference, and the fact that they **add up to the real number**. Linearity stops being a
-  claim about the architecture and becomes an arithmetic check the room can watch.
+* ``logit_decomposition.pdf`` - every component's contribution to the logit difference, and the
+  fact that they **add up to the real number**. Linearity stops being a claim about the
+  architecture and becomes an arithmetic check the room can watch.
 * ``probe_vs_lens.pdf``       - probe accuracy and logit difference on one shared layer axis,
   so the six-layer gap between "readable" and "used" is visible instead of tabulated.
 
-It also prints the raw logits for one sentence, for the by-hand worked-numbers frame.
+It also records the raw logits for one sentence, for the by-hand worked-numbers frame.
+
+Measurements go to ``results/l45_extra_figs.json``; the figures are drawn from that file (and from
+``results/l45_figs.json`` for the probe/lens pair). Figures are drawn at their slot size.
+
+Usage (about 30 s on CPU with GPT-2 small cached; --plot-only takes seconds):
+    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_extra_figs.py
+    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_extra_figs.py --plot-only
 """
 
 from __future__ import annotations
 
-import json
+import argparse
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 
-from ioi_core import (
-    FIG_DIR,
-    RESULTS_DIR,
-    load_model,
-    load_prompts,
-    logit_diff,
-    logit_diff_directions,
-    save_results,
-    setup_logging,
-)
+from mi_common import FIG_DIR, load_results, save_results, setup_logging
 
 RED, BLUE, ORANGE = "#D90012", "#0033A0", "#F2A800"
+GREY = "#666666"
 N_TOP = 6
 
+plt.rcParams.update({"font.size": 8.5, "axes.spines.top": False, "axes.spines.right": False})
+SAVE = dict(bbox_inches="tight", metadata={"CreationDate": None})
+
+
+# ---------------------------------------------------------------- measurement (needs the model)
 
 def worked_numbers(model, data, log) -> dict:
     """The actual logits for one sentence - the by-hand frame."""
+    import torch
     sample = data["samples"][0]
     tokens = data["clean"][:1]
     logits = model(tokens)[0, -1, :]
@@ -64,8 +70,10 @@ def worked_numbers(model, data, log) -> dict:
     return result
 
 
-def fig_decomposition(model, data, directions, log) -> dict:
+def measure_decomposition(model, data, directions, log) -> dict:
     """Break the logit difference into one term per component, and check the sum."""
+    import torch
+    from ioi_core import logit_diff
     tokens = data["clean"]
     logits, cache = model.run_with_cache(tokens)
     true_ld = logit_diff(logits, data["answer_tokens"]).item()
@@ -99,36 +107,7 @@ def fig_decomposition(model, data, directions, log) -> dict:
     log.info(f"reconstruction gap: {gap:.5f} - exact")
 
     values = contributions.numpy()
-    order = np.argsort(np.abs(values))[::-1]
-    top_idx = order[:N_TOP]
-    rest = float(values.sum() - values[top_idx].sum())
-
-    n_other = len(labels) - N_TOP
-    names = [labels[i] for i in top_idx] + [f"all {n_other}\nothers", "unembed\nbias"]
-    heights = list(values[top_idx]) + [rest, bias_term]
-    colors = [BLUE if v > 0 else RED for v in heights[:-1]] + ["0.6"]
-
-    fig, ax = plt.subplots(figsize=(8.8, 4.3))
-    bars = ax.bar(range(len(heights)), heights, color=colors, zorder=3)
-    ax.bar_label(bars, fmt="%+.2f", fontsize=8, padding=2)
-
-    ax.bar([len(heights) + 0.6], [true_ld], color=ORANGE, zorder=3, width=0.8)
-    ax.text(len(heights) + 0.6, true_ld + 0.12, f"{true_ld:+.2f}", ha="center", fontsize=10,
-            fontweight="bold")
-    ax.text(len(heights) + 0.6, -0.62, "all of these,\nadded up", ha="center", fontsize=9,
-            color="0.25")
-
-    ax.axhline(0, color="0.3", lw=1)
-    ax.axvline(len(heights) - 0.3, color="0.6", ls=":", lw=1.5)
-    ax.set_xticks(list(range(len(heights))) + [len(heights) + 0.6])
-    ax.set_xticklabels(names + ["actual\nlogit diff"], rotation=45, ha="right", fontsize=8)
-    ax.set_ylabel("contribution to the logit difference")
-    ax.set_title("Every component's share - and they add up to the real number")
-    ax.grid(axis="y", alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "logit_decomposition.pdf")
-    plt.close(fig)
-
+    top_idx = np.argsort(np.abs(values))[::-1][:N_TOP]
     return {
         "true_logit_diff": true_ld,
         "sum_of_parts": total,
@@ -136,83 +115,111 @@ def fig_decomposition(model, data, directions, log) -> dict:
         "gap": gap,
         "n_components": len(labels),
         "top": [{"component": labels[i], "contribution": float(values[i])} for i in top_idx],
-        "rest": rest,
+        "rest": float(values.sum() - values[top_idx].sum()),
     }
 
 
-def fig_probe_vs_lens(log) -> dict:
-    """The six-layer gap, on one shared x axis."""
-    path = RESULTS_DIR / "l45_figs.json"
-    if not path.exists():
-        raise FileNotFoundError(f"{path} not found - run l45_figs.py first.")
-    saved = json.loads(path.read_text(encoding="utf-8"))
-
-    accuracies = saved["probe"]["accuracies"]
-    lens_values = saved["logit_lens"]["values"]
-    # accumulated_resid returns one entry per layer boundary plus the embedding; align the tail
-    # of that series with layers 0..n-1 so both panels share an x axis.
-    lens_by_layer = lens_values[-len(accuracies):]
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.6, 5.4), sharex=True)
-    x = np.arange(len(accuracies))
-
-    ax1.plot(x, accuracies, marker="o", color=BLUE, lw=2, zorder=3)
-    ax1.axhline(0.5, color="0.6", ls="--", lw=1.2)
-    ax1.text(0.15, 0.53, "chance", fontsize=8, color="0.4")
-    ax1.set_ylim(0.4, 1.08)
-    ax1.set_ylabel("probe accuracy\n(is a name repeated?)")
-    ax1.set_title("The information is there long before it is used")
-    ax1.grid(axis="y", alpha=0.3)
-
-    ax2.plot(x, lens_by_layer, marker="o", color=ORANGE, lw=2, zorder=3)
-    ax2.axhline(0, color="0.6", lw=1)
-    ax2.set_ylabel("logit difference\n(what it would answer)")
-    ax2.set_xlabel("layer")
-    ax2.set_xticks(x)
-    ax2.grid(axis="y", alpha=0.3)
-
-    first_perfect = next(i for i, a in enumerate(accuracies) if a >= 0.999)
-    for ax in (ax1, ax2):
-        ax.axvspan(first_perfect, 9, color=RED, alpha=0.08, zorder=0)
-    ax1.annotate(
-        f"readable from layer {first_perfect}",
-        xy=(first_perfect, accuracies[first_perfect]),
-        xytext=(first_perfect + 0.4, 0.62),
-        fontsize=9, color=RED,
-        arrowprops=dict(arrowstyle="->", color=RED, lw=1.2),
-    )
-    ax2.annotate(
-        "used at layer 9",
-        xy=(9, lens_by_layer[9]),
-        xytext=(4.4, lens_by_layer[9] + 0.6),
-        fontsize=9, color=RED,
-        arrowprops=dict(arrowstyle="->", color=RED, lw=1.2),
-    )
-    mid = (first_perfect + 9) / 2
-    ax2.text(mid, min(lens_by_layer) - 0.15, f"{9 - first_perfect} layers, unused",
-             ha="center", fontsize=9, color=RED, style="italic")
-
-    fig.tight_layout()
-    fig.savefig(FIG_DIR / "probe_vs_lens.pdf")
-    plt.close(fig)
-    log.info(f"probe readable from layer {first_perfect}; answer appears at layer 9")
-    return {"first_perfect_layer": first_perfect, "gap_layers": 9 - first_perfect}
-
-
-def main() -> None:
-    log = setup_logging("l45_extra_figs")
-    FIG_DIR.mkdir(parents=True, exist_ok=True)
-
+def run(log) -> dict:
+    from ioi_core import load_model, load_prompts, logit_diff_directions
     model = load_model(log)
     data = load_prompts(model, log, n=64)
     directions = logit_diff_directions(model, data["answer_tokens"])
-
-    results = {
+    return {
         "worked_numbers": worked_numbers(model, data, log),
-        "decomposition": fig_decomposition(model, data, directions, log),
-        "probe_vs_lens": fig_probe_vs_lens(log),
+        "decomposition": measure_decomposition(model, data, directions, log),
     }
-    save_results("l45_extra_figs", results, log)
+
+
+# ---------------------------------------------------------------- figures (JSON only)
+
+def fig_decomposition(res: dict, log) -> None:
+    d = res["decomposition"]
+    n_other = d["n_components"] - len(d["top"])
+    names = [t["component"] for t in d["top"]] + [f"{n_other}\nothers", "unembed\nbias"]
+    heights = [t["contribution"] for t in d["top"]] + [d["rest"], d["unembed_bias"]]
+    if abs(sum(heights) - d["true_logit_diff"]) > 0.01:
+        raise RuntimeError("the bars do not add up to the logit difference the figure claims")
+    colors = [BLUE if v > 0 else RED for v in heights[:-1]] + ["0.6"]
+
+    fig, ax = plt.subplots(figsize=(5.0, 2.15))
+    x = np.arange(len(heights))
+    bars = ax.bar(x, heights, color=colors, zorder=3, width=0.72)
+    ax.bar_label(bars, labels=[f"{h:+.2f}" for h in heights], fontsize=7, padding=1.5)
+    xa = len(heights) + 0.55
+    ax.bar([xa], [d["true_logit_diff"]], color=ORANGE, zorder=3, width=0.72)
+    ax.text(xa, d["true_logit_diff"] + 0.12, f"{d['true_logit_diff']:+.2f}", ha="center",
+            va="bottom", fontsize=8, fontweight="bold")
+    ax.axhline(0, color="0.3", lw=0.8)
+    ax.axvline(len(heights) - 0.2, color="0.6", ls=":", lw=1.2)
+    ax.set_xticks(list(x) + [xa])
+    ax.set_xticklabels(names + ["actual\nlogit diff"], fontsize=7)
+    ax.set_ylabel("share of the\nlogit difference", fontsize=8.5)
+    ax.set_ylim(min(heights) - 0.5, max(max(heights), d["true_logit_diff"]) + 0.6)
+    ax.tick_params(axis="y", labelsize=7.5)
+    ax.grid(axis="y", alpha=0.3)
+    fig.tight_layout(pad=0.3)
+    fig.savefig(FIG_DIR / "logit_decomposition.pdf", **SAVE)
+    plt.close(fig)
+    log.info(f"decomposition: {d['n_components']} components, bars sum {sum(heights):+.4f}, "
+             f"actual {d['true_logit_diff']:+.4f}")
+
+
+def fig_probe_vs_lens(log) -> None:
+    """The six-layer gap, on one shared x axis: x = the stream after layer L, both panels."""
+    saved = load_results("l45_figs")
+    accuracies = saved["probe"]["accuracies"]
+    lens_values = saved["logit_lens"]["values"]
+    labels = saved["logit_lens"]["labels"]
+    # accumulated_resid has one more point than there are layers (the embedding first); drop it so
+    # both panels read "the stream after layer L" for L = 0..11.
+    if len(lens_values) != len(accuracies) + 1 or labels[0] != "0_pre":
+        raise RuntimeError(f"unexpected logit-lens layout: {labels}")
+    lens_by_layer = lens_values[1:]
+
+    first_perfect = next(i for i, a in enumerate(accuracies) if a >= 0.999)
+    used = int(np.argmax(np.diff([lens_values[0]] + lens_by_layer)))
+    if used != 9:
+        raise RuntimeError(f"the slides say the answer is written in layer 9; the data says {used}")
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(4.7, 2.55), sharex=True)
+    x = np.arange(len(accuracies))
+    for ax in (ax1, ax2):
+        ax.axvspan(first_perfect - 0.15, used - 0.85, color=RED, alpha=0.08, zorder=0)
+        ax.grid(axis="y", alpha=0.3)
+        ax.tick_params(labelsize=7.5)
+    ax1.plot(x, accuracies, marker="o", ms=3, color=BLUE, lw=1.6, zorder=3)
+    ax1.axhline(0.5, color="0.6", ls="--", lw=0.9)
+    ax1.text(10.9, 0.44, "chance", fontsize=7, color="0.4", va="center", ha="center")
+    ax1.set_ylim(0.4, 1.1)
+    ax1.set_ylabel("probe\naccuracy", fontsize=8)
+    mid = (first_perfect + used - 1) / 2
+    ax1.text(mid, 0.66, f"readable from layer {first_perfect}", ha="center", fontsize=8, color=RED)
+
+    ax2.plot(x, lens_by_layer, marker="o", ms=3, color=ORANGE, lw=1.6, zorder=3)
+    ax2.axhline(0, color="0.6", lw=0.8)
+    ax2.set_ylabel("logit\ndifference", fontsize=8)
+    ax2.set_xlabel("residual stream after layer", fontsize=8.5)
+    ax2.set_xticks(x)
+    ax2.text(mid, 2.2, f"{used - first_perfect} layers: not used yet", ha="center", fontsize=8,
+             color=RED)
+    ax2.annotate(f"used in layer {used}", xy=(used - 0.45, 2.6), xytext=(used - 3.6, 3.7),
+                 fontsize=8, color=RED, arrowprops=dict(arrowstyle="->", color=RED, lw=1.0))
+    fig.tight_layout(pad=0.3, h_pad=0.4)
+    fig.savefig(FIG_DIR / "probe_vs_lens.pdf", **SAVE)
+    plt.close(fig)
+    log.info(f"probe readable from layer {first_perfect}; answer written in layer {used}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--plot-only", action="store_true")
+    args = parser.parse_args()
+    log = setup_logging("l45_extra_figs")
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not args.plot_only:
+        save_results("l45_extra_figs", run(log), log)
+    fig_decomposition(load_results("l45_extra_figs"), log)
+    fig_probe_vs_lens(log)
 
 
 if __name__ == "__main__":

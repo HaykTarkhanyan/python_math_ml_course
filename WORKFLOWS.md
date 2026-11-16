@@ -20,8 +20,9 @@ matches a row below, follow the referenced workflow - do not improvise a new one
 | Solutions package (LaTeX PDF + ipynb) | `generate-solutions` skill | `math/SOLUTIONS_STATUS.md` |
 | Collapsible solutions inside a `.qmd` | `add-inline-solutions` skill | `math/SOLUTIONS_STATUS.md` |
 | Add YouTube / video links after a session | `update-youtube` skill | `_meta/youtube_channel.md` |
-| Pull reference material from a video link (transcript, screenshots, borrow visuals into slides) | `youtube-reference` skill (yt-dlp + ffmpeg pipeline -> `_reference_<slug>/`) | `.claude/skills/youtube-reference/SKILL.md` |
+| Pull reference material from a video link (transcript, screenshots, borrow visuals into slides) | `youtube-reference` skill, user-global (yt-dlp + ffmpeg pipeline -> `_reference_<slug>/`) | `~/.claude/skills/youtube-reference/SKILL.md` + the repo overrides in `CONVENTIONS.md` (Borrowed video material) |
 | Check the website for broken links (before pushing site changes; `--live` every few weeks) | `./ma/Scripts/python.exe non_essential/check_links.py [--live]` | `CONVENTIONS.md` (Links on rendered pages) |
+| Review a student project submission (repo / notebook link) | `review-submission` skill -> private `_submissions/NN_task/student/FEEDBACK.md` (gitignored) | `_submissions/README.md` |
 | Delete LaTeX build junk | `clean-tex` skill or `clean_latex.py` | - |
 | End of session / commit the day's work | `wrap-session` skill | `_work_sessions/*.toml` |
 
@@ -37,7 +38,10 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
    ```bash
    ./ma/Scripts/python.exe non_essential/detect_clipped_slides.py DECK.pdf      # clipped at the frame edge
    ./ma/Scripts/python.exe non_essential/detect_footer_collisions.py DECK.pdf   # grown into the page-number band
+   ./ma/Scripts/python.exe non_essential/detect_small_figure_text.py DECK.pdf   # figure text shrunk below 5.5 pt
    ```
+
+   The third one (added 2026-10-01) catches what neither of the first two can: a matplotlib figure drawn wider than its slot, which LaTeX scales down with every label in it. All four `ml/12_cnn` decks passed both detectors with figure labels at 2.3-5 pt. Fix by drawing at slot size (`figsize` = on-slide width, fonts 7-10 pt), not by bumping font sizes. See `_learnings/2026-10-01-2317_figures-drawn-wider-than-their-slot.md`.
 
    `detect_clipped_slides.py` looks for content clipped at the frame boundary. It is **blind** to a `tcolorbox` or paragraph that simply grows downward until it sits on the page number - the text is still drawn, so nothing is "clipped", but the last line is unreadable. (Found 2026-08-13: it reported 0 flagged for all three `ml/ch19_mech_interp` decks while **13 frames** had content in the footer band, two of which lost a sentence outright. Both decks had also passed 2x `pdflatex` with 0 overfull-vbox warnings, because Beamer does not warn about this at all.) See `_learnings/2026-08-13-1930_a-passing-check-is-only-as-good-as-its-coverage.md`.
 
@@ -89,7 +93,7 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 | Artifact | Done means |
 |---|---|
-| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, **`non_essential/detect_clipped_slides.py` AND `non_essential/detect_footer_collisions.py` both run, every flag checked against the rendered page**, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
+| Slide deck | 2x pdflatex passes, 0 `!` lines in the `.log`, no `end{center>`-style typos, **`non_essential/detect_clipped_slides.py` AND `non_essential/detect_footer_collisions.py` both run, every flag checked against the rendered page**, `non_essential/detect_small_figure_text.py` clean for decks with matplotlib figures, overflow checked visually, **acronym check run** (see below), aux files cleaned, `% Provenance:` block present (`ml/` decks only - stat/optim decks don't use them) |
 | Figure script | runs end-to-end under the `ma` venv, PDFs in sibling `fig/`, log in `logs/`, figures actually embedded in the deck and the deck recompiled |
 | Homework `.qmd` | registered in `_quarto.yml` with exact-case path, blank line before every list / blockquote / fence, difficulty markers set |
 | Commit | no `.aux`/`.log`/`.nav` staged, message explains the change, push only when asked |

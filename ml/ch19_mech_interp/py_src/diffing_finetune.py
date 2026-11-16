@@ -1,4 +1,4 @@
-"""Gate G7 + figures for the optional deck "Personas and model diffing" (xx_personas_and_diffing.tex).
+"""Gate G7 + figures for the optional deck "Personas and model diffing" (08_personas_and_diffing.tex).
 
 A model organism with a KNOWN change: fine-tune GPT-2 small on positive movie-review sentences
 only (SST-2), then ask the diffing questions as if we did not know what we did.

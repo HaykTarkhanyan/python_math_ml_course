@@ -62,6 +62,7 @@ Callout boxes via `fcolorbox{COLOR}{COLOR!8}{\parbox...}`:
 - **Outline** frame (`\tableofcontents`).
 - One `\section` per major topic, each preceded by a **`[plain]` transition slide**: `popblue` bold title + one short motivation line.
 - **Recap** frame at the end + a `paramgreen` **"Next:"** box pointing to the next lecture.
+- **"Add it at the end" means the end of the main part** - before the Recap and before any `\appendix`, never after the appendix (instructor, 2026-10-02). The appendix stays the very last thing in the deck.
 - **No HW frame in the deck.** Homework lives on the chapter `.qmd` page, not in the slides.
 - **Long decks are fine — no fixed length, and don't split or trim a deck just because it's long.** One idea per frame; split only a single *dense* frame into two. A single deck may cover several subtopics in one file (e.g. binary + multiclass logistic regression).
   - **Never weigh frame count or session length at all (instructor, 2026-10-04: "stop thinking about minute amount of slide numbers ... I have full flexibility in the lecture, I prefer proper decks, that's the most important thing").** Do not offer "trim to ~N frames" options, do not argue for a session break, do not cite length as a cost. When a reviewer asks for a worked example or a missing step, the default answer is to add it. Cut only what repeats or confuses, never for time.
@@ -111,6 +112,7 @@ Common math macros (from `preamble.tex`): `\xv \yv \thetav \thx \fh \fxh \sumin 
 
 - **Every essential figure is Python-generated (matplotlib), not TikZ** - anything data-driven (curves, distributions, benchmarks, confusion matrices) and any diagram that carries the frame's core message. **TikZ only for small throwaway visuals** - quick boxes-and-arrows, tiny annotations, decoration the frame could live without.
 - Generation scripts live in a sibling **`py_src/`**; output PDFs/PNGs to a sibling **`fig/`**. Run them with the **`ma` venv** (`./ma/Scripts/python.exe py_src/script.py`).
+- **Draw each figure at its slot size**: `figsize` width = the width it gets on the slide (16:9 text width is ~5.5 in, so a `0.6\textwidth` column is ~3.3 in), fonts 7-10 pt, and embed it at that width. A figure drawn wider is scaled down with all its labels - ch19 and `ml/12_cnn` both shipped 2-5 pt figure text that passed every other check. Verify with `non_essential/detect_small_figure_text.py DECK.pdf` (0 pages under 5.5 pt).
 - **No enforced figure palette** — sensible per-figure defaults. (Global fallback for 3+ color charts: Armenian-flag red `#D90012`, blue `#0033A0`, orange `#F2A800`.)
 - **Embedded third-party figures:** keep a source/attribution line on the frame (e.g. "Source: LMU i2ml, CC BY 4.0"). Verify the license first.
 

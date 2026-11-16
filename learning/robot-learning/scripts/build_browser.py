@@ -1,7 +1,7 @@
 """Build the static course browser: browser/data.js (+ slide frames in browser/frames/).
 
-Run from the repo root (~15 s; the first run also extracts ~625 slide frames from
-the slide PDFs, a few seconds more):
+Run from the repo root (~40 s wall clock, ~15 s of it after imports; the first run
+also extracts ~625 slide frames from the slide PDFs, a few seconds more):
 
     ./ma/Scripts/python.exe learning/robot-learning/scripts/build_browser.py
 
@@ -10,11 +10,10 @@ http, not file://, so for that serve the folder:
 
     python -m http.server 8765 -d learning/robot-learning/browser
 
-Online: .github/workflows/publish.yml copies browser/ into the course site, at
-https://hayktarkhanyan.github.io/python_math_ml_course/robot-learning/ - so commit
-data.js and frames/ after rebuilding.
+Local only: nothing deploys the browser (DECISIONS #70). Commit data.js and frames/
+after rebuilding.
 
-Inputs: the week folders (transcript_*.md, slides.md, slides.pdf), homework/,
+Inputs: the week folders (transcript_*.md, slides.md, slides.pdf, study.md), homework/,
 README.md and the hand-written scripts/browser_content.json. index.html, app.js and
 style.css are hand-written and only read data.js.
 
@@ -61,9 +60,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def pandoc(md: str, *args: str) -> str:
+def pandoc(md: str, *args: str, fmt: str = "markdown") -> str:
     res = subprocess.run(
-        ["pandoc", "-f", "markdown", "-t", "html5", "--mathml", "--wrap=none", *args],
+        ["pandoc", "-f", fmt, "-t", "html5", "--mathml", "--wrap=none", *args],
         input=md, capture_output=True, text=True, encoding="utf-8",
     )
     if res.returncode != 0:
@@ -72,6 +71,21 @@ def pandoc(md: str, *args: str) -> str:
         if line.strip():
             log.warning(f"pandoc: {line}")
     return res.stdout
+
+
+INLINE_MATH_RE = re.compile(r'<math display="inline".*?</math>', re.S)
+TEX_RE = re.compile(r'<annotation encoding="application/x-tex">(.*?)</annotation>', re.S)
+
+
+def wrap_wide_math(html: str, max_tex: int = 60) -> str:
+    """Put long inline equations in a scrollable span: MathML ignores overflow on <math>
+    itself, so on a phone they otherwise push the whole page sideways."""
+    def wrap(m):
+        tex = TEX_RE.search(m.group(0))
+        if tex and len(tex.group(1)) > max_tex:
+            return f'<span class="mathwide">{m.group(0)}</span>'
+        return m.group(0)
+    return INLINE_MATH_RE.sub(wrap, html)
 
 
 def plain(html: str) -> str:
@@ -217,7 +231,7 @@ def parse_slides(path: Path) -> dict:
             in_code = not in_code
         keep = in_code or in_math_block or ln.startswith("# ")
         marked.append(ln if keep else mark_own_words(ln))
-    html = pandoc("\n".join(marked), "--section-divs")
+    html = wrap_wide_math(pandoc("\n".join(marked), "--section-divs"))
 
     about = re.search(r"</h1>(.*?)<section", html, re.S)
     found = SEC_RE.findall(html)
@@ -261,6 +275,115 @@ def extract_notes(sections: list) -> list:
             notes.append({"slide": s["id"], "label": s["title"], "html": re.sub(r"^\[Note:\s*|\]$", "", inner)})
             pos = j
     return notes
+
+
+# ---------- study guides and quizzes ----------
+
+STUDY_PARTS = {"Lecture": ("notes", "lecture"), "Lecture quiz": ("quiz", "lecture"),
+               "Guest talk": ("notes", "guest0"), "Guest talk quiz": ("quiz", "guest0")}
+Q_RE = re.compile(r"^### Q\d+[ \t]*$", re.M)
+OPT_RE = re.compile(r"^- ([A-F])\) (.+)$")
+ANSWER_RE = re.compile(r"^<details><summary>Answer</summary>\n(.*?)\n</details>[ \t]*$", re.S | re.M)
+PIECE_RE = re.compile(r"<p>XXPIECE(\d+)XX</p>")
+
+
+def parse_study(path: Path, key: str, secs: list, videos: dict) -> dict:
+    """study.md -> {slot: {notes_html, quiz: [{stem_html, options_html, answer, explain_html}]}}.
+
+    Sections are '## Lecture', '## Lecture quiz', '## Guest talk', '## Guest talk quiz'. A question is
+    '### Qn', a stem, options '- A) ...' as its last lines, then the explanation in a
+    <details><summary>Answer</summary> block that starts with '**X.**'. All markdown goes through one
+    pandoc call, cut apart again at marker paragraphs.
+    """
+    md = path.read_text(encoding="utf-8")
+    parts = re.split(r"^## (.+)$", md, flags=re.M)
+    pieces, study = [], {}
+
+    def add(chunk: str) -> int:
+        pieces.append(chunk.strip())
+        return len(pieces) - 1
+
+    for name, body in zip(parts[1::2], parts[2::2]):
+        if name not in STUDY_PARTS:
+            raise RuntimeError(f"{path}: unknown section '## {name}'")
+        kind, slot = STUDY_PARTS[name]
+        if slot not in videos:
+            raise RuntimeError(f"{path}: '## {name}' but the week has no such video")
+        entry = study.setdefault(slot, {"notes": None, "quiz": []})
+        if kind == "notes":
+            entry["notes"] = add(body)
+            continue
+        chunks = Q_RE.split(body)
+        if chunks[0].strip():
+            raise RuntimeError(f"{path}: text before the first question of '## {name}'")
+        for n, q in enumerate(chunks[1:], 1):
+            where = f"{path.parent.name} {name} Q{n}"
+            m = ANSWER_RE.search(q)
+            if not m:
+                raise RuntimeError(f"{where}: no <details><summary>Answer</summary> block")
+            lines = q[:m.start()].strip().split("\n")
+            opts = [i for i, ln in enumerate(lines) if OPT_RE.match(ln)]
+            if not opts or opts != list(range(opts[0], len(lines))):
+                raise RuntimeError(f"{where}: options must be the consecutive last lines before the answer")
+            letters = [OPT_RE.match(lines[i]).group(1) for i in opts]
+            if "".join(letters) != "ABCDEF"[:len(letters)] or len(letters) < 2:
+                raise RuntimeError(f"{where}: options lettered {letters}")
+            explain = m.group(1).strip()
+            am = re.match(r"\*\*([A-F])\.\*\* ", explain)
+            if not am or am.group(1) not in letters:
+                raise RuntimeError(f"{where}: explanation must start with '**<letter>.**' of an option")
+            entry["quiz"].append({"stem": add("\n".join(lines[:opts[0]])),
+                                  "options": [add(OPT_RE.match(lines[i]).group(2)) for i in opts],
+                                  "answer": letters.index(am.group(1)), "explain": add(explain)})
+    for slot in videos:
+        if slot not in study or study[slot]["notes"] is None or not study[slot]["quiz"]:
+            raise RuntimeError(f"{path}: {slot} needs both its notes and its quiz section")
+
+    html = pandoc("\n\n".join(f"XXPIECE{i}XX\n\n{c}" for i, c in enumerate(pieces)), "--shift-heading-level-by=1",
+                  fmt="markdown-smart")  # keep straight quotes and plain hyphens as written
+    cut = PIECE_RE.split(html)
+    if len(cut) != 2 * len(pieces) + 1 or [int(x) for x in cut[1::2]] != list(range(len(pieces))):
+        raise RuntimeError(f"{path}: pandoc output lost piece markers")
+    rendered = [study_links(wrap_wide_math(h.strip()), path, key, secs, videos) for h in cut[2::2]]
+
+    def one_para(i: int) -> str:
+        h = rendered[i]
+        if not (h.startswith("<p>") and h.endswith("</p>") and h.count("<p>") == 1):
+            raise RuntimeError(f"{path}: quiz option is not a single paragraph: {pieces[i][:60]}")
+        return h[3:-4]
+
+    return {slot: {"notes_html": rendered[s["notes"]],
+                   "quiz": [{"stem_html": rendered[q["stem"]], "options_html": [one_para(i) for i in q["options"]],
+                             "answer": q["answer"], "explain_html": rendered[q["explain"]]} for q in s["quiz"]]}
+            for slot, s in study.items()}
+
+
+def study_links(html: str, path: Path, key: str, secs: list, videos: dict) -> str:
+    """slides.md#slide-N -> in-page slide route; youtu.be/<this week's video>?t=S -> seek link; others open a new tab."""
+    by_num = {s["num"]: s["id"] for s in secs if s["num"] is not None}
+    by_vid = {v["id"]: (slot, v["paragraphs"][-1]["t"] + 60) for slot, v in videos.items()}
+
+    def slide(m):
+        n = int(m.group(1))
+        if n not in by_num:
+            raise RuntimeError(f"{path}: link to slide {n}, which slides.md does not have")
+        return f'href="#w{key}/slide/{by_num[n]}"'
+
+    def video(m):
+        vid, t = m.group(1), int(m.group(2))
+        if vid not in by_vid:
+            return f'href="{m.group(0)[6:-1]}" target="_blank" rel="noopener"'
+        slot, end = by_vid[vid]
+        if t > end:
+            raise RuntimeError(f"{path}: timestamp {t}s is past the end of {slot} ({end}s)")
+        return f'class="seek" data-slot="{slot}" data-t="{t}" href="https://youtu.be/{vid}?t={t}"'
+
+    html = re.sub(r'href="slides\.md#slide-(\d+)"', slide, html)
+    html = re.sub(r'href="https://youtu\.be/([\w-]{11})\?t=(\d+)"', video, html)
+    html = re.sub(r'href="(https?://[^"]+)"(?! target)', r'href="\1" target="_blank" rel="noopener"', html)
+    if 'href="slides.md' in html:
+        raise RuntimeError(f"{path}: slides.md link without #slide-N")
+    return html
 
 
 # ---------- alignment ----------
@@ -384,6 +507,9 @@ def main() -> None:
         secs = slides["sections"]
         extract_frames(wd, max(s["frames"][1] for s in secs))
 
+        videos = {"lecture": lecture, **{f"guest{j}": g for j, g in enumerate(guests)}}
+        study = parse_study(wd / "study.md", key, secs, videos) if (wd / "study.md").exists() else None
+
         times = align_slides(secs, lecture["paragraphs"])
         for s, t in zip(secs, times):
             s["t"] = t
@@ -405,7 +531,7 @@ def main() -> None:
             "key": key, "dir": wd.name, "date": info["date"], "topic": info["topic"],
             "summary": info["summary"], "key_ideas": info["key_ideas"], "papers": info["papers"],
             "homework": info["homework"], "lecture": lecture, "guests": guests,
-            "slides": slides, "notes": extract_notes(secs),
+            "slides": slides, "notes": extract_notes(secs), "study": study,
         })
         el = time.time() - t0
         log.info(f"{i}/{len(week_dirs)} {wd.name}: {len(secs)} slide sections, {len(guests)} guest talk(s), "
@@ -415,7 +541,8 @@ def main() -> None:
         if not any(w["key"] == key for w in weeks):
             weeks.append({"key": key, "dir": None, "date": info["date"], "topic": info["topic"],
                           "summary": info["summary"], "key_ideas": [], "papers": [], "homework": [],
-                          "lecture": None, "guests": [], "slides": None, "notes": [], "placeholder": True})
+                          "lecture": None, "guests": [], "slides": None, "notes": [], "study": None,
+                          "placeholder": True})
 
     data = {"built": time.strftime("%Y-%m-%d %H:%M"), "weeks": weeks,
             "homework": homework_pages(content["homework"]), "about_html": readme_html()}

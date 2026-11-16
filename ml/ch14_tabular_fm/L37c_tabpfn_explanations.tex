@@ -1,0 +1,361 @@
+\documentclass[aspectratio=169]{beamer}
+\input{../preamble}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{Lecture 37c: Explaining TabPFN}
+\subtitle{Feature effects, feature importance, and the value of training rows}
+\date{}
+
+\begin{document}
+
+\begin{frame}\titlepage\end{frame}
+
+\begin{frame}{One model, three explanation questions}
+  \small
+  Imagine a TabPFN loan-risk predictor and one applicant. We can ask:
+  \vskip 8pt
+  \begin{enumerate}\itemsep 7pt
+    \item \textbf{Feature effect:} how does this applicant's predicted risk change
+      if we vary credit utilization?
+    \item \textbf{Feature importance:} how much worse is prediction on held-out
+      applicants if the learner never gets that column?
+    \item \textbf{Data value:} which labeled applicants help when only a subset
+      fits in the context?
+  \end{enumerate}
+  \vskip 8pt
+  Rundel, Kobialka, von Crailsheim, Feurer, Nagler and R\"ugamer (2024)
+  adapt established methods to answer these questions efficiently for the
+  \textbf{original, small-context TabPFN}.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al., \emph{Interpretable Machine Learning for TabPFN}, arXiv:2403.10923.}
+\end{frame}
+
+\begin{frame}{Outline}\tableofcontents\end{frame}
+
+\section{What is held fixed?}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{What is held fixed?}}\\[9pt]
+  {\small An explanation changes when the context changes.}
+  \vfill
+\end{frame}
+
+\begin{frame}{The prediction depends on two inputs}
+  \small
+  Write the in-context predictor as
+  \[\hat p(y^*\mid x^*,D),\qquad D=\{(x_i,y_i)\}_{i=1}^{n}.\]
+  \vskip 7pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Change the query $x^*$.}\par
+      An individual conditional expectation curve varies one feature for
+      the same applicant while keeping $D$ fixed.}}
+    \column{0.49\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Change the context $D$.}\par
+      Leave-one-out removes a training row; feature-subset methods remove a
+      column from both $D$ and $x^*$.}}
+  \end{columns}
+  \vskip 10pt
+  The network weights stay fixed in both cases. TabPFN can evaluate the new
+  supervised problem with another forward pass.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Sections 2--3.}
+\end{frame}
+
+\section{Feature effects and importance}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{Feature effects and importance}}\\[9pt]
+  {\small A changed prediction and a lost predictive signal are different measurements.}
+  \vfill
+\end{frame}
+
+\begin{frame}{Three ways to plot a feature's effect}
+  \small
+  Let $z$ be a grid of credit-utilization values.
+  \vskip 8pt
+  \begin{tabular}{L{0.29\linewidth}L{0.62\linewidth}}
+    \textbf{Method} & \textbf{Question answered}\\[3pt]\hline
+    Individual conditional expectation (ICE) & For one applicant, what is
+      $\hat p(y^*\mid x^*_{j}\!\leftarrow\! z,D)$ at each $z$?\\[5pt]
+    Partial dependence (PD) & Average those altered predictions over many applicants.\\[5pt]
+    Accumulated local effects (ALE) & Average changes over observed local ranges,
+      reducing extrapolation into empty combinations.
+  \end{tabular}
+  \vskip 9pt
+  ICE and PD may query implausible combinations, such as very low income and a huge
+  loan. ALE limits that problem but still describes \textbf{predictions}, not interventions.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Section 3.1; Apley and Zhu (2020) for ALE.}
+\end{frame}
+
+\begin{frame}{Batch the altered queries}
+  \small
+  Ordinary PD implementations may call the predictor once per grid point.
+  With TabPFN, place all altered applicants into one inference array:
+  \vskip 10pt
+  \begin{center}
+  \begin{tikzpicture}[>=stealth, every node/.style={font=\small}]
+    \node[draw=popblue,fill=armblue!8,rounded corners,minimum width=2.7cm,minimum height=.85cm] (a) at (0,0) {fixed context $D$};
+    \node[draw=armorange,fill=armorange!12,rounded corners,minimum width=3.1cm,minimum height=.85cm] (b) at (4.2,0) {all grid queries};
+    \node[draw=paramgreen,fill=paramgreen!8,rounded corners,minimum width=2.8cm,minimum height=.85cm] (c) at (8.5,0) {one pass};
+    \draw[->,thick] (a) -- (b); \draw[->,thick] (b) -- (c);
+  \end{tikzpicture}
+  \end{center}
+  \vskip 10pt
+  The paper gives the schematic connection-count comparison
+  \[O((n_{\rm train}^{2}+n_{\rm train}n_{\rm inf})G)
+    \quad\hbox{versus}\quad
+    O(n_{\rm train}^{2}+n_{\rm train}n_{\rm inf}G).\]
+  $G$ is the grid size. The saving comes from processing the training context once.
+  \vskip 3pt
+  {\scriptsize Source: Rundel et al. (2024), Section 3.1.}
+\end{frame}
+
+\begin{frame}{Does a column help on held-out rows?}
+  \small
+  \textbf{Leave-One-Covariate-Out (LOCO)} compares predictive risk with and
+  without feature $j$. Both versions must use the \emph{same} validation rows:
+  \[\mathrm{LOCO}_{j}=R_{\rm val}(D_{-j})-R_{\rm val}(D).\]
+  \vskip 7pt
+  \begin{center}
+  \begin{tabular}{lcc}
+    & all columns & without credit utilization\\[3pt]\hline
+    Illustrative validation log loss & 0.22 & 0.29\\[3pt]
+  \end{tabular}
+  \end{center}
+  \vskip 7pt
+  Thus $\mathrm{LOCO}_{j}=0.29-0.22=\boxed{0.07}$. The column provides useful
+  predictive information in this evaluation. A near-zero value can also mean
+  another column carries the same information.
+  \vskip 4pt
+  {\scriptsize Method: Rundel et al. (2024), Section 3.2. Numbers are illustrative, not paper results.}
+\end{frame}
+
+\section{Shapley values through in-context learning}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{Shapley values}}\\[9pt]
+  {\small A feature's contribution depends on which other features are present.}
+  \vfill
+\end{frame}
+
+\begin{frame}{A coalition is a complete smaller learning problem}
+  \small
+  For a subset of features $S$, define a value $v(S)$ from the model trained
+  \emph{in context} on only columns in $S$ and queried on those same columns.
+  \vskip 8pt
+  \begin{center}
+  \begin{tikzpicture}[>=stealth, every node/.style={font=\small}]
+    \node[draw=armblue,fill=armblue!8,rounded corners,minimum width=3.3cm,minimum height=.9cm] (a) at (0,0) {$D$: all columns};
+    \node[draw=armorange,fill=armorange!12,rounded corners,minimum width=3.3cm,minimum height=.9cm] (b) at (4.5,0) {$D_S$: columns in $S$};
+    \node[draw=paramgreen,fill=paramgreen!8,rounded corners,minimum width=3.3cm,minimum height=.9cm] (c) at (9,0) {$\hat p(y^*\mid x^*_S,D_S)$};
+    \draw[->,thick] (a) -- (b);
+    \draw[->,thick] (b) -- (c);
+  \end{tikzpicture}
+  \end{center}
+  \vskip 10pt
+  The \textbf{feature-subset learner} is evaluated directly. We do not fill
+  missing features in the query with sampled values while retaining the full
+  model. This differs from ordinary Kernel SHapley Additive exPlanations
+  (Kernel SHAP).
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Section 3.3. Schematic.}
+\end{frame}
+
+\begin{frame}{Shapley values average the marginal contribution}
+  \small
+  With $p$ features, feature $j$ gets
+  \[\phi_j=\sum_{S\subseteq F\setminus\{j\}}
+    \frac{|S|!(p-|S|-1)!}{p!}\,[v(S\cup\{j\})-v(S)].\]
+  \vskip 6pt
+  For two features, the weights are both $1/2$. In an illustrative game:
+  \vskip 5pt
+  \begin{center}
+    $v(\varnothing)=0.40,\quad v(A)=0.70,\quad
+      v(B)=0.50,\quad v(A,B)=0.80.$
+  \end{center}
+  \vskip 5pt
+  \[\phi_A=\tfrac12(0.70-0.40)+\tfrac12(0.80-0.50)=\boxed{0.30},\]
+  \[\phi_B=\tfrac12(0.50-0.40)+\tfrac12(0.80-0.70)=\boxed{0.10}.\]
+  The parts sum to $0.40=v(A,B)-v(\varnothing)$.
+  \vskip 3pt
+  {\scriptsize Definition: Shapley (1953); adaptation: Rundel et al. (2024). Values are illustrative.}
+\end{frame}
+
+\begin{frame}{"Exact retraining" does not mean exact Shapley values}
+  \small
+  The paper uses \textbf{exact retraining} for one particular operation:
+  obtain $v(S)$ directly by passing the restricted table $D_S$ through TabPFN.
+  There is no parameter optimization on $D_S$.
+  \vskip 9pt
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Exact for a chosen coalition}\par
+      Evaluate the restricted learner directly. No missing-feature imputation
+      approximates that learner.}}
+    \column{0.48\textwidth}
+    \fcolorbox{armorange}{armorange!12}{\parbox{0.94\linewidth}{\small
+      \textbf{Still approximate overall}\par
+      Kernel SHAP samples $M$ feature coalitions instead of enumerating all
+      $2^p$ coalitions.}}
+  \end{columns}
+  \vskip 10pt
+  The paper reports lower attribution error for this approach at a fixed
+  connection budget on its three small classification datasets, with some
+  exceptions at low budgets.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Sections 3.3 and 4.2.}
+\end{frame}
+
+\section{Which training rows help?}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{Which training rows help?}}\\[9pt]
+  {\small The context is part of the predictor, so its rows can be valued too.}
+  \vfill
+\end{frame}
+
+\begin{frame}{Leave-one-out measures one row's effect}
+  \small
+  For training row $i$, compare the held-out loss with the full context and
+  with row $i$ removed:
+  \[\mathrm{LOO}_i=R_{\rm val}(D_{-i})-R_{\rm val}(D).\]
+  \vskip 8pt
+  \begin{itemize}\itemsep 7pt
+    \item Positive score: removing this row hurts prediction on the validation set.
+    \item Negative score: removing it helps on that validation set.
+    \item A large score may reflect a rare useful case, label noise, or validation-set choice.
+  \end{itemize}
+  \vskip 8pt
+  One row removal is one changed context and one forward pass. The paper also
+  explores gradients with respect to training observations, a different notion
+  of sensitivity.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Sections 3.4--3.5.}
+\end{frame}
+
+\begin{frame}{Data Shapley selects a small context from a large pool}
+  \small
+  The 2024 model accepted roughly 1,024 context rows. Suppose the available
+  labeled pool is larger. A random 512-row subset wastes some informative rows.
+  \vskip 7pt
+  \begin{enumerate}\itemsep 5pt
+    \item Sample many candidate subsets of training rows.
+    \item Evaluate each subset on a separate validation set.
+    \item Attribute the change in validation risk to individual rows.
+    \item Choose 512 rows with favorable estimated contributions.
+  \end{enumerate}
+  \vskip 8pt
+  In the paper, 3,072 available rows are reduced to 512. Across three selected
+  OpenML datasets and five runs, the optimized context beats random selection
+  in reported test ROC AUC. The procedure takes \textbf{nearly 10,000 forward passes}.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Sections 3.4 and 4.3.}
+\end{frame}
+
+\begin{frame}{The package also covers other explanation tasks}
+  \small
+  Rundel et al. provide more than the four methods we worked through:
+  \vskip 8pt
+  \begin{tabular}{L{0.32\linewidth}L{0.58\linewidth}}
+    \textbf{Method in the paper} & \textbf{Question or role}\\[3pt]\hline
+    Shapley Additive Global Importances (SAGE) & Attribute predictive risk to
+      features across a dataset; uses the subset-evaluation idea.\\[5pt]
+    Sensitivity analysis & Use gradients of predictions or risk to score local
+      feature or training-row sensitivity.\\[5pt]
+    Conformal prediction & Wrap predictions to form uncertainty sets.\\[5pt]
+    Counterfactual explanations and decision curves & Explore alternative inputs
+      and assess decisions; package integrations rather than the main new result.
+  \end{tabular}
+  \vskip 9pt
+  An explanation method is useful only after its \textbf{target quantity} is clear.
+  Sensitivity, predictive risk, and decision value answer different questions.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), Table 1 and Sections 3.5--3.6.}
+\end{frame}
+
+\section{Interpretation limits}
+\begin{frame}[plain]
+  \vfill\centering
+  {\Large\color{popblue}\textbf{Interpretation limits}}\\[9pt]
+  {\small A useful explanation still needs the right question and evaluation data.}
+  \vfill
+\end{frame}
+
+\begin{frame}{Predictive explanations are not causal effects}
+  \small
+  In the loan example, a PD curve may rise as utilization rises. That means
+  \emph{the predictor's output} changes when we edit that input. It does not
+  establish that changing a person's utilization would change their actual outcome.
+  \vskip 10pt
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+    \fcolorbox{armblue}{armblue!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Prediction question}\par
+      What does $\hat p(y\mid x,D)$ do under an input or context change?}}
+    \column{0.49\textwidth}
+    \fcolorbox{armred}{armred!8}{\parbox{0.94\linewidth}{\small
+      \textbf{Causal question}\par
+      What would happen to the outcome under a real intervention? That needs
+      causal assumptions and a different design.}}
+  \end{columns}
+  \vskip 10pt
+  Correlated columns make attribution ambiguous: LOCO can be small because
+  another feature substitutes for the removed one.
+  \vskip 4pt
+  {\scriptsize Methods: Rundel et al. (2024). Causal distinction follows the estimands defined here.}
+\end{frame}
+
+\begin{frame}{The paper studied the 2024 model}
+  \small
+  The authors built \texttt{tabpfn\_iml} for the original TabPFN, whose practical
+  context was about 1,024 rows. The 2.5, 3 and 3.5 releases came later.
+  \vskip 9pt
+  \begin{tabular}{L{0.31\linewidth}L{0.59\linewidth}}
+    \textbf{Portable idea} & A context change can evaluate a new restricted learner
+      without optimizing model weights.\\[7pt]
+    \textbf{Needs rechecking} & Runtime, memory, input encodings, attribution
+      stability, and performance on later checkpoints.\\[7pt]
+    \textbf{Evaluation rule} & Keep a held-out set for LOCO and row valuation;
+      inspect dependence between features before giving a causal reading.
+  \end{tabular}
+  \vskip 8pt
+  The paper and implementation are a method demonstration, not a validation
+  of every explanation method on TabPFN-3.5.
+  \vskip 4pt
+  {\scriptsize Source: Rundel et al. (2024), arXiv:2403.10923; later versions: Prior Labs (2025, 2026).}
+\end{frame}
+
+\section*{Wrap-up}
+\begin{frame}{Recap}
+  \small
+  \begin{enumerate}\itemsep 7pt
+    \item ICE, PD and ALE vary \textbf{query features}; batching saves repeated
+      context processing.
+    \item LOCO removes a \textbf{column} and measures the held-out loss difference.
+    \item The paper evaluates a Shapley coalition by restricting \textbf{both}
+      context and query; sampled coalitions still approximate the full sum.
+    \item LOO and Data Shapley value \textbf{training rows}. Better context
+      selection can cost many forward passes.
+  \end{enumerate}
+  \vskip 8pt
+  \fcolorbox{paramgreen}{paramgreen!8}{\parbox{0.96\linewidth}{\small
+    \textbf{Next:} choose the question first. A local feature effect, global
+    predictive importance, and training-row value are different explanations.}}
+  \vskip 7pt
+  {\scriptsize Paper: arxiv.org/abs/2403.10923 \quad Code: github.com/david-rundel/tabpfn\_iml}
+\end{frame}
+
+\end{document}
+
+% Provenance:
+%   Rundel, Kobialka, von Crailsheim, Feurer, Nagler and Rugamer (2024),
+%   Interpretable Machine Learning for TabPFN, arXiv:2403.10923.
+%   Local PDF: papers/2403.10923_interpretable-machine-learning-for-tabpfn.pdf.
+%   All worked numbers are labeled illustrative. TikZ figures are schematics.
+%   The paper evaluates the original TabPFN, not later 2.5/3/3.5 checkpoints.
+%   Forward pointer: apply the methods to a chosen model and held-out split.

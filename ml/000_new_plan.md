@@ -1,0 +1,3 @@
+Sat Oct 3 - CNN prac 1, 
+Sun oct 4 - CNN lecture - architectures,  ...
+Sun Oct 11 - CNN Project

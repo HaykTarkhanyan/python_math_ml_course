@@ -30,6 +30,32 @@ single pass leaves a stale TOC and page counters. Follow every step, in order.
    Success = no output (grep will exit 1 in that case - that is the GOOD
    outcome, not a failed command). Any printed line is a typo to fix.
 
+1b. **Deck not taught yet? Check its `_notes` copy BEFORE compiling.** The
+   instructor annotates `DECK_notes.pdf` live in class, so every compile of a
+   deck that has not been delivered also refreshes that copy (instructor,
+   2026-10-23). Check now, while the old clean PDF is still on disk:
+
+   ```bash
+   { [ ! -e DECK_notes.pdf ] || cmp -s DECK.pdf DECK_notes.pdf; } && echo "notes copy: safe to refresh"
+   ```
+
+   After step 3 passes, and only if that line printed, run
+   `cp DECK.pdf DECK_notes.pdf`. Nothing printed means the copy differs from the
+   clean PDF: it may hold annotations from class, which cannot be regenerated, so
+   leave it alone and tell the instructor. A delivered deck without a
+   `_notes.pdf` gets none. Commit the `_notes.pdf` only after the lecture.
+
+   **Also check the CLEAN PDF for ink before compiling** - if the instructor
+   annotated the clean file by mistake, the compile would erase it:
+
+   ```bash
+   ./ma/Scripts/python.exe -c "from pypdf import PdfReader; import sys; r=PdfReader(sys.argv[1]); n=sum(1 for p in r.pages for a in (p.get('/Annots') or []) if str(a.get_object().get('/Subtype'))=='/Ink'); print('ink strokes in clean PDF:', n)" DECK.pdf
+   ```
+
+   Anything above 0: stop, back the file up, move it to `DECK_notes.pdf` (if
+   that one is still a plain copy), then compile. (2026-10-28: 653 strokes found
+   in the clean LLM-1 PDF.)
+
 2. **Compile twice, from inside the deck's own directory** - decks load the
    shared preamble with `\input{../preamble}`, which pdflatex resolves relative
    to the CWD, so compiling from the repo root fails with "file not found":
@@ -79,3 +105,4 @@ single pass leaves a stale TOC and page counters. Follow every step, in order.
 | "Page count looks right" | Beamer clips silently. Render pages and look. |
 | "Nothing structural changed, one pass is fine" | Counters and TOC go stale. Always two passes. |
 | "I'll clean aux files later" | Later means they get committed. Clean now. |
+| "The `_notes.pdf` is just out of date, overwrite it" | If it differs from the clean PDF it may hold the instructor's annotations, which exist nowhere else. Ask. |

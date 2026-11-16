@@ -9,6 +9,82 @@ this file holds the choice and a pointer.
 
 ---
 
+## #115 - After B0 the LLM part builds first: the next practical topic is tool calls, MCP, skills and orchestration
+
+**Date:** 2026-11-12 · **Status:** active; **built 2026-11-12** in `llms/tools_agents/` (two decks, two executed
+notebooks, `server.py`, `skills/`, saved runs; outline `xx_tools_agents_OUTLINE.md` lists the files and what the build
+found), after a review of the outline by Claude Fable. Answers Q5 of `llms/NEXT_STRETCH_OPTIONS.html` with option B;
+replaces #114's practical, which was shelved the same day.
+
+**Decision.** The LLM part keeps the model a black box for the next stretch and teaches building: the next session
+is a practical topic (slides plus code, or a notebook with markdown) on tool calls, MCP, skills and orchestration.
+LLM-3 Embeddings comes before search and RAG; the transformer run (LLM-4 to LLM-6) follows the applied block.
+
+**Why.** Instructor: "i agree, lets do tool calls, mcp, skills, orchestration as next one". The options page found
+that none of the nine projects needs transformer internals to be built, that agents are the most-asked skill in the
+job snapshot (12 of 23 Armenian ML/AI companies, 59 of 71 worldwide LLM-role companies), and that finishing LLM-3 to
+LLM-6 first would delay tool calling by 4 sessions and RAG by 3.
+
+**Scope (interview, same day).** Two sessions: (1) "the model decides, your code does" (direct orchestration, tool
+calls by hand, the loop), (2) MCP, skills, workflow and multi-agent orchestration, security. Slides first (L44 plus
+new frames), then a notebook. Tools: Yerevan weather (Open-Meteo, keyless) and a web-search tool on **Tavily**
+(instructor pick over ddgs, which is unofficial and throttles, and over OpenRouter's built-in search, which students
+would not write themselves; Tavily's SDK also has a rate-limited keyless mode). Files in a new unnumbered folder
+`llms/tools_agents/` (numbering it would mean another renumber like #113). A real MCP client appears as an instructor
+demo; students stay in the notebook, where the MCP SDK v2 runs server and client in one kernel.
+
+**Alternatives rejected.** Opening the box first (LLM-3 to LLM-6, option A); alternating one to one (option C, the
+two-streams plan as drawn). One session for all four topics (too thin for MCP and skills). A notebook-only format. A two-applied-to-one-theory rhythm (C') is identical for five sessions and stays open.
+
+**What would change this.** Students stalling on tool calls because they do not know how the model sees roles and
+tools (then a short LLM-9 chat-template recap moves up); the theory slot for LLM-4 to LLM-6 getting eaten.
+
+---
+
+## #114 - A practical after the API notebook: four models extract checked JSON from 148 staff.am job postings
+
+**Date:** 2026-11-11 (first proposed 2026-11-09 as a student project) · **Status:** active; built 2026-11-11 (`xx_job_extraction_solution.ipynb`,
+1,776 calls, $0.389; outline `llms/02_decoding/xx_job_extraction_OUTLINE.md`). Revisited 2026-11-11: GPT-6.1 Sol added
+as a flagship comparison (see below). **Shelved 2026-11-12** (instructor: "i dont wanna do the project for job
+postings, most likely"; chose "keep it, unlinked"): the files stay in `llms/02_decoding/`, not on the website; which
+practical comes next instead is being decided.
+
+**Addendum 2026-11-11 - a flagship, and a bug in the endpoint test.** The cheap models landed at or below the regex
+(31-58% vs 56%), so the instructor asked for "one good model as well": GPT-6.1 Sol, strict pass only, low-effort
+thinking (no temperature or logprobs on offer), 148 calls, $0.361. It scored 30.3% overall but 81.6% where it named a
+level (the best), with 83 of 132 `not_stated`: a stronger model does not fix a key the text does not contain. Saved
+run now 1,924 calls, $0.750. A probe of the four DeepSeek endpoints that failed "logprobs do not line up" showed two
+broken ones (Morph: 19 entries for 57 tokens; Novita: 2 entries for another text) and two that only appended
+DeepSeek's `<｜end▁of▁sentence｜>`, missing from our `END_MARKS`. Fixed in the code; the saved run keeps
+`parasail/fast` ($0.45/$1.80 per 1M vs Cohere's $0.20/$0.66), and the notebook says so (section 4). Re-picking the
+endpoint would mean redoing DeepSeek's 444 calls. Also corrected: the Armenian vs English split now counts letters
+instead of trusting the scraper's `lang` field (11 of 148 differed): 31 Armenian, 116 English, 1 Russian.
+
+**Decision.** An industry-style, in-class practical on the decoding folder, run by the instructor as a worked demo
+(students do not work on it), taught after the API notebook. GPT-4o mini, DeepSeek V4.1 Flash, Gemma 4 26B (A4B)
+and Llama 3.1 8B turn the 148 staff.am postings in `_knowledge/ml_job_market/data/` into schema-checked JSON
+(seniority, minimum years, skills, salary, work mode). It measures a text-only regex baseline, prompt-for-JSON vs
+a strict schema, a logprob-based review queue, Armenian (26) vs English (120), and temperature 0 run twice, with the
+employer's own `level` field (132 filled) as the answer key. Estimated ~$0.22 per full run.
+
+**Why.** The instructor asked for an industry-style project on the decoding folder, "not too big", then chose the
+practical format ("we will do it as practical, students dont work on this one") and every model offered. The task
+uses LLM-2's constrained decoding, logprobs and temperature 0 as tools; its data is already in the repo with a free
+partial answer key. Rough keyword counts in the 2026-10-28 snapshot: structured extraction 8%, evals 45%, LLMOps
+32% of 292 LinkedIn postings.
+
+**Alternatives rejected.** A student portfolio project (the first draft, `job_extraction_hy.md`, deleted at the
+instructor's request); a confidence highlighter, speculative decoding from scratch, generic JSON extraction
+("more industry style"); a self-hosted inference server and an LLM gateway (offered, not picked); an
+"Armenian-only" decoding mask (a probe showed Ministral 3B and Llama 3.1 8B already answer in Armenian script, 0%
+foreign letters in 12 answers). Dropped from the measurement: reading model-vs-employer disagreements and
+counting invented salaries. Kept out of scope: a deployed API or a review web page.
+
+**What would change this.** The outline review; the four models' providers dropping logprobs or strict schemas; a
+full run costing well over the estimate.
+
+---
+
 ## #113 - The LLM part is renumbered to teaching order: decoding is LLM-2 in `llms/02_decoding/`, delivered decks take their playlist number
 
 **Date:** 2026-11-09 · **Status:** active; follows #109 (decoding taught second). Supersedes the labels of

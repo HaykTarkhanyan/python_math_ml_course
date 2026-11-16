@@ -11,7 +11,7 @@
 Run from the repository root:
 
 ```bash
-bash .claude/skills/youtube-reference/scripts/yt_fetch.sh \
+bash ~/.claude/skills/youtube-reference/scripts/yt_fetch.sh \
   "https://www.youtube.com/watch?v=D8GOeCFFby4" \
   "misc/grokking"
 ```

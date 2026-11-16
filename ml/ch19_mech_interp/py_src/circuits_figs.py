@@ -1,4 +1,4 @@
-"""Gate G4 + figures for the optional deck "Circuits read off the weights" (xx_transformer_circuits.tex).
+"""Gate G4 + figures for the optional deck "Circuits read off the weights" (06_transformer_circuits.tex).
 
 Everything here reads WEIGHTS, except the behavioural checks that say which heads are which.
 Models: TransformerLens's attention-only toys attn-only-1l / attn-only-2l (8 heads per layer,

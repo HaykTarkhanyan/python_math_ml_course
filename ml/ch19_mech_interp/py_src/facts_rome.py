@@ -1,4 +1,4 @@
-"""Gate G6 + figures for the optional deck "Where facts live" (xx_where_facts_live.tex), part 2.
+"""Gate G6 + figures for the optional deck "Where facts live" (07_where_facts_live.tex), part 2.
 
 A rank-one fact edit in the style of ROME (Meng et al., 2022), written from scratch for GPT-2 small. Runs on a GPU when present (committed results: Colab T4,
 DECISIONS #41), else CPU with 2 threads. The MLP output matrix W_out of one layer is treated as a

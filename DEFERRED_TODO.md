@@ -6,13 +6,18 @@ Last updated: 2026-11-06
 
 ---
 
-## LLM part: what comes after B0?
+## LLM part: what comes after B0b?
 
-The order is now LLM-1 -> practical 02 -> LLM-6 Decoding -> B0, the first API session
-(`llms/02_decoding/04_llm_api.ipynb`) (DECISIONS #109-#111). The instructor wants to decide later what
-follows B0: LLM-2 (opening the box) with B workshops alternating, as in DECISIONS #105 and
-`llms/TWO_STREAMS_PROPOSAL.html`, or more workshops first. Its open questions Q1-Q8 are still open apart from
-Q3 (OpenRouter, #110) and Q5's LLM-6 move (#109). Decide before B0 is taught.
+**Resolved 2026-11-12 (DECISIONS #115):** build now. The next practical topic is tool calls, MCP, skills and
+orchestration (two sessions, outline draft in `llms/tools_agents/xx_tools_agents_OUTLINE.md`). Still open from
+`llms/NEXT_STRETCH_OPTIONS.html`: Q7 (sessions a week, end date), Q8 (project start and length).
+
+Delivered: LLM-1 -> practical 02 -> LLM-2 Decoding -> B0, the first API session
+(`llms/02_decoding/04_llm_api.ipynb`) (DECISIONS #109-#111, labels of #113). Next: B0b, the job-extraction
+practical (#114, built). Still open: what follows B0b, LLM-3 Embeddings with B workshops alternating (DECISIONS
+#105) or more workshops first. Now Q9 in `llms/TWO_STREAMS_PROPOSAL.html` (updated 2026-11-12), whose Q1, Q2, Q4,
+Q5b, Q5c, Q6, Q7 and Q8 are also still open (Q3 and Q5a were decided in #110 and #109). The old deadline,
+"before B0 is taught", has passed.
 
 ---
 

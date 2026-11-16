@@ -23,6 +23,26 @@ RED, BLUE, ORANGE = "#D90012", "#0033A0", "#F2A800"
 GREY, GREEN = "#666666", "#008C46"
 
 
+def stream_ticks(tl_labels: list[str]) -> list[str]:
+    """Tick labels for a logit-lens x axis, in the decks' convention: "emb", then "after layer L"
+    with layers counted from 0 like the head names (L9H9 is in layer 9).
+
+    TransformerLens's accumulated_resid labels a point by the block it ENTERS: "k_pre" is the
+    stream after layers 0..k-1, and "final_post" is the stream after the last layer. Printing
+    those raw names put "9_pre" under the point that is really "after layer 8", and one deck frame
+    read a layer number off by one because of it (2026-10-17). Fails loudly on any other label.
+    """
+    out = []
+    for k, lab in enumerate(tl_labels):
+        if lab == f"{k}_pre":
+            out.append("emb" if k == 0 else str(k - 1))
+        elif lab == "final_post" and k == len(tl_labels) - 1:
+            out.append(str(k - 1))
+        else:
+            raise ValueError(f"unexpected accumulated_resid label {lab!r} at index {k}")
+    return out
+
+
 def pick_device() -> str:
     """"cuda" when a GPU is present (the heavy runs go to Colab), otherwise "cpu"."""
     import torch
