@@ -9,6 +9,29 @@ this file holds the choice and a pointer.
 
 ---
 
+## #119 - The RAG decks move into `llms/04_rag/` as videos 07-09, before they are taught; LLM folders move to 05-16
+
+**Date:** 2026-11-18 · **Status:** active. Paths in entries before this one use the old names.
+
+**Decision.** `ml/ch17_rag/` became `llms/04_rag/`; the decks were named by their planned video numbers:
+`L41_rag_retrieval` -> `07_rag_retrieval`, `L42_rag_hybrid_rerank` -> `08_rag_hybrid_rerank`,
+`L43_rag_generation_eval` -> `09_rag_generation_eval` (.tex, .pdf, `_notes.pdf`). The LLM folders
+`04_embeddings_position` ... `15_anatomy_2026` became `05_` ... `16_`. Decks load `\input{../../ml/preamble}` now;
+L43's "lecture 41 ... lecture 42" became "video 07 ... video 08"; every live reference was updated (figure scripts'
+run commands, `extract_rag_papers.py`, `rag.qmd`, plans, `CLAUDE.md`). The figure scripts keep their `l41_` to
+`l43_` names (internal; renaming them would touch every import for nothing).
+
+**Why.** Instructor: "pls rename the files and folders so we're ready, no need to wait for the end" (the end of the
+lectures), following the teaching-order scheme chosen in Q30 (#117).
+
+**Alternatives rejected.** Rename after teaching, as with the tools decks (the instructor did not want to wait).
+Keep the decks in `ml/ch17_rag/` and only rename the files (the RAG lectures are now part of the LLM block).
+
+**What would change this.** If the RAG lectures are not taught next, the 07-09 numbers are wrong and need one more
+rename; a practical inserted before them would shift every folder again (#117's warning).
+
+---
+
 ## #118 - Next on the industry track: semantic search, then RAG (two sessions), embeddings as a black box
 
 **Date:** 2026-11-18 · **Status:** active, **revised the same evening** at the scope interview: the slides are the

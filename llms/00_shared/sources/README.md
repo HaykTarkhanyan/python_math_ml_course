@@ -14,7 +14,7 @@ The instructor's earlier DL4NLP course: 15 survey decks (`01_pre_transformer` to
 and the notes for Karpathy's "Deep Dive into LLMs" (`_yt_videos/karpathy_deep_dive_llms/`: transcript
 and README; the video itself is git-ignored and was not copied).
 
-- **Left out:** `12_rag` (replaced by `ml/ch17_rag`), `14_agents_tool_use` (`ml/ch18_agents`),
+- **Left out:** `12_rag` (replaced by `llms/04_rag`), `14_agents_tool_use` (`ml/ch18_agents`),
   `18_reinforcement_learning` (`ml/ch11_rl`), and `materials_dl4nlp.pdf` (a merged bundle of the
   decks).
 - **Compile** from inside `dl4nlp/`: `pdflatex 03_tokenization.tex` (twice). The decks load
