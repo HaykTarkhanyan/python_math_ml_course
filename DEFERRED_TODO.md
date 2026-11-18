@@ -2,14 +2,22 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-11-06
+Last updated: 2026-11-18
+
+---
+
+## Interview the instructor on notebook conventions (asked 2026-11-18)
+
+**Done the same evening (Q32-Q39):** the answers are in `CONVENTIONS.md`, section "Notebooks". The tools notebooks
+05 and 06 stay as taught; session 2's reworked builder (`llms/03_tools_agents/py_src/build_tools_2_nb.py`, never run)
+is not needed for now.
 
 ---
 
 ## LLM part: what comes after B0b?
 
 **Resolved 2026-11-12 (DECISIONS #115):** build now. The next practical topic is tool calls, MCP, skills and
-orchestration (two sessions, outline draft in `llms/tools_agents/xx_tools_agents_OUTLINE.md`). Still open from
+orchestration (two sessions, outline draft in `llms/03_tools_agents/05_06_tools_agents_OUTLINE.md`). Still open from
 `llms/NEXT_STRETCH_OPTIONS.html`: Q7 (sessions a week, end date), Q8 (project start and length).
 
 Delivered: LLM-1 -> practical 02 -> LLM-2 Decoding -> B0, the first API session

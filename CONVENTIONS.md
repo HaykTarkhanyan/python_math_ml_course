@@ -256,6 +256,27 @@ Reason: during ch10 four runs were compared (2-level, 1-level, 24px, 32px). With
 
 ---
 
+## Notebooks (instructor interview, 2026-11-18: Q32-Q39)
+
+- **No record/replay layer.** Call the model and the tools directly in the cell. No `recorder.py`-style module that
+  saves and plays back calls (DECISIONS #116: "it complicates the codebase"). The tools notebooks
+  (`llms/03_tools_agents/05_*`, `06_*`) keep theirs: they stay as taught (Q32).
+- **Code is spread out** (Q33): one step per line, numbered step comments (`# 1. city name -> coordinates`), full
+  variable names (not `g, p, w`), big dicts and calls one key or argument per line, functions of about 20-30 lines.
+- **Prints: every step the first time a pattern appears** (Q34): the first tool call or agent run prints what was
+  sent, what came back and what our code did; later runs of the same pattern print one summary line each.
+- **Live results change between runs** (Q35): the build-time execution is the saved run students read, and the text
+  quotes its results with the date ("in the run of 18 Nov"). A re-run in class gives new results, and that is fine.
+- **Builder scripts stay** (Q36): each notebook is written and executed by `py_src/build_*_nb.py` (cells as strings,
+  the `ma` kernel, HTML export). Edit the builder, never the generated `.ipynb`.
+- **Helpers live in the notebook** (Q37). A `.py` module only when other code must import it too (as `server.py`
+  imports `tools_lib.py`).
+- **One version, `NN_topic_solution.ipynb`** (Q38): executed, run by the instructor in class, homework at the end. No
+  student copy with TODO cells.
+- **Size is decided per topic** at the outline stage (Q39); for scale, tools session 1 was 66 cells in 8 parts.
+
+---
+
 ## When to update this file
 
 - Whenever a decision gets made twice — that's a convention waiting to be written.

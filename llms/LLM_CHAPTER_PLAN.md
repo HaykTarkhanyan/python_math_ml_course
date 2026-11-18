@@ -2,9 +2,9 @@
 
 > **Renumbered 2026-11-09 (DECISIONS #113).** Labels in this plan are the ones in use when each part was
 > written. Today: old LLM-6 decoding = **LLM-2** (`02_decoding/`, deck `03_decoding.tex`, taught as video 03);
-> old LLM-2 embeddings = **LLM-3** (`03_embeddings_position/`); old LLM-3 attention = **LLM-4**
-> (`04_attention/`); old LLM-4 block = **LLM-5** (`05_transformer_block/`); old LLM-5 transformers = **LLM-6**
-> (`06_transformers_in_the_world/`). LLM-1 (deck `01_tokenization.tex`) and LLM-7 onward are unchanged. Folder
+> old LLM-2 embeddings = **LLM-3** (`04_embeddings_position/`); old LLM-3 attention = **LLM-4**
+> (`05_attention/`); old LLM-4 block = **LLM-5** (`06_transformer_block/`); old LLM-5 transformers = **LLM-6**
+> (`07_transformers_in_the_world/`). LLM-1 (deck `01_tokenization.tex`) and LLM-7 onward are unchanged. Folder
 > paths below are already updated.
 
 Drafted 2026-10-02; folder, order and map decided 2026-10-04 (DECISIONS #66, #67); numbered in

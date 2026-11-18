@@ -9,6 +9,89 @@ this file holds the choice and a pointer.
 
 ---
 
+## #118 - Next on the industry track: semantic search, then RAG (two sessions), embeddings as a black box
+
+**Date:** 2026-11-18 · **Status:** active, **revised the same evening** at the scope interview: the slides are the
+three built RAG decks **kept whole** (`ml/ch17_rag/L41`-`L43`, 55 + 59 + 55 frames; instructor, Q40: "keep all
+slides for now, just check if anything can be improved there, not cut"), reviewed and improved but not condensed.
+The practical (notebook) is planned later (Q23: "We plan the practical later"); decided for it so far: plain numpy
+(Q24, 2026-11-16) and BM25 written by hand in numpy (Q26). Q23 embedding model and Q25 corpus wait for that.
+Correction: the black-box intro to embeddings belongs to L41's "Finding chunks by meaning" section, not to LLM-3,
+which is about token embeddings and defers embedding models ("Not this deck: embedding models").
+**Review done the same night (Q41, Q42), nothing cut:** L41's "You already have most of this" claimed students saw
+word vectors in LLM-2 (no taught deck shows them on a slide), so it became "Text becomes a vector", the black-box
+intro; LLM-2/LLM-6 labels from the old order fixed; the Armenian-tax callback points to LLM-1; context windows
+updated to 2026 (largest about 10M, Llama 4 Scout); L43 gets back LLM-11's frame "How to use a judge without lying
+to yourself" (moved out on 2026-10-06; LLM-11 now comes later); callbacks added to Context7 (video 06), the agent
+loop and the SQL homework (video 05), and OpenRouter's embeddings endpoint (video 04). L42 needed no change.
+
+**Decision.** After the tools practical (videos 05-06), the next sessions are a semantic-search practical and a RAG
+practical, in the tools practical's format (slides then a notebook, project-relevant). Embeddings get a short
+"text becomes vectors; similar meaning, nearby vectors" intro taken from the first part of LLM-3; the full LLM-3 deck
+(`llms/04_embeddings_position/`) moves after search and RAG, to open the box.
+
+**Why.** Instructor (Q31): "maybe we proceed with indstry track and do something project relevant like we did with
+tools", then picked this option. Of the applied skills not yet taught, RAG is named most in the course's job snapshot
+(10 of 23 Armenian ML/AI companies, 54 of 71 worldwide LLM-role companies; agents rank higher but the tools practical
+covered them), and search plus RAG start projects 1, 2 and 7. NEXT_STRETCH_OPTIONS.html found that only LLM-3's
+first part is needed before search.
+
+**Alternatives rejected.** LLM-3 first, then search and RAG (zero build work for the next class, but delays the
+applied line a session). Evals for LLM apps first (smallest build, every project needs it; stays next in line).
+Prompting that holds up (LLM-10; overlaps with the injection part of tools session 1).
+
+**What would change this.** No time to build the notebook before the next class: teach LLM-3 (ready) in that slot.
+
+---
+
+## #117 - The tools practical becomes `llms/03_tools_agents/` (videos 05 and 06); LLM-3..LLM-14 folders move up by one
+
+**Date:** 2026-11-18 · **Status:** active. Paths in entries before this one use the old names.
+
+**Decision.** After both tools sessions were taught (2026-11-18), `llms/tools_agents/` became `llms/03_tools_agents/`
+and the folders `03_embeddings_position` ... `14_anatomy_2026` became `04_embeddings_position` ...
+`15_anatomy_2026`. Files were named by video number: `xx_tools_1.*` -> `05_tool_calls.*`, `xx_tools_2.*` ->
+`06_mcp_skills.*` (decks, `_notes.pdf`, and each session's notebook `NN_..._solution.ipynb` with the same number as
+its deck), outline -> `05_06_tools_agents_OUTLINE.md`. Every live reference was updated (README, plans, figure
+scripts' docstrings, `attention.qmd` links, `CLAUDE.md`); history (`_work_sessions/`, `_learnings/`, older
+DECISIONS entries, `docs/`) was not.
+
+**Why.** Instructor: "if this is not in a folder, please put it in its folder. So like we had 01 tokenization, 02
+decoding, and now 03 is this". Asked (Q30) how, with 03 taken, they chose to shift the rest over `02b_tools_agents`
+or a second 03. A notebook sharing its deck's number was Claude's pick ("just pick some stuff"): each session was one
+video with its deck and notebook.
+
+**Alternatives rejected.** `02b_tools_agents/` (nothing else moves, folder number keeps matching LLM-N; the instructor
+preferred plain teaching-order numbers). `03_tools_agents/` next to `03_embeddings_position/` (two 03s).
+
+**What would change this.** The next practical folder (semantic search) would shift 04-15 again; putting a practical
+inside the folder of the deck it follows (as `04_llm_api.ipynb` sits in `02_decoding/`) avoids that.
+
+---
+
+## #116 - New notebooks call APIs directly: no record/replay layer like the tools practical's `recorder.py`
+
+**Date:** 2026-11-18 · **Status:** active. The tools practical (`llms/03_tools_agents/`) keeps its recorder for now
+(no time to remove it before class); whether to strip it is a question for the notebook-conventions interview
+parked in `DEFERRED_TODO.md`.
+
+**Decision.** Notebooks that call a model or a live API call it directly in the cell. No module that saves every
+model reply and tool result and plays them back on re-execution.
+
+**Why.** Instructor, after `recorder.py` was explained: "it complicates the codebase pls dont use it next time".
+Each demo had to go through `rec.demo(...)`, `demo.model(...)`, `demo.tool(...)` and `demo.save()` instead of plain
+`client.chat.completions.create(...)` and a function call, and the notebook needed a page of explanation for
+machinery that has nothing to do with the topic.
+
+**Alternatives rejected.** Keep the recorder in every API notebook (it kept the outputs in line with the text and
+slides, and made re-execution free and offline, but the cost in readability was judged too high). `vcrpy` cassettes
+(a library instead of hand-written code, but still a layer every cell goes through).
+
+**What would change this.** A notebook whose re-run outputs must match the slides exactly and cannot be kept in
+line by wording the text around "in the run on DATE"; ask the instructor first.
+
+---
+
 ## #115 - After B0 the LLM part builds first: the next practical topic is tool calls, MCP, skills and orchestration
 
 **Date:** 2026-11-12 · **Status:** active; **built 2026-11-12** in `llms/tools_agents/` (two decks, two executed
