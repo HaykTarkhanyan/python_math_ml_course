@@ -9,6 +9,29 @@ this file holds the choice and a pointer.
 
 ---
 
+## #120 - After the RAG practical, a bounded industry block (vision and documents, voice, shipping it), then theory
+
+**Date:** 2026-11-19 · **Status:** active; the order of the three sessions is a proposal. Plan page:
+`llms/TWO_STREAMS_PROPOSAL.html`, section 0.
+
+**Decision.** After the RAG lectures (videos 07-09) and the RAG practical (video 10, also the project kickoff), three more
+industry sessions come before the theory run: vision and documents (11), voice in and out (12), shipping it (13). Then
+LLM-3 to LLM-6, LLM-7 onward, while the projects run; local models after LLM-12, fine-tuning after LLM-13.
+
+**Why.** Instructor: "i'd prefer to kind of do a ton of industry stuff before going back to theory, but i don't wanna
+overdo it", then picked the three topics (Q52). Claude had recommended starting the projects and opening the box right
+after the RAG practical; the instructor chose more applied work first, bounded at three sessions. Vision and documents
+goes first because it extends RAG to real PDFs; shipping goes last because it ships a project with everything before it.
+
+**Alternatives rejected.** Theory right after the RAG practical (Claude's recommendation; the instructor wanted more
+industry first). Local models in this block (picked out; they land better after LLM-12's quantization). A longer
+industry block ("don't overdo it").
+
+**What would change this.** The projects needing a theory lecture earlier (a LoRA project blocked until LLM-13), or the
+class losing the attention thread from the RNN chapter for too long.
+
+---
+
 ## #119 - The RAG decks move into `llms/04_rag/` as videos 07-09, before they are taught; LLM folders move to 05-16
 
 **Date:** 2026-11-18 · **Status:** active. Paths in entries before this one use the old names.

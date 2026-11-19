@@ -222,15 +222,77 @@ quietly decides your ceiling.}
   \emph{one vector}, and one vector can only represent one meaning.}
 \end{frame}
 
-\begin{frame}{The five strategies, on the same text}
-  \vspace{-0.3em}
+\begin{frame}{How much text fits in one embedding?}
+  \vspace{0.1em}
   \begin{center}
-    \includegraphics[width=0.86\linewidth]{fig/02_chunking_strategies.pdf}
+    \includegraphics[width=0.70\linewidth]{fig/e01_embed_limits.pdf}
   \end{center}
-  \vspace{-0.6em}
-  {\small Boundaries computed by running each strategy, not drawn by hand. Note that the two
-  \emph{structural} strategies, sentence and paragraph, both keep the answer intact, while
-  the two \emph{arithmetic} ones destroy it.}
+  \vspace{-0.5em}
+  {\small An embedding model reads \textbf{a few hundred to a few thousand tokens} per input, at most tens of
+  thousands. The million-token windows from a few slides back belong to the LLM, not to the embedder.}
+
+  \vspace{0.3em}
+  \watchbox{\small Text past the limit is usually \textbf{cut off without an error} (gemini-embedding-001 does it by
+  default, so do open models). What was cut is not in the vector, so a chunk must fit.}
+\end{frame}
+
+\begin{frame}{First, look at the corpus}
+  \vspace{0.2em}
+  \begin{columns}[T]
+    \column{0.42\textwidth}
+      {\small The cheese factory's archive: \textbf{4{,}000} English documents - manuals, procedures,
+      maintenance logs, incident reports. Explore it like any dataset before choosing a chunker:}
+      \begin{itemize}\footnotesize
+        \item lengths in tokens, against the embedder's limit
+        \item structure: headings, lists, tables
+        \item scans need optical character recognition (OCR)
+        \item duplicates and old revisions
+        \item languages
+      \end{itemize}
+    \column{0.56\textwidth}
+      \includegraphics[width=\linewidth]{fig/e02_corpus_eda.pdf}
+  \end{columns}
+
+  \vspace{0.2em}
+  {\footnotesize\color{gray}One manual is far longer than one embedding can hold; a log entry is already chunk-sized.}
+\end{frame}
+
+\begin{frame}{Cutting by counting: fixed size}
+  \vspace{0.1em}
+  {\small A press-manual excerpt. Each coloured block is one chunk, the underlined sentence answers the question,
+  \P\ marks a paragraph break.}
+
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.78\linewidth]{fig/e03_chunks_arith.pdf}
+  \end{center}
+  \vspace{-0.2em}
+  {\small \textbf{Fixed size}: a cut every $n$ characters, wherever it falls. \textbf{Overlap}: each chunk also repeats
+  the end of the previous one. Both cut the answer: neither knows where a sentence ends.}
+\end{frame}
+
+\begin{frame}{Cutting where the text already breaks}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.66\linewidth]{fig/e04_chunks_struct.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small \textbf{By sentence}: one per chunk. \textbf{By paragraph}: split on blank lines. \textbf{Recursive}:
+  paragraphs first, smaller pieces only where one is too long (next slide). All computed, not drawn by hand.}
+\end{frame}
+
+\begin{frame}{Recursive splitting, step by step}
+  \vspace{0.1em}
+  \begin{center}
+    \includegraphics[width=0.76\linewidth]{fig/e05_recursive_tree.pdf}
+  \end{center}
+  \vspace{-0.4em}
+  \begin{enumerate}\small
+    \item Split on the biggest separator, blank lines: each paragraph becomes a piece.
+    \item A piece still over the cap? Split it on the next separator: sentences, then words, then characters.
+    \item Glue small neighbours back together while they fit under the cap.
+  \end{enumerate}
+  {\footnotesize\color{gray}A real run of the algorithm. LangChain's RecursiveCharacterTextSplitter (2022) works this way.}
 \end{frame}
 
 \begin{frame}{Cut where the author already cut}
@@ -390,18 +452,9 @@ still, in 2026, half of every serious system.}
   \vspace{0.6em}
   Query: \texttt{lori press bar}. Count how many query words appear in each chunk.
 
-  \vspace{0.9em}
+  \vspace{0.2em}
   \begin{center}
-  \small
-  \begin{tabular}{clc}
-    \toprule
-    & \textbf{Chunk} & \textbf{Query-word occurrences} \\
-    \midrule
-    D1 & ``The Lori press operates at 2.5 bar\ldots''            & 3 \\
-    D2 & ``Press maintenance\ldots press\ldots press\ldots bar'' & 4 \\
-    D3 & ``Cheese brining\ldots for Lori cheese.''               & 1 \\
-    \bottomrule
-  \end{tabular}
+    \includegraphics[width=0.60\linewidth]{fig/e06_bow_counts.pdf}
   \end{center}
 
   \vspace{1.0em}
@@ -414,35 +467,26 @@ still, in 2026, half of every serious system.}
 \end{frame}
 
 \begin{frame}{Fix 1: rare words carry more information}
-  \vspace{0.7em}
+  \vspace{0.4em}
   ``The'' appears in nearly every chunk. ``Lori'' appears in a handful. Matching on
   ``Lori'' tells you far more.
 
-  \vspace{0.9em}
-  \begin{center}
-    $\displaystyle \text{idf}(t) \;=\; \log\frac{N - n_t + 0.5}{n_t + 0.5}$
-  \end{center}
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \column{0.43\textwidth}
+      \vspace{0.8em}
+      $\displaystyle \text{idf}(t) \;=\; \log\frac{N - n_t + 0.5}{n_t + 0.5}$
 
-  \vspace{0.6em}
-  {\small where $N$ is the number of chunks in the corpus and $n_t$ how many of them
-  contain term $t$. This is the \textbf{inverse document frequency}: rare term, big weight.}
+      \vspace{0.7em}
+      {\small $N$: the number of chunks in the corpus ($4{,}000$ in our archive). $n_t$: how many of them contain
+      term $t$. This is the \textbf{inverse document frequency}: rare term, big weight.}
 
-  \vspace{0.9em}
-  For our factory archive ($N = 4{,}000$):
-
-  \vspace{0.4em}
-  \begin{center}
-  \small
-  \begin{tabular}{lcc}
-    \toprule
-    \textbf{Term} & \textbf{Appears in} & \textbf{idf} \\
-    \midrule
-    \texttt{lori}  & 120 chunks & \textbf{3.47} \\
-    \texttt{bar}   & 210 chunks & 2.89 \\
-    \texttt{press} & 380 chunks & 2.25 \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
+      \vspace{0.5em}
+      {\footnotesize\color{gray}It drops below zero for words in more than half the chunks; libraries clip it at
+      zero or add 1 inside the log.}
+    \column{0.55\textwidth}
+      \includegraphics[width=\linewidth]{fig/e07_idf_curve.pdf}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{This already has a name: tf-idf}
@@ -471,29 +515,19 @@ still, in 2026, half of every serious system.}
   \vspace{0.2em}
   Query \texttt{lori press bar}, scored with tf-idf:
 
-  \vspace{0.3em}
-  \begin{center}
-  \small
-  \begin{tabular}{clcc}
-    \toprule
-    & \textbf{Chunk} & \textbf{tf-idf} & \\
-    \midrule
-    D1 & the one that answers the question & 8.62 & \\
-    D2 & the maintenance schedule          & \textbf{9.65} & \color{armred}\textbf{wins} \\
-    D3 & brining                           & 3.47 & \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+      \includegraphics[width=\linewidth]{fig/e08_tfidf_stacked.pdf}
+    \column{0.46\textwidth}
+      \vspace{1.2em}
+      {\small D1 is the chunk that answers the question. D2, the maintenance schedule, wins because it says
+      \texttt{press} \textbf{three times}, and tf-idf takes that literally: three times the term, three times the
+      weight. It also never notices that D2 is more than twice as long as D1.}
+  \end{columns}
 
-  \vspace{0.4em}
-  D2 wins because it says \texttt{press} \textbf{three times}, and tf-idf takes that
-  literally: three times the term, three times the weight. It also never notices that D2 is
-  more than twice as long as D1.
-
-  \vspace{0.4em}
-  \watchbox{So tf-idf fixed \emph{rarity} and nothing else. Two problems remain: repetition
-  counts too much, and long chunks get a free advantage. \textbf{BM25 is tf-idf with exactly
-  those two repairs.}}
+  \vspace{0.1em}
+  \watchbox{tf-idf fixed \emph{rarity} only: repetition still counts too much, and long chunks get a free
+  advantage. \textbf{BM25 is tf-idf with exactly those two repairs.}}
 \end{frame}
 
 \begin{frame}{Fix 2: predict first}
@@ -565,6 +599,19 @@ still, in 2026, half of every serious system.}
   \vspace{0.9em}
   {\small Usual settings: $k_1 \approx 1.5$ (range 1.2 to 2), $b \approx 0.75$ (range 0.5
   to 0.8). There is no theory that fixes them; they are tuned.}
+\end{frame}
+
+\begin{frame}{One word's journey through BM25}
+  \vspace{0.1em}
+  {\small Follow \texttt{press}: once in D1 (12 tokens), three times in D2 (30 tokens).}
+
+  \vspace{0.2em}
+  \begin{center}
+    \includegraphics[width=0.74\linewidth]{fig/e09_bm25_journey.pdf}
+  \end{center}
+  \vspace{-0.3em}
+  {\small tf-idf multiplies the raw count: three mentions, three times the score. BM25 \textbf{damps} it,
+  $tf / (k_1 B + tf)$, and the longer chunk pays a larger $B$: three mentions are worth 1.2 times one.}
 \end{frame}
 
 \begin{frame}{One chunk, scored by hand}
@@ -772,18 +819,59 @@ mean.}
   unrelated, and for real text embeddings (not toy arrows) you rarely see below about 0.6.}
 \end{frame}
 
+\begin{frame}{A toy first: retrieval is finding the nearest point}
+  \vspace{0.2em}
+  \begin{columns}[T]
+    \column{0.56\textwidth}
+      \includegraphics[width=\linewidth]{fig/e10_points_toy.pdf}
+    \column{0.42\textwidth}
+      \vspace{0.5em}
+      {\small Pretend every text becomes just \textbf{two numbers}, so we can draw it.}
+
+      \vspace{0.5em}
+      {\small \textbf{Blue dots}: our chunks, embedded once, ahead of time.}
+
+      \vspace{0.3em}
+      {\small \textbf{Red star}: the question, embedded the same way when it arrives.}
+
+      \vspace{0.3em}
+      {\small \textbf{The answer}: the dot closest to the star (with normalised vectors, the highest cosine
+      similarity).}
+  \end{columns}
+
+  \vspace{0.4em}
+  {\footnotesize\color{gray}Made-up coordinates. A real embedder uses hundreds of numbers per text; the next slide
+  squashes real ones down to two.}
+\end{frame}
+
 \begin{frame}{The corpus as points in space}
   \vspace{0.1em}
   \begin{center}
-    \includegraphics[width=0.60\linewidth]{fig/08_embedding_space.pdf}
+    \includegraphics[width=0.56\linewidth]{fig/08_embedding_space.pdf}
   \end{center}
   \vspace{-0.6em}
-  {\small Real vectors, real model. Retrieval is now: embed the question, take the nearest.}
+  {\small Real vectors, squashed from 384 numbers to 2. \textbf{Dots}: our 18 chunks. \textbf{Stars}: three
+  questions - sharing words with the answer (direct), same meaning in other words (paraphrase), just a model number
+  (identifier). \textbf{Dashed lines}: each question to its answer.}
+
+  {\footnotesize\color{gray}The 2-D picture (PCA) is an impression; retrieval measures closeness in all 384 dimensions.}
+\end{frame}
+
+\begin{frame}{Training as a multiple-choice test}
+  \vspace{0.1em}
+  {\small Give the model a question and three candidate passages; exactly one, $d^{+}$, answers it.}
 
   \vspace{0.1em}
-  {\footnotesize\color{gray}Careful: the multilingual model's vectors have \textbf{384} dimensions, so this
-  2-D shadow is an impression, not the retrieval signal. All \textbf{18} chunks are plotted,
-  only a few labelled.}
+  \begin{center}
+    \includegraphics[width=0.62\linewidth]{fig/e11_infonce_steps.pdf}
+  \end{center}
+  \vspace{-0.5em}
+  \begin{enumerate}\footnotesize
+    \item Score every candidate: cosine similarity to the question.
+    \item Divide by a temperature $\tau$ (the knob from LLM-2's sampling).
+    \item Softmax: scores become probabilities that sum to 1.
+    \item Loss $= -\log p(d^{+})$: near 0 when sure of the right one, large when it hesitates.
+  \end{enumerate}
 \end{frame}
 
 \begin{frame}{How the vectors are trained to be useful}
@@ -810,7 +898,8 @@ mean.}
   $\tau$ sharpens the competition and punishes near-misses harder.}
 
   \vspace{0.6em}
-  \watchbox{This objective is called \textbf{InfoNCE}. The name is not important; the shape
+  \watchbox{This objective is called \textbf{InfoNCE} (van den Oord et al., 2018; the name comes from noise-contrastive
+  estimation). The name is not important; the shape
   is: one positive on top, everything else pushed down.}
 \end{frame}
 
@@ -980,6 +1069,37 @@ mean.}
   expensive one.}
 \end{frame}
 
+\begin{frame}{Who is who: encoders you will meet}
+  \vspace{0.3em}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+      \textbf{\color{popblue}Bi-encoders} {\small (embedding models)}
+      \begin{itemize}\footnotesize
+        \item Sentence-BERT (2019): made sentence vectors practical
+        \item Dense Passage Retrieval, DPR (2020)
+        \item E5 (2022), multilingual-E5 (2023): open
+        \item BGE (2023), BGE-M3 (2024): open, Beijing Academy of AI
+        \item text-embedding-3 (2024): OpenAI, paid
+        \item gemini-embedding-001 (2025): Google, paid
+        \item Qwen3-Embedding (2025): open, Alibaba
+        \item Armenian Text Embeddings, ATE-2 (2026): open
+      \end{itemize}
+    \column{0.44\textwidth}
+      \textbf{\color{armred}Cross-encoders} {\small (rerankers)}
+      \begin{itemize}\footnotesize
+        \item monoBERT (2019): BERT as a reranker
+        \item ms-marco-MiniLM (2021): small, open
+        \item BGE-reranker (2023): open
+        \item Cohere Rerank (2023): paid
+        \item Qwen3-Reranker (2025): open, Alibaba
+      \end{itemize}
+  \end{columns}
+
+  \vspace{0.6em}
+  {\footnotesize\color{gray}To compare them: the Massive Text Embedding Benchmark (MTEB, 2022) leaderboard, and for
+  Armenian, ArmBench-TextEmbed (2026). Check the scores on your own language and data before trusting a ranking.}
+\end{frame}
+
 \begin{frame}{Practical: prefixes are not decoration}
   \vspace{0.7em}
   Many embedding models are trained \textbf{asymmetrically}: questions and passages are fed
@@ -1105,7 +1225,7 @@ embedding model exists for your language.}
     \includegraphics[width=0.6\linewidth]{fig/14_ate2_scores.pdf}
   \end{center}
   \vspace{-0.4em}
-  {\small \textbf{Armenian Text Embeddings 2 (ATE-2)}, from Metric AI Lab. Scores are the
+  {\small \textbf{Armenian Text Embeddings 2 (ATE-2)}, from Metric AI Lab (2026). Scores are the
   average on an Armenian embedding benchmark, native Armenian text, higher is better.}
 \end{frame}
 
@@ -1269,4 +1389,15 @@ embedding model exists for your language.}
 %   L42 - keyword extraction, reciprocal rank fusion, metadata filtering, reranking and the
 %   retrieve-then-rerank cascade, ColBERT late interaction, vector indexes (HNSW).
 %   L43 - context assembly, grounding, and evaluation.
+%
+% ADDED 2026-11-19 after the instructor's read-through (nothing cut; figures from py_src/l41_explain_figs.py):
+%   - "How much text fits in one embedding?" (e01): input limits of common embedders vs an LLM window.
+%   - "First, look at the corpus" (e02, illustrative lengths): what the archive is, EDA before chunking.
+%   - The old "five strategies" bar chart (02) became the real text coloured per chunk (e03 fixed size,
+%     e04 structural) plus "Recursive splitting, step by step" (e05, a real run of the algorithm).
+%   - tf-idf/BM25: counts table as a figure (e06), idf curve (e07), tf-idf per-word bars (e08, the mirror
+%     of 06_bm25_worked), "One word's journey through BM25" (e09).
+%   - "A toy first" (e10) before "The corpus as points in space", whose caption now explains each element.
+%   - "Training as a multiple-choice test" (e11) before the InfoNCE formula; InfoNCE cited (2018).
+%   - "Who is who: encoders you will meet": bi- and cross-encoders with years (verified 2026-11-18/19).
 % ============================================================================
