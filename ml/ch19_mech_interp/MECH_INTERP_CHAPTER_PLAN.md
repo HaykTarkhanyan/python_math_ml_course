@@ -95,7 +95,7 @@ rather than confirmed - see the build-risk gate and the self-repair section.
 
 Three decks, `L45`-`L47`, continuing `ml/` numbering after `L44` (agents). Chapter page
 `mech_interp.qmd` registers in `_quarto.yml`. Three decks matches `ch10_diffusion` (L29-L31)
-and `04_rag` (L41-L43).
+and `05_rag` (L41-L43).
 
 Closes no existing entry in `ml/MISSING_TOPICS.md` - this is a new topic, not a known gap. It
 was proposed 2026-08-13 after reading Neel Nanda's current guide (see Sources).
@@ -210,7 +210,7 @@ duplicates an L22 frame, cut the L47 one.
 ~50 frames. **The descriptive deck.** Ends by admitting everything in it is circumstantial.
 
 > **Frame budget, corrected 2026-08-13.** v1 of this plan estimated 38/40/36 frames. Measured
-> against the decks this chapter is shaped after - `04_rag` at **54/58/55** and `ch16_jepa` at
+> against the decks this chapter is shaped after - `05_rag` at **54/58/55** and `ch16_jepa` at
 > **47/49** - those numbers were low, and the beats outlined below will land nearer **50 per
 > deck**. Size the three sessions against 50-frame decks, not 38-frame ones.
 

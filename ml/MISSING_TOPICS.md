@@ -13,7 +13,7 @@
 > |---|---|---|
 > | **Transformers — L25, L26** | **the only hole in the built sequence** | `llms/` holds 1 deck of a planned 3. L24 stops after a single attention head; L30 (diffusion) had to build cross-attention itself because L26 does not exist (`DECISIONS.md` #4). Source largely exists: `misc/dl4nlp/02_transformers.tex`, 28 frames, already in the house palette. Outline drafted in `llms/ATTENTION_CHAPTER_PLAN.md`. |
 > | Duplicate decks in `06_feature_engineering` | unresolved | `26_`/`27_` vs legacy `L01g_`/`L01h_` — same two topics, two numbering schemes, all four still present. Decide which pair is live and demote the other. |
-> | **LLM agents / tool use** | **nothing, and the course now points at it** | Verified absent 2026-08-11: the only `agent` hits in `ml/**/*.tex` are RL agents (`ch11_rl`) and JEPA, a different sense. `04_rag/L43` mentions "agentic" twice as a teaser and its student review asked what the *"enough to answer?"* stopping check actually is — a question the chapter raises and never answers. Natural sequel to RAG: retrieve-then-generate becomes decide-act-observe-repeat. `04_rag/rag_demo.py` is ready-made scaffolding (add a tool registry and a stopping condition). |
+> | **LLM agents / tool use** | **nothing, and the course now points at it** | Verified absent 2026-08-11: the only `agent` hits in `ml/**/*.tex` are RL agents (`ch11_rl`) and JEPA, a different sense. `05_rag/L43` mentions "agentic" twice as a teaser and its student review asked what the *"enough to answer?"* stopping check actually is — a question the chapter raises and never answers. Natural sequel to RAG: retrieve-then-generate becomes decide-act-observe-repeat. `05_rag/rag_demo.py` is ready-made scaffolding (add a tool registry and a stopping condition). |
 > | Graph neural networks | absent, and disconnected | Zero hits anywhere in `ml/`. A genuine classical gap, but nothing else in the course leads into or out of it, so it would be a standalone island. Lower priority than agents for that reason. |
 > | Serving, cost and monitoring | absent | No hits for MLOps, drift or model monitoring; deployment appears only in passing inside feature engineering. Every chapter currently ends at "it works in a notebook". Listed below as out of scope, which may be worth revisiting now that the course reaches production-shaped topics. |
 >
@@ -36,7 +36,7 @@
 > - **CNNs** → `12_cnn/` L16–L19 (foundations, architectures, transfer learning, vision tasks)
 > - **RNN / LSTM** → `13_rnns/` L20, L21
 > - **Modern optimizers, init, BatchNorm** → `11_neural_networks/44_optimization` + `45_optimization_init_activations`
-> - **Attention** → `llms/06_attention/` (LLM-3, was L24) (partial — see "still open")
+> - **Attention** → `llms/07_attention/` (LLM-3, was L24) (partial — see "still open")
 > - **Autoencoders / VAE** → `ch8_autoencoders/` L22, L23
 > - **GANs** → `ch8b_gans/` L23b, L23c
 > - **Diffusion** → `ch10_diffusion/` L27–L31
@@ -52,12 +52,12 @@
 > Closed since the 2026-08-04 refresh:
 >
 > - **Prompting / RAG** — the last "coverage: none" row in the archive below. Built as
->   `04_rag/`: L41 retrieval (chunking, tf-idf, BM25, embedders, Armenian/ATE-2), L42 hybrid
+>   `05_rag/`: L41 retrieval (chunking, tf-idf, BM25, embedders, Armenian/ATE-2), L42 hybrid
 >   and reranking, L43 generation and evaluation, plus `rag_demo.py`, a runnable end-to-end
->   pipeline. 182 pages, 52 generated figures, 6 source papers in `04_rag/papers/`.
+>   pipeline. 182 pages, 52 generated figures, 6 source papers in `05_rag/papers/`.
 > - **Chapter pages for the 4 folders** listed as open on 2026-08-04 — all now exist and are
 >   registered in `_quarto.yml`: `06_feature_engineering.qmd`, `07_classic_methods.qmd`,
->   `13_rnns/rnn.qmd`, `llms/06_attention/attention.qmd`.
+>   `13_rnns/rnn.qmd`, `llms/07_attention/attention.qmd`.
 > - **Reinforcement learning** → `ch11_rl/L32`, plus the alignment track in `llm_training/`
 > - **Vision-language models** → `ch12_vlm/` L33, L34; **audio** → `ch13_audio/` L35, L36
 > - **Tabular foundation models** → `ch14_tabular_fm/L37`; **vision-language-action** →

@@ -9,6 +9,44 @@ this file holds the choice and a pointer.
 
 ---
 
+## #121 - The next session (video 07) is a "find that sketch" agent over Kargin Haghordum, before the RAG lectures
+
+**Date:** 2026-11-24 · **Status:** active; outline approved (Q60, `llms/04_kargin_agent/07_kargin_agent_OUTLINE.md`),
+notebook built and executed, the instructor's check of the 20 questions pending. **Class model: GPT-6.1 Terra** (Q61,
+chosen before the final comparison). **Final comparison** (Q62; 10 fresh hazy questions, regex tools, one run, $0.42):
+Sol 7/10 with 1 wrong sketch, Terra 6/10 with 4 wrong, DeepSeek V4.1 Flash 5/10 with 0 wrong, Gemini 3 Flash 3/10 with 0
+wrong, gpt-4o-mini 0/10 with 4 wrong. Only gpt-4o-mini is clearly separated (95% intervals). Terra's 4 confident wrong
+answers are the reason to reconsider it. **Project 9 (#107) is dropped** (Q59), because video 07 builds its MCP
+server in class. The instructor asked for the model to be chosen with ArmBench-LLM and for the lesson to teach why
+benchmarks matter (Q58). On the 12 hazy questions: Sol (ArmBench #1) 9/12, DeepSeek V4.1 Flash (#2) 5/12, Gemini 3 Flash
+(#5) 5/12, Terra (not on the board) 9/12 at half Sol's cost. Twelve questions cannot rank these (9/12 against 5/12:
+Fisher p = 0.21), and ArmBench's top three are marked as supplied rounded scores, so the lesson says a benchmark
+shortlists and your own test decides.
+
+**Decision.** A notebook-only session builds an agent over the 654 unique sketches of `kargin_project`, with SQL, regex
+and web-search tools, a known-answer question set, and an MCP server at the end. The regex tool reads dialogue and titles
+only, so the generated summaries stay available for the RAG practical, which reruns the same questions. The RAG decks
+become videos 08-10 in `llms/05_rag/`, and the LLM folders become 06-17.
+
+**Why.** Instructor proposed a database agent and a regex search over a news site, picked Claude's merge of the two (P3,
+"I like p3, let's do it"), then Q54-Q57. The data already exists and is public, and it combines structured fields with
+free text. **The planned argument did not survive testing.** Claude had said regex fails on vague memories. On 12 sketches,
+regex tools only, one run each: from plot summaries gpt-4o-mini 3/12, gpt-4.1-mini 5/12, GPT-6.1 Terra 11/12; from one
+hazy sentence gpt-4o-mini 1/12, Terra 9/12. The lesson therefore says regex with a good model goes far, at about 7.6 tool
+calls and $0.0075 a question, and leaves "can retrieval make the cheap model work?" for the RAG practical, unmeasured.
+Scripts and raw results: `llms/04_kargin_agent/archive/2026-11-24_regex_premise/` (about $0.23).
+
+**Alternatives rejected.** A plain database agent (a clean database gets one-shot SQL, so the loop barely shows). News
+search over Infocom's 24,259 articles (runner-up; they came through a client's partner API, so they need its OK before
+entering this public repo). A course assistant, a CSV analyst with code execution, a news fact-checker (P4-P6). Letting
+the search tool read the summaries (Q54: removes the gap the RAG lectures start from).
+
+**What would change this.** The hazy-question result not holding on the final question set, in either direction: if
+Terra also fails on real fans' descriptions, the "regex goes far" framing is too strong; if the cheap model does well,
+the handover to RAG needs another reason.
+
+---
+
 ## #120 - After the RAG practical, a bounded industry block (vision and documents, voice, shipping it), then theory
 
 **Date:** 2026-11-19 · **Status:** active; the order of the three sessions is a proposal. Plan page:
@@ -437,7 +475,7 @@ whole-line frame and the code run, and cut the two piece-1 frames.
 ## #107 - Three more LLM projects join #106's six: an Armenian embedding fine-tune, a 1B model taught to call tools (both on a rented GPU), and an MCP server for the "great sketch show"
 
 **Date:** 2026-10-28 · **Status:** active, extends #106 (instructor, by phone through a voice bot, picking from a
-second list of ten ideas). Written down only; nothing built.
+second list of ten ideas). Written down only; nothing built. **Project 9 dropped 2026-11-24 (#121).**
 
 **Decision.**
 

@@ -2,16 +2,16 @@
 
 > **Renumbered 2026-11-09 (DECISIONS #113).** Labels in this plan are the ones in use when each part was
 > written. Today: old LLM-6 decoding = **LLM-2** (`02_decoding/`, deck `03_decoding.tex`, taught as video 03);
-> old LLM-2 embeddings = **LLM-3** (`05_embeddings_position/`); old LLM-3 attention = **LLM-4**
-> (`06_attention/`); old LLM-4 block = **LLM-5** (`07_transformer_block/`); old LLM-5 transformers = **LLM-6**
-> (`08_transformers_in_the_world/`). LLM-1 (deck `01_tokenization.tex`) and LLM-7 onward are unchanged. Folder
+> old LLM-2 embeddings = **LLM-3** (`06_embeddings_position/`); old LLM-3 attention = **LLM-4**
+> (`07_attention/`); old LLM-4 block = **LLM-5** (`08_transformer_block/`); old LLM-5 transformers = **LLM-6**
+> (`09_transformers_in_the_world/`). LLM-1 (deck `01_tokenization.tex`) and LLM-7 onward are unchanged. Folder
 > paths below are already updated.
 
 Drafted 2026-10-02; folder, order and map decided 2026-10-04 (DECISIONS #66, #67); numbered in
 teaching order, LLM-1 to LLM-14, on 2026-10-05 (#71: L24-L26 became LLM-3 to LLM-5). **Not approved
 yet** - the open decisions in section 1 come first. Follows the house new-chapter workflow
 (interview -> outline -> approval -> build), like `ATTENTION_CHAPTER_PLAN.md` (this folder, LLM-3 to LLM-5)
-and `04_rag/RAG_CHAPTER_PLAN.md`.
+and `05_rag/RAG_CHAPTER_PLAN.md`.
 
 **Scope.** The whole language-model chapter between the RNN chapter and the application chapters
 (RAG, agents): tokenization, embeddings and position, the three built attention lectures (LLM-3 to LLM-5),
@@ -54,7 +54,7 @@ Two threads, each unbroken: text (RNN -> attention -> LLMs) and generative (AE -
 diffusion).
 
 **Nothing in or right after this block needs autoencoders** (checked 2026-10-03, grep for
-autoencod / VAE / L22 / L23 over the decks): `14_llms` 0, `04_rag` 0, `ch18_agents` 0. The
+autoencod / VAE / L22 / L23 over the decks): `14_llms` 0, `05_rag` 0, `ch18_agents` 0. The
 LLM source decks say "denoising" only about T5/BART span corruption
 (`misc/dl4nlp/06_early_notable_models.tex:588, 640`) - one sentence, no chapter needed.
 
@@ -910,7 +910,7 @@ chapter's order existed; they now come after LLM-11.
 1. **Layout debt, the biggest finding.** Measured with the house detectors: **52 frames overflow**
    (L41 14, L42 9 - up to 27.6 pt - L43 21, L44 8), **58 pages have text under 5.5 pt** (L41 18,
    L42 19, L43 16, L44 5; down to 3.2 pt), and 14 pages put content in the footer band. The cause is
-   the one LLM-3 to LLM-5 had: figures drawn far wider than their slots (`04_rag/py_src`,
+   the one LLM-3 to LLM-5 had: figures drawn far wider than their slots (`05_rag/py_src`,
    `ch18_agents/py_src`). The fix is mechanical but large - redraw each figure at slot size, trim
    the overflowing frames, detectors to zero.
 2. **The students now arrive knowing more.** Embeddings and cosine neighbours (LLM-2), temperature
@@ -944,7 +944,7 @@ lists are identical to the committed versions (no new overflow).
 **Point 1 done (layout pass, 2026-10-05/06):** all four decks at zero overflow, zero figure text
 under 5.5 pt and zero footer collisions; every figure redrawn at slot size; every model figure
 rerun on e5-small and identical to its August numbers, with a check that fails if a quoted number
-moves; measured timings frozen in `04_rag/results/*.json`. Found on the way: L44's code boxes
+moves; measured timings frozen in `05_rag/results/*.json`. Found on the way: L44's code boxes
 had lost their indentation (a `\quad` after `\\` is discarded), L42's recap said "Later
 interaction". Session log `_work_sessions/2026-10-05-1600_rag-agents-critique-and-layout-pass.toml`.
 

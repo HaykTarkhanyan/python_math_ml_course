@@ -100,7 +100,7 @@ This also applies to ordered lists, blockquotes (`>`), code fences, and tables. 
 - **python_libs/** — 18 Jupyter notebooks: data science stack (NumPy, Pandas, etc.)
 - **math/** — 26 `.qmd` homework modules + `Lectures/` (Beamer slide decks)
 - **ml/** — active ML course (formerly `ml_new/`): chapter folders `01_regression_intro`, `02_main_concepts`, `03_classification`, `04_trees`, plus clustering, dimensionality-reduction, trees, neural-network, and genai decks. Quarto pages registered in `_quarto.yml`; Beamer decks live under each chapter.
-- **llms/** — the LLM part of the course (moved out of `ml/14_llms` on 2026-10-28): one folder per deck, `01_tokenization` to `16_anatomy_2026`, each with its own `fig/`, `py_src/`, `results/`; the course-map figures and borrowed stills used by several decks live in `00_shared/`. Decks load `\input{../../ml/preamble}` and follow `ml/SLIDE_STYLE.md`. Website part "🧠 LLMs" in `_quarto.yml`. Map: `llms/README.md`.
+- **llms/** — the LLM part of the course (moved out of `ml/14_llms` on 2026-10-28): one folder per deck, `01_tokenization` to `17_anatomy_2026`, each with its own `fig/`, `py_src/`, `results/`; the course-map figures and borrowed stills used by several decks live in `00_shared/`. Decks load `\input{../../ml/preamble}` and follow `ml/SLIDE_STYLE.md`. Website part "🧠 LLMs" in `_quarto.yml`. Map: `llms/README.md`.
 - **misc/** — supplementary materials: Google Colab guide, dl4nlp lectures, Claude Code slides
 - Course is bilingual: Armenian (Հայերեն) + English throughout all materials
 
