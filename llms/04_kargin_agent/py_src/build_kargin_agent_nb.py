@@ -1,19 +1,19 @@
-"""Assemble and execute llms/04_kargin_agent/07_kargin_agent_solution.ipynb: "Find that sketch" (DECISIONS #121).
+"""Assemble and execute llms/04_kargin_agent/07_kargin_agent_solution.ipynb: "Find that sketch" (DECISIONS #121, #122).
 
-An agent over the 654 sketches of Kargin Haghordum: SQLite, regex search, web search, a known-answer check, why benchmarks
-matter (ArmBench-LLM against our own test), and an MCP server. The functions shown in the notebook are copied here from
-kargin_agent.py, so the notebook and the module cannot drift.
+The notebook is a guided tour of the project in sketch_finder/: it imports the package, shows each function's real source,
+and runs it. Data, a read-only database, SQL, regex and web tools, failures and tests, why benchmarks matter
+(ArmBench-LLM against our own test), the command line, an MCP server, and the handover to RAG.
 
 Calls the models directly (no record/replay, DECISIONS #116). The five-model table comes from
-results/model_comparison.json (py_src/run_model_comparison.py), so a class re-run does not pay for it again.
-Needs OPENROUTER_API_KEY and TAVILY_API_KEY in the repository's .env (read, never printed).
+sketch_finder/results/hazy_comparison_2026-11-24.json, so a class re-run does not pay for it again.
+Needs OPENROUTER_API_KEY and TAVILY_API_KEY in the repository's .env (read, never printed), and `uv sync` done once in
+sketch_finder/ for the command-line cells.
 
-Run with the project venv (builds, executes, exports HTML; about 2 min, about $0.05):
+Run with the project venv (builds, executes, exports HTML; about 3 min, about $0.10):
     ./ma/Scripts/python.exe llms/04_kargin_agent/py_src/build_kargin_agent_nb.py
     ./ma/Scripts/python.exe llms/04_kargin_agent/py_src/build_kargin_agent_nb.py --markdown-only
 """
 import argparse
-import ast
 import logging
 import subprocess
 import sys
@@ -27,8 +27,6 @@ LESSON_DIR = HERE.parents[1]
 REPO_ROOT = HERE.parents[3]
 OUTPUT_PATH = LESSON_DIR / "07_kargin_agent_solution.ipynb"
 LOGS_DIR = REPO_ROOT / "logs"
-MODULE_SOURCE = (LESSON_DIR / "kargin_agent.py").read_text(encoding="utf-8")
-MODULE_TREE = ast.parse(MODULE_SOURCE)
 CELLS = []
 log = logging.getLogger("build_kargin_agent_nb")
 
@@ -41,91 +39,87 @@ def code(source):
     CELLS.append(nbf.v4.new_code_cell(source.strip("\n")))
 
 
-def functions(*names):
-    """The exact source of these functions in kargin_agent.py."""
-    by_name = {node.name: node for node in MODULE_TREE.body if isinstance(node, ast.FunctionDef)}
-    return "\n\n\n".join(ast.get_source_segment(MODULE_SOURCE, by_name[name]) for name in names)
-
-
-def assignment(name):
-    """The exact source of one top-level assignment in kargin_agent.py."""
-    for node in MODULE_TREE.body:
-        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == name:
-            return ast.get_source_segment(MODULE_SOURCE, node)
-    raise KeyError(name)
-
-
-def schema(name):
-    """One entry of TOOL_SCHEMAS, as its own assignment."""
-    for node in MODULE_TREE.body:
-        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "TOOL_SCHEMAS":
-            for key, value in zip(node.value.keys, node.value.values):
-                if key.value == name:
-                    lines = ast.get_source_segment(MODULE_SOURCE, value).split("\n")
-                    body = "\n".join([lines[0]] + [line[4:] for line in lines[1:]])
-                    return f'TOOL_SCHEMAS["{name}"] = {body}'
-    raise KeyError(name)
-
-
 def build_cells():
     CELLS.clear()
     # ==================================================================================== intro
     md(r"""
 # Find that sketch: an agent over Kargin Haghordum
 
-*Video 07. Notebook only.*
+*Video 07.*
 
 You remember a Kargin sketch but not its name: "the one where a lady lies to get a seat on the minibus". Today we build
 an agent that finds it, across all 654 sketches, with the tools from videos 05 and 06.
 
-1. **The model alone** (1), then **the data** (2) and **a real database** (3).
+The code is a real project in `sketch_finder/`, laid out the way you would lay out your own: a package, tests, a
+command line, a cost ledger. This notebook is the guided tour. It imports the package, shows each piece, and runs it.
+
+1. **The project** (0), **the model alone** (1), **the data** (2), **a read-only database** (3).
 2. **Three kinds of tools:** SQL (4), regex over the dialogue (5), the web (6).
-3. **Break it, fix it** (7).
+3. **Break it, fix it, test it** (7).
 4. **Which model?** What a benchmark tells you (8), and our own benchmark (9).
-5. **An MCP server** (10), so the same tools work inside Claude Code, and **the handover to RAG** (11).
+5. **The command line** (10), **an MCP server** (11), and **the handover to RAG** (12).
 
 > **Running it.** Every cell calls the model for real, so your answers will differ from the saved run of 24 Nov. A full
-> run takes about 2 minutes and costs about $0.05. The five-model table in part 9 is read from a saved file, because
+> run takes about 3 minutes and costs about $0.10. The five-model table in part 9 is read from a saved file, because
 > that run alone cost $0.42.
 """)
 
-    # ==================================================================================== 0 setup
+    # ==================================================================================== 0 the project
     md(r"""
-## 0. Setup
+## 0. The project
 """)
     code(r"""
 # ~5 s
+import inspect
 import json
-import os
+import logging
 import re
 import sqlite3
-import csv
-import time
+import sys
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from dotenv import load_dotenv
-from openai import OpenAI
+from IPython.display import Code, display
 from statsmodels.stats.proportion import proportion_confint
 
-load_dotenv("../../.env")   # keys are read here and never printed
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.environ["OPENROUTER_API_KEY"],
-    max_retries=3,
-    timeout=120,
-)
+sys.path.insert(0, str(Path("sketch_finder/src").resolve()))   # or: uv sync, then pick sketch_finder/.venv as the kernel
+from sketch_finder import agent, config, database, evaluate, ledger, tools
 
-CSV_PATH = Path("data/kargin_sketches.csv")
-DB_PATH = Path("data/kargin.db")
-""" + "\n".join(assignment(name) for name in
-                ("MAX_SQL_ROWS", "MAX_CELL_CHARS", "MAX_SEARCH_RESULTS", "MAX_PATTERN_CHARS", "MAX_DIALOGUE_CHARS",
-                 "DEFAULT_MODEL")) + r"""
+logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout, force=True)
+for noisy in ("httpx", "mcp"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 
-session_cost = 0.0     # every model call below adds to this
+
+def show(function):
+    # print a function's real source from the project
+    display(Code(inspect.getsource(function), language="python"))
+
+
+client = agent.make_client()          # reads the keys from .env, never prints them
+calls_before = len(ledger.read_ledger())
+print("model:", config.DEFAULT_MODEL)
+""")
+    md(r"""
+What is in the folder:
+""")
+    code(r"""
+skip = {".venv", "__pycache__", "logs", ".pytest_cache", "uv.lock", "kargin.db"}
+
+for path in sorted(Path("sketch_finder").rglob("*")):
+    if path.is_file() and not skip & set(path.parts) and path.name not in skip:
+        depth = len(path.relative_to("sketch_finder").parts) - 1
+        print(f"{'    ' * depth}{path.name:28} {path.stat().st_size / 1000:7.1f} kB")
+""")
+    md(r"""
+`pyproject.toml` names the dependencies with exact versions and declares the `sketch-finder` command. Each module does
+one job: `config` (settings), `database`, `tools`, `agent` (the loop), `evaluate` (the benchmark), `ledger` (costs),
+`server` (MCP), `cli`. We walk through them in that order.
+""")
+    code(r"""
+print(Path("sketch_finder/pyproject.toml").read_text(encoding="utf-8"))
 """)
 
     # ==================================================================================== 1 the model alone
@@ -139,7 +133,7 @@ First, no tools at all. We ask our model about the sketch directly.
 question = "Which Kargin Haghordum sketch is the one where a lady lies to get a seat on the minibus? Give its title and YouTube link."
 
 response = client.chat.completions.create(
-    model=DEFAULT_MODEL,
+    model=config.DEFAULT_MODEL,
     messages=[{"role": "user", "content": question}],
     max_tokens=1000,
     extra_body={
@@ -148,23 +142,24 @@ response = client.chat.completions.create(
         "usage": {"include": True},
     },
 )
-session_cost += response.usage.cost
+ledger.record_call(config.DEFAULT_MODEL, "openai", response.usage, "hook")   # every call goes in the ledger
 print(response.choices[0].message.content)
 """)
     md(r"""
-In the run of 24 Nov the model said it could not verify the title or link, offered a guess at a name, and pointed to a
-YouTube search. That is a fair answer: it does not have this archive. The right answer is sketch 198, and by the end of
-part 5 the agent can look it up.
+In the run of 24 Nov the model said it could not identify the sketch and asked what lie the woman tells. That is the
+honest answer: it does not have this archive, so it cannot look. The right answer is sketch 198, and by the end of part
+5 the agent finds it.
 """)
 
     # ==================================================================================== 2 data
     md(r"""
 ## 2. The data
 
-One CSV, frozen from the Kargin project: hand-curated dialogue, plus YouTube's numbers. Real data, so it is messy.
+One CSV, frozen from the Kargin project (`scripts/freeze_data.py`): hand-curated dialogue, plus YouTube's numbers. Real
+data, so it is messy.
 """)
     code(r"""
-table = pd.read_csv(CSV_PATH, dtype={"upload_date": str})
+table = pd.read_csv(config.CSV_PATH, dtype={"upload_date": str})
 
 print("rows:", len(table))
 print("columns:", list(table.columns))
@@ -199,36 +194,34 @@ print("some of them:")
 for value in raw_actors[raw_actors.str.contains("Մկո Հասմիկ|Հայկո Մկո")].unique()[:4]:
     print("  ", repr(value))
 """)
-    md(r"""
-`"Հայկո , Մկո Հասմիկ"` is three people with one comma missing. We split on commas, and split on a space only when
-every word is a name we have seen on its own in at least five sketches.
-""")
 
     # ==================================================================================== 3 database
     md(r"""
-## 3. A real database
+## 3. A read-only database
 
-Three tables: the sketches, the actors, and which actor is in which sketch.
+`database.py`. Names are split on commas, and on a space only when every word is a name seen on its own in at least five
+sketches. "փոքր երեխա" (a small child) is a role, so it stays whole.
 """)
-    code(functions("split_actor_names", "find_known_names", "empty_to_none") + r"""
+    code(r"""
+show(database.split_actor_names)
+show(database.find_known_names)
 
-
-known_names = find_known_names(unique_sketches.fillna("").to_dict("records"))
-print(split_actor_names("Հայկո , Մկո Հասմիկ", known_names))
+known_names = database.find_known_names(unique_sketches.fillna("").to_dict("records"))
+print(database.split_actor_names("Հայկո , Մկո Հասմիկ", known_names))
+print(database.split_actor_names("Մկո, փոքր երեխա", known_names))
 """)
-    code(functions("build_database") + r"""
-
-
-print(build_database())
+    code(r"""
+show(database.build_database)
+print(database.build_database())
 """)
     md(r"""
-From 186 hand-typed strings to 76 actor names. Before an agent touches this database, one safety step: every tool
+From 186 hand-typed strings to 76 actor names, in three tables. One safety step before an agent touches it: every tool
 connects **read-only**. The model writes the SQL, and we do not want to find out what happens if it writes the wrong one.
 """)
-    code(functions("open_read_only") + r"""
+    code(r"""
+show(database.open_read_only)
 
-
-connection = open_read_only()
+connection = database.open_read_only()
 try:
     connection.execute("DROP TABLE sketches")
 except sqlite3.OperationalError as error:
@@ -241,43 +234,40 @@ finally:
     md(r"""
 ## 4. Tool 1: SQL, and the agent loop
 
-The first tool runs a query and returns at most 30 rows, so one bad query cannot flood the model's context.
+`tools.py`. The first tool runs a query and returns at most 30 rows, so one bad query cannot flood the model's context.
 """)
-    code(functions("run_sql") + r"""
-
-
-run_sql("SELECT name, count(*) AS sketches FROM actors JOIN sketch_actors USING (actor_id) GROUP BY name ORDER BY sketches DESC LIMIT 4")
-""")
-    md(r"""
-As in video 05, the model only sees a description of the tool. Its docstring becomes that description.
-""")
-    code(functions("tool_schema") + "\n\n\nTOOL_SCHEMAS = {}\nTOOL_FUNCTIONS = {\"run_sql\": run_sql}\n" + schema("run_sql") + r"""
-
-print(json.dumps(TOOL_SCHEMAS["run_sql"], indent=1))
+    code(r"""
+show(tools.run_sql)
+tools.run_sql("SELECT name, count(*) AS sketches FROM actors JOIN sketch_actors USING (actor_id) GROUP BY name ORDER BY sketches DESC LIMIT 4")
 """)
     md(r"""
-The system prompt tells the model what is in the database and how to search it. Most of what makes this agent work
-lives here, and we will see why in part 7.
+As in video 05, the model only sees a description of each tool. The docstring becomes that description:
 """)
-    code(assignment("SYSTEM_PROMPT") + r"""
-
-
-print(len(SYSTEM_PROMPT), "characters")
+    code(r"""
+print(json.dumps(tools.TOOL_SCHEMAS["run_sql"], indent=1, ensure_ascii=False))
 """)
     md(r"""
-Now the loop from video 05, with three additions: every model is pinned to one provider, a tool failure goes back to the
-model as text, and a cut-off tool call is handled (part 7 shows why).
+`agent.py`. The system prompt says what is in the database and how to search it. Most of what makes this agent work
+lives here, and part 7 shows why.
 """)
-    code(assignment("MODELS") + "\n" + 'ALL_TOOL_NAMES = ("run_sql", "search_dialogue", "read_sketch", "web_search")\n'
-         + 'REGEX_TOOL_NAMES = ("search_dialogue", "read_sketch")\n\n\n'
-         + functions("call_model", "run_tool", "read_tool_arguments", "read_final_answer"))
-    code(functions("run_agent") + r"""
+    code(r"""
+print(agent.SYSTEM_PROMPT)
+""")
+    md(r"""
+The loop from video 05, with three additions: each model is pinned to one provider (`config.MODELS`), every call is
+written to the cost ledger, and a broken tool call goes back to the model as text instead of crashing the program.
+""")
+    code(r"""
+show(agent.call_model)
+show(agent.run_tool)
+show(agent.read_tool_arguments)
+""")
+    code(r"""
+show(agent.run_agent)
 
 
 def show_run(outcome):
-    # one summary line per run, and the running total
-    global session_cost
-    session_cost += outcome["cost"]
+    # one summary line per run
     tools_used = Counter(call["tool"] for call in outcome["calls"])
     print(f"answer: {outcome['answer']} | {outcome['steps']} steps | tools: {dict(tools_used)} | "
           f"${outcome['cost']:.4f} | {outcome['seconds']:.0f} s")
@@ -287,13 +277,13 @@ The first run, with every step printed:
 """)
     code(r"""
 # ~5 s
-outcome = run_agent(client, "How many sketches take place in a hospital?", tool_names=("run_sql",), verbose=True)
+outcome = agent.run_agent(client, "How many sketches take place in a hospital?", tool_names=("run_sql",), verbose=True)
 print()
 show_run(outcome)
 """)
     code(r"""
 # ~5 s
-outcome = run_agent(client, "Which actor appears in the most sketches, not counting Հայկո and Մկո?", tool_names=("run_sql",))
+outcome = agent.run_agent(client, "Which actor appears in the most sketches, not counting Հայկո and Մկո?", tool_names=("run_sql",))
 show_run(outcome)
 """)
 
@@ -322,39 +312,32 @@ for word, stem in [("դպրոց", "դպրոց"), ("հիվանդանոց", "հի�
 So the tool takes **regexes**, and the system prompt tells the model to search stems. It can also require several
 patterns in the same sketch, which is what `grep a | grep b` does in a terminal.
 """)
-    code(functions("search_dialogue", "read_sketch") + r"""
+    code(r"""
+show(tools.search_dialogue)
+show(tools.read_sketch)
 
-
-found = search_dialogue(["դպրոց", "ուսուցիչ|դասատու"])
+found = tools.search_dialogue(["դպրոց", "ուսուցիչ|դասատու"])
 print("matches:", found["total_matches"])
 print(found["results"][0])
-print()
-print({key: str(value)[:70] for key, value in read_sketch(found["results"][0]["sketch_id"]).items()})
-""")
-    code(schema("search_dialogue") + "\n" + schema("read_sketch") + r"""
-
-TOOL_FUNCTIONS["search_dialogue"] = search_dialogue
-TOOL_FUNCTIONS["read_sketch"] = read_sketch
-print(list(TOOL_FUNCTIONS))
 """)
     md(r"""
-Back to the opening question, and this time the model can look. Every step is printed, so watch which words it tries.
+Back to the opening question, and this time the model can look. Watch which words it tries.
 """)
     code(r"""
 # ~20 s
-outcome = run_agent(
+outcome = agent.run_agent(
     client,
     "I remember a sketch but not its name: A lady lies to get a seat on the minibus. Which sketch is it?",
-    tool_names=REGEX_TOOL_NAMES,
+    tool_names=tools.REGEX_TOOL_NAMES,
     verbose=True,
 )
 print()
 show_run(outcome)
 """)
     md(r"""
-Look at the patterns in the run of 24 Nov. `մարշրուտ` found nothing, because the dialogue spells the minibus
-`մառշուտկա`. The agent still got there through another pair of stems, `նստ` (sit) and `հղի` (pregnant), a word that is
-not in the question at all. It guessed what the lady would say.
+Look at the patterns in the run of 24 Nov. Three words for the minibus (`մարշրուտ|երթուղ|գազել`) found nothing, because
+the dialogue spells it `մառշուտկա`. The agent then searched `հղի` (pregnant), a word that is not in the question at all:
+it guessed what the lady would say. Eight sketches matched, and it read the right one.
 """)
 
     # ==================================================================================== 6 web
@@ -363,13 +346,12 @@ not in the question at all. It guessed what the lady would say.
 
 Some questions are not in our database at all. The agent should notice that and go outside.
 """)
-    code(functions("web_search") + "\n\n\n" + schema("web_search") + r"""
-
-TOOL_FUNCTIONS["web_search"] = web_search
+    code(r"""
+show(tools.web_search)
 """)
     code(r"""
 # ~15 s
-outcome = run_agent(
+outcome = agent.run_agent(
     client,
     "How many sketches does Հայկո appear in, and what public office did the actor Hayko (Hayk Marutyan) hold after the show? "
     "Use the database for the count and the web for the office. End with ANSWER: <count>, <office>.",
@@ -381,7 +363,7 @@ show_run(outcome)
 
     # ==================================================================================== 7 break it
     md(r"""
-## 7. Break it, fix it
+## 7. Break it, fix it, test it
 
 Three failures that really happened while building this agent.
 
@@ -389,15 +371,15 @@ Three failures that really happened while building this agent.
 comma is just a comma, so this looks for that exact sentence:
 """)
     code(r"""
-print("what the model wrote: ", search_dialogue(["օլիգարխ, մահ, խնձոր"])["total_matches"], "matches")
-print("one stem at a time:   ", search_dialogue(["օլիգարխ"])["total_matches"], "matches")
-print("two stems, both needed:", search_dialogue(["օլիգարխ", "խնձոր"])["total_matches"], "matches")
+print("what the model wrote:  ", tools.search_dialogue(["օլիգարխ, մահ, խնձոր"])["total_matches"], "matches")
+print("one stem at a time:    ", tools.search_dialogue(["օլիգարխ"])["total_matches"], "matches")
+print("two stems, both needed:", tools.search_dialogue(["օլիգարխ", "խնձոր"])["total_matches"], "matches")
 """)
     md(r"""
 The fix is one line in the system prompt: *"Never put English words or commas in a pattern."*
 
 **Failure 2: a tool call cut off halfway.** One model wrote a regex so long that it hit `max_tokens` in the middle of the
-JSON. The first version of our loop crashed on it. Here is that reply, rebuilt by hand:
+JSON. The first version of the loop crashed on it. Here is that reply, rebuilt by hand:
 """)
     code(r"""
 cut_off_call = SimpleNamespace(
@@ -411,8 +393,8 @@ try:
 except json.JSONDecodeError as error:
     print("json.loads alone would crash:", error)
 
-arguments = read_tool_arguments(reply)["call_1"]
-print("our loop instead tells the model:", run_tool("search_dialogue", arguments))
+arguments = agent.read_tool_arguments(reply)["call_1"]
+print("our loop instead tells the model:", agent.run_tool("search_dialogue", arguments))
 """)
     md(r"""
 **Failure 3: an agent that never stops.** When a search keeps failing, a model can keep trying forever, and each try
@@ -420,26 +402,34 @@ costs money. The step cap ends it. Here the cap is set too low on purpose:
 """)
     code(r"""
 # ~5 s
-outcome = run_agent(
+outcome = agent.run_agent(
     client,
     "I remember a sketch but not its name: An old man keeps getting woken up by someone calling him. Which sketch is it?",
-    tool_names=REGEX_TOOL_NAMES,
+    tool_names=tools.REGEX_TOOL_NAMES,
     max_steps=2,
 )
 print("hit the step cap:", outcome["hit_step_cap"], "| answer:", outcome["answer"])
 show_run(outcome)
+""")
+    md(r"""
+Each of these failures is now a **test** in `sketch_finder/tests/`, so it cannot come back unnoticed. The tests use a
+tiny database and a fake model that replays fixed replies: no key, no network, no cost. In a terminal it is
+`uv run pytest`; here:
+""")
+    code(r"""
+# ~10 s
+!"{sys.executable}" -m pytest sketch_finder -q
 """)
 
     # ==================================================================================== 8 benchmarks
     md(r"""
 ## 8. Why benchmarks matter
 
-We have used one model so far. Why that one? There are hundreds, prices differ by a factor of 100, and most of them were
-never tested on Armenian. A **benchmark** is a fixed test that many models take, so you can compare them without trying
-each one yourself.
+Which model should run this agent? There are hundreds, prices differ by a factor of 100, and most were never tested on
+Armenian. A **benchmark** is a fixed test that many models take, so you can compare them without trying each one yourself.
 
 For Armenian the one to know is **ArmBench-LLM**, from Metric AI Lab: 24 tasks in five categories (knowledge, reading,
-analysis, generation, correction). This is its leaderboard on 24 Nov:
+analysis, generation, correction). This is its leaderboard on 24 Nov (`py_src/build_armbench_table.py` rebuilds it):
 """)
     code(r"""
 armbench = pd.DataFrame(json.loads(Path("results/armbench_2026-11-24.json").read_text(encoding="utf-8")))
@@ -471,14 +461,14 @@ For that we need a test of our own.
     md(r"""
 ## 9. Our own benchmark
 
-Twenty questions with known answers, in `data/questions.json`: 5 for the database, 5 exact quotes, 10 hazy memories. The
-RAG practical will rerun this same file. A question set like this is the most valuable thing in an LLM project: it turns
-"seems to work" into a number.
+`evaluate.py` and `data/questions.json`: twenty questions with known answers, 5 for the database, 5 exact quotes, 10 hazy
+memories. The RAG practical will rerun this same file. A question set like this is the most valuable thing in an LLM
+project: it turns "seems to work" into a number.
 """)
-    code(functions("is_correct") + r"""
+    code(r"""
+show(evaluate.is_correct)
 
-
-questions = json.loads(Path("data/questions.json").read_text(encoding="utf-8"))
+questions = evaluate.load_questions()
 print(Counter(question["kind"] for question in questions))
 """)
     md(r"""
@@ -486,14 +476,13 @@ First the easy half, live, on our model:
 """)
     code(r"""
 # ~1 min
-easy_questions = [question for question in questions if question["kind"] != "hazy"]
+easy_questions = evaluate.load_questions(["sql", "quote"])
 easy_right = 0
 
 for question in easy_questions:
-    outcome = run_agent(client, question["question"], tool_names=("run_sql", "search_dialogue", "read_sketch"))
-    correct = is_correct(outcome["answer"], question)
+    outcome = agent.run_agent(client, question["question"], tool_names=tools.SEARCH_TOOL_NAMES)
+    correct = evaluate.is_correct(outcome["answer"], question)
     easy_right += correct
-    session_cost += outcome["cost"]
     print(f"{question['id']} {question['kind']:5} {'right' if correct else 'WRONG'} | expected {question['answer']:>5} | "
           f"got {str(outcome['answer'])[:12]:12} | {len(outcome['calls'])} tool calls")
 
@@ -501,43 +490,30 @@ print(f"\n{easy_right} of {len(easy_questions)} right")
 """)
     md(r"""
 Now the hard half: ten hazy memories, regex tools only, on five models. They are sketches we did **not** use while
-writing the prompt, because a test you tuned on stops being a test. This run is saved:
+writing the prompt, because a test you tuned on stops being a test. `uv run sketch-finder eval` runs this kind of
+comparison and saves every run; here is the saved one:
 """)
     code(r"""
-saved_runs = pd.DataFrame(json.loads(Path("results/model_comparison.json").read_text(encoding="utf-8")))
+saved_runs = json.loads(Path("sketch_finder/results/hazy_comparison_2026-11-24.json").read_text(encoding="utf-8"))
+results = pd.DataFrame(evaluate.summarize(saved_runs)).set_index("model")
 
-# 1. a miss is either "no answer" or, worse, a confident wrong sketch
-said_nothing = saved_runs["answer"].isna() | saved_runs["answer"].str.strip(" .").str.lower().eq("none")
-saved_runs["wrong_sketch"] = ~saved_runs["correct"] & ~said_nothing
-
-# 2. one row per model
-results = saved_runs.groupby("model").agg(
-    right=("correct", "sum"),
-    wrong_sketch=("wrong_sketch", "sum"),
-    questions=("correct", "size"),
-    cost_per_question=("cost", "mean"),
-    tool_calls=("calls", lambda calls: calls.map(len).mean()),
-    seconds=("seconds", "mean"),
-)
-
-# 3. how sure can we be with so few questions? (a 95% Wilson interval)
+# how sure can we be with so few questions? (a 95% Wilson interval)
 low, high = proportion_confint(results["right"], results["questions"], alpha=0.05, method="wilson")
 results["low"] = low
 results["high"] = high
 
-# 4. where the model stands on ArmBench
+# where each model stands on ArmBench
 armbench_rank = armbench.set_index("model")["rank"]
 results["armbench"] = [f"#{armbench_rank[m]}" if m in armbench_rank.index else "not listed" for m in results.index]
-results = results.sort_values(["right", "cost_per_question"], ascending=[False, True])
 
-results.round({"cost_per_question": 4, "tool_calls": 1, "seconds": 1, "low": 2, "high": 2})
+results.round({"cost_per_question": 4, "tool_calls_per_question": 1, "low": 2, "high": 2})
 """)
     code(r"""
 names = [model.split("/")[1] for model in results.index]
 pass_rate = 100 * results["right"] / results["questions"]
 error_low = pass_rate - 100 * results["low"]
 error_high = 100 * results["high"] - pass_rate
-colors = ["#F2A800" if model == DEFAULT_MODEL else "#0033A0" for model in results.index]
+colors = ["#F2A800" if model == config.DEFAULT_MODEL else "#0033A0" for model in results.index]
 
 figure, axis = plt.subplots(figsize=(8, 3.4))
 bars = axis.barh(names, pass_rate, color=colors, xerr=[error_low, error_high], capsize=4, ecolor="#555555")
@@ -557,34 +533,48 @@ plt.show()
 - **Ten questions cannot rank close models.** The intervals of Sol, Terra and DeepSeek overlap almost completely. The
   clear gap is gpt-4o-mini, at 0 of 10, against Sol and Terra.
 - **A wrong answer is worse than no answer.** When Terra missed, it named the wrong sketch all 4 times. Sol did that
-  once and gave up twice. DeepSeek never named a wrong sketch. The pass rate alone hides this.
+  once and gave up twice. DeepSeek never named a wrong sketch. The pass rate alone hides this, and it is why the class
+  runs on Sol.
 - **Price per question is not price per token.** DeepSeek is cheap per token but made about 15 tool calls per question.
 
 > **The rule to take home:** a benchmark gives you a shortlist. Your own test, on your own task, picks the model.
 """)
 
-    # ==================================================================================== 10 MCP
+    # ==================================================================================== 10 CLI
     md(r"""
-## 10. The same tools as an MCP server
+## 10. The command line
 
-Our four tools only work inside this notebook. As in video 06, an MCP server makes them available to any client. The
-file is short because it just wraps the functions we wrote:
+Nobody runs a notebook in production. The same agent is a command, declared in `pyproject.toml` and written in
+`cli.py`. This is what you would type in a terminal after `uv sync`:
 """)
     code(r"""
-print(Path("kargin_server.py").read_text(encoding="utf-8"))
+# ~15 s
+!uv run --directory sketch_finder sketch-finder ask "the one where a father and son go fishing and catch nothing"
+""")
+    md(r"""
+Every model call, from the notebook and from the command line, went into the ledger:
+""")
+    code(r"""
+!uv run --directory sketch_finder sketch-finder cost
+""")
+
+    # ==================================================================================== 11 MCP
+    md(r"""
+## 11. The same tools as an MCP server
+
+As in video 06, an MCP server makes our tools available to any client. `server.py` is short because it only wraps the
+functions in `tools.py`:
+""")
+    code(r"""
+display(Code(filename="sketch_finder/src/sketch_finder/server.py", language="python"))
 """)
     md(r"""
 We can talk to it from here, in memory. Each cell opens and closes its own client, which is the safe way in Jupyter.
 """)
     code(r"""
 # ~3 s
-import logging
-
 from mcp import Client
-from kargin_server import mcp
-
-logging.getLogger("httpx").setLevel(logging.WARNING)   # the MCP library turns on request logs, we do not need them here
-logging.getLogger("mcp").setLevel(logging.WARNING)
+from sketch_finder.server import mcp
 
 
 def result_text(result):
@@ -609,22 +599,22 @@ async def run_agent_over_mcp(question, max_steps=10):
     # 1. ask the server what tools exist, and describe them to the model
     async with Client(mcp) as mcp_client:
         listed = await mcp_client.list_tools()
-    tools = [
+    tool_list = [
         {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.input_schema}}
         for t in listed.tools
     ]
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": question}]
+    messages = [{"role": "system", "content": agent.SYSTEM_PROMPT}, {"role": "user", "content": question}]
     total_cost = 0.0
 
     for step in range(1, max_steps + 1):
         # 2. ask the model
-        reply, cost = call_model(client, DEFAULT_MODEL, messages, tools)
+        reply, cost = agent.call_model(client, config.DEFAULT_MODEL, messages, tool_list, label="mcp")
         total_cost += cost
         if not reply.tool_calls:
-            return read_final_answer(reply.content), step, total_cost
+            return agent.read_final_answer(reply.content), step, total_cost
 
         # 3. send each tool call to the server
-        arguments_by_id = read_tool_arguments(reply)
+        arguments_by_id = agent.read_tool_arguments(reply)
         messages.append(reply.model_dump(exclude_none=True))
         for tool_call in reply.tool_calls:
             arguments = arguments_by_id[tool_call.id] or {}
@@ -638,46 +628,48 @@ async def run_agent_over_mcp(question, max_steps=10):
     code(r"""
 # ~10 s
 answer, steps, cost = await run_agent_over_mcp("Which sketch has the most YouTube views? Give its sketch_id.")
-session_cost += cost
 print(f"answer: {answer} | {steps} steps | ${cost:.4f}")
 """)
     md(r"""
-**In Claude Code.** Register the same file once, from the repository root in PowerShell, then ask in plain language
-("which Kargin sketch is the one with the fishing trip?"):
+**In Claude Code.** Register the server once, from `sketch_finder/` in PowerShell, then ask in plain language ("which
+Kargin sketch is the one with the fishing trip?"):
 
 ```powershell
-claude mcp add kargin -- "$PWD/ma/Scripts/python.exe" "$PWD/llms/04_kargin_agent/kargin_server.py"
+claude mcp add kargin -- uv run --directory "$PWD" sketch-finder serve
 ```
 
 We wrote no new tool code for this. That is what the protocol buys.
 """)
 
-    # ==================================================================================== 11 handover
+    # ==================================================================================== 12 handover
     md(r"""
-## 11. What regex could not do
+## 12. What regex could not do
 
-Here are the hazy questions our model missed in the saved run:
+The hazy questions our model missed in the saved run:
 """)
     code(r"""
 questions_by_id = {question["id"]: question for question in questions}
-our_model_runs = saved_runs[saved_runs["model"] == DEFAULT_MODEL]
+our_runs = [run for run in saved_runs if run["model"] == config.DEFAULT_MODEL]
 
-for _, run in our_model_runs[~our_model_runs["correct"]].iterrows():
+for run in our_runs:
+    if run["correct"]:
+        continue
     memory = questions_by_id[run["id"]]["question"]
     memory = memory.replace("I remember a sketch but not its name: ", "").replace(" Which sketch is it?", "")
     print(f"{run['id']}: {memory}")
     print(f"     right answer {run['expected']}, the agent said {run['answer']}, after {len(run['calls'])} tool calls")
 
 print()
-print(f"hazy questions: {len(our_model_runs)}, tool calls per question: {our_model_runs['calls'].map(len).mean():.1f}, "
-      f"cost per question: ${our_model_runs['cost'].mean():.4f}")
-print(f"this notebook's live calls cost ${session_cost:.3f}")
+print(f"tool calls per hazy question: {sum(len(run['calls']) for run in our_runs) / len(our_runs):.1f}, "
+      f"cost per hazy question: ${sum(run['cost'] for run in our_runs) / len(our_runs):.4f}")
+new_calls = ledger.read_ledger()[calls_before:]
+print(f"this notebook made {len(new_calls)} model calls for ${sum(call['cost'] for call in new_calls):.3f}")
 """)
     md(r"""
-In the run of 24 Nov, regex plus a good model got all 10 database and quote questions and 6 of the 10 hazy memories.
-That is further than most people expect. Look at what it took, though: about 10 tool calls for one question, because the
-model has to **guess the words** the characters said. If it guesses wrong, the sketch stays invisible. And the 96
-sketches with no dialogue cannot be found this way at all.
+In the run of 24 Nov, regex plus a good model got all 10 database and quote questions, and 7 of the 10 hazy memories
+in the saved comparison. That is further than most people expect. Look at what it took, though: about 7 tool calls for
+one hazy question, because the model has to **guess the words** the characters said. If it guesses wrong, the sketch
+stays invisible. And the 96 sketches with no dialogue cannot be found this way at all.
 
 The next three lectures are about finding text **by meaning** instead of by exact words. Then the RAG practical reruns
 this same question file and asks: can retrieval let a cheap model do what only an expensive one managed here? We do not
@@ -685,10 +677,11 @@ know yet. That is what the test is for.
 
 ## Homework (optional)
 
-1. Write three hazy descriptions of sketches you remember, add them to `data/questions.json`, and see if the agent
-   finds them.
-2. Add a tool `sketches_with(actor_a, actor_b)` to `kargin_server.py`, register the server in Claude Code, and check
-   that it picks your tool when you ask which sketches two actors share.
+1. Write three hazy descriptions of sketches you remember, add them to `sketch_finder/data/questions.json`, and run
+   `uv run sketch-finder eval --kinds hazy --tools regex`.
+2. Add a tool `sketches_with(actor_a, actor_b)` to `tools.py` and `server.py`, write a test for it in
+   `tests/test_tools.py`, register the server in Claude Code, and check that it picks your tool when you ask which
+   sketches two actors share.
 """)
 
 

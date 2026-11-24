@@ -4,8 +4,8 @@ SQL answers and exact quotes are computed from data/kargin_sketches.csv. The haz
 sketches NOT used while tuning the agent's prompt (the 12 in archive/2026-11-24_regex_premise), so they are a fair test.
 
 Writes data/questions.json and 07_kargin_questions_REVIEW.md (for the instructor's check).
-Run from the repo root (about 1 s):
-    ./ma/Scripts/python.exe llms/04_kargin_agent/py_src/build_kargin_questions.py
+Run from the project folder (about 1 s; needs pandas from the maintainer group):
+    uv run --group maintainer python scripts/build_questions.py
 """
 import collections
 import json
@@ -17,10 +17,10 @@ import re
 import pandas as pd
 
 SEED = 509
-LESSON_DIR = pathlib.Path(__file__).resolve().parents[1]
-DATA_PATH = LESSON_DIR / "data" / "kargin_sketches.csv"
-QUESTIONS_PATH = LESSON_DIR / "data" / "questions.json"
-REVIEW_PATH = LESSON_DIR / "07_kargin_questions_REVIEW.md"
+PROJECT_DIR = pathlib.Path(__file__).resolve().parents[1]
+DATA_PATH = PROJECT_DIR / "data" / "kargin_sketches.csv"
+QUESTIONS_PATH = PROJECT_DIR / "data" / "questions.json"
+REVIEW_PATH = PROJECT_DIR.parent / "07_kargin_questions_REVIEW.md"   # the lesson folder, for the instructor
 QUOTE_SKETCHES = [408, 155, 223, 469, 73]
 QUOTE_WORDS = 5
 HAZY = {
@@ -36,13 +36,13 @@ HAZY = {
     544: "A secretary on the phone thinks she is getting fired because of some furniture.",
 }
 
-pathlib.Path("logs").mkdir(exist_ok=True)
+(PROJECT_DIR / "logs").mkdir(exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("logs/build_kargin_questions.log", encoding="utf-8"),
+        logging.FileHandler(PROJECT_DIR / "logs" / "build_questions.log", encoding="utf-8"),
     ],
 )
 log = logging.getLogger(__name__)

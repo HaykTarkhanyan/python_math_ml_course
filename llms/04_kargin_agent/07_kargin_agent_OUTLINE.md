@@ -1,7 +1,8 @@
 # Video 07: "Find that sketch", an agent over Kargin Haghordum
 
-**Status:** approved 2026-11-24 (Q60) and built: `07_kargin_agent_solution.ipynb`, executed on 24 Nov. The 20 questions
-still wait for the instructor's check.
+**Status:** approved 2026-11-24 (Q60) and built. The code is a uv project in `sketch_finder/` (package, tests, command
+line, eval, cost ledger, MCP server; Q64-Q66, DECISIONS #122). `07_kargin_agent_solution.ipynb` is the guided tour of it,
+on GPT-6.1 Sol (Q63). The 20 questions still wait for the instructor's check.
 **Decided (Q53-Q60):** the very next session, before the RAG lectures. Notebook only. The regex tool reads dialogue and
 titles only. The session ends with an MCP server. Claude drafts the test questions, the instructor checks them. The
 model choice goes through ArmBench-LLM, and the lesson teaches why benchmarks matter. Project 9 is dropped.
@@ -56,8 +57,8 @@ The same 12 hazy questions, regex tools only, one run each. Rank is the ArmBench
 
 | Model | ArmBench | Found | Named a wrong sketch | Cost per question | Tool calls per question |
 |---|---|---|---|---|---|
-| GPT-6.1 Sol | #1 | **7/10** | 1 | $0.016 | 6.8 |
-| GPT-6.1 Terra (class model, Q61) | not listed | **6/10** | **4** | $0.010 | 9.6 |
+| GPT-6.1 Sol (class model, Q63) | #1 | **7/10** | 1 | $0.016 | 6.8 |
+| GPT-6.1 Terra | not listed | **6/10** | **4** | $0.010 | 9.6 |
 | DeepSeek V4.1 Flash | #2 | 5/10 | 0 | $0.006 | 14.6 |
 | Gemini 3 Flash | #5 | 3/10 | 0 | $0.009 | 8.5 |
 | gpt-4o-mini | not listed | 0/10 | 4 | $0.001 | 8.7 |
@@ -66,27 +67,30 @@ The same 12 hazy questions, regex tools only, one run each. Rank is the ArmBench
 
 | # | Part | Min | What happens on screen |
 |---|---|---|---|
-| 0 | The hook | 5 | "The one where a lady lies to get a seat on the minibus." The model alone cannot identify it (run of 24 Nov). |
-| 1 | The data | 8 | 702 rows, 48 duplicates, 96 without dialogue. Messy actor names (`Մկո Հասմիկ` with a missing comma). |
-| 2 | A real database | 7 | Three SQLite tables. Open read-only, then try `DROP TABLE` and watch it refuse. |
-| 3 | Tool 1: `run_sql` | 10 | The loop from video 05, every step printed once. "How many sketches are set in a hospital?" |
-| 4 | Tools 2, 3: search and read | 15 | Exact word against word stem on Armenian endings. `search_dialogue` (all patterns must match) and `read_sketch`. |
-| 5 | Tool 4: `web_search` | 5 | A question the database cannot answer. The agent chooses to go outside. |
-| 6 | Break it, fix it | 10 | Real failures from the prototype: a tool call cut off mid-JSON, commas inside a regex, running out of steps. |
-| 7 | Why benchmarks matter | 10 | Which model? ArmBench-LLM: what it measures, how to read it, and what it cannot tell us about this job. |
-| 8 | Our own benchmark | 15 | The 20 known-answer questions: pass rate, cost and an honest error bar per model. |
-| 9 | MCP server | 15 | The tools move to `kargin_server.py`. Test with `Client`, then ask the same question inside Claude Code. |
-| 10 | Handover to RAG | 5 | Which questions failed and what each cost. "Can retrieval fix the cheap model?" |
+| 0 | The project | 5 | The `sketch_finder/` folder, `pyproject.toml`, what each module does. |
+| 1 | The hook | 4 | "The one where a lady lies to get a seat on the minibus." The model alone cannot identify it. |
+| 2 | The data | 7 | 702 rows, 48 duplicates, 96 without dialogue. Messy actor names (`Մկո Հասմիկ` with a missing comma). |
+| 3 | A read-only database | 7 | `database.py`: three tables, then `DROP TABLE` refused. |
+| 4 | Tool 1 and the loop | 10 | `tools.run_sql`, the description the model sees, the system prompt, `agent.run_agent` with every step printed. |
+| 5 | Tools 2, 3: search and read | 15 | Exact word against word stem on Armenian endings, then the minibus question found by regex. |
+| 6 | Tool 4: `web_search` | 5 | A question the database cannot answer. The agent goes outside. |
+| 7 | Break it, fix it, test it | 10 | Commas inside a regex, a tool call cut off mid-JSON, running out of steps; then the 23 tests run. |
+| 8 | Why benchmarks matter | 10 | ArmBench-LLM: what it measures, how to read it, and what it cannot tell us about this job. |
+| 9 | Our own benchmark | 12 | 10 easy questions live; the saved five-model table on 10 hazy ones, with error bars. |
+| 10 | The command line | 5 | `uv run sketch-finder ask ...` and `sketch-finder cost` (the ledger). |
+| 11 | MCP server | 12 | `server.py`, an in-memory client, the model through MCP, the Claude Code command. |
+| 12 | Handover to RAG | 4 | Which questions failed and what each cost. "Can retrieval fix the cheap model?" |
 
 Homework (optional): write three hazy descriptions and test them; add a `sketches_with(actor_a, actor_b)` tool to the
 server and check that Claude Code picks it.
 
 ## How it gets built
 
-- `py_src/build_kargin_agent_nb.py` writes and runs `07_kargin_agent_solution.ipynb` and its HTML (CONVENTIONS, Notebooks).
-  Direct API calls, no record/replay layer (#116).
-- A frozen copy of the sketch data goes in `data/`, so the notebook does not depend on the Kargin repo changing.
-- The question set lives in `data/questions.json`, because the RAG practical reruns the same file.
+- `sketch_finder/`: the uv project. `uv sync`, `uv run pytest`, `uv run sketch-finder ask|eval|serve|cost` (its README).
+- `py_src/build_kargin_agent_nb.py` writes and runs `07_kargin_agent_solution.ipynb` and its HTML. The notebook imports
+  the package and prints the real source of each function. Direct API calls, no record/replay layer (#116).
+- A frozen copy of the sketch data is in `sketch_finder/data/`, so nothing depends on the Kargin repo changing.
+- The question set is `sketch_finder/data/questions.json`, because the RAG practical reruns the same file.
 - Questions are checked for class: several sketches have adult themes, so the instructor picks what goes on screen.
 
 ## Renames this caused (Q53, done 24 Nov)
@@ -100,6 +104,7 @@ server and check that Claude Code picks it.
 
 ## Open
 
-- **Q63:** keep Terra in class, or switch to Sol, given Terra's 4 confident wrong answers on the final test.
-- The instructor's check of the 20 questions (`07_kargin_questions_REVIEW.html`).
-- The server was tested as a real stdio process with an MCP client. It has not been registered inside Claude Code yet.
+- The instructor's check of the 20 questions (`07_kargin_questions_REVIEW.html`). Changing a hazy question means
+  rerunning the saved five-model comparison for it (about $0.04 per question for all five models).
+- The server was tested through `uv run ... sketch-finder serve` with an MCP client. It has not been registered inside
+  Claude Code yet.

@@ -2,6 +2,12 @@
 
 One-off scripts kept as a record. Not imported by anything and not expected to keep running.
 
+## `run_model_comparison.py`
+
+Produced `sketch_finder/results/hazy_comparison_2026-11-24.json` (five models, 10 hazy questions, $0.42) with the old
+single-file `kargin_agent.py`, before the code became the `sketch_finder` package. Moved here on 2026-11-24 (#122):
+`uv run sketch-finder eval --kinds hazy --tools regex --models ...` does the same job now, with the same loop.
+
 ## `2026-11-24_regex_premise/`
 
 Tested whether a regex-only agent fails on vague descriptions of Kargin sketches, before the lesson was outlined.

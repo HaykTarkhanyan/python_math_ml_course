@@ -9,11 +9,39 @@ this file holds the choice and a pointer.
 
 ---
 
+## #122 - Video 07's code is a small Python package, `llms/04_kargin_agent/sketch_finder/`; the notebook tours it; the class model is Sol
+
+**Date:** 2026-11-24 · **Status:** active. Revises #121's "notebook only" and its class model (Terra).
+
+**Decision.** The agent lives in a uv project: `pyproject.toml` with exact pins (openai 2.6.1, mcp 2.3.0, tavily-python
+0.8.5, python-dotenv 1.1.1; dev pytest 9.2.0; a `maintainer` group with pandas for `scripts/build_questions.py`),
+`src/sketch_finder/` split into `config`, `database`, `tools`, `agent`, `evaluate`, `ledger`, `server`, `cli`, 23 tests
+with a tiny database and a fake model, a `sketch-finder` command (`build-db`, `ask`, `eval`, `serve`, `cost`), and a cost
+ledger in `logs/calls.jsonl`. The notebook imports the package and prints each function's real source with `inspect`,
+so the two cannot drift. The default model is GPT-6.1 Sol. pytest 9.2.0 was added to the `ma` venv so the notebook can
+run the tests.
+
+**Why.** Instructor: "for this project lets do it as a proper subfolder so that its more realistic and not just a single
+jupyter notebook", then Q64 (small package), Q65 (notebook walks through the project), Q66 (tests, command line, eval
+script, logging and ledger: all four). Sol (Q63) after the final test: 7/10 with 1 confident wrong sketch, against
+Terra's 6/10 with 4, for about $0.006 more per question. Checked on 24 Nov: a fresh `uv sync` installs and the 23 tests
+pass on its Python 3.14.8; `uv run --directory ... sketch-finder serve` starts as an MCP server and answers a client.
+This departs from CONVENTIONS "helpers live in the notebook" on purpose: here the project is the lesson.
+
+**Alternatives rejected.** A flat scripts folder (less like real projects), the package plus a Dockerfile (belongs to
+video 14, shipping it), live coding in VS Code with a results-only notebook, no notebook (hard to follow on a projector),
+keeping Terra (its confident wrong answers look bad live).
+
+**What would change this.** Students who cannot get `uv sync` working in class (then run the notebook on the course
+venv and keep the CLI as a demo). Sol becoming unavailable or much more expensive (Terra is the next pick).
+
+---
+
 ## #121 - The next session (video 07) is a "find that sketch" agent over Kargin Haghordum, before the RAG lectures
 
 **Date:** 2026-11-24 · **Status:** active; outline approved (Q60, `llms/04_kargin_agent/07_kargin_agent_OUTLINE.md`),
-notebook built and executed, the instructor's check of the 20 questions pending. **Class model: GPT-6.1 Terra** (Q61,
-chosen before the final comparison). **Final comparison** (Q62; 10 fresh hazy questions, regex tools, one run, $0.42):
+notebook built and executed, the instructor's check of the 20 questions pending. Class model: GPT-6.1 Terra (Q61,
+chosen before the final comparison), **then Sol (Q63, #122)**; "notebook only" became a package plus a notebook (#122). **Final comparison** (Q62; 10 fresh hazy questions, regex tools, one run, $0.42):
 Sol 7/10 with 1 wrong sketch, Terra 6/10 with 4 wrong, DeepSeek V4.1 Flash 5/10 with 0 wrong, Gemini 3 Flash 3/10 with 0
 wrong, gpt-4o-mini 0/10 with 4 wrong. Only gpt-4o-mini is clearly separated (95% intervals). Terra's 4 confident wrong
 answers are the reason to reconsider it. **Project 9 (#107) is dropped** (Q59), because video 07 builds its MCP

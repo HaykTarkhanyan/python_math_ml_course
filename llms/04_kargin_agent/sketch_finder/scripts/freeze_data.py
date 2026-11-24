@@ -4,8 +4,8 @@ Reads kargin_eng.csv and data/youtube_metadata.csv from ~/OneDrive/Desktop/kargi
 llms/04_kargin_agent/data/kargin_sketches.csv. All 702 rows stay, duplicates and messy names included: cleaning them is
 part of the lesson.
 
-Run from the repo root (about 1 s):
-    ./ma/Scripts/python.exe llms/04_kargin_agent/py_src/build_kargin_data.py
+Run from the project folder (about 1 s):
+    uv run python scripts/freeze_data.py
 """
 import csv
 import logging
@@ -13,8 +13,8 @@ import pathlib
 import time
 
 KARGIN_REPO = pathlib.Path.home() / "OneDrive" / "Desktop" / "kargin_project"
-LESSON_DIR = pathlib.Path(__file__).resolve().parents[1]
-OUTPUT_PATH = LESSON_DIR / "data" / "kargin_sketches.csv"
+PROJECT_DIR = pathlib.Path(__file__).resolve().parents[1]
+OUTPUT_PATH = PROJECT_DIR / "data" / "kargin_sketches.csv"
 COLUMNS = [
     "sketch_id",
     "title",
@@ -29,13 +29,13 @@ COLUMNS = [
     "dialogue",
 ]
 
-pathlib.Path("logs").mkdir(exist_ok=True)
+(PROJECT_DIR / "logs").mkdir(exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("logs/build_kargin_data.log", encoding="utf-8"),
+        logging.FileHandler(PROJECT_DIR / "logs" / "freeze_data.log", encoding="utf-8"),
     ],
 )
 log = logging.getLogger(__name__)
