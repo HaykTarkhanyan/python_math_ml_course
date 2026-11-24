@@ -43,7 +43,8 @@ def test_the_loop_runs_a_tool_and_stops_at_the_answer(tiny_db):
 
     assert outcome["answer"] == "6"
     assert outcome["steps"] == 2
-    assert [call["tool"] for call in outcome["calls"]] == ["run_sql"]
+    assert outcome["calls"][0]["tool"] == "run_sql"
+    assert (outcome["calls"][0]["step"], outcome["calls"][0]["result"]) == (1, "1 rows")
     assert abs(outcome["cost"] - 0.002) < 1e-9
     tool_message = client.requests[1]["messages"][-1]
     assert tool_message["role"] == "tool" and '"6"' in tool_message["content"]

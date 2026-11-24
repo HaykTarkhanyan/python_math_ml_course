@@ -61,9 +61,9 @@ def command_eval(arguments):
 
 
 def command_serve(arguments):
-    from sketch_finder.agent import make_client
+    from sketch_finder.agent import load_keys
     from sketch_finder.server import mcp
-    make_client()   # loads the keys from .env, for web_search
+    load_keys()   # only web_search needs a key here; the server never calls a model
     mcp.run()
 
 

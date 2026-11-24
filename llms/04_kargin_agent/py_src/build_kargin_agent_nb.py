@@ -106,12 +106,19 @@ print("model:", config.DEFAULT_MODEL)
 What is in the folder:
 """)
     code(r"""
-skip = {".venv", "__pycache__", "logs", ".pytest_cache", "uv.lock", "kargin.db"}
+skip_folders = {".venv", "__pycache__", "logs", ".pytest_cache"}
+skip_files = {"uv.lock", "kargin.db"}
+root = Path("sketch_finder")
 
-for path in sorted(Path("sketch_finder").rglob("*")):
-    if path.is_file() and not skip & set(path.parts) and path.name not in skip:
-        depth = len(path.relative_to("sketch_finder").parts) - 1
-        print(f"{'    ' * depth}{path.name:28} {path.stat().st_size / 1000:7.1f} kB")
+for path in sorted(root.rglob("*")):
+    parts = path.relative_to(root).parts
+    if skip_folders & set(parts) or path.name in skip_files:
+        continue
+    indent = "    " * (len(parts) - 1)
+    if path.is_dir():
+        print(f"{indent}{path.name}/")
+    else:
+        print(f"{indent}{path.name:{34 - len(indent)}} {path.stat().st_size / 1000:7.1f} kB")
 """)
     md(r"""
 `pyproject.toml` names the dependencies with exact versions and declares the `sketch-finder` command. Each module does
@@ -146,8 +153,8 @@ ledger.record_call(config.DEFAULT_MODEL, "openai", response.usage, "hook")   # e
 print(response.choices[0].message.content)
 """)
     md(r"""
-In the run of 24 Nov the model said it could not identify the sketch and asked what lie the woman tells. That is the
-honest answer: it does not have this archive, so it cannot look. The right answer is sketch 198, and by the end of part
+In the run of 24 Nov the model said it could not verify the title or the link, offered a YouTube search, and asked
+whether the lie was about being pregnant. That is the honest answer: it does not have this archive, so it cannot look. The right answer is sketch 198, and by the end of part
 5 the agent finds it.
 """)
 
@@ -271,6 +278,16 @@ def show_run(outcome):
     tools_used = Counter(call["tool"] for call in outcome["calls"])
     print(f"answer: {outcome['answer']} | {outcome['steps']} steps | tools: {dict(tools_used)} | "
           f"${outcome['cost']:.4f} | {outcome['seconds']:.0f} s")
+
+
+def trace_table(outcome):
+    # one row per tool call: easier to read than the raw log
+    rows = []
+    for call in outcome["calls"]:
+        arguments = call["arguments"] or {}
+        shown = arguments.get("query") or " + ".join(arguments.get("all_patterns", [])) or arguments.get("sketch_id")
+        rows.append({"step": call["step"], "tool": call["tool"], "input": str(shown)[:80], "result": call["result"]})
+    return pd.DataFrame(rows)
 """)
     md(r"""
 The first run, with every step printed:
@@ -280,6 +297,13 @@ The first run, with every step printed:
 outcome = agent.run_agent(client, "How many sketches take place in a hospital?", tool_names=("run_sql",), verbose=True)
 print()
 show_run(outcome)
+""")
+    md(r"""
+The full log gets long fast. From here on, each run gets a **trace table** instead: one row per tool call, with what
+went in and what came back. Here is the same run:
+""")
+    code(r"""
+trace_table(outcome)
 """)
     code(r"""
 # ~5 s
@@ -329,15 +353,17 @@ outcome = agent.run_agent(
     client,
     "I remember a sketch but not its name: A lady lies to get a seat on the minibus. Which sketch is it?",
     tool_names=tools.REGEX_TOOL_NAMES,
-    verbose=True,
 )
+print(outcome["text"])
 print()
 show_run(outcome)
+trace_table(outcome)
 """)
     md(r"""
-Look at the patterns in the run of 24 Nov. Three words for the minibus (`մարշրուտ|երթուղ|գազել`) found nothing, because
-the dialogue spells it `մառշուտկա`. The agent then searched `հղի` (pregnant), a word that is not in the question at all:
-it guessed what the lady would say. Eight sketches matched, and it read the right one.
+Look at the trace of 24 Nov. Two words for the minibus (`մարշրուտ|երթուղային`) found nothing, because the dialogue
+spells it `մառշուտկա`. The agent then searched `հղի` (pregnant), a word that is not in the question at all, together with
+ways to ask for a seat (`տեղ տվ|նստեմ`): it guessed what the lady would say. Thirteen sketches matched, and it read the
+right one.
 """)
 
     # ==================================================================================== 6 web
@@ -355,10 +381,11 @@ outcome = agent.run_agent(
     client,
     "How many sketches does Հայկո appear in, and what public office did the actor Hayko (Hayk Marutyan) hold after the show? "
     "Use the database for the count and the web for the office. End with ANSWER: <count>, <office>.",
-    verbose=True,
 )
+print(outcome["text"])
 print()
 show_run(outcome)
+trace_table(outcome)
 """)
 
     # ==================================================================================== 7 break it
@@ -664,6 +691,30 @@ print(f"tool calls per hazy question: {sum(len(run['calls']) for run in our_runs
       f"cost per hazy question: ${sum(run['cost'] for run in our_runs) / len(our_runs):.4f}")
 new_calls = ledger.read_ledger()[calls_before:]
 print(f"this notebook made {len(new_calls)} model calls for ${sum(call['cost'] for call in new_calls):.3f}")
+""")
+    md(r"""
+Why did they fail? Take q18, the old man woken up by phone calls. Below are the words the agent searched for in the saved
+run, checked against the dialogue of the right sketch, and then the start of that dialogue:
+""")
+    code(r"""
+miss = next(run for run in our_runs if run["id"] == "q18")
+dialogue = tools.read_sketch(int(miss["expected"]))["dialogue"]
+
+for call in miss["calls"]:
+    if call["tool"] == "search_dialogue" and call["arguments"]:
+        patterns = call["arguments"]["all_patterns"]
+        found = ["yes" if re.search(pattern, dialogue, re.IGNORECASE) else "no" for pattern in patterns]
+        print(f"{' + '.join(patterns):36} in the right sketch? {', '.join(found)}")
+
+print()
+print("the right sketch, the start:")
+print(dialogue[:330])
+""")
+    md(r"""
+The agent looked for waking (`արթն`), sleep (`քն`), a grandpa (`պապ`) and a phone call (`զանգ`). **Not one of these
+words is in the sketch.** The characters say "Ալո ով ա" (hello, who is it), a rhyming insult, and "գիշերվա 3-ին"
+(at 3 at night). The memory and the dialogue describe the same scene and share no words. A better regex cannot fix
+that, because the problem is not the pattern, it is the vocabulary.
 """)
     md(r"""
 In the run of 24 Nov, regex plus a good model got all 10 database and quote questions, and 7 of the 10 hazy memories

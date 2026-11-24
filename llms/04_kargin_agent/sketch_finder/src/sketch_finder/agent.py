@@ -38,10 +38,14 @@ End with a final line exactly like: ANSWER: <value>. For "which sketch" the valu
 If nothing fits after your searches, write ANSWER: none."""
 
 
-def make_client():
+def load_keys():
     for env_file in config.ENV_FILES:
         if env_file.exists():
             load_dotenv(env_file)   # an earlier file wins: load_dotenv never overrides a key already set
+
+
+def make_client():
+    load_keys()
     return OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.environ["OPENROUTER_API_KEY"],
@@ -94,6 +98,19 @@ def read_tool_arguments(reply):
     return arguments_by_id
 
 
+def summarize_result(name, result):
+    """A few words about a tool result, for the trace."""
+    if isinstance(result, dict) and "error" in result:
+        return "error: " + result["error"][:60]
+    if name == "search_dialogue":
+        return f"{result['total_matches']} matches"
+    if name == "run_sql":
+        return f"{len(result['rows'])} rows"
+    if name == "read_sketch":
+        return result["title"][:40]
+    return f"{len(result)} pages"
+
+
 def read_final_answer(text):
     found = re.findall(r"ANSWER:\s*(.+)", text or "")
     return found[-1].strip() if found else None
@@ -137,7 +154,13 @@ def run_agent(client, question, model=None, tool_names=ALL_TOOL_NAMES, max_steps
             name = tool_call.function.name
             arguments = arguments_by_id[tool_call.id]
             result = run_tool(name, arguments)
-            calls.append({"tool": name, "arguments": arguments, "broken_json": arguments is None})
+            calls.append({
+                "step": step,
+                "tool": name,
+                "arguments": arguments,
+                "result": summarize_result(name, result),
+                "broken_json": arguments is None,
+            })
             result_text = json.dumps(result, ensure_ascii=False)
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": result_text})
             if verbose:
