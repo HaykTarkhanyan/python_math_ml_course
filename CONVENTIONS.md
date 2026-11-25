@@ -47,6 +47,10 @@ Last updated: 2026-09-28
   taught deck carries its YouTube playlist number (`02_decoding/03_decoding.tex`: video 03, after the
   tokenization lecture 01 and practical 02); an untaught deck keeps its label `LLMn_topic.tex` until delivery.
   The label LLM-n in slides is the topic order too (DECISIONS #113, 2026-11-09).
+- **A practical lives in the folder of the topic it belongs to, not in a new top-level folder.** One file goes in the
+  topic folder itself (`02_decoding/04_llm_api.ipynb`); a session with its own project gets a subfolder named by its
+  video number (`03_tools_agents/07_kargin_agent/`). Its section goes on that topic's website page. A new top-level
+  folder only for a new topic, because it renumbers every folder after it (decided twice: #110, #123).
 - **Two-part lectures** use `NN_1_` / `NN_2_` (first seen 2026-09-16: `41_1_neuron_to_network`,
   `41_2_multilayer_nets` in `ml/11_neural_networks/`).
 

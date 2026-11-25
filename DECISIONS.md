@@ -9,6 +9,29 @@ this file holds the choice and a pointer.
 
 ---
 
+## #123 - The Kargin agent session is part of the tools topic: `llms/03_tools_agents/07_kargin_agent/`, one website page for videos 05-07
+
+**Date:** 2026-11-26 · **Status:** active. Supersedes the folder part of #121 (`llms/04_kargin_agent/`, RAG in
+`05_rag`, LLM folders 06-17); the lesson itself, #122's project and the video numbers are unchanged.
+
+**Decision.** `llms/04_kargin_agent/` moved to `llms/03_tools_agents/07_kargin_agent/`; `05_rag` went back to `04_rag`
+and the LLM folders back to 05-16 (references updated in 56 live files; history files keep the old names). The website
+has one page for the topic, `03_tools_agents/tools_agents.qmd`, with sections 05, 06 and 07; the separate Kargin page was
+removed the day after it went up. `sketch_finder/` sits one folder deeper, so its `config.ENV_FILES` and the notebook
+builder's `REPO_ROOT` look one level higher, and its `.venv` was reinstalled (its launchers held the old path).
+
+**Why.** Instructor: "04 kargin agent can be part of tools agent, its not a separate topic", then Q68 "Move the folder
+too", so folder numbers match the site's topic numbers again. Checked after the move: 23 tests pass, `sketch-finder`
+runs, both keys load from the course `.env`.
+
+**Alternatives rejected.** Merging only the website page and keeping `04_kargin_agent/` (fewer changes, but folder and
+topic numbers would disagree).
+
+**What would change this.** Nothing expected. The rule behind it is now in CONVENTIONS (a practical lives in its topic's
+folder).
+
+---
+
 ## #122 - Video 07's code is a small Python package, `llms/04_kargin_agent/sketch_finder/`; the notebook tours it; the class model is Sol
 
 **Date:** 2026-11-24 · **Status:** active. Revises #121's "notebook only" and its class model (Terra).
