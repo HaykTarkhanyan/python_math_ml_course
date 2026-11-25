@@ -1,6 +1,6 @@
 # Video 07: "Find that sketch", an agent over Kargin Haghordum
 
-**Status:** approved 2026-11-24 (Q60) and built. The code is a uv project in `sketch_finder/` (package, tests, command
+**Status:** taught 2026-11-25. Approved 2026-11-24 (Q60) and built. The code is a uv project in `sketch_finder/` (package, tests, command
 line, eval, cost ledger, MCP server; Q64-Q66, DECISIONS #122). `07_kargin_agent_solution.ipynb` is the guided tour of it,
 on GPT-6.1 Sol (Q63). The 20 questions still wait for the instructor's check.
 **Decided (Q53-Q60):** the very next session, before the RAG lectures. Notebook only. The regex tool reads dialogue and

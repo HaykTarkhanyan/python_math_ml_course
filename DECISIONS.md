@@ -39,7 +39,7 @@ venv and keep the CLI as a demo). Sol becoming unavailable or much more expensiv
 
 ## #121 - The next session (video 07) is a "find that sketch" agent over Kargin Haghordum, before the RAG lectures
 
-**Date:** 2026-11-24 · **Status:** active; outline approved (Q60, `llms/04_kargin_agent/07_kargin_agent_OUTLINE.md`),
+**Date:** 2026-11-24 · **Status:** active; **taught 2026-11-25**; outline approved (Q60, `llms/04_kargin_agent/07_kargin_agent_OUTLINE.md`),
 notebook built and executed, the instructor's check of the 20 questions pending. Class model: GPT-6.1 Terra (Q61,
 chosen before the final comparison), **then Sol (Q63, #122)**; "notebook only" became a package plus a notebook (#122). **Final comparison** (Q62; 10 fresh hazy questions, regex tools, one run, $0.42):
 Sol 7/10 with 1 wrong sketch, Terra 6/10 with 4 wrong, DeepSeek V4.1 Flash 5/10 with 0 wrong, Gemini 3 Flash 3/10 with 0
