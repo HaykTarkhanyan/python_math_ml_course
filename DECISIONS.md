@@ -9,6 +9,37 @@ this file holds the choice and a pointer.
 
 ---
 
+## #124 - The course environment `ma` is a pinned uv project (`ma/pyproject.toml`, `ma/uv.lock`, venv in `ma/.venv/`)
+
+**Date:** 2026-11-26 · **Status:** active.
+
+**Decision.** `ma` is rebuilt as a uv project whose dependencies are the third-party packages the repo's build areas
+import (`llms/`, `ml/`, `math/`, `non_essential/`, `_knowledge/`, root scripts), each pinned with `==` and locked. Versions
+known from the old environment are kept (openai 2.6.1, mcp 2.3.0, tavily-python 0.8.5, python-dotenv 1.1.1, pandas
+2.3.2, plotly 6.3.0, statsmodels 0.14.5, nbformat 5.10.4, nbclient 0.11.0, pytest 9.2.0, requests 2.32.5, ipykernel
+6.30.1); the rest are what uv resolved on 26 Nov. The interpreter path is now `ma/.venv/Scripts/python.exe` (updated in
+283 live files; history keeps the old path). New packages go in with `uv add --project ma --bounds exact`.
+
+**Why.** A disk cleanup on 2026-11-25 deleted the old environment (3.46 GB: `Lib`, `Scripts`, `Include`, `share`,
+`pyvenv.cfg`), recorded in the disk-space-hunt skill as "a forgotten venv built inside the uv project folder". It was the
+venv every script in this repo runs on, installed by hand over a year and never pinned, so its exact contents could not
+be restored. Instructor, Q69: "Rebuild, pinned in pyproject". A locked uv project makes the next loss one command
+(`uv sync --project ma`) and puts the venv where uv tools expect one. The instructor declined a "never delete" note in
+the cleanup skill (Q70).
+
+**Left out on purpose.** Packages only one-off scripts or single old notebooks import, which are heavy or pull
+conflicting stacks: tensorflow (4 files), prophet, wandb, gradio, rasterio and pystac-client (one Sevan fetch script),
+pillow-heif (one photo script), gensim (in the old `ma/pyproject.toml`, imported nowhere). Students' notebooks in
+`python/` and `python_libs/` keep installing their own extras.
+
+**Alternatives rejected.** Rebuilding the plain venv at `ma/Scripts/` by hand (no doc changes, but still not
+reproducible, Q69). Leaving it broken until needed.
+
+**What would change this.** A script that needs one of the left-out packages often enough to justify its size: add it
+with `uv add --project ma --bounds exact`.
+
+---
+
 ## #123 - The Kargin agent session is part of the tools topic: `llms/03_tools_agents/07_kargin_agent/`, one website page for videos 05-07
 
 **Date:** 2026-11-26 · **Status:** active. Supersedes the folder part of #121 (`llms/04_kargin_agent/`, RAG in

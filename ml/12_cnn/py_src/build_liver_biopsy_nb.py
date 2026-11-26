@@ -19,8 +19,8 @@ downloaded once from GitHub on Colab). The notebooks run with ml/12_cnn/ as thei
 
 Run with the project venv (builds, then executes; measured 2026-10-13: ~2 min, of which ~1 min
 is the kernel start):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/build_liver_biopsy_nb.py
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/build_liver_biopsy_nb.py --no-execute
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_liver_biopsy_nb.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_liver_biopsy_nb.py --no-execute
 --no-execute overwrites the executed notebook with an output-free one (see _learnings/
 2026-10-01-2308_no-execute-rebuild-overwrites-the-executed-notebook.md).
 """

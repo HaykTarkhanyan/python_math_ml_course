@@ -7,7 +7,7 @@
            real multi-topic passage. The split points are wherever similarity dips, and the
            script checks the dips actually land on the true topic boundaries.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l41_similarity_figs.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_similarity_figs.py
 """
 
 import logging

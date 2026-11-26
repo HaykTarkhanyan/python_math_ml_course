@@ -26,7 +26,7 @@ importance was scored on train (lecture 23 says test); and the GBM was scored 1 
 ahead while SARIMA forecast 18, with the horizon stated nowhere.
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/08_time_series/py_src/ml_figs.py
+    ./ma/.venv/Scripts/python.exe ml/08_time_series/py_src/ml_figs.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, fixed seed, f-strings,
 Armenian-flag colours, matplotlib Agg, fail loud (no silent except).

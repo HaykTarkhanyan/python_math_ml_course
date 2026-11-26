@@ -5,7 +5,7 @@ of the five categories. Adds each entry's origin (a full evaluation log, or roun
 OpenRouter price. Writes results/armbench_2026-11-24.json.
 
 Run from the repo root (about 30 s):
-    ./ma/Scripts/python.exe llms/03_tools_agents/07_kargin_agent/py_src/build_armbench_table.py
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/07_kargin_agent/py_src/build_armbench_table.py
 """
 import json
 import logging

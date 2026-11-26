@@ -7,7 +7,7 @@ Generates into ml/13_rnns/fig/:
                         visual contrast.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/activation_zoo.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/activation_zoo.py
 """
 
 import logging

@@ -13,7 +13,7 @@ curve is a real sweep over a fitted model's scores -- no invented coordinates.
   (also: cm_threshold_metrics, cm_cost_curve, cm_youden, cm_recall_floor, cm_multiclass.)
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch2_classification/py_src/cheese_metrics.py
+    ./ma/.venv/Scripts/python.exe ml/ch2_classification/py_src/cheese_metrics.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

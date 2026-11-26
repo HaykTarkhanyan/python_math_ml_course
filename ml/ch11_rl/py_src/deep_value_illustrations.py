@@ -8,7 +8,7 @@ Generates into ml/ch11_rl/fig/:
   dqn_loop.pdf     -- where the replay buffer and the target network sit
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/deep_value_illustrations.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/deep_value_illustrations.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, f-strings, Armenian-flag
 colours, matplotlib Agg, fail loud.

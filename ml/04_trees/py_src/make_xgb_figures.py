@@ -7,7 +7,7 @@ Figures for the deck:
   - xgb_monotonic.pdf          : unconstrained (wiggly) vs monotone-constrained (clean) fit
   - xgb_stacking.pdf           : RF / LightGBM / logistic vs a stacked meta-learner (receipt)
 
-Run with the ma venv:  ./ma/Scripts/python.exe ml/04_trees/py_src/make_xgb_figures.py
+Run with the ma venv:  ./ma/.venv/Scripts/python.exe ml/04_trees/py_src/make_xgb_figures.py
 """
 import logging
 from pathlib import Path

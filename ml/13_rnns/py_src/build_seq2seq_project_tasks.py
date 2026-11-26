@@ -11,7 +11,7 @@ py_src/archive/build_rnn_practical_tasks.py.
 
 One source of truth: edit build_seq2seq_project_nb.py, execute and merge it, then run this
 (a second or two):
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_tasks.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_tasks.py
 """
 import io
 import logging

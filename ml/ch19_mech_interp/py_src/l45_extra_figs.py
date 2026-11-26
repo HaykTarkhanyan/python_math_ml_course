@@ -15,8 +15,8 @@ Measurements go to ``results/l45_extra_figs.json``; the figures are drawn from t
 ``results/l45_figs.json`` for the probe/lens pair). Figures are drawn at their slot size.
 
 Usage (about 30 s on CPU with GPT-2 small cached; --plot-only takes seconds):
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_extra_figs.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_extra_figs.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_extra_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_extra_figs.py --plot-only
 """
 
 from __future__ import annotations

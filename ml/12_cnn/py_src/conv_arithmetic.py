@@ -5,7 +5,7 @@ Generates into ml/12_cnn/fig/:
                           to 3x3 with a 3x3 kernel; "same" (zero-pad 1) keeps it 5x5.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_arithmetic.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/conv_arithmetic.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 

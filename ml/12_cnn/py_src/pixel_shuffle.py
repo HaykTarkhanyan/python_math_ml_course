@@ -7,7 +7,7 @@ Generates into ml/12_cnn/fig/:
                         for the "an MLP cannot see structure" frame.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/pixel_shuffle.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/pixel_shuffle.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 The pomegranate photo is required; the script fails loudly if it is missing.

@@ -8,7 +8,7 @@ All REAL: produced by the implementations in l42_keywords.py, which are ours (no
 rake-nltk / keybert package is installed in the `ma` venv). See that module's docstring
 for what is faithful and what is simplified.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l42_keyword_figs.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_keyword_figs.py
 """
 
 import logging

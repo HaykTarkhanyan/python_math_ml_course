@@ -5,7 +5,7 @@ Generates into ml/12_cnn/fig/:
                        own color). One pixel = (R, G, B), each 0-255.
 
 Uses skimage's public-domain 'astronaut' test image (NASA). Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/rgb_channels.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/rgb_channels.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.52, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

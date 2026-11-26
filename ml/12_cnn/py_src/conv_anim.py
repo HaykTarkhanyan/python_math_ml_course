@@ -16,7 +16,7 @@ orange - the old dark-blue outline vanished against the dark cells (instructor r
 in-figure title was dropped; the frame title already says it.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_anim.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/conv_anim.py
 """
 
 import logging

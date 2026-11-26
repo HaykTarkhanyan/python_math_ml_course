@@ -14,7 +14,7 @@ Science, Google Scholar), so the bars are not sorted by count. A database Nature
 for a paper (it under-records it) is left out of that paper's median and range, as Nature did.
 
 Run (~10 s on CPU, guess):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/most_cited.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/most_cited.py
 """
 
 import logging

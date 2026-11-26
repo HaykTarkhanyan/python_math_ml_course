@@ -13,7 +13,7 @@ Photos: the chapter's pomegranate (fig/src_pomegranate.jpg) and three public-dom
 images (astronaut, chelsea the cat, coffee). Drawn at slide size (5.5 in wide), fonts 7.5-9 pt.
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/backbone_diagrams.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/backbone_diagrams.py
 """
 
 import logging

@@ -7,7 +7,7 @@ Generates:
   init_variance.pdf           per-layer activation std, bad init vs He (forward-pass only)
   batchnorm_curves.pdf        train loss with vs without BatchNorm
 
-Run: ./ma/Scripts/python.exe ml/11_neural_networks/py_src/nn_training_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/nn_training_figs.py
 
 Light by design: subsampled train set, small nets, ~25-40 epochs, torch defaults to 4 threads.
 """

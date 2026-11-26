@@ -16,7 +16,7 @@ Generates into ml/12_cnn/fig/:
   yolo_targets.pdf
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/yolo_targets.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/yolo_targets.py
 """
 
 import logging

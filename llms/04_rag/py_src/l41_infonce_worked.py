@@ -5,7 +5,7 @@ real chunks, while InfoNCE - the densest idea in the deck - gets a formula and n
 This produces the arithmetic, with real e5-small similarities, so the slide can quote
 verified numbers and a student can reproduce every step.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l41_infonce_worked.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_infonce_worked.py
 """
 
 import logging

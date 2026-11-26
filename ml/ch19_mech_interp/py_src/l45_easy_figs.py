@@ -16,8 +16,8 @@ held back from 100% only by sklearn's default L2 penalty) and below chance on he
 Results -> results/l45_easy_figs.json; the figures are drawn from that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_easy_figs.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_easy_figs.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_easy_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_easy_figs.py --plot-only
 """
 
 from __future__ import annotations

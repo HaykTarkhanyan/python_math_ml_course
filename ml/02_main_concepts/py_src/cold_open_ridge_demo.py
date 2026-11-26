@@ -15,7 +15,7 @@ the L2 penalty is applied unfairly across columns -- which is exactly the lesson
 of the deck's "scale before regularizing" frame, so we practice what we preach.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/cold_open_ridge_demo.py
+    ./ma/.venv/Scripts/python.exe ml/upcoming_lectures/py_src/cold_open_ridge_demo.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

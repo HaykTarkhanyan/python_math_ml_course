@@ -11,7 +11,7 @@ Generates into ml/ch11_rl/fig/:
   ppo_clip.pdf           -- the PPO clipped objective as a function of the probability ratio
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/rl_concepts.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/rl_concepts.py
 """
 
 import logging

@@ -231,7 +231,7 @@ Non-negotiables, in build order:
    `[running example]` = the pomegranate thread. Every deck ends with a recap frame, a
    paramgreen "Next:" box, and a `% Provenance:` comment block (sources consulted,
    figures used, key decisions, forward pointer).
-4. **Figure scripts:** run with `./ma/Scripts/python.exe` (never bare python, never uv
+4. **Figure scripts:** run with `./ma/.venv/Scripts/python.exe` (never bare python, never uv
    ephemeral envs); use `logging` to console + `logs/` (create the dir first), never
    print; seed 509; fail loudly - no silent fallbacks, missing inputs must raise;
    labeled bars via `ax.bar_label`; Armenian-flag palette (#D90012, #0033A0, #F2A800)
@@ -239,7 +239,7 @@ Non-negotiables, in build order:
    (<= 8k train / 2k test), tiny nets, <= 5 epochs, minutes not hours. Anything heavier
    trains in the HW notebooks on Colab; only its saved metrics get plotted locally.
 5. **Compile loop per deck:** `pdflatex -interaction=nonstopmode -halt-on-error` twice
-   -> zero `!` lines in the log -> `./ma/Scripts/python.exe clean_latex.py ml/12_cnn`
+   -> zero `!` lines in the log -> `./ma/.venv/Scripts/python.exe clean_latex.py ml/12_cnn`
    -> visual overflow check (`beamer-overflow-check`; Beamer clips silently) -> open
    the PDF for instructor review.
 6. **Prose rules:** no em-dashes (use -), no curly quotes; English slide body.

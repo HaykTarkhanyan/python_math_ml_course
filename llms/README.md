@@ -27,7 +27,7 @@ Working with a deck:
 - Compile from inside the deck's folder (the decks load `\input{../../ml/preamble}`), twice:
   `cd llms/01_tokenization && pdflatex -interaction=nonstopmode -halt-on-error 01_tokenization.tex`
 - Each deck's `\graphicspath` searches its own `fig/` and `../00_shared/fig/` (plus `borrowed/` where used).
-- Figure scripts run from the repo root, e.g. `./ma/Scripts/python.exe llms/01_tokenization/py_src/tokenization_figs.py`.
+- Figure scripts run from the repo root, e.g. `./ma/.venv/Scripts/python.exe llms/01_tokenization/py_src/tokenization_figs.py`.
   They find their folders relative to themselves (`parents[1]` = the deck folder, `parents[3]` = the repo root).
 - `NN_topic_notes.pdf` is the copy the instructor annotates in class. Open that one for the instructor, never the
   clean PDF (see `CLAUDE.md`).

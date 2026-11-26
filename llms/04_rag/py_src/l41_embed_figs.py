@@ -10,7 +10,7 @@ Everything here is MEASURED, not drawn:
 e5-small is used because it is multilingual (so the Armenian section can reuse it) and it
 carries the query:/passage: prefix convention the deck teaches.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l41_embed_figs.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_embed_figs.py
 
 USE_TF=0 is required: TensorFlow is present in the `ma` venv and transformers refuses to
 import its TF integration under Keras 3.

@@ -4,7 +4,7 @@ REAL: the chunk boundaries are computed by actually running each strategy over a
 manual excerpt. Nothing is hand-placed. The script asserts that fixed-size chunking really
 does split the answer sentence, because that is the claim the slide makes.
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l41_chunking_fig.py
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_chunking_fig.py
 """
 
 import logging

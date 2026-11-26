@@ -6,7 +6,7 @@ Generates:
   - two_moons_mlp.pdf     same data + MLP (bent) boundary                     -> works
 
 Run with the repo `ma` venv:
-  ./ma/Scripts/python.exe ml/11_neural_networks/py_src/nn_fundamentals_figs.py
+  ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/nn_fundamentals_figs.py
 """
 
 import logging

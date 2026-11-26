@@ -10,7 +10,7 @@ Generates into ml/12_cnn/fig/:
 Both are drawn at their size on the slide (5.5 in wide), so font sizes are slide sizes (8-10 pt).
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/multichannel_conv.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/multichannel_conv.py
 """
 
 import logging

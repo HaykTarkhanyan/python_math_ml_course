@@ -7,7 +7,7 @@ Downloads the UCI Bike Sharing day.csv (cached), then:
       * variance reduction of the fitted tree's ROOT split (real bike numbers),
       * information gain on a tiny classification toy (exact).
 
-Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_linear_trees_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/05_interpretability/py_src/interp_linear_trees_figs.py
 Conventions: logging to console + logs/, seed 509, f-strings, Armenian-flag colours.
 """
 import io

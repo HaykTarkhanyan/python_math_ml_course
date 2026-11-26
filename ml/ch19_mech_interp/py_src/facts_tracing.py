@@ -14,8 +14,8 @@ threads. Three measurements:
 Results -> results/facts_tracing.json; figures read that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_tracing.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_tracing.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_tracing.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_tracing.py --plot-only
 """
 
 from __future__ import annotations

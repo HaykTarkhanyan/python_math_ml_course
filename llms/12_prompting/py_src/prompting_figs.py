@@ -16,8 +16,8 @@ Generates into llms/12_prompting/fig/:
   prompt_cot_steps.pdf   -- serial layer passes: answer at once vs after 40 tokens of reasoning (toy)
 
 Run:
-  ./ma/Scripts/python.exe llms/12_prompting/py_src/prompting_figs.py --gpt2   # ~1-3 min, background
-  ./ma/Scripts/python.exe llms/12_prompting/py_src/prompting_figs.py          # figures (~5 s)
+  ./ma/.venv/Scripts/python.exe llms/12_prompting/py_src/prompting_figs.py --gpt2   # ~1-3 min, background
+  ./ma/.venv/Scripts/python.exe llms/12_prompting/py_src/prompting_figs.py          # figures (~5 s)
 """
 import itertools
 import json

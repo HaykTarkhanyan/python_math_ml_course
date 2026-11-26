@@ -14,8 +14,8 @@ reconstruction check at the end proves the sum is exact rather than approximate.
 
 Usage (about 20 s on CPU with GPT-2 small cached; --plot-only redraws from
 results/residual_stream.json in seconds):
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_residual_stream.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_residual_stream.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_residual_stream.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_residual_stream.py --plot-only
 """
 
 import argparse

@@ -9,7 +9,7 @@ Generates into ml/09_clustering/fig/:
 Every number the slide quotes is computed and asserted here, not typed in by hand.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_gamma.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_gamma.py
 """
 
 import matplotlib

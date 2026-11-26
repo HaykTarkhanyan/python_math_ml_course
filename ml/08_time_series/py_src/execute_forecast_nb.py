@@ -6,7 +6,7 @@ is broken (`No module named 'notebook.services'`), so nbconvert dies at import.
 Worse, when piped the shell reports exit 0 and the notebook is left unexecuted with
 every cell's execution_count = None. nbclient in-process avoids all of that.
 
-    ./ma/Scripts/python.exe ml/08_time_series/py_src/execute_forecast_nb.py
+    ./ma/.venv/Scripts/python.exe ml/08_time_series/py_src/execute_forecast_nb.py
 """
 
 import logging

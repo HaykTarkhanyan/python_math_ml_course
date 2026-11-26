@@ -12,7 +12,7 @@ What it does:
   4. Reprojects the WorldCover labels onto the same grid with NEAREST neighbour.
   5. Writes the npz plus a quick-look PNG.
 
-Run:  ./ma/Scripts/python.exe ml/09_clustering/py_src/fetch_sevan_scene.py
+Run:  ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/fetch_sevan_scene.py
 """
 
 from __future__ import annotations

@@ -18,8 +18,8 @@ Part 3 calls OpenRouter (key: OPENROUTER_API_KEY in the repo's .env); 63 calls, 
 call goes to results/02_probe_ledger.json.
 
 Run with the project venv (builds, then executes; 8-14 min measured 2026-10-28, ~$0.0005 of API calls):
-    ./ma/Scripts/python.exe llms/01_tokenization/py_src/build_tokenization_practical_nb.py
-    ./ma/Scripts/python.exe llms/01_tokenization/py_src/build_tokenization_practical_nb.py --no-execute
+    ./ma/.venv/Scripts/python.exe llms/01_tokenization/py_src/build_tokenization_practical_nb.py
+    ./ma/.venv/Scripts/python.exe llms/01_tokenization/py_src/build_tokenization_practical_nb.py --no-execute
 Both also write 02_armenian_tokens_solution.html (non_essential/notebook_to_html.py), the page to read
 the notebook in a browser (instructor, 2026-10-31).
 --markdown-only copies edited prose into the executed notebook without rerunning it.

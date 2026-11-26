@@ -5,7 +5,7 @@ tokenizations (so the tokenizer task works with no model and no internet), and t
 polysemy sentences with their anchors.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/embed_armenian_words.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/embed_armenian_words.py
 """
 import sys
 sys.stdout.reconfigure(encoding="utf-8")   # Windows console is cp1252, which cannot

@@ -8,7 +8,7 @@ them shows a number, so there is nothing here to mislabel.
   14  the agentic retrieval loop: search, read, decide, search again.
   15  when the answer is not RAG.
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l43_diagram_figs.py
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l43_diagram_figs.py
 """
 
 import logging

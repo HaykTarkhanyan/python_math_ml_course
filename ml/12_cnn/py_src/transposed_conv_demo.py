@@ -18,7 +18,7 @@ Generates into ml/12_cnn/fig/:
 are slide sizes (7.5-9.5 pt; the old figure rendered at 3.4 pt). The suptitle moved to the slide.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/transposed_conv_demo.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/transposed_conv_demo.py
 """
 
 import logging

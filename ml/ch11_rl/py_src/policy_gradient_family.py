@@ -8,7 +8,7 @@ Generates into ml/ch11_rl/fig/:
   pg_family.pdf
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/policy_gradient_family.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/policy_gradient_family.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, f-strings, Armenian-flag
 colours, matplotlib Agg, fail loud.

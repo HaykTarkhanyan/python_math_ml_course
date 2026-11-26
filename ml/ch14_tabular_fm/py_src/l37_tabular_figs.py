@@ -15,7 +15,7 @@ Generates into ml/ch14_tabular_fm/fig/:
   scaling_timeline.pdf-- the six papers that exist only to make it take more rows
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch14_tabular_fm/py_src/l37_tabular_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch14_tabular_fm/py_src/l37_tabular_figs.py
 """
 
 import logging

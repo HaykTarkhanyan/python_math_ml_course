@@ -1,7 +1,7 @@
 """Figures for the FLAN deck ([LLM-18] Instruction Tuning at Scale).
 
 Run with the project venv (or any env with matplotlib + numpy):
-    ../../../../ma/Scripts/python.exe py_src/make_figures.py
+    ../../../../ma/.venv/Scripts/python.exe py_src/make_figures.py
 Outputs PDFs into ../fig/. Fails loud on any error (no silent fallback).
 
 Numbers are from Wei et al. (2021), "Finetuned Language Models Are Zero-Shot

@@ -9,7 +9,7 @@ Copied from ml/12_cnn/py_src/rgb_channels.py and re-pointed at the Saryan painti
 the deck shows the same pixels the image-compression practical clusters.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/rgb_channels.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/rgb_channels.py
 """
 
 import matplotlib

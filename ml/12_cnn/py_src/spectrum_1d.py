@@ -8,7 +8,7 @@ Generates into ml/12_cnn/fig/:
                       the same idea in two dimensions.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/spectrum_1d.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/spectrum_1d.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3+ series (red/blue/orange); bars carry value labels.

@@ -25,8 +25,8 @@ CPU only, torch limited to 2 threads (a 16 GB laptop), results checkpointed afte
 so an interrupted sweep resumes where it stopped.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/memory_highway.py
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/memory_highway.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/memory_highway.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/memory_highway.py --plot-only
 """
 
 import argparse

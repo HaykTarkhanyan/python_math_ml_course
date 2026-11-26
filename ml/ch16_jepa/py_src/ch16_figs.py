@@ -3,7 +3,7 @@
 Every number plotted here is transcribed from a primary source; nothing is measured
 or simulated. Provenance per figure is in the docstring of its builder.
 
-Run:  ./ma/Scripts/python.exe ml/ch16_jepa/py_src/ch16_figs.py
+Run:  ./ma/.venv/Scripts/python.exe ml/ch16_jepa/py_src/ch16_figs.py
 """
 
 import logging

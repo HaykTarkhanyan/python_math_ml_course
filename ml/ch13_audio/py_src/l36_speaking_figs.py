@@ -20,7 +20,7 @@ Codebooks are fit on a 60 s synthesized corpus and applied to a HELD-OUT utteran
 reported error is not training-set reconstruction.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch13_audio/py_src/l36_speaking_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch13_audio/py_src/l36_speaking_figs.py
 """
 
 import sys

@@ -18,7 +18,7 @@ The Armenian words are read from py_src/data/armenian_line.txt (never retyped). 
 gloss is the chapter constant used in [54]'s encoder-decoder frame.
 
 Runtime: ~2 s. Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/alignment_grid.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/alignment_grid.py
 """
 
 import logging

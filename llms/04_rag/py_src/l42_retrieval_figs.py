@@ -10,7 +10,7 @@
 Numbers here are the ones on the slides. Anything that disagreed with the intended story
 changed the story: see the provenance block of 09_rag_hybrid_rerank.tex.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l42_retrieval_figs.py   (~30 s)
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_retrieval_figs.py   (~30 s)
 """
 
 import logging

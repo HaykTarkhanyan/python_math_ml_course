@@ -8,7 +8,7 @@ Generates into ml/11_neural_networks/fig/:
                    Left: the individual bumps. Right: their sum vs the target, for 6 and 20 bumps.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/uat_bumps.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/uat_bumps.py
 """
 
 import logging

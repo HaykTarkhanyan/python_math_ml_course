@@ -15,7 +15,7 @@ Run fe_measure.py first if the file is missing (it is gitignored - regenerable i
   fs_stability.pdf         : frame 28    - selection frequency across 100 bootstraps
   fs_selection_bias.pdf    : frame 31    - selecting outside the CV loop inflates the score
 
-Run: ./ma/Scripts/python.exe ml/06_feature_engineering/py_src/fs_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/06_feature_engineering/py_src/fs_figs.py
 Conventions: logging to console + logs/, seed 509, Armenian colours, n_jobs=1 (single core).
 """
 import logging
@@ -63,7 +63,7 @@ def load_pool():
     if not POOL_CSV.exists():
         raise FileNotFoundError(
             f"{POOL_CSV} is missing. Deck 27 prunes the pool deck 26 generates - run "
-            f"./ma/Scripts/python.exe ml/06_feature_engineering/py_src/fe_measure.py first.")
+            f"./ma/.venv/Scripts/python.exe ml/06_feature_engineering/py_src/fe_measure.py first.")
     P = pd.read_csv(POOL_CSV)
     y = P.pop(TARGET).values
     origin = pd.read_csv(ORIGIN_CSV, index_col=0)["origin"].to_dict()

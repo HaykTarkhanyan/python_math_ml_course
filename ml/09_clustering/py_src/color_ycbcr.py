@@ -10,7 +10,7 @@ That asymmetry is the whole reason JPEG and every video codec store colour at lo
 resolution than brightness. Both errors are measured so the slide can quote them.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_ycbcr.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_ycbcr.py
 """
 
 import matplotlib

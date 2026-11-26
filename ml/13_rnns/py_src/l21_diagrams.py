@@ -32,7 +32,7 @@ a missing glyph is promoted to an error. The 42-word review is imported from pad
 its one home.
 
 Run with the project venv (about 5 s):
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/l21_diagrams.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/l21_diagrams.py
 """
 
 import logging

@@ -25,8 +25,8 @@ Generates into llms/08_transformers_in_the_world/fig/:
   head_quadratic.pdf      -- attention vs feed-forward FLOPs, crossover n = d f (port of l26_quadratic)
 
 Run:
-  ./ma/Scripts/python.exe llms/08_transformers_in_the_world/py_src/head_figs.py --gpt2   # once (~30 s)
-  ./ma/Scripts/python.exe llms/08_transformers_in_the_world/py_src/head_figs.py          # figures (~5 s)
+  ./ma/.venv/Scripts/python.exe llms/08_transformers_in_the_world/py_src/head_figs.py --gpt2   # once (~30 s)
+  ./ma/.venv/Scripts/python.exe llms/08_transformers_in_the_world/py_src/head_figs.py          # figures (~5 s)
 """
 import json
 import math

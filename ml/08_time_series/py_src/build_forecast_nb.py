@@ -8,8 +8,8 @@ one idea per cell, a markdown cell before each code cell saying what is about to
 
 This script only ASSEMBLES the notebook. It is executed separately so that every number in the
 prose comes from a real run:
-    ./ma/Scripts/python.exe ml/08_time_series/py_src/build_forecast_nb.py
-    ./ma/Scripts/python.exe -m nbconvert --execute --inplace --to notebook <nb>
+    ./ma/.venv/Scripts/python.exe ml/08_time_series/py_src/build_forecast_nb.py
+    ./ma/.venv/Scripts/python.exe -m nbconvert --execute --inplace --to notebook <nb>
 """
 
 from pathlib import Path

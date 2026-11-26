@@ -11,7 +11,7 @@ threshold at 0.5, blow it back up with nearest neighbour. The overlay is baked i
 pixels (array alpha on imshow is ignored in PDF output, see task_zoo.py).
 
 Run (~5 s on CPU, guess):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/seg_dilemma.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/seg_dilemma.py
 """
 
 import logging

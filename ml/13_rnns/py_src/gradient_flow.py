@@ -30,8 +30,8 @@ seconds), ~1200 steps for the quick comparison re-run (still CPU seconds -- roug
 4x, not an "extended" run of the kind the instructor ruled out).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py               # ~90 s, [54] comparison only
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py --l20-figures # ~25 s, redraws
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py               # ~90 s, [54] comparison only
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/gradient_flow.py --l20-figures # ~25 s, redraws
         [53]'s two figures after checking the rerun reproduces the July 2026-07-13 17:48 norms
 """
 

@@ -1,6 +1,6 @@
 """Build the standalone HTML report from results/skills_<date>.json (nothing is re-collected).
 
-Run (repo root):  ./ma/Scripts/python.exe _knowledge/ml_job_market/py_src/report.py [YYYY-MM-DD]
+Run (repo root):  ./ma/.venv/Scripts/python.exe _knowledge/ml_job_market/py_src/report.py [YYYY-MM-DD]
 Takes ~3 s. Writes ML_JOB_MARKET_<date>.html in _knowledge/ml_job_market/ with plotly.js inlined
 once (~5 MB), so the file can be sent as is. The commentary comes from notes/implications_<date>.html.
 """

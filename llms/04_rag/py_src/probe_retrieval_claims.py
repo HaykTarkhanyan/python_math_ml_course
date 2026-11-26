@@ -9,7 +9,7 @@ Two fixes to the experiment, both about statistical power rather than cherry-pic
   - part-number distractors are added, so "dense blurs exact identifiers" is testable at all;
   - scores are reported, so near-zero BM25 signal is not disguised as a mid-table rank.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/probe_retrieval_claims.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/probe_retrieval_claims.py
 """
 
 import logging

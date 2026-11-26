@@ -10,7 +10,7 @@ Reported as IoU between the selection before and after the lighting change, so "
 moves" is a number and not an adjective.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_hsv_threshold.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_hsv_threshold.py
 """
 
 import matplotlib

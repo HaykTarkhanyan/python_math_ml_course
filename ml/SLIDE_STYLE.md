@@ -22,7 +22,7 @@ calibration) and the regression decks (05 regularization, 06 hyperparameter tuni
 **Compile loop:**
 
 - `pdflatex -interaction=nonstopmode -halt-on-error FILE.tex` run **twice** (so `\tableofcontents`/Outline and cross-refs resolve).
-- Then clean: `./ma/Scripts/python.exe clean_latex.py` (or `clean_latex.py PATH`).
+- Then clean: `./ma/.venv/Scripts/python.exe clean_latex.py` (or `clean_latex.py PATH`).
 - Beamer **clips overflow silently** (no overfull-vbox warning). Verify by rendering pages to PNG and eyeballing, or run the `/beamer-overflow-check` skill.
 - Open a finished PDF for review with PowerShell `Start-Process "msedge.exe" -ArgumentList '"...pdf"'`, one at a time (~0.5s apart).
 
@@ -111,7 +111,7 @@ Common math macros (from `preamble.tex`): `\xv \yv \thetav \thx \fh \fxh \sumin 
 ## Figures
 
 - **Every essential figure is Python-generated (matplotlib), not TikZ** - anything data-driven (curves, distributions, benchmarks, confusion matrices) and any diagram that carries the frame's core message. **TikZ only for small throwaway visuals** - quick boxes-and-arrows, tiny annotations, decoration the frame could live without.
-- Generation scripts live in a sibling **`py_src/`**; output PDFs/PNGs to a sibling **`fig/`**. Run them with the **`ma` venv** (`./ma/Scripts/python.exe py_src/script.py`).
+- Generation scripts live in a sibling **`py_src/`**; output PDFs/PNGs to a sibling **`fig/`**. Run them with the **`ma` venv** (`./ma/.venv/Scripts/python.exe py_src/script.py`).
 - **Draw each figure at its slot size**: `figsize` width = the width it gets on the slide (16:9 text width is ~5.5 in, so a `0.6\textwidth` column is ~3.3 in), fonts 7-10 pt, and embed it at that width. A figure drawn wider is scaled down with all its labels - ch19 and `ml/12_cnn` both shipped 2-5 pt figure text that passed every other check. Verify with `non_essential/detect_small_figure_text.py DECK.pdf` (0 pages under 5.5 pt).
 - **No enforced figure palette** — sensible per-figure defaults. (Global fallback for 3+ color charts: Armenian-flag red `#D90012`, blue `#0033A0`, orange `#F2A800`.)
 - **Embedded third-party figures:** keep a source/attribution line on the frame (e.g. "Source: LMU i2ml, CC BY 4.0"). Verify the license first.

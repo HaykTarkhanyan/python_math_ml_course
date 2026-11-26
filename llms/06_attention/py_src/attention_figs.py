@@ -35,8 +35,8 @@ Generates into llms/06_attention/fig/:
   att_mat_pipeline.pdf  -- X -> Q, K, V -> QK^T / sqrt(2) -> softmax -> A V, creature's row in red
 
 Run (~8 s):
-  ./ma/Scripts/python.exe llms/06_attention/py_src/attention_figs.py            # the figures
-  ./ma/Scripts/python.exe llms/06_attention/py_src/attention_figs.py --verify   # also check GPT2 against the caches
+  ./ma/.venv/Scripts/python.exe llms/06_attention/py_src/attention_figs.py            # the figures
+  ./ma/.venv/Scripts/python.exe llms/06_attention/py_src/attention_figs.py --verify   # also check GPT2 against the caches
 """
 import json
 import logging

@@ -3,7 +3,7 @@
 Run from the repo root (~40 s wall clock, ~15 s of it after imports; the first run
 also extracts ~625 slide frames from the slide PDFs, a few seconds more):
 
-    ./ma/Scripts/python.exe learning/robot-learning/scripts/build_browser.py
+    ./ma/.venv/Scripts/python.exe learning/robot-learning/scripts/build_browser.py
 
 Then open learning/robot-learning/browser/index.html. Embedded video playback needs
 http, not file://, so for that serve the folder:

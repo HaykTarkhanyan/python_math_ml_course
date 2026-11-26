@@ -23,8 +23,8 @@ The tuned checkpoint goes to ml/ch19_mech_interp/checkpoints/ (git-ignored, ~500
 Results -> results/diffing_finetune.json; figures read that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/diffing_finetune.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/diffing_finetune.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/diffing_finetune.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/diffing_finetune.py --plot-only
 """
 
 from __future__ import annotations

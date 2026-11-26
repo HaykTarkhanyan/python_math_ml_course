@@ -7,7 +7,7 @@ Generates into ml/13_rnns/fig/:
 LOCKED worked numbers: 0.8^29 ~ 0.0015 (vanishing), 1.25^29 ~ 646 (exploding).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/vanish_curve.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/vanish_curve.py
 """
 
 import logging

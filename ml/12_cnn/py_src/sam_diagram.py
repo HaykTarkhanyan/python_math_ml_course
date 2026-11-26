@@ -10,7 +10,7 @@ Generates into ml/12_cnn/fig/:
   sam_diagram.pdf
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/sam_diagram.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/sam_diagram.py
 """
 
 import logging

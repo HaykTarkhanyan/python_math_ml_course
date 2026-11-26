@@ -18,7 +18,7 @@ it per document, which is the point the deck makes.
 Measured, seed 509: headers kept -> test acc 0.9066; headers/footers/quotes stripped
 -> 0.7908. The 11.6-point gap is the artifact the deck quotes.
 
-Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_text_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/05_interpretability/py_src/interp_text_figs.py
 """
 import logging
 import re

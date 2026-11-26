@@ -17,8 +17,8 @@ Measured:
 Results -> results/circuits_figs.json; figures read that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/circuits_figs.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/circuits_figs.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/circuits_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/circuits_figs.py --plot-only
 """
 
 from __future__ import annotations

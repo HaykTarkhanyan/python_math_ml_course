@@ -9,7 +9,7 @@ Generates into ml/12_cnn/fig/:
   building blocks - blocks labelled by frequency, which is what we later filter.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/taylor_vs_fourier.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/taylor_vs_fourier.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3+ series (red/blue/orange).

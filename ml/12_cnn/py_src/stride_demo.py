@@ -6,7 +6,7 @@ Generates into ml/12_cnn/fig/:
                       controls how many stops, hence the output size.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/stride_demo.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/stride_demo.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.48, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

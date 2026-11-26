@@ -9,7 +9,7 @@ emits:
   sae_ablation.pdf        causal test: delete the feature, watch the prediction break
 
 Run with the project venv (after sae_rnn_lab.py, which is where the sweep lives):
-    ./ma/Scripts/python.exe ml/ch8_autoencoders/py_src/sae_rnn_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch8_autoencoders/py_src/sae_rnn_figs.py
 """
 import logging
 

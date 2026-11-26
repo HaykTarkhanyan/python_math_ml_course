@@ -48,5 +48,5 @@ given by the nearest `=== PAGE n ===` marker.
 Re-download from the arXiv links above, then re-extract with the `ma` venv:
 
 ```bash
-./ma/Scripts/python.exe extract_embedding_papers.py
+./ma/.venv/Scripts/python.exe extract_embedding_papers.py
 ```

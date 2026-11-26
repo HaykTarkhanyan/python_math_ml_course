@@ -22,7 +22,7 @@
 From this directory (`misc/grokking/runs/paper_p113_train30_fullbatch_seed1`):
 
 ```powershell
-..\..\..\..\ma\Scripts\python.exe -u ..\..\code\train.py --paper-mode --save-snapshots --resume --seed 1 --threads 1
+..\..\..\..\ma\.venv\Scripts\python.exe -u ..\..\code\train.py --paper-mode --save-snapshots --resume --seed 1 --threads 1
 ```
 
 In paper mode, resume now treats 40,000 as the total target, so this runs the remaining 38,800 epochs rather than adding another 40,000.
@@ -30,7 +30,7 @@ In paper mode, resume now treats 40,000 as the total target, so this runs the re
 ## Analyze a completed run
 
 ```powershell
-..\..\..\..\ma\Scripts\python.exe ..\..\code\paper_analysis.py --progress
+..\..\..\..\ma\.venv\Scripts\python.exe ..\..\code\paper_analysis.py --progress
 ```
 
 This writes:

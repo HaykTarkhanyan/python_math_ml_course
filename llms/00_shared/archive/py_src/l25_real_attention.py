@@ -7,7 +7,7 @@ reproducible from this repo.
 The sentence is the 3Blue1Brown running example LLM-3 already uses, so the chapter keeps one
 example from the single-head derivation through to multi-head.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/00_shared/archive/py_src/l25_real_attention.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/00_shared/archive/py_src/l25_real_attention.py
 """
 
 import logging

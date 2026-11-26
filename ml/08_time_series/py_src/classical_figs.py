@@ -22,7 +22,7 @@ NOTE (2026-08-14): over_differencing.pdf is still generated and still logs the s
 values the deck quotes in prose, but its frame was cut, so no slide embeds it now.
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/08_time_series/py_src/classical_figs.py
+    ./ma/.venv/Scripts/python.exe ml/08_time_series/py_src/classical_figs.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, fixed seed, f-strings,
 Armenian-flag colours, matplotlib Agg (no display), fail loud (no silent except).

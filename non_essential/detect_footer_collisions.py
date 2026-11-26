@@ -19,8 +19,8 @@ where the page number legitimately lives. Any ink left over is content that shou
 
 Usage::
 
-    ./ma/Scripts/python.exe non_essential/detect_footer_collisions.py DECK.pdf [MORE.pdf ...]
-    ./ma/Scripts/python.exe non_essential/detect_footer_collisions.py ml/ch19_mech_interp
+    ./ma/.venv/Scripts/python.exe non_essential/detect_footer_collisions.py DECK.pdf [MORE.pdf ...]
+    ./ma/.venv/Scripts/python.exe non_essential/detect_footer_collisions.py ml/ch19_mech_interp
 
 Exits 1 if anything is flagged, so it can gate a build. Every flag must still be checked against
 the rendered page - a full-bleed figure frame legitimately fills the bottom of the slide.

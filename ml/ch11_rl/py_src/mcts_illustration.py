@@ -7,7 +7,7 @@ Generates into ml/ch11_rl/fig/:
   mcts_phases.pdf
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/mcts_illustration.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/mcts_illustration.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, f-strings, Armenian-flag
 colours, matplotlib Agg, fail loud.

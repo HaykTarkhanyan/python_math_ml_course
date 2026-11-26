@@ -13,7 +13,7 @@ Every number here is measured at run time with intfloat/multilingual-e5-small ov
   13  REAL - HyDE: rank of the correct chunk when searching with the question vs with a
              fabricated answer to that question.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l43_eval_figs.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l43_eval_figs.py
 """
 
 import logging

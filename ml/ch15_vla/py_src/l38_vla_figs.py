@@ -16,7 +16,7 @@ Generates into ml/ch15_vla/fig/:
   wilson_ci.pdf         -- exact Wilson score intervals vs trial count n
 
 Run with the project venv, from the repo root:
-    ./ma/Scripts/python.exe ml/ch15_vla/py_src/l38_vla_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch15_vla/py_src/l38_vla_figs.py
 """
 
 import logging

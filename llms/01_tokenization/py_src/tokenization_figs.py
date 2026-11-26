@@ -20,7 +20,7 @@ JSON vs YAML, the trailing space, glitch tokens across vocabularies, the longest
 lottery tokens, and SentencePiece Unigram on T5 (n-best splits, sampled splits, no byte fallback)
 and on ch11's surnames (a model trained here, in a subprocess so its pruning log can be read).
 
-Run: ./ma/Scripts/python.exe llms/01_tokenization/py_src/tokenization_figs.py   (~1.5 min; the first run also
+Run: ./ma/.venv/Scripts/python.exe llms/01_tokenization/py_src/tokenization_figs.py   (~1.5 min; the first run also
 downloads the BERT, T5 and Qwen tokenizer files, a few MB)
 Supersedes ml/13_rnns/py_src/tokenizer_demo.py for this deck (its panels were drawn 13 in wide).
 """

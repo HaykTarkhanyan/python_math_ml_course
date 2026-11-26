@@ -11,7 +11,7 @@ Generates into ml/12_cnn/fig/:
 Drawn at its slide size (5.5 x 1.9 in), so font sizes are slide sizes (7.5-9 pt).
 
 Run with the project venv (~10 s, mostly importing torch):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/vgg_layout.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/vgg_layout.py
 """
 
 import logging

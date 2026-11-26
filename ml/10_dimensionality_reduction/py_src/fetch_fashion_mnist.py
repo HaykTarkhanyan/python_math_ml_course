@@ -7,10 +7,10 @@ anything, so the chapter is reproducible offline and needs nothing but numpy.
 
 Reads the raw IDX files torchvision downloads. If they are missing, fetch them with:
 
-    ./ma/Scripts/python.exe -c "from torchvision.datasets import FashionMNIST; \
+    ./ma/.venv/Scripts/python.exe -c "from torchvision.datasets import FashionMNIST; \
         FashionMNIST(root=r'C:/Users/hayk_/.cache/torchvision', download=True)"
 
-Run:  ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/fetch_fashion_mnist.py
+Run:  ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/fetch_fashion_mnist.py
 """
 
 from __future__ import annotations

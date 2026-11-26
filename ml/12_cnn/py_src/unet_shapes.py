@@ -16,7 +16,7 @@ Generates into ml/12_cnn/fig/:
   unet_shapes.pdf
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/unet_shapes.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/unet_shapes.py
 """
 
 import logging

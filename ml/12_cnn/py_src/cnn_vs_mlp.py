@@ -18,7 +18,7 @@ config where the CNN leads consistently. Full 10k test set for a stable accuracy
 
 Run with the project venv (~3-5 min on 2 CPU threads; --plot-only redraws in ~3 s from the
 saved results/cnn_vs_mlp.json, no training):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/cnn_vs_mlp.py [--plot-only]
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/cnn_vs_mlp.py [--plot-only]
 
 2026-10-01: the run now saves its numbers to ml/12_cnn/results/cnn_vs_mlp.json (the artifact of
 record) and the figure is drawn from that file at its slide size (3.6 in wide, 7-8.5 pt text; it

@@ -4,7 +4,7 @@ m01_sources_ui   what the user sees: an answer with numbered citations and a sou
 m02_eval_loop    growing the eval set from real failures: logs -> failures -> label -> eval set -> rerun -> ship
 
 Both are schematic (illustrative content, the deck's own cheese-factory example).
-Run (repo root, ~2 s):  ./ma/Scripts/python.exe llms/04_rag/py_src/l43_explain_figs.py
+Run (repo root, ~2 s):  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l43_explain_figs.py
 """
 import logging
 import time

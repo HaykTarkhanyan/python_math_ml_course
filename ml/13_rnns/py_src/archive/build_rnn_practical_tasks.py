@@ -10,7 +10,7 @@ shipping a task notebook that still contains the solutions. Stub logic follows
 ml/ch8_autoencoders/py_src/build_sae_tasks.py.
 
 One source of truth: edit build_rnn_practical_nb.py, re-execute it, then re-run this.
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/build_rnn_practical_tasks.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_rnn_practical_tasks.py
 """
 import io
 import logging

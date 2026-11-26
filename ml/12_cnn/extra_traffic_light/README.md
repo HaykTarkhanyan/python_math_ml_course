@@ -44,6 +44,6 @@ the eval set was sampled and verified, how the cameras were labelled). Crops are
 original frames with the exact boxes that project scored, so the numbers here match it:
 
 ```bash
-./ma/Scripts/python.exe ml/12_cnn/py_src/pack_traffic_light_data.py      # data/, ~30 s (needs the project's raw data)
-./ma/Scripts/python.exe ml/12_cnn/py_src/build_traffic_light_nb.py       # the notebook, executed, ~1 min
+./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/pack_traffic_light_data.py      # data/, ~30 s (needs the project's raw data)
+./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_traffic_light_nb.py       # the notebook, executed, ~1 min
 ```

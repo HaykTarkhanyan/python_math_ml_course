@@ -14,7 +14,7 @@ Generates into ml/12_cnn/fig/:
   separable_idea.pdf
 
 Run with the project venv (~2 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/separable_idea.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/separable_idea.py
 """
 
 import logging

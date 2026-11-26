@@ -17,7 +17,7 @@ synthetic demos:
                                on an 8-character pool; a balanced question gains most.
 
 Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
-    ./ma/Scripts/python.exe ml/04_trees/py_src/make_figures.py
+    ./ma/.venv/Scripts/python.exe ml/04_trees/py_src/make_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours for multi-line plots.

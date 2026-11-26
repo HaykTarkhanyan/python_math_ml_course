@@ -12,7 +12,7 @@ Provenance per figure:
                      mix them with the ATE-1 paper's numbers.
   15  ILLUSTRATIVE - the ATE-2 recipe, from the same post.
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l41_diagram_figs.py
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_diagram_figs.py
 """
 
 import logging

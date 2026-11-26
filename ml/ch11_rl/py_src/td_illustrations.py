@@ -9,7 +9,7 @@ Generates into ml/ch11_rl/fig/:
   cliff_walking.pdf  -- the safe path and the optimal path, and why they differ
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/td_illustrations.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/td_illustrations.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, f-strings, Armenian-flag
 colours, matplotlib Agg, fail loud.

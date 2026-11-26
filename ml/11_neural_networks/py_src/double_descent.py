@@ -16,7 +16,7 @@ Two modes, because the first one tried did NOT reproduce the phenomenon:
 Both are still "a one-hidden-layer network"; rf just freezes the hidden layer and solves the
 output layer exactly instead of descending to it.
 
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/double_descent.py --mode rf
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/double_descent.py --mode rf
 
 Artifacts are TAGGED by mode (CONVENTIONS.md: never overwrite a run's outputs):
     data/double_descent_<mode>.json   <- artifact of record

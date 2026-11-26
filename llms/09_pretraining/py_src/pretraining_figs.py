@@ -25,8 +25,8 @@ Generates into llms/09_pretraining/fig/:
   pre_base_model.pdf    -- a bare question vs a Q/A document, continued by GPT-2 (real)
 
 Run:
-  ./ma/Scripts/python.exe llms/09_pretraining/py_src/pretraining_figs.py --gpt2   # once (~1 min)
-  ./ma/Scripts/python.exe llms/09_pretraining/py_src/pretraining_figs.py          # figures (~10 s)
+  ./ma/.venv/Scripts/python.exe llms/09_pretraining/py_src/pretraining_figs.py --gpt2   # once (~1 min)
+  ./ma/.venv/Scripts/python.exe llms/09_pretraining/py_src/pretraining_figs.py          # figures (~10 s)
 """
 import json
 import logging

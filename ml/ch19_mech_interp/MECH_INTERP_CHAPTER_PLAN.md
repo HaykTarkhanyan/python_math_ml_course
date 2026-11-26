@@ -655,7 +655,7 @@ Both belong to the **build-risk gate** in Open questions - resolve them by runni
 `transformers 4.57.1` are present, the rest are not):
 
 ```bash
-uv pip install --python ./ma/Scripts/python.exe transformer_lens circuitsvis
+uv pip install --python ./ma/.venv/Scripts/python.exe transformer_lens circuitsvis
 ```
 
 Pin exact versions in the commit per the global rule. `sae_lens` is only needed if L47 runs a

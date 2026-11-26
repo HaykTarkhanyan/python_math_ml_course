@@ -14,7 +14,7 @@ Generates into ml/12_cnn/fig/:
   trainable_params.pdf
 
 Run with the project venv (~5 s, CPU):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/trainable_params.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/trainable_params.py
 """
 
 import logging

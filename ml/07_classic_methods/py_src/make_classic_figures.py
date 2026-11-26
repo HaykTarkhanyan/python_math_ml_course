@@ -2,7 +2,7 @@
 
 Real matplotlib on tiny 2D/1D toys, house palette (Armenian-flag colors), seed 509.
 Outputs PDFs to ../fig/ ; logs to ./logs/. Run with the ma venv:
-    ./ma/Scripts/python.exe ml/07_classic_methods/py_src/make_classic_figures.py
+    ./ma/.venv/Scripts/python.exe ml/07_classic_methods/py_src/make_classic_figures.py
 """
 import logging
 import os

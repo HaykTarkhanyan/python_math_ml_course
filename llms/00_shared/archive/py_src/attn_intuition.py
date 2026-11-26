@@ -5,7 +5,7 @@ Generates into llms/00_shared/fig/:
   attn_illustrative.pdf -- a CLEAN, hand-set attention pattern on the chapter sentence, for
                            teaching the mechanics (labelled illustrative).
 
-Run: ./ma/Scripts/python.exe llms/00_shared/archive/py_src/attn_intuition.py
+Run: ./ma/.venv/Scripts/python.exe llms/00_shared/archive/py_src/attn_intuition.py
 """
 import logging
 import sys

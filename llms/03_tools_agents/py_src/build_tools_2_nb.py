@@ -14,8 +14,8 @@ Keys (OPENROUTER_API_KEY, TAVILY_API_KEY in the repository's .env) are needed on
 Packages: requirements.txt next to the notebook (mcp==2.3.0 among them); kernel "ma".
 
 Run with the project venv (builds, executes, replay-checks, exports HTML):
-    ./ma/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_2_nb.py
-    ./ma/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_2_nb.py --markdown-only
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_2_nb.py
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_2_nb.py --markdown-only
 Full build ~3 min when demos are recorded, ~1.5 min when replayed (two executions).
 """
 import argparse
@@ -346,7 +346,7 @@ print(Path("server.py").read_text(encoding="utf-8"))
 A notebook cannot start it as a separate process (Jupyter's own output streams get in the way), so this part
 happens outside: **the instructor's demo.**
 
-1. In a terminal at the **repository root**: `claude mcp add yerevan-tools -- ./ma/Scripts/python.exe
+1. In a terminal at the **repository root**: `claude mcp add yerevan-tools -- ./ma/.venv/Scripts/python.exe
    llms/03_tools_agents/server.py`. Use the course's `ma` Python: another Python may have version 1 of the SDK and
    fail with `cannot import name 'MCPServer'`. (Claude Desktop and VS Code take the same command in a settings
    file.)

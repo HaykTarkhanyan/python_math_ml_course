@@ -14,7 +14,7 @@ Images: skimage's public-domain test images (camera, coins, brick, astronaut).
 OpenCV 4.11 (SIFT is in the main package since 4.4, after its patent expired in March 2020).
 
 Run (~2 min on CPU, measured 2026-10-02: 101-152 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/classical_cv.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/classical_cv.py
 
 Every figure is drawn at its slide size: a 5.4 x 1.65 in strip across the text width,
 fonts 7-8 pt.

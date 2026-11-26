@@ -13,7 +13,7 @@
                       fractions of the IMAGE. The decode numbers are asserted.
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/yolo_cell_figs.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/yolo_cell_figs.py
 """
 
 import logging

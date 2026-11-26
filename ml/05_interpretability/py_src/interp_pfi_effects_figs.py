@@ -8,7 +8,7 @@
 (LMU CC-BY figures reused in the deck: pfi_demo2 animation, pfi_test_vs_train, pfi_extrapolation,
  ale_vs_pdp.)
 
-Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_pfi_effects_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/05_interpretability/py_src/interp_pfi_effects_figs.py
 Conventions: logging to console + logs/, seed 509, f-strings, Armenian colours.
 """
 import logging

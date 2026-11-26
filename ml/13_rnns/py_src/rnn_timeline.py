@@ -21,7 +21,7 @@ same house style (horizontal axis, boxed year/event labels, Armenian-palette col
 the three eras: pre-2017 RNN era, the 2017 transformer pivot, the 2023+ comeback).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/rnn_timeline.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/rnn_timeline.py
 """
 
 import logging

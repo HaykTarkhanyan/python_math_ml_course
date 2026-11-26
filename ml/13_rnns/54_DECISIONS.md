@@ -63,7 +63,7 @@ instructor's message:
    sentiment, verb tense) are placed by hand into visually separated regions purely
    for legibility; no distances or angles there carry any claim.
 4. **`tokenizer_demo.py` - kept, fully real.** `uv pip install --python
-   ./ma/Scripts/python.exe tiktoken` resolved and installed in under a second
+   ./ma/.venv/Scripts/python.exe tiktoken` resolved and installed in under a second
    (already-cached wheel), and `tiktoken.get_encoding("cl100k_base")` downloaded its
    encoding file in about 6 seconds on first run and 0.3 seconds on a warm cache -
    trivially cheap, so this stayed in scope per the instructor's condition. All three

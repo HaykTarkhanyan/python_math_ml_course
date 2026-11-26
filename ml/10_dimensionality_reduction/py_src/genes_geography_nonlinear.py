@@ -11,7 +11,7 @@ Pipeline is exactly what lecture 35 teaches: Patterson-scale, PCA to 25 componen
 Logged measurements: silhouette of the 5 super-populations and of the 26
 populations in each 2-D embedding, so "UMAP separates more" is a number, not a vibe.
 
-Run:  ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/genes_geography_nonlinear.py
+Run:  ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/genes_geography_nonlinear.py
 """
 from __future__ import annotations
 

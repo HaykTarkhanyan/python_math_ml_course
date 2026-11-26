@@ -27,7 +27,7 @@ from there, its forward scores asserted below), so the 0.38 on the pad frame is 
 forward-pass animation ends on.
 
 Run with the project venv (about 5 s):
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/l20_diagrams.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/l20_diagrams.py
 """
 
 import logging

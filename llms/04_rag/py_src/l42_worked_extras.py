@@ -13,7 +13,7 @@
    help). Eleven identifier questions on the 18 chunks, then the same corpus plus 19
    near-identical spare-parts notes (PRS-401 ... PRS-420). Every query tried is logged.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l42_worked_extras.py   (~20 s)
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_worked_extras.py   (~20 s)
 """
 
 import logging

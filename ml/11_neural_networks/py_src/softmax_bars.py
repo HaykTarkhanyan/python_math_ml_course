@@ -9,7 +9,7 @@ Generates into ml/11_neural_networks/fig/:
                       two possible labels: right (class 2) vs confidently wrong (class 1).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/softmax_bars.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/softmax_bars.py
 """
 
 import logging

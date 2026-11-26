@@ -6,7 +6,7 @@ Generates into ml/12_cnn/fig/:
                       by a [1,2,1] column); and the full gradient magnitude.
 
 Uses skimage's public-domain 'astronaut' test image. Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/sobel_build.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/sobel_build.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.3, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

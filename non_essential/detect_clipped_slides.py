@@ -5,9 +5,9 @@ the page count is right, and the deck looks finished. This closes most of that g
 it compares the prose of each frame in the source against the prose actually on the page it
 rendered to, and reports what did not make it.
 
-    ./ma/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch19_mech_interp
-    ./ma/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch19_mech_interp/L45_opening_the_box.tex
-    ./ma/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch19_mech_interp/L45_opening_the_box.pdf
+    ./ma/.venv/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch19_mech_interp
+    ./ma/.venv/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch19_mech_interp/L45_opening_the_box.tex
+    ./ma/.venv/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch19_mech_interp/L45_opening_the_box.pdf
 
 Exit code is 1 if anything is flagged, 0 if clean, so it can gate a build.
 

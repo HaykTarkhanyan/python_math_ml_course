@@ -14,7 +14,7 @@ ILLUSTRATIVE (schematic, labelled as such on the figure):
   l25_block         the Transformer block, as a data-flow diagram.
   l26_three_arch    encoder-only / decoder-only / encoder-decoder.
 
-Run:  ./ma/Scripts/python.exe llms/00_shared/archive/py_src/l25_l26_figs.py
+Run:  ./ma/.venv/Scripts/python.exe llms/00_shared/archive/py_src/l25_l26_figs.py
 """
 
 import logging

@@ -16,7 +16,7 @@ open symbol for exactly that reason.
 Coastlines: Natural Earth 110m (public domain), fetched once into
 ~/.cache/natural_earth/.
 
-Run:  ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/genes_geography_maps.py
+Run:  ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/genes_geography_maps.py
 """
 from __future__ import annotations
 

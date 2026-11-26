@@ -12,7 +12,7 @@ Produces 3 PDFs into ``ml/upcoming_lectures/fig/``:
                               early-stopping point (val minimum) marked.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/extra_figures.py
+    ./ma/.venv/Scripts/python.exe ml/upcoming_lectures/py_src/extra_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

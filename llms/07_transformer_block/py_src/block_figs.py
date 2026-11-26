@@ -28,8 +28,8 @@ Generates into llms/07_transformer_block/fig/:
   (blk_causal_mask and blk_mask_grid moved to LLM-4 on 2026-10-28, as py_src/masking_figs.py there.)
 
 Run:
-  ./ma/Scripts/python.exe llms/07_transformer_block/py_src/block_figs.py --gpt2   # once (25 s measured, 1-2 min cold)
-  ./ma/Scripts/python.exe llms/07_transformer_block/py_src/block_figs.py          # figures (~7 s measured)
+  ./ma/.venv/Scripts/python.exe llms/07_transformer_block/py_src/block_figs.py --gpt2   # once (25 s measured, 1-2 min cold)
+  ./ma/.venv/Scripts/python.exe llms/07_transformer_block/py_src/block_figs.py          # figures (~7 s measured)
 """
 import json
 import logging

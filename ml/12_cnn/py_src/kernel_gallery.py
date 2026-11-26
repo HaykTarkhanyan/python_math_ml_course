@@ -12,7 +12,7 @@ Convolution is scipy.ndimage.correlate (no kernel flip, exactly what nn.Conv2d c
 Image: skimage's public-domain 'astronaut' (grayscale) and 'brick' test images.
 
 Run (~30 s on CPU, measured 2026-10-02; a cold first import of skimage can add a minute):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/kernel_gallery.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/kernel_gallery.py
 
 Drawn at slide size (5.4 in wide = the full text width), fonts 7-9 pt.
 """

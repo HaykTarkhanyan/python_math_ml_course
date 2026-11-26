@@ -6,7 +6,7 @@ Generates into ml/13_rnns/fig/:
                       <pad>, the long one loses its ending -- including the verdict.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/pad_truncate.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/pad_truncate.py
 """
 
 import logging

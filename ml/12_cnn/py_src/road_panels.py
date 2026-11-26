@@ -11,7 +11,7 @@ Generates into ml/12_cnn/fig/:
   road_panels.pdf
 
 Run with the project venv (~2 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/road_panels.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/road_panels.py
 """
 
 import logging

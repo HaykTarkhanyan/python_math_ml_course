@@ -13,7 +13,7 @@ identity the HSV frame already asserts from the other direction. This script ass
 the rendered scene rather than restating it.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_depth.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_depth.py
 """
 
 import matplotlib

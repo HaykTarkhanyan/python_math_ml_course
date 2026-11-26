@@ -5,8 +5,8 @@ folders (weeks -> chapters -> source deck) and nests any bookmarks embedded in
 the individual PDFs below their source-deck bookmark.
 
 Usage:
-    ./ma/Scripts/python.exe ml/dl4nlp/moodle_s26_course/merge_slides.py
-    ./ma/Scripts/python.exe ml/dl4nlp/moodle_s26_course/merge_slides.py --out path/to/slides.pdf
+    ./ma/.venv/Scripts/python.exe ml/dl4nlp/moodle_s26_course/merge_slides.py
+    ./ma/.venv/Scripts/python.exe ml/dl4nlp/moodle_s26_course/merge_slides.py --out path/to/slides.pdf
 
 The script deliberately includes only the two lecture-slide folders.  It does
 not merge the separate ``exams/`` PDFs in this Moodle archive.

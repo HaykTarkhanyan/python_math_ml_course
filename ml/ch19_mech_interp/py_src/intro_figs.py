@@ -19,8 +19,8 @@ Drawn (no measurement, but Python per the house rule because each carries its fr
 Raw numbers go to results/intro_figs.json first; the measured figures are drawn from it.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_figs.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_figs.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_figs.py --plot-only
 """
 
 from __future__ import annotations

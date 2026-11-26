@@ -6,7 +6,7 @@ thumbnails and a set of text-prompt embeddings, and needs nothing but numpy.
 
 The point of caching: the practical is about clustering, not about installing torch.
 
-Run:  ./ma/Scripts/python.exe ml/09_clustering/py_src/embed_images_clip.py
+Run:  ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/embed_images_clip.py
 """
 
 from __future__ import annotations

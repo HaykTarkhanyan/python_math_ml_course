@@ -20,8 +20,8 @@ Figures (fig/): surname_next_<k>.pdf (one per step, a click-through), surname_sa
 (one per checkpoint), surname_loss.pdf.
 
 CPU only, 2 threads. Runtime: ~55 s measured on this laptop (experiment ~31 s, figures the rest). Run with:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/surname_gru.py
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/surname_gru.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/surname_gru.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/surname_gru.py --plot-only
 """
 
 import argparse

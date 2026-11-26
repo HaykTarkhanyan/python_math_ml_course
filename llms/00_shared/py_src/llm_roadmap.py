@@ -19,8 +19,8 @@ Drawn at the size it gets on the slide (5.5 x 2.5 in, include at width=\\linewid
 text stays 7-8 pt.
 
 Two steps, so the model is not rerun for every redraw:
-  ./ma/Scripts/python.exe llms/00_shared/py_src/llm_roadmap.py --gpt2   # GPT-2 numbers -> results/roadmap_gpt2.json (~2 min, mostly importing torch)
-  ./ma/Scripts/python.exe llms/00_shared/py_src/llm_roadmap.py          # the maps, from that JSON (19-78 s measured)
+  ./ma/.venv/Scripts/python.exe llms/00_shared/py_src/llm_roadmap.py --gpt2   # GPT-2 numbers -> results/roadmap_gpt2.json (~2 min, mostly importing torch)
+  ./ma/.venv/Scripts/python.exe llms/00_shared/py_src/llm_roadmap.py          # the maps, from that JSON (19-78 s measured)
 
 Generates into llms/00_shared/fig/: roadmap_<key>_pass.pdf and roadmap_<key>_life.pdf for every
 session key, plus roadmap_overview_pass.pdf / roadmap_overview_life.pdf (nothing lit).

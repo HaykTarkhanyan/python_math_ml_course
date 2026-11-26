@@ -18,7 +18,7 @@ Figure 12 uses the same model's token vectors. It is NOT a trained ColBERT model
 the MaxSim mechanism computed for real on real token vectors, which is what the frame
 claims and nothing more.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l42_rerank_figs.py   (~30 s)
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_rerank_figs.py   (~30 s)
 """
 
 import json

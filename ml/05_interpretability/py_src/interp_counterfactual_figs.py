@@ -11,7 +11,7 @@ values + predicted probabilities, and draws:
 Actionability is enforced: we freeze immutable / past-fact features (age, job, education,
 poutcome, pdays, previous) and only let the bank-controllable / financial-state features vary.
 
-Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_counterfactual_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/05_interpretability/py_src/interp_counterfactual_figs.py
 Conventions: logging to console + logs/, seed 509, f-strings, Armenian-flag colours. dice_ml in ma.
 """
 import logging

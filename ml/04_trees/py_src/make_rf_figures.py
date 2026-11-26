@@ -11,7 +11,7 @@ Produces four PDFs into ``ml/04_trees/fig/`` from the Titanic dataset:
   (plus oob_fraction, variance_floor, oob_vs_cv, bias_variance_dartboard, rf_boundary_smoothing.)
 
 Run with the project venv (repo CLAUDE.md -- do NOT spin up an ephemeral env):
-    ./ma/Scripts/python.exe ml/04_trees/py_src/make_rf_figures.py
+    ./ma/.venv/Scripts/python.exe ml/04_trees/py_src/make_rf_figures.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours for multi-line plots, value labels on bars, n_jobs=1 to

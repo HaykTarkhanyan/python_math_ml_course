@@ -15,7 +15,7 @@ Russakovsky/Karpathy. Numbers web-verified 2026-07-14 (match the canonical CS231
 7.5-9.5 pt on the slide (they were 3.4-4.3 pt).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/imagenet_error.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/imagenet_error.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette, value labels on bars.

@@ -10,8 +10,8 @@ the interesting part for this course is the prompt itself, which is the thing yo
 normally get to look at.
 
 Run:
-    USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/rag_demo.py
-    USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/rag_demo.py --no-filter
+    USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/rag_demo.py
+    USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/rag_demo.py --no-filter
 
 Try next:
     * change TOP_K and watch what enters the prompt

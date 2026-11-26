@@ -14,8 +14,8 @@ Training all eight seeds takes about four minutes on one CPU core. Results go to
 are drawn from that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_toy_mlp.py            # run + plot
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_toy_mlp.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_toy_mlp.py            # run + plot
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/intro_toy_mlp.py --plot-only
 """
 
 from __future__ import annotations

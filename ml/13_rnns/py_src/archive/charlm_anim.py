@@ -24,7 +24,7 @@ promoted to hard errors, utf-8 console/log reconfiguration, and no Armenian text
 into mathtext `$...$` strings.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/charlm_anim.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/charlm_anim.py
 """
 
 import logging

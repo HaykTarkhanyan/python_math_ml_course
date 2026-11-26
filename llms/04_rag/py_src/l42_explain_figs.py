@@ -8,7 +8,7 @@ k04_keybert_toy     KeyBERT as a picture: the message and its candidate phrases 
                     (illustrative coordinates; the real run is l42_04_keybert.pdf)
 
 Real numbers: k01-k03 run the deck's own code (l42_data.bm25_scores' formula, l42_keywords.rake) on l42_data.RAMBLING.
-Run (repo root, ~3 s):  ./ma/Scripts/python.exe llms/04_rag/py_src/l42_explain_figs.py
+Run (repo root, ~3 s):  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_explain_figs.py
 """
 import logging
 import re

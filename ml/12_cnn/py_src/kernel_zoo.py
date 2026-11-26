@@ -10,7 +10,7 @@ Part A asks students to write, so the deck figure and the homework share one imp
 
 Uses skimage's public-domain 'astronaut' test image (strong edges for the filters).
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/kernel_zoo.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/kernel_zoo.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 

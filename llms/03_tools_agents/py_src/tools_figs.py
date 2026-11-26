@@ -4,7 +4,7 @@ mcp_roles.pdf          - who talks to whom with MCP: the model, your app (the cl
 orchestrator.pdf       - one agent vs an orchestrator with workers, call by call (the notebook's part on it)
 
 Both are schematic (boxes and arrows), drawn at slot size with 7-10 pt text.
-Run (repo root, ~3 s):  ./ma/Scripts/python.exe llms/03_tools_agents/py_src/tools_figs.py
+Run (repo root, ~3 s):  ./ma/.venv/Scripts/python.exe llms/03_tools_agents/py_src/tools_figs.py
 """
 import logging
 import time

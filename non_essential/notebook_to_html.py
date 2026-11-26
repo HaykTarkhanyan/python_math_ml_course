@@ -3,7 +3,7 @@ look (nbconvert's "lab" template), images embedded, a table of contents at the t
 "##" section collapsible (<details open>). It never runs the notebook: it shows the saved outputs.
 
 Run (~5 s):
-    ./ma/Scripts/python.exe non_essential/notebook_to_html.py llms/01_tokenization/02_armenian_tokens_solution.ipynb
+    ./ma/.venv/Scripts/python.exe non_essential/notebook_to_html.py llms/01_tokenization/02_armenian_tokens_solution.ipynb
 Writes the .html next to the notebook. Fails if the page would still load anything from the internet.
 """
 import argparse

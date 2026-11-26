@@ -21,7 +21,7 @@ matches a row below, follow the referenced workflow - do not improvise a new one
 | Collapsible solutions inside a `.qmd` | `add-inline-solutions` skill | `math/SOLUTIONS_STATUS.md` |
 | Add YouTube / video links after a session | `update-youtube` skill | `_meta/youtube_channel.md` |
 | Pull reference material from a video link (transcript, screenshots, borrow visuals into slides) | `youtube-reference` skill, user-global (yt-dlp + ffmpeg pipeline -> `_reference_<slug>/`) | `~/.claude/skills/youtube-reference/SKILL.md` + the repo overrides in `CONVENTIONS.md` (Borrowed video material) |
-| Check the website for broken links (before pushing site changes; `--live` every few weeks) | `./ma/Scripts/python.exe non_essential/check_links.py [--live]` | `CONVENTIONS.md` (Links on rendered pages) |
+| Check the website for broken links (before pushing site changes; `--live` every few weeks) | `./ma/.venv/Scripts/python.exe non_essential/check_links.py [--live]` | `CONVENTIONS.md` (Links on rendered pages) |
 | Review a student project submission (repo / notebook link) | `review-submission` skill -> private `_submissions/NN_task/student/FEEDBACK.md` (gitignored) | `_submissions/README.md` |
 | Delete LaTeX build junk | `clean-tex` skill or `clean_latex.py` | - |
 | End of session / commit the day's work | `wrap-session` skill | `_work_sessions/*.toml` |
@@ -36,9 +36,9 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
    **Run BOTH detectors - they catch different failures and neither catches the other's:**
 
    ```bash
-   ./ma/Scripts/python.exe non_essential/detect_clipped_slides.py DECK.pdf      # clipped at the frame edge
-   ./ma/Scripts/python.exe non_essential/detect_footer_collisions.py DECK.pdf   # grown into the page-number band
-   ./ma/Scripts/python.exe non_essential/detect_small_figure_text.py DECK.pdf   # figure text shrunk below 5.5 pt
+   ./ma/.venv/Scripts/python.exe non_essential/detect_clipped_slides.py DECK.pdf      # clipped at the frame edge
+   ./ma/.venv/Scripts/python.exe non_essential/detect_footer_collisions.py DECK.pdf   # grown into the page-number band
+   ./ma/.venv/Scripts/python.exe non_essential/detect_small_figure_text.py DECK.pdf   # figure text shrunk below 5.5 pt
    ```
 
    The third one (added 2026-10-01) catches what neither of the first two can: a matplotlib figure drawn wider than its slot, which LaTeX scales down with every label in it. All four `ml/12_cnn` decks passed both detectors with figure labels at 2.3-5 pt. Fix by drawing at slot size (`figsize` = on-slide width, fonts 7-10 pt), not by bumping font sizes. See `_learnings/2026-10-01-2317_figures-drawn-wider-than-their-slot.md`.
@@ -100,7 +100,7 @@ Used when polishing an existing deck before delivery (`misc/dl4nlp/*` or `ml/` d
 
 ## Hard rules (each of these has caused real damage)
 
-1. Python runs through `./ma/Scripts/python.exe`. Never `uv run --with ...`, never a bare `python` for repo scripts.
+1. Python runs through `./ma/.venv/Scripts/python.exe`. Never `uv run --with ...`, never a bare `python` for repo scripts.
 2. No parallel heavy compute and no subagent fan-outs (multi-agent code review included) without explicit user approval. "Quick" always means zero subagents. The one recognized exception is the deck **student review** (step 3 of the deck-polish loop), one agent per deck - it is a standard step, but still ask before launching it, and say how many decks and roughly what it will cost. (Froze the machine 2026-05-21; drained the usage quota 2026-07-06.)
 3. pdflatex twice, always. One pass leaves a blank Outline frame and stale page counters.
 4. `_quarto.yml` paths are case-sensitive on CI (Linux) even though Windows hides the mismatch locally.

@@ -13,8 +13,8 @@ checked - look at those.
 
 Usage::
 
-    ./ma/Scripts/python.exe non_essential/detect_small_figure_text.py DECK.pdf [MORE.pdf ...]
-    ./ma/Scripts/python.exe non_essential/detect_small_figure_text.py ml/12_cnn --threshold 6
+    ./ma/.venv/Scripts/python.exe non_essential/detect_small_figure_text.py DECK.pdf [MORE.pdf ...]
+    ./ma/.venv/Scripts/python.exe non_essential/detect_small_figure_text.py ml/12_cnn --threshold 6
 
 Options: ``--threshold PT`` (default 5.5), ``--min-chars N`` (default 2: single characters are
 skipped, because math subscripts in normal slide text are legitimately small).

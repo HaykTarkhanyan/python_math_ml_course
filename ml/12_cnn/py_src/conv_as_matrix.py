@@ -9,7 +9,7 @@ Generates into ml/12_cnn/fig/:
 Drawn at its size on the slide (5.5 x 2.1 in), so font sizes are slide sizes (8-10 pt).
 
 Run with the project venv (~2 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_as_matrix.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/conv_as_matrix.py
 """
 
 import logging

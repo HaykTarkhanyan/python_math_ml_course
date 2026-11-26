@@ -5,7 +5,7 @@ Outputs (sized for a 4:3 slide, large fonts, no titles - the slide supplies cont
     fig/norm_axes.pdf     - what BatchNorm normalises over vs what LayerNorm normalises over
     fig/lr_schedules.pdf  - constant / linear decay / warmup + inverse sqrt / warmup + cosine
 
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/modern_components_figs.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/modern_components_figs.py
 """
 
 import logging

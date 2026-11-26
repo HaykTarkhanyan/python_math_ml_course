@@ -6,7 +6,7 @@ wraps badly. Those need eyes, and looking at 50 pages one by one is slow. A cont
 nine pages at once with their page numbers stamped in red.
 
 Usage:
-    ./ma/Scripts/python.exe non_essential/deck_contact_sheet.py DECK.pdf OUT_DIR [DPI] [PAGES]
+    ./ma/.venv/Scripts/python.exe non_essential/deck_contact_sheet.py DECK.pdf OUT_DIR [DPI] [PAGES]
 
     DPI    default 45 - enough to spot layout problems; use 70-110 to read small text
     PAGES  optional comma-separated page numbers, e.g. 2,13,41 (default: every page)

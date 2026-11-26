@@ -12,7 +12,7 @@ Cleaning:
   - dedupe + sort (deterministic output).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/fetch_surnames.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/fetch_surnames.py
 """
 
 import json

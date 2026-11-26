@@ -4,7 +4,7 @@ The notebook reads the saved result instead of paying for this again in class. R
 Writes results/model_comparison.json after every question. Approved budget about $0.41 (Q62), hard stop at $0.55.
 
 Run from the repo root (about 8 min):
-    ./ma/Scripts/python.exe -u llms/03_tools_agents/07_kargin_agent/py_src/run_model_comparison.py
+    ./ma/.venv/Scripts/python.exe -u llms/03_tools_agents/07_kargin_agent/py_src/run_model_comparison.py
 """
 import json
 import logging

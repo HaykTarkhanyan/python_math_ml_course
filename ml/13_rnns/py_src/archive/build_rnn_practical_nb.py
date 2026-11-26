@@ -13,7 +13,7 @@ practical, and deliberately avoids the ch8 SAE homework's "train a tiny RNN that
 Measured before the prose was written (session scratchpad, 2026-09-23): see DECISIONS.md.
 
 Run with the project venv (executes with the local 'ma' kernel, ~3 min on 2 CPU threads):
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/build_rnn_practical_nb.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_rnn_practical_nb.py
 """
 import io
 import logging

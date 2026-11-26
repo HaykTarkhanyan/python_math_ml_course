@@ -15,7 +15,7 @@ Generates into ml/ch12_vlm/fig/:
   raster_order.pdf    -- next-token prediction over a token grid, in raster order
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch12_vlm/py_src/l34_drawing_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch12_vlm/py_src/l34_drawing_figs.py
 """
 
 import logging

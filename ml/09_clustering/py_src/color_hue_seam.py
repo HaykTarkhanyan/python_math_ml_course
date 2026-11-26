@@ -10,7 +10,7 @@ The overlap metric is the same one the image-compression practical (34_*) comput
 the lecture and the notebook report the same number.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_hue_seam.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_hue_seam.py
 """
 
 import matplotlib

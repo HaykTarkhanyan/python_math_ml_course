@@ -8,7 +8,7 @@ Generates into ml/13_rnns/fig/:
                       frame did the same demo on an image's pixels.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/word_shuffle.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/word_shuffle.py
 """
 
 import logging

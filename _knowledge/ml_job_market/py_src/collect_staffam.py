@@ -1,6 +1,6 @@
 """Collect open jobs from staff.am that could be ML / AI / data roles, with their full text.
 
-Run (repo root):  ./ma/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_staffam.py
+Run (repo root):  ./ma/.venv/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_staffam.py
 Takes ~5-8 min (a guess: ~27 list pages + ~150-250 job pages at one request per ~1.5 s).
 
 staff.am's keyword search is fuzzy ("machine learning" returns 131 mostly unrelated jobs), so this

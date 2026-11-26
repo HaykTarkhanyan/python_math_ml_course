@@ -17,7 +17,7 @@ Generates into ml/12_cnn/fig/:
 are slide sizes (8-9.5 pt; the old figure rendered at 4.4-5.2 pt). The suptitle moved to the slide.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/morphology_demo.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/morphology_demo.py
 """
 
 import logging

@@ -12,7 +12,7 @@ Two families:
   so the hyperparameter frames show what the knobs actually do rather than a sketch of it.
 
 Outputs PDFs to the sibling ``fig/``. Run with the ma venv:
-    ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/umap_demos.py
+    ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/umap_demos.py
 (Fits UMAP about a dozen times; allow several minutes.)
 """
 import logging

@@ -17,7 +17,7 @@ Also writes data/cnn_reference.json: the project's tiny-CNN accuracies (S2TLD by
 cams by camera) for the practical's closing teaser - the CNN itself is the next practical.
 
 Run once (~30 s); --reference-only rewrites just cnn_reference.json:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/pack_traffic_light_data.py [--reference-only]
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/pack_traffic_light_data.py [--reference-only]
 """
 
 import json

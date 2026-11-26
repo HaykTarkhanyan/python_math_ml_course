@@ -16,7 +16,7 @@ Generates into ml/12_cnn/fig/ (2026-10-01: sections reordered chronologically, i
 were 5 pt); three label lanes per side so neighbours do not collide at that size.
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/timeline_ribbon.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/timeline_ribbon.py
 """
 
 import logging

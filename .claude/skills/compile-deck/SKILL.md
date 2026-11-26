@@ -49,7 +49,7 @@ single pass leaves a stale TOC and page counters. Follow every step, in order.
    annotated the clean file by mistake, the compile would erase it:
 
    ```bash
-   ./ma/Scripts/python.exe -c "from pypdf import PdfReader; import sys; r=PdfReader(sys.argv[1]); n=sum(1 for p in r.pages for a in (p.get('/Annots') or []) if str(a.get_object().get('/Subtype'))=='/Ink'); print('ink strokes in clean PDF:', n)" DECK.pdf
+   ./ma/.venv/Scripts/python.exe -c "from pypdf import PdfReader; import sys; r=PdfReader(sys.argv[1]); n=sum(1 for p in r.pages for a in (p.get('/Annots') or []) if str(a.get_object().get('/Subtype'))=='/Ink'); print('ink strokes in clean PDF:', n)" DECK.pdf
    ```
 
    Anything above 0: stop, back the file up, move it to `DECK_notes.pdf` (if
@@ -85,7 +85,7 @@ single pass leaves a stale TOC and page counters. Follow every step, in order.
 5. **Clean build junk** (always before a commit):
 
    ```bash
-   ./ma/Scripts/python.exe clean_latex.py PATH_TO_DIR_OR_TEX
+   ./ma/.venv/Scripts/python.exe clean_latex.py PATH_TO_DIR_OR_TEX
    ```
 
 6. **Open for instructor review** - PowerShell, one file at a time, ~0.5 s apart

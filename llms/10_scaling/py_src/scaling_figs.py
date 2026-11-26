@@ -18,7 +18,7 @@ Generates into llms/10_scaling/fig/:
   scal_mirage.pdf            -- toy: per-token accuracy p (smooth) and exact match p^5 (a "jump")
 and results/scaling_figs.json.
 
-Run: ./ma/Scripts/python.exe llms/10_scaling/py_src/scaling_figs.py      (~10 s)
+Run: ./ma/.venv/Scripts/python.exe llms/10_scaling/py_src/scaling_figs.py      (~10 s)
 """
 import json
 import logging

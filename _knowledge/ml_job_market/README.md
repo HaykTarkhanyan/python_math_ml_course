@@ -21,10 +21,10 @@ skill, so course projects can be designed around what is actually hired for. Fir
 ## Re-run (repo root, `ma` venv)
 
 ```bash
-./ma/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_staffam.py    # 5.4 min (2026-10-28, 177 requests)
-./ma/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_linkedin.py   # 16 min fresh (327 requests); 5 min re-run same day
-./ma/Scripts/python.exe _knowledge/ml_job_market/py_src/analyze.py               # ~15 s
-./ma/Scripts/python.exe _knowledge/ml_job_market/py_src/report.py                # ~3 s
+./ma/.venv/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_staffam.py    # 5.4 min (2026-10-28, 177 requests)
+./ma/.venv/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_linkedin.py   # 16 min fresh (327 requests); 5 min re-run same day
+./ma/.venv/Scripts/python.exe _knowledge/ml_job_market/py_src/analyze.py               # ~15 s
+./ma/.venv/Scripts/python.exe _knowledge/ml_job_market/py_src/report.py                # ~3 s
 ```
 
 The LinkedIn collector reuses postings already in today's file, so a same-day re-run only downloads new ones.

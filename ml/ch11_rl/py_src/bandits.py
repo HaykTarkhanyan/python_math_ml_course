@@ -9,7 +9,7 @@ Generates into ml/ch11_rl/fig/:
   bandit_estimates.pdf -- what greedy sees after 10 pulls vs the truth
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/bandits.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/bandits.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, fixed seed, f-strings,
 Armenian-flag colours, matplotlib Agg, fail loud.

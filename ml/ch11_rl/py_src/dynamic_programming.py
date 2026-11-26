@@ -10,7 +10,7 @@ Generates into ml/ch11_rl/fig/:
   gpi_diagram.pdf  -- the generalised policy iteration picture
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/dynamic_programming.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/dynamic_programming.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, fixed seed, f-strings,
 Armenian-flag colours, matplotlib Agg, fail loud.

@@ -3,7 +3,7 @@
 Separate from l43_probe_claims.py because none of this needs the embedding model except
 the ranked lists, which are read back from the first probe's measured output.
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l43_probe_metrics.py
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l43_probe_metrics.py
 """
 
 import logging

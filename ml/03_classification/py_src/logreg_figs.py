@@ -10,7 +10,7 @@ ml/03_classification/fig/:
                                 (convex) as a single weight w varies.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/03_classification/py_src/logreg_figs.py
+    ./ma/.venv/Scripts/python.exe ml/03_classification/py_src/logreg_figs.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

@@ -21,7 +21,7 @@ Both are drawn at their size on the slide (5.5 / 4.75 in wide), so font sizes ar
 
 Run with the project venv (~15 s, CPU: one ResNet-18 forward pass; weights from the torch cache,
 a one-time ~45 MB download if missing):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/feature_hierarchy.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/feature_hierarchy.py
 """
 
 import logging

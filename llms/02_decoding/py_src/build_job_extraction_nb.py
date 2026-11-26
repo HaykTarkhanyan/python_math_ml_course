@@ -17,9 +17,9 @@ calls (~$0.75 measured 2026-11-11, ~5 min, 8 at a time). Section 4 also reads
 results/job_extraction_logprob_mismatch.json, written by py_src/non_essential/probe_logprob_mismatch.py.
 
 Run with the project venv (builds, then executes):
-    ./ma/Scripts/python.exe llms/02_decoding/py_src/build_job_extraction_nb.py              # full
-    ./ma/Scripts/python.exe llms/02_decoding/py_src/build_job_extraction_nb.py --limit 6    # dev: 6 postings
-    ./ma/Scripts/python.exe llms/02_decoding/py_src/build_job_extraction_nb.py --markdown-only
+    ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/build_job_extraction_nb.py              # full
+    ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/build_job_extraction_nb.py --limit 6    # dev: 6 postings
+    ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/build_job_extraction_nb.py --markdown-only
 All write xx_job_extraction_solution.html next to the notebook (non_essential/notebook_to_html.py).
 --markdown-only copies edited prose into the executed notebook without rerunning it.
 """

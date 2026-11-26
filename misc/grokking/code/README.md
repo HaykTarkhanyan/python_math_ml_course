@@ -9,8 +9,8 @@ Look for training accuracy reaching 100% quickly, followed later by a sharp rise
 From this directory, using the repository environment:
 
 ```powershell
-..\..\..\ma\Scripts\python.exe train.py --steps 25000 --weight-decay 1.0
-..\..\..\ma\Scripts\python.exe analyze.py
+..\..\..\ma\.venv\Scripts\python.exe train.py --steps 25000 --weight-decay 1.0
+..\..\..\ma\.venv\Scripts\python.exe analyze.py
 ```
 
 Outputs in `artifacts/`:
@@ -23,13 +23,13 @@ Outputs in `artifacts/`:
 
 ```powershell
 # Fast smoke test
-..\..\..\ma\Scripts\python.exe train.py --modulus 31 --d-model 32 --n-heads 1 --d-mlp 64 --steps 500
+..\..\..\ma\.venv\Scripts\python.exe train.py --modulus 31 --d-model 32 --n-heads 1 --d-mlp 64 --steps 500
 
 # More examples makes generalization easier
-..\..\..\ma\Scripts\python.exe train.py --train-fraction 0.7
+..\..\..\ma\.venv\Scripts\python.exe train.py --train-fraction 0.7
 
 # Often weakens or removes grokking
-..\..\..\ma\Scripts\python.exe train.py --weight-decay 0
+..\..\..\ma\.venv\Scripts\python.exe train.py --weight-decay 0
 ```
 
 The exact onset is sensitive to the seed, model size, learning rate, and weight decay. The goal is to expose those knobs plainly.

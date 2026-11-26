@@ -90,7 +90,7 @@ Last updated: 2026-09-28
 - Templates (`python/00_template.ipynb`, `python_libs/00_template.ipynb`, `math/xx_template.qmd`)
   mark must-fill targets `NN_topic` / `NN_name` / `VIDEO_ID` / `URL` and keep optional blocks in
   HTML comments. Fill or delete them in the copy.
-- Before pushing site changes: `./ma/Scripts/python.exe non_essential/check_links.py` (~2 s). Every
+- Before pushing site changes: `./ma/.venv/Scripts/python.exe non_essential/check_links.py` (~2 s). Every
   few weeks: add `--live` for external link rot. Manual, not a CI gate (DECISIONS #53).
 
 ---

@@ -20,7 +20,7 @@ shots added by hand) -- re-running this script refetches an uncurated superset,
 so don't re-run it over the committed folder. ``_sources.json`` maps every kept
 file back to its Commons title.
 
-Run:  ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/fetch_project_demo_images.py
+Run:  ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/fetch_project_demo_images.py
 """
 from __future__ import annotations
 

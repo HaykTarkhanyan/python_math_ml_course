@@ -12,8 +12,8 @@ Needs OPENROUTER_API_KEY and TAVILY_API_KEY in the repository's .env (read with 
 Packages (pinned in requirements.txt next to the notebook): openai, tavily-python, requests, python-dotenv.
 
 Run with the project venv (builds, then executes, then exports HTML):
-    ./ma/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_1_nb.py
-    ./ma/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_1_nb.py --markdown-only
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_1_nb.py
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/py_src/build_tools_1_nb.py --markdown-only
 Full build ~1-2 min when calls are live, ~30 s when replayed.
 """
 import argparse

@@ -7,7 +7,7 @@ Generates into ml/11_neural_networks/fig/:
                         Data: Visual Capitalist / UBS (time-to-100M-users), accessed 2026.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/adoption_speed.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/adoption_speed.py
 """
 
 import logging

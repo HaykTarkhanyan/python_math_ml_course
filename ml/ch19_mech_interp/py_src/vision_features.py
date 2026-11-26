@@ -19,8 +19,8 @@ DECISIONS #41), else CPU with 2 threads. Measured:
 Results -> results/vision_features.json (images stored at 96x96); figures read that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_features.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_features.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_features.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_features.py --plot-only
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Figures for the "Making Training Fast" deck ([LLM-19]).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe py_src/make_figures.py
+    ./ma/.venv/Scripts/python.exe py_src/make_figures.py
 Outputs PDFs into ../fig/. Fails loud on any error (no silent fallback).
 
 Real-number figures use A100 80GB SXM datasheet values and the measured

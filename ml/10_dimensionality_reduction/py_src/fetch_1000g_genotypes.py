@@ -22,7 +22,7 @@ Output npz:
                                      "." for every ID -- no rsIDs; kept for layout)
   source                          -- the exact URL, for provenance
 
-Run:  ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/fetch_1000g_genotypes.py
+Run:  ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/fetch_1000g_genotypes.py
 (~205 MB download on first run, cached in ~/.cache/1000genomes; the parse streams
 the whole chromosome and takes a few minutes.)
 """

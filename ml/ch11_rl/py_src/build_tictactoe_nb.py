@@ -11,8 +11,8 @@ Structure rule (house pattern, ch8_autoencoders/py_src/build_sae_nb.py): MANY SM
 idea per cell, a markdown cell before each code cell saying what is about to happen and why.
 
 Assemble, then execute separately so every number in the prose comes from a real run:
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/build_tictactoe_nb.py
-    ./ma/Scripts/python.exe -m nbconvert --execute --inplace --to notebook <nb>
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/build_tictactoe_nb.py
+    ./ma/.venv/Scripts/python.exe -m nbconvert --execute --inplace --to notebook <nb>
 """
 
 from pathlib import Path

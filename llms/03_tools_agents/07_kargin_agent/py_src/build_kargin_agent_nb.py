@@ -10,8 +10,8 @@ Needs OPENROUTER_API_KEY and TAVILY_API_KEY in the repository's .env (read, neve
 sketch_finder/ for the command-line cells.
 
 Run with the project venv (builds, executes, exports HTML; about 3 min, about $0.10):
-    ./ma/Scripts/python.exe llms/03_tools_agents/07_kargin_agent/py_src/build_kargin_agent_nb.py
-    ./ma/Scripts/python.exe llms/03_tools_agents/07_kargin_agent/py_src/build_kargin_agent_nb.py --markdown-only
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/07_kargin_agent/py_src/build_kargin_agent_nb.py
+    ./ma/.venv/Scripts/python.exe llms/03_tools_agents/07_kargin_agent/py_src/build_kargin_agent_nb.py --markdown-only
 """
 import argparse
 import logging

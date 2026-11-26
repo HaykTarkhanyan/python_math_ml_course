@@ -9,7 +9,7 @@ Generates into ml/12_cnn/fig/:
                             depthwise conv is g = C (one group per channel).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/grouped_conv_demo.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/grouped_conv_demo.py
 """
 
 import logging

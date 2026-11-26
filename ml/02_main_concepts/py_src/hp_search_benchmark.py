@@ -21,7 +21,7 @@ Produces one figure into ``ml/upcoming_lectures/fig/``:
 
 Single-threaded everywhere (n_jobs=1) so the laptop stays cool and Optuna's
 sequential nature is reflected honestly. Run with the project venv:
-    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/hp_search_benchmark.py
+    ./ma/.venv/Scripts/python.exe ml/upcoming_lectures/py_src/hp_search_benchmark.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

@@ -28,7 +28,7 @@ problems.
 Usage:
 
 ```bash
-./ma/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch12_vlm
+./ma/.venv/Scripts/python.exe non_essential/detect_clipped_slides.py ml/ch12_vlm
 ```
 
 Exit code 1 if anything is flagged, 0 if clean.

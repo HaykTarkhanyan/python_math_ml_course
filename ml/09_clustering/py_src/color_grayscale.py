@@ -9,7 +9,7 @@ Also measures, and logs, which standard each library in the ma venv implements. 
 measurement is the point of the slide: PIL and skimage disagree by construction.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_grayscale.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_grayscale.py
 """
 
 import matplotlib

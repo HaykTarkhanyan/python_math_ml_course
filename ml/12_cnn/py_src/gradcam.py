@@ -24,7 +24,7 @@ All figures are drawn at their size on the slide, so font sizes are slide sizes 
 Fails loudly if the photo or the pretrained weights are unavailable.
 
 Run with the project venv (~15 s, mostly importing torch):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/gradcam.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/gradcam.py
 """
 
 import logging

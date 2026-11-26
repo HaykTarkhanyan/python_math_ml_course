@@ -9,7 +9,7 @@ Generates into ml/13_rnns/fig/:
 
 Uses tiktoken's cl100k_base encoding (a real production BPE tokenizer, GPT-3.5/4
 family) -- installed into the `ma` venv with
-    uv pip install --python ./ma/Scripts/python.exe tiktoken
+    uv pip install --python ./ma/.venv/Scripts/python.exe tiktoken
 The encoding file downloads once on first use (~a few seconds) and is then cached by
 tiktoken under the user's cache dir; this script fails loudly if tiktoken is missing or
 the encoding cannot be loaded (no silent fallback to a fake tokenizer).
@@ -20,7 +20,7 @@ Chapter constants reused verbatim (never retyped):
   English gloss: locked at the [54] interview (see ENGLISH_GLOSS below)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/tokenizer_demo.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/tokenizer_demo.py
 """
 
 import logging
@@ -33,7 +33,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "tiktoken is required for tokenizer_demo.py and must be installed into the "
-        "project venv: uv pip install --python ./ma/Scripts/python.exe tiktoken "
+        "project venv: uv pip install --python ./ma/.venv/Scripts/python.exe tiktoken "
         "-- refusing to silently fall back to a fake tokenizer."
     ) from e
 

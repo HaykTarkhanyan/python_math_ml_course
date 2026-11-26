@@ -8,7 +8,7 @@ markdown cell before it saying what is about to happen and why. Never bundle a c
 its training loop and its evaluation into a single cell.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch8_autoencoders/py_src/build_sae_nb.py
+    ./ma/.venv/Scripts/python.exe ml/ch8_autoencoders/py_src/build_sae_nb.py
 """
 import io
 from pathlib import Path

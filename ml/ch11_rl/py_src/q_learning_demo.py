@@ -12,7 +12,7 @@ Generates into ml/ch11_rl/fig/:
   qlearning_convergence.pdf -- error to V* vs episodes, plus the policy it ends up with
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/q_learning_demo.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/q_learning_demo.py
 """
 
 import logging

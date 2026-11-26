@@ -14,7 +14,7 @@ Generates into ml/11_neural_networks/fig/:
                     Dates are textbook-standard DL history.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/dl_history_timeline.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/dl_history_timeline.py
 """
 
 import logging

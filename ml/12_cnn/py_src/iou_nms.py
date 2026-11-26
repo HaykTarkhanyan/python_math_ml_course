@@ -16,7 +16,7 @@ Generates into ml/12_cnn/fig/:
   nms_only.pdf  (right panel alone)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/iou_nms.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/iou_nms.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.46, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

@@ -13,7 +13,7 @@ to the torch hub cache on first run). COCO has no pomegranate class, so it calls
 whatever class it was given.
 
 Run (~1 min on CPU incl. model load; --plot-only ~5 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/detector_candidates.py [--plot-only]
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/detector_candidates.py [--plot-only]
 """
 
 import argparse

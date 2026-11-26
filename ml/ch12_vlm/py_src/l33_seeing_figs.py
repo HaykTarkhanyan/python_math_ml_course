@@ -13,7 +13,7 @@ Reuses ml/ch10_diffusion/data/mashtots_panir_24.npz so the chapter needs no new 
 the patchify frame is the same letter students generated in ch10.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch12_vlm/py_src/l33_seeing_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch12_vlm/py_src/l33_seeing_figs.py
 """
 
 import logging

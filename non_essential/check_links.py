@@ -16,8 +16,8 @@ Two modes:
       as "unverified", never as fine.
 
 Run from the repo root with the ma venv:
-    ./ma/Scripts/python.exe non_essential/check_links.py            # source mode
-    ./ma/Scripts/python.exe non_essential/check_links.py --live     # live mode
+    ./ma/.venv/Scripts/python.exe non_essential/check_links.py            # source mode
+    ./ma/.venv/Scripts/python.exe non_essential/check_links.py --live     # live mode
 
 Exit code 1 when anything is broken. Full results: logs/check_links_<mode>.json.
 """

@@ -4,7 +4,7 @@ Every number the deck asserts about hybrid retrieval, keyword extraction or quer
 expansion is produced here first. If a measurement contradicts the intended story, the
 story changes - see _learnings/2026-08-10-2016_rag-figure-contradicted-its-own-claim.md.
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l42_probe.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_probe.py
 """
 
 import logging

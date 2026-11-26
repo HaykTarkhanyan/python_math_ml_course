@@ -55,7 +55,7 @@ table, an equation, a figure), open the PDF at the page number given by the near
 Re-download from the links above, then re-extract with the `ma` venv:
 
 ```bash
-./ma/Scripts/python.exe llms/04_rag/extract_rag_papers.py
+./ma/.venv/Scripts/python.exe llms/04_rag/extract_rag_papers.py
 ```
 
 The extract script verifies page counts and asserts each PDF's expected title appears on page 1,

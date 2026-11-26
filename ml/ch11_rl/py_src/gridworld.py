@@ -10,7 +10,7 @@ Generates into ml/ch11_rl/fig/:
   gridworld_policy.pdf  -- the greedy policy arrows implied by V*
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/gridworld.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/gridworld.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, fixed seed, f-strings,
 Armenian-flag colours, matplotlib Agg, fail loud.

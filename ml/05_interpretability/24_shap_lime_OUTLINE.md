@@ -91,7 +91,7 @@ lighter local cousin. No game-theory derivations.
   `global_shap_depend`, `lime-wolfhusky*`, `lime_credit`, `lime_robustness`.
 - **Generate (only the gap):** a **waterfall** on a course model (the one plot with no LMU asset);
   optionally a beeswarm on course data for continuity.
-- **Dependency:** add `shap` to `ma` (`uv pip install --python ./ma/Scripts/python.exe shap`) for
+- **Dependency:** add `shap` to `ma` (`uv pip install --python ./ma/.venv/Scripts/python.exe shap`) for
   the waterfall; LIME stays reuse-only (no `lime` dep needed).
 
 ## Open decisions

@@ -23,10 +23,10 @@ without). Scripts live in a sibling `py_src/`, outputs go to a sibling `fig/`
 as PDF (vector), and they run with the project venv - never a fresh environment:
 
 ```bash
-./ma/Scripts/python.exe ml/CHAPTER/py_src/SCRIPT.py
+./ma/.venv/Scripts/python.exe ml/CHAPTER/py_src/SCRIPT.py
 ```
 
-Missing package? `uv pip install --python ./ma/Scripts/python.exe PKG`.
+Missing package? `uv pip install --python ./ma/.venv/Scripts/python.exe PKG`.
 
 ## Required script skeleton
 

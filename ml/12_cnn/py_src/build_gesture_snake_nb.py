@@ -14,8 +14,8 @@ and gesture_data/ resolve the same way they do for students.
 
 Run with the project venv (builds, then executes on 2 CPU threads; runtime scales with the
 amount of recorded data - 753 s for the instructor's 500 crops, measured 2026-10-16):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/build_gesture_snake_nb.py
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/build_gesture_snake_nb.py --no-execute
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_gesture_snake_nb.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_gesture_snake_nb.py --no-execute
 """
 import argparse
 import logging

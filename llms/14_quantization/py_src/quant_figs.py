@@ -20,8 +20,8 @@ Generates into llms/14_quantization/fig/:
   quant_kv.pdf         -- KV-cache size against context length: GPT-2 vs Llama 3 8B (by hand)
 
 Run:
-  ./ma/Scripts/python.exe llms/14_quantization/py_src/quant_figs.py --gpt2   # ~2-4 min, background
-  ./ma/Scripts/python.exe llms/14_quantization/py_src/quant_figs.py          # figures (~5 s)
+  ./ma/.venv/Scripts/python.exe llms/14_quantization/py_src/quant_figs.py --gpt2   # ~2-4 min, background
+  ./ma/.venv/Scripts/python.exe llms/14_quantization/py_src/quant_figs.py          # figures (~5 s)
 """
 import json
 import logging

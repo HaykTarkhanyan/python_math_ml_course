@@ -6,7 +6,7 @@ PUBLISHED numbers, so they need no model weights (embeddings_position_figs.py ne
                        against the paper on 2026-10-27 (ar5iv 2307.03172).
 
 Writes llms/05_embeddings_position/results/long_context_figs.json (the plotted values and their source).
-Run: ./ma/Scripts/python.exe llms/05_embeddings_position/py_src/long_context_figs.py   (~3 s)
+Run: ./ma/.venv/Scripts/python.exe llms/05_embeddings_position/py_src/long_context_figs.py   (~3 s)
 """
 import json
 import logging

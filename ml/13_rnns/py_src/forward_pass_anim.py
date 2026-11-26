@@ -37,7 +37,7 @@ Noto Sans Armenian was checked and is not installed on this machine). Any matplo
 missing-glyph run crashes instead of silently shipping a tofu box to a slide.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/forward_pass_anim.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/forward_pass_anim.py
 """
 
 import logging

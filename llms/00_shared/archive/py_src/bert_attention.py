@@ -8,7 +8,7 @@ BERT heads dump most of their mass on [SEP]/[CLS] (a well-documented artifact), 
 linguistic pattern -- so we drop those tokens and renormalise each query row over content tokens.
 
 Real attention weights from distilbert-base-uncased (one-time ~260 MB download, CPU inference).
-Run: ./ma/Scripts/python.exe llms/00_shared/archive/py_src/bert_attention.py
+Run: ./ma/.venv/Scripts/python.exe llms/00_shared/archive/py_src/bert_attention.py
 """
 import logging
 import sys

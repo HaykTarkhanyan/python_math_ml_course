@@ -5,7 +5,7 @@ Fits an imodels RuleFitRegressor on the bike data (deck 1's anchor), logs the ru
   - rulefit_scorecard.pdf : the kept rules as a diverging horizontal bar (the scorecard made
                             visual; positive weights push rentals up, negative push down).
 
-Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_rulefit_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/05_interpretability/py_src/interp_rulefit_figs.py
 Conventions: logging to console + logs/, seed 509, f-strings, Armenian-flag colours.
 """
 import logging

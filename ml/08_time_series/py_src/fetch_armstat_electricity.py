@@ -13,7 +13,7 @@ Writes ml/08_time_series/data/armstat_electricity_monthly.csv with columns:
     value_kdram -- volume of production, thousand drams, CURRENT prices (nominal)
 
 Run with the project venv (repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/08_time_series/py_src/fetch_armstat_electricity.py
+    ./ma/.venv/Scripts/python.exe ml/08_time_series/py_src/fetch_armstat_electricity.py
 
 Conventions (repo CLAUDE.md): console + logs/ logging, f-strings, fail loud.
 

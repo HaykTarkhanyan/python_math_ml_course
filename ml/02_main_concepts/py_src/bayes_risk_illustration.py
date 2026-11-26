@@ -10,7 +10,7 @@ Point of the frame: even an oracle that knows the true f cannot beat MSE = sigma
 Regularization closes the gap ABOVE this floor, never below it.
 
 Run with the project venv (see repo CLAUDE.md -> Python Environment):
-    ./ma/Scripts/python.exe ml/upcoming_lectures/py_src/bayes_risk_illustration.py
+    ./ma/.venv/Scripts/python.exe ml/upcoming_lectures/py_src/bayes_risk_illustration.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

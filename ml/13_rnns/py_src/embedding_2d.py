@@ -14,7 +14,7 @@ exact (not fit from real vectors). The frame using this figure must say so expli
 ("schematic of a real embedding space").
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/embedding_2d.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/embedding_2d.py
 """
 
 import logging

@@ -1,7 +1,7 @@
 """Collect ML / AI / data job postings from LinkedIn's public (logged-out) job search: Armenia, and a
 worldwide sample for comparison.
 
-Run (repo root):  ./ma/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_linkedin.py
+Run (repo root):  ./ma/.venv/Scripts/python.exe -u _knowledge/ml_job_market/py_src/collect_linkedin.py
 Takes ~12-18 min (a guess: ~120 search pages + ~250 postings at one request per ~2.5 s, more if
 LinkedIn answers 429 and the backoff kicks in).
 

@@ -20,7 +20,7 @@ Generates into ml/ch13_audio/fig/:
   audio_token_budget.pdf  -- a minute of audio against its own transcript, and an image
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch13_audio/py_src/l35_hearing_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch13_audio/py_src/l35_hearing_figs.py
 """
 
 import sys

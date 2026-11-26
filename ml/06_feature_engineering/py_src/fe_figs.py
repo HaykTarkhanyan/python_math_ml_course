@@ -14,7 +14,7 @@ imported from fe_measure.build_pool so deck [27] prunes exactly the matrix this 
   fe_geo_illustration.pdf       : frame 24 - raw lat/lon vs distance (synthetic, labelled)
   fe_candidate_pool.pdf         : frame 28 - the pool, and the data-quality bug it surfaced
 
-Run: ./ma/Scripts/python.exe ml/06_feature_engineering/py_src/fe_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/06_feature_engineering/py_src/fe_figs.py
 Conventions: logging to console + logs/, seed 509, Armenian colours, n_jobs=1.
 """
 import logging

@@ -5,7 +5,7 @@ written in words -> ISO dates, and text without spaces -> the same text with spa
 per-letter tagger as the comparison. Outline and measured design: seq2seq_dates_and_spaces_OUTLINE.md.
 
 The notebook is NOT executed here (a laptop CPU is ~30x too slow). Pipeline:
-  1. ./ma/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_nb.py
+  1. ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_nb.py
        -> writes the unexecuted solution notebook (a few seconds)
   2. execute it on a Colab T4 with the `colab` CLI in WSL (~11 min of GPU time):
        colab new -s proj --gpu T4
@@ -14,11 +14,11 @@ The notebook is NOT executed here (a laptop CPU is ~30x too slow). Pipeline:
        colab download -s proj /content/seq2seq_wall.json ml/13_rnns/results/seq2seq_wall.json
        colab stop -s proj
      -> writes seq2seq_dates_and_spaces_solution_output.ipynb next to the input
-  3. ./ma/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_nb.py \
+  3. ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_nb.py \
          --merge ml/13_rnns/seq2seq_dates_and_spaces_solution_output.ipynb
        -> rebuilds the notebook and copies every code cell's outputs from the executed copy.
           Fails loudly if any code cell differs, so prose can be revised without retraining.
-  4. ./ma/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_tasks.py  (student version)
+  4. ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_project_tasks.py  (student version)
 
 Structure rule (instructor, 2026-08-02): many small cells, one idea each, a markdown cell before
 each code cell saying what is about to happen and why. This project is the chapter's only

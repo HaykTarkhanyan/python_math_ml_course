@@ -22,7 +22,7 @@ Armenian rendering follows forward_pass_anim.py's pattern (Segoe UI, glyph-error
 promotion, utf-8 logging, no Armenian inside mathtext).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/charlm_generate.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/charlm_generate.py
 """
 
 import logging

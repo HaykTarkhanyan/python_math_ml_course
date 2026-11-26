@@ -11,7 +11,7 @@ Generates into ml/12_cnn/fig/:
 First run downloads the resnet18 weights once (~45 MB, sanctioned).
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/pretrained_filters.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/pretrained_filters.py
 """
 
 import logging

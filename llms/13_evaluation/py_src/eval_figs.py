@@ -15,8 +15,8 @@ Generates into llms/13_evaluation/fig/:
   eval_contamination.pdf  -- share of each Armenian corpus's documents overlapping evaluation sets
 
 Run:
-  ./ma/Scripts/python.exe llms/13_evaluation/py_src/eval_figs.py --gpt2   # once (~30 s)
-  ./ma/Scripts/python.exe llms/13_evaluation/py_src/eval_figs.py          # figures (~5 s)
+  ./ma/.venv/Scripts/python.exe llms/13_evaluation/py_src/eval_figs.py --gpt2   # once (~30 s)
+  ./ma/.venv/Scripts/python.exe llms/13_evaluation/py_src/eval_figs.py          # figures (~5 s)
 """
 import json
 import logging

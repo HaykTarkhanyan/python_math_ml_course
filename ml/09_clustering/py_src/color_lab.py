@@ -10,7 +10,7 @@ is measured here rather than asserted, because the effect is real but milder tha
 usual telling suggests.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_lab.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_lab.py
 """
 
 import matplotlib

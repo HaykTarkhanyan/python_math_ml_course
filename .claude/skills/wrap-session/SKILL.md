@@ -18,7 +18,7 @@ user-invocable: true
 
 Work through these in order and report each as done or skipped (with reason).
 
-1. **Clean LaTeX junk:** `./ma/Scripts/python.exe clean_latex.py` (repo-wide).
+1. **Clean LaTeX junk:** `./ma/.venv/Scripts/python.exe clean_latex.py` (repo-wide).
 
 2. **Review `git status`:** nothing unintended staged - no `.aux`/`.log`/`.nav`
    files, no oversized files, no PII datasets (the voter registry is

@@ -18,7 +18,7 @@ figures can be redrawn from it with --plot-only. The SSDlite top box matches the
 of detector_candidates.json (same model, same photo).
 
 Run (~40 s on CPU incl. model loads; --plot-only ~5 s; weights from the torch hub cache):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/candidate_boxes.py [--plot-only]
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/candidate_boxes.py [--plot-only]
 """
 
 import argparse

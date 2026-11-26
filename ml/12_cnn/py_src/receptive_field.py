@@ -13,7 +13,7 @@ Generates into ml/12_cnn/fig/:
 (instructor: "VGG - I didn't get it"), so each panel is its own figure, drawn at its slide size.
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/receptive_field.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/receptive_field.py
 """
 
 import logging

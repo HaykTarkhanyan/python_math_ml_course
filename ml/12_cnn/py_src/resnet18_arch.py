@@ -16,7 +16,7 @@ Generates into ml/12_cnn/fig/:
   resnet18_arch.pdf
 
 Run with the project venv (~4 s, CPU):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/resnet18_arch.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/resnet18_arch.py
 """
 
 import logging

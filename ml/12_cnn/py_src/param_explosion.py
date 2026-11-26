@@ -6,7 +6,7 @@ Generates into ml/12_cnn/fig/:
                           filter needs 75. Log-scale labeled bars.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/param_explosion.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/param_explosion.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette, value labels on bars.

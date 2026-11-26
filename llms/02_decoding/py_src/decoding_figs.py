@@ -11,8 +11,8 @@ Drawn at the size each figure gets on the slide (5.5 in = full text width), 7-8 
 save() refuses any text outside its figure.
 
 Two steps, so torch is not imported for every redraw:
-  ./ma/Scripts/python.exe llms/02_decoding/py_src/decoding_figs.py --gpt2   # greedy run -> JSON (~2 min, mostly importing torch)
-  ./ma/Scripts/python.exe llms/02_decoding/py_src/decoding_figs.py          # the figures (~15 s)
+  ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/decoding_figs.py --gpt2   # greedy run -> JSON (~2 min, mostly importing torch)
+  ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/decoding_figs.py          # the figures (~15 s)
 
 Generates into llms/02_decoding/fig/: dec_*.pdf.
 """

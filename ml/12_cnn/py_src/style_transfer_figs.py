@@ -18,7 +18,7 @@ layers, no fully connected layers; content from conv4_2, style from conv1_1 ... 
 responses", given by the Gram matrix.
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/style_transfer_figs.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/style_transfer_figs.py
 """
 
 import logging

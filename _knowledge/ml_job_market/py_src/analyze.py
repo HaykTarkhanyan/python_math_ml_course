@@ -1,6 +1,6 @@
 """Tag every collected posting with skills, a role and a seniority bucket, and count them per group.
 
-Run (repo root):  ./ma/Scripts/python.exe _knowledge/ml_job_market/py_src/analyze.py [YYYY-MM-DD]
+Run (repo root):  ./ma/.venv/Scripts/python.exe _knowledge/ml_job_market/py_src/analyze.py [YYYY-MM-DD]
 Takes ~15 s (measured 13 s on 2026-10-28, ~300 postings). Reads data/staffam_<date>.json and data/linkedin_<date>.json (latest date if none given),
 writes results/skills_<date>.json. report.py builds the HTML from that file only.
 

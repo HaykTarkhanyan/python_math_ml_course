@@ -12,7 +12,7 @@ The bottom row backs the slide's claim with measured numbers, printed to the log
 Uses skimage's public-domain 'astronaut' test image (NASA), same source image as
 rgb_channels.pdf / kernel_zoo.pdf so the section stays visually consistent. Run with the
 project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/hsv_space.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/hsv_space.py
 """
 
 import logging

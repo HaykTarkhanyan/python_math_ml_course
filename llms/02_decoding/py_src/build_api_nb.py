@@ -12,8 +12,8 @@ models, $0.003 per run (measured 2026-11-06); every call goes to results/04_api_
 2026-11-06 run's outputs: after a re-execution, re-read them and fix the prose (sampled texts change).
 
 Run with the project venv (builds, then executes; 142 s measured 2026-11-06):
-    ./ma/Scripts/python.exe llms/02_decoding/py_src/build_api_nb.py
-    ./ma/Scripts/python.exe llms/02_decoding/py_src/build_api_nb.py --markdown-only
+    ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/build_api_nb.py
+    ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/build_api_nb.py --markdown-only
 Both write 04_llm_api.html next to the notebook (non_essential/notebook_to_html.py).
 --markdown-only copies edited prose into the executed notebook without rerunning it (no API calls).
 """

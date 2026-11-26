@@ -9,7 +9,7 @@ Copied from ml/12_cnn/py_src/eye_cones.py (the CNN deck keeps its own copy) and 
 with the metamerism panel, which is the reason three numbers are enough.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/eye_cones.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/eye_cones.py
 """
 
 import matplotlib

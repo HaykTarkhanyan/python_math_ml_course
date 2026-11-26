@@ -17,7 +17,7 @@ Numbers: chunk text, chunking functions, BM25 constants and similarities come fr
 print. e02 and e10 are illustrative (stated on the slides). e01's limits: model cards / provider docs, checked
 2026-11-18 (gemini-embedding-001: 2,048 tokens, Google developers blog).
 
-Run (repo root, ~5 s):  ./ma/Scripts/python.exe llms/04_rag/py_src/l41_explain_figs.py
+Run (repo root, ~5 s):  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_explain_figs.py
 """
 import logging
 import re

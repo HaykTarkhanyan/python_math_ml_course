@@ -5,7 +5,7 @@ Flash endpoint that failed it with "logprobs do not line up" in results/job_extr
 reply next to its logprob entries: results/job_extraction_logprob_mismatch.json. The notebook only reads that file.
 
 Run (repo root, ~10 s, ~$0.0002):
-    ./ma/Scripts/python.exe llms/02_decoding/py_src/non_essential/probe_logprob_mismatch.py
+    ./ma/.venv/Scripts/python.exe llms/02_decoding/py_src/non_essential/probe_logprob_mismatch.py
 """
 import json
 import logging

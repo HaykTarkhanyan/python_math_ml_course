@@ -7,7 +7,7 @@
   04  ILLUSTRATIVE - the agent loop and its stopping condition.
   05  ILLUSTRATIVE - the three ways a loop fails to stop.
 
-Run:  ./ma/Scripts/python.exe ml/ch18_agents/py_src/l44_figs.py   (~5 s)
+Run:  ./ma/.venv/Scripts/python.exe ml/ch18_agents/py_src/l44_figs.py   (~5 s)
 """
 
 import json

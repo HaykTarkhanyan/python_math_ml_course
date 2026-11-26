@@ -11,7 +11,7 @@ One figure uses the CLIP embeddings committed for the clustering chapter
 (``ml/10_dimensionality_reduction/data/imagenette_clip.npz``) to show DR on a real 512-d embedding space.
 
 Outputs PDFs to the sibling ``fig/``. Run with the ma venv:
-    ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/dimred_demos.py
+    ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/dimred_demos.py
 (Requires umap-learn in the ma venv. Takes a few minutes -- t-SNE dominates.)
 """
 import io

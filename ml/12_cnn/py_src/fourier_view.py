@@ -12,7 +12,7 @@ Generates into ml/12_cnn/fig/:
 
 Uses skimage's public-domain 'astronaut' test image (same image as kernel_zoo.py).
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/fourier_view.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/fourier_view.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings.
 

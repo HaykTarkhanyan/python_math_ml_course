@@ -10,7 +10,7 @@ This is the failure the photo-grouping practical opens with -- now ch10,
 colour histograms and you group by palette, never by subject.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/09_clustering/py_src/color_histogram.py
+    ./ma/.venv/Scripts/python.exe ml/09_clustering/py_src/color_histogram.py
 """
 
 import matplotlib

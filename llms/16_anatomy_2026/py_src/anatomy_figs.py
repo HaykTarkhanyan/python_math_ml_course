@@ -19,7 +19,7 @@ Generates into llms/16_anatomy_2026/fig/:
   anat_kv.pdf      -- KV bytes per token as built vs with full multi-head attention (log scale)
   anat_moe.pdf     -- total vs active parameters of three MoE models
 
-Run: ./ma/Scripts/python.exe llms/16_anatomy_2026/py_src/anatomy_figs.py      (~5 s)
+Run: ./ma/.venv/Scripts/python.exe llms/16_anatomy_2026/py_src/anatomy_figs.py      (~5 s)
 """
 import json
 import logging

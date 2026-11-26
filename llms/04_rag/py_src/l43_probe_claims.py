@@ -13,7 +13,7 @@ What it measures:
   6. HyDE           - rank of the gold chunk from the question vs from a fake answer
   7. multi-hop      - can one retrieval call get both chunks the question needs
 
-Run:  USE_TF=0 ./ma/Scripts/python.exe llms/04_rag/py_src/l43_probe_claims.py
+Run:  USE_TF=0 ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l43_probe_claims.py
 """
 
 import logging

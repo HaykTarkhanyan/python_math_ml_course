@@ -6,7 +6,7 @@ statistics they use (N=4000, document frequencies, average length) describe a hy
 factory archive and are stated in l41_data.py; the BM25 arithmetic on top of them is exact
 and is logged so the slide can quote verified numbers.
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l41_bm25_figs.py
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l41_bm25_figs.py
 """
 
 import logging

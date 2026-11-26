@@ -8,7 +8,7 @@ Generates (house style, Armenian palette) into ml/03_classification/fig/:
   imb_benchmark.pdf      -- PR-AUC of baseline vs ROS/RUS/SMOTE: gains are small.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/03_classification/py_src/imbalanced_figs.py
+    ./ma/.venv/Scripts/python.exe ml/03_classification/py_src/imbalanced_figs.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag colours.

@@ -26,13 +26,13 @@ Everything uses the repo venv `ma/`:
 
 ```bash
 # the experiment (~10-15 min: downloads wiki samples + XLM-R weights on first run)
-../../../ma/Scripts/python.exe -m nbconvert --to notebook --execute --inplace armenian_token_hunt.ipynb
+../../../ma/.venv/Scripts/python.exe -m nbconvert --to notebook --execute --inplace armenian_token_hunt.ipynb
 
 # the report (fast, JSONs only)
-../../../ma/Scripts/python.exe build_report.py
+../../../ma/.venv/Scripts/python.exe build_report.py
 
 # the playground
-../../../ma/Scripts/python.exe tokenizer_app.py
+../../../ma/.venv/Scripts/python.exe tokenizer_app.py
 ```
 
 Notebook knobs (env vars): `ATH_MAX_CHARS` (hy corpus chars, default 20M),

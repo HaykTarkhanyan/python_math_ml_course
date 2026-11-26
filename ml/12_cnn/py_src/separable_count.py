@@ -15,7 +15,7 @@ Generates into ml/12_cnn/fig/:
   separable_count.pdf
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/separable_count.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/separable_count.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.42, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

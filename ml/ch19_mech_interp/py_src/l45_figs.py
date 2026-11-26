@@ -17,8 +17,8 @@ Every figure is drawn at the size it occupies on the slide (16:9 text width ~5.5
 font sizes here are the font sizes students see (_learnings/2026-10-01-2317).
 
 Usage (about 1 minute on CPU with GPT-2 small cached; --plot-only takes seconds):
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_figs.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_figs.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_figs.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/l45_figs.py --plot-only
 """
 
 from __future__ import annotations

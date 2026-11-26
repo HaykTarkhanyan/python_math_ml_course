@@ -9,7 +9,7 @@ Generates into ml/11_neural_networks/fig/:
                           Dotted: plain decay (1 - lr * wd)^t for reference.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/adamw_decay_fig.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/adamw_decay_fig.py
 """
 
 import logging

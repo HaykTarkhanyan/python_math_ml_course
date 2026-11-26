@@ -11,7 +11,7 @@ here are the same net that wins the payoff figure.)
 
 Run with the project venv (~2-3 min on 2 CPU threads; --plot-only redraws in ~3 s from the
 saved results/feature_maps.npz, no training):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/feature_maps.py [--plot-only]
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/feature_maps.py [--plot-only]
 
 2026-10-01: the run now saves the learned kernels, the sample image and its maps to
 ml/12_cnn/results/feature_maps.npz, and the figure is drawn from that file at its slide size

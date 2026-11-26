@@ -7,7 +7,7 @@ Stub tools make the comparison fair and cost no Tavily credits. Nothing is ever 
 
 Output: llms/03_tools_agents/results/model_test.json (the artifact of record; the notebooks quote it).
 Run (repo root, ~3-5 min, ~$0.10 estimated):
-    ./ma/Scripts/python.exe -u llms/03_tools_agents/py_src/non_essential/model_test.py
+    ./ma/.venv/Scripts/python.exe -u llms/03_tools_agents/py_src/non_essential/model_test.py
 """
 import json
 import logging

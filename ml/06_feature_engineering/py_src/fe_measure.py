@@ -8,7 +8,7 @@ Split, seed and model settings are identical to ml/05_interpretability/py_src/* 
 here is directly comparable to the slides in decks [22]-[24]:
     train_test_split(test_size=0.3, random_state=509), RandomForestRegressor(n_estimators=300)
 
-Run: ./ma/Scripts/python.exe ml/06_feature_engineering/py_src/fe_measure.py
+Run: ./ma/.venv/Scripts/python.exe ml/06_feature_engineering/py_src/fe_measure.py
 Conventions: logging to console + logs/, seed 509, f-strings, n_jobs=1 (single-core on purpose).
 """
 import logging

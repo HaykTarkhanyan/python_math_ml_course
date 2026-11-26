@@ -18,8 +18,8 @@ Generates into llms/15_lora/fig/:
   lora_memory.pdf    -- memory for a 7B model: full fine-tuning vs LoRA vs QLoRA (by hand)
 
 Run:
-  ./ma/Scripts/python.exe llms/15_lora/py_src/lora_figs.py --gpt2   # ~2-4 min, background
-  ./ma/Scripts/python.exe llms/15_lora/py_src/lora_figs.py          # figures (~5 s)
+  ./ma/.venv/Scripts/python.exe llms/15_lora/py_src/lora_figs.py --gpt2   # ~2-4 min, background
+  ./ma/.venv/Scripts/python.exe llms/15_lora/py_src/lora_figs.py          # figures (~5 s)
 """
 import json
 import logging

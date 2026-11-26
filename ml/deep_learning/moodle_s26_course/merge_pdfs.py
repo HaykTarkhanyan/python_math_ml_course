@@ -12,13 +12,13 @@ Example (ROOT = this moodle course folder) produces `_merged/slides.pdf`,
 `_merged/lab_materials.pdf`, `_merged/mock_exam.pdf`, each viewable end to end.
 
 Usage (project venv):
-    ./ma/Scripts/python.exe ml/deep_learning/moodle_s26_course/merge_pdfs.py            # merge this folder
-    ./ma/Scripts/python.exe .../merge_pdfs.py  <ROOT>                                   # merge another folder
-    ./ma/Scripts/python.exe .../merge_pdfs.py  <ROOT> --leaf                            # one file per leaf folder
+    ./ma/.venv/Scripts/python.exe ml/deep_learning/moodle_s26_course/merge_pdfs.py            # merge this folder
+    ./ma/.venv/Scripts/python.exe .../merge_pdfs.py  <ROOT>                                   # merge another folder
+    ./ma/.venv/Scripts/python.exe .../merge_pdfs.py  <ROOT> --leaf                            # one file per leaf folder
 
 Notes:
 - Output goes to  <ROOT>/_merged/  (that folder is never itself merged, so re-running is safe).
-- Requires `pypdf` (install: uv pip install --python ./ma/Scripts/python.exe pypdf).
+- Requires `pypdf` (install: uv pip install --python ./ma/.venv/Scripts/python.exe pypdf).
 - Fails loud: unreadable source PDFs are logged at ERROR and the run exits non-zero, but every
   PDF that CAN be merged still is (a broken file never silently vanishes without a logged error).
 """

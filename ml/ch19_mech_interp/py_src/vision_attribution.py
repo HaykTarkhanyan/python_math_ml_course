@@ -14,8 +14,8 @@ when present (committed results: Colab T4, DECISIONS #41), else CPU with 2 threa
 Results -> results/vision_attribution.json (maps downsampled to 56x56); figures read that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_attribution.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_attribution.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_attribution.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/vision_attribution.py --plot-only
 """
 
 from __future__ import annotations

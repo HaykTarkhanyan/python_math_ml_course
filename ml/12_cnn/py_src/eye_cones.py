@@ -5,7 +5,7 @@ Generates into ml/12_cnn/fig/:
                     types -> three numbers per point -> RGB.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/eye_cones.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/eye_cones.py
 """
 
 import logging

@@ -12,7 +12,7 @@ cannot answer it. The *behaviour* being measured - scan time, recall loss - is r
 14's timings are measured once and kept in results/l42_brute_force_timings.json, so redrawing
 the figure does not re-time it (the deck quotes these numbers). Delete the file to re-measure.
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l42_index_figs.py   (~20 s)
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l42_index_figs.py   (~20 s)
 """
 
 import json

@@ -16,7 +16,7 @@ Generates into ml/12_cnn/fig/:
   transposed_anim_0.pdf .. transposed_anim_4.pdf  (empty, then one stamp per click)
 
 Run with the project venv (~3 s):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/transposed_anim.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/transposed_anim.py
 """
 
 import logging

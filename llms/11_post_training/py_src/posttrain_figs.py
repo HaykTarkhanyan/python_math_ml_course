@@ -17,8 +17,8 @@ Generates into llms/11_post_training/fig/:
   post_goodhart.pdf       -- proxy reward keeps rising, true quality peaks (toy shape)
 
 Run:
-  ./ma/Scripts/python.exe llms/11_post_training/py_src/posttrain_figs.py --gpt2   # once (~30 s)
-  ./ma/Scripts/python.exe llms/11_post_training/py_src/posttrain_figs.py          # figures (~5 s)
+  ./ma/.venv/Scripts/python.exe llms/11_post_training/py_src/posttrain_figs.py --gpt2   # once (~30 s)
+  ./ma/.venv/Scripts/python.exe llms/11_post_training/py_src/posttrain_figs.py          # figures (~5 s)
 """
 import json
 import logging

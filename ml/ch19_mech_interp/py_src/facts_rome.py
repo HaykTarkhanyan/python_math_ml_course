@@ -23,8 +23,8 @@ facts GPT-2 small knows. Text for C: the first ~8k tokens of WikiText-2 (train s
 Results -> results/facts_rome.json; figures read that file.
 
 Usage:
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_rome.py
-    ./ma/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_rome.py --plot-only
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_rome.py
+    ./ma/.venv/Scripts/python.exe ml/ch19_mech_interp/py_src/facts_rome.py --plot-only
 """
 
 from __future__ import annotations

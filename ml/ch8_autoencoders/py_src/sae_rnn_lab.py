@@ -24,7 +24,7 @@ Compute guardrails (per AE_CHAPTER_PLAN.md): thread-capped to 4, tiny nets, CPU 
 downloads at all - the corpus is generated. Seed 509.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch8_autoencoders/py_src/sae_rnn_lab.py
+    ./ma/.venv/Scripts/python.exe ml/ch8_autoencoders/py_src/sae_rnn_lab.py
 """
 import logging
 from pathlib import Path

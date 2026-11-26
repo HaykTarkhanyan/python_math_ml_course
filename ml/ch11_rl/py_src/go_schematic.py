@@ -14,7 +14,7 @@ Verified facts used on the slide (web-checked 2026-08-06):
 Generates ml/ch11_rl/fig/go_lines.pdf
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/ch11_rl/py_src/go_schematic.py
+    ./ma/.venv/Scripts/python.exe ml/ch11_rl/py_src/go_schematic.py
 """
 
 import logging

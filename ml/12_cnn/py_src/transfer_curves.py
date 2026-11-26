@@ -16,7 +16,7 @@ Two modes:
      DECISIONS #58, so the disclaimer no longer promises it.)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/transfer_curves.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/transfer_curves.py
 
 Conventions (repo CLAUDE.md): logging to console + logs/, seed 509, f-strings,
 Armenian-flag palette for 3-color charts.

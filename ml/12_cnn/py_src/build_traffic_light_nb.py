@@ -14,8 +14,8 @@ Data: ml/12_cnn/extra_traffic_light/data/ (3.1 MB), packed from ml/claude_projec
 by py_src/pack_traffic_light_data.py. The notebook runs with extra_traffic_light/ as its working dir.
 
 Run with the project venv (builds, then executes; ~1 min incl. kernel start, guess):
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/build_traffic_light_nb.py
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/build_traffic_light_nb.py --no-execute
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_traffic_light_nb.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/build_traffic_light_nb.py --no-execute
 """
 import argparse
 import logging

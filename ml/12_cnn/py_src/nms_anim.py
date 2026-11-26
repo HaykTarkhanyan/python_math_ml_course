@@ -13,7 +13,7 @@ Generates into ml/12_cnn/fig/:
   nms_anim_0.pdf .. nms_anim_N.pdf   (N reported in the log)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/nms_anim.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/nms_anim.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.42, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

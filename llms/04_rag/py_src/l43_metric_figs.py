@@ -14,7 +14,7 @@ Provenance per figure:
              Table 1. Not re-measured here.
   16  REAL - exact arithmetic on stated archive parameters (400 reports, 37 relevant).
 
-Run:  ./ma/Scripts/python.exe llms/04_rag/py_src/l43_metric_figs.py   (~5 s)
+Run:  ./ma/.venv/Scripts/python.exe llms/04_rag/py_src/l43_metric_figs.py   (~5 s)
 """
 
 import logging

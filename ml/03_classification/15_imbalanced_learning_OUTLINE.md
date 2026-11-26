@@ -151,7 +151,7 @@ neither a cure nor useless.
 **Reuse from source (CC-BY, on-slide credit):** `smote_viz_1..12.pdf` (animation, if reused),
 `coordinate_system.jpeg` (worked numbers), `under_oversampling.png` (overview).
 
-**Dependency:** `imbalanced-learn` (`uv pip install --python ./ma/Scripts/python.exe
+**Dependency:** `imbalanced-learn` (`uv pip install --python ./ma/.venv/Scripts/python.exe
 imbalanced-learn`) for the generated resampling/benchmark figures — or hand-roll (~10 lines each).
 
 ## Open decisions (pending)

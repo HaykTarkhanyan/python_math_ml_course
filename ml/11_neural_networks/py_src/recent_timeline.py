@@ -10,7 +10,7 @@ Generates into ml/11_neural_networks/fig/:
                            foundation / generative / reasoning (2022-2026, red)
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/recent_timeline.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/recent_timeline.py
 """
 
 import logging

@@ -7,7 +7,7 @@
 
 (Reused LMU CC-BY in the deck: the Shapley fair-payout framing image, the LIME husky/robustness.)
 
-Run: ./ma/Scripts/python.exe ml/05_interpretability/py_src/interp_shap_figs.py
+Run: ./ma/.venv/Scripts/python.exe ml/05_interpretability/py_src/interp_shap_figs.py
 """
 import logging
 from pathlib import Path

@@ -20,7 +20,7 @@ Generates into llms/06_attention/fig/:
   mask_two_kinds.pdf     -- the trap: the [MASK] token (input) vs the attention mask (who looks at whom)
 
 Run (~25 s):
-  ./ma/Scripts/python.exe llms/06_attention/py_src/masking_figs.py
+  ./ma/.venv/Scripts/python.exe llms/06_attention/py_src/masking_figs.py
 """
 import json
 import logging

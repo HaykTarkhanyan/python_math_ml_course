@@ -24,7 +24,7 @@ matplotlib "Glyph ... missing from current font" warning is promoted to a hard e
 below, so a missing-glyph run crashes instead of silently shipping a tofu box.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/unroll_anim.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/unroll_anim.py
 """
 
 import logging

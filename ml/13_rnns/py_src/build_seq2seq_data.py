@@ -15,7 +15,7 @@ made of Armenian letters (no digits, Latin, hyphens), it has 4+ words, and it wa
 
 Run (network; measured 2026-10-24: 1181 s, the API answered HTTP 429 about once a minute and
 the script waited ~45 s each time, as told):
-    ./ma/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_data.py
+    ./ma/.venv/Scripts/python.exe ml/13_rnns/py_src/build_seq2seq_data.py
 """
 import json
 import logging

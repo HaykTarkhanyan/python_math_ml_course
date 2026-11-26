@@ -8,7 +8,7 @@ Generates into ml/11_neural_networks/fig/:
                            PyTorch's defaults.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/11_neural_networks/py_src/activation_figs.py
+    ./ma/.venv/Scripts/python.exe ml/11_neural_networks/py_src/activation_figs.py
 """
 
 import logging

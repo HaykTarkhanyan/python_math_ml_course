@@ -11,7 +11,7 @@ Reads data/genomes_1000g_chr22.npz (fetch_1000g_genotypes.py), writes:
   out/gg_europe_pca.png  -- EUR-only refit, Novembre-style (text codes + medians)
 and logs the measurements (EVR, silhouette, k-means ARI, per-pop medians).
 
-Run:  ./ma/Scripts/python.exe ml/10_dimensionality_reduction/py_src/non_essential/validate_genes_geography.py
+Run:  ./ma/.venv/Scripts/python.exe ml/10_dimensionality_reduction/py_src/non_essential/validate_genes_geography.py
 """
 from __future__ import annotations
 

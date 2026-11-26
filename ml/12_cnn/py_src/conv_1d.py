@@ -8,7 +8,7 @@ Generates into ml/12_cnn/fig/:
                          not just an image trick - it is how you add two random variables.
 
 Run with the project venv:
-    ./ma/Scripts/python.exe ml/12_cnn/py_src/conv_1d.py
+    ./ma/.venv/Scripts/python.exe ml/12_cnn/py_src/conv_1d.py
 
 2026-10-01: redrawn at its slide size (figsize x 0.34, fonts mapped to 7-10.5 pt)
 so the labels are readable on the slide; they rendered at 2-5 pt before.

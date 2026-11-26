@@ -12,7 +12,7 @@ Drawn at the size each figure gets on the slide (5.5 in = full text width), 7-8 
 Generates into llms/05_embeddings_position/fig/: emb_*.pdf (one per figure function below).
 Writes llms/05_embeddings_position/results/embeddings_position_figs.json (every measured number - the artifact of record).
 
-Run: ./ma/Scripts/python.exe llms/05_embeddings_position/py_src/embeddings_position_figs.py   (~50 s measured 2026-10-04)
+Run: ./ma/.venv/Scripts/python.exe llms/05_embeddings_position/py_src/embeddings_position_figs.py   (~50 s measured 2026-10-04)
 Needs the GPT-2 weights in the HF cache (the chapter map's --gpt2 step downloads them once).
 
 Rerun some figures only: ... embeddings_position_figs.py --only fig_unembed fig_one_pair   (a few s)
