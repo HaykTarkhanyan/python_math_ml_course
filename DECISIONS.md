@@ -9,6 +9,34 @@ this file holds the choice and a pointer.
 
 ---
 
+## #125 - A fourth RAG deck, `llms/04_rag/11_rag_advanced` (graph RAG and beyond), drafted; its graph claims are measured on LLM-built graphs
+
+**Date:** 2026-11-27 · **Status:** draft, awaiting the instructor (interview and outline approval were skipped on
+his instruction "search up on graph rag and other topics ... start to put them in a new deck 11_").
+
+**Decision.** Deck 11 covers graph RAG (extraction, entity resolution, local and global search, communities,
+Personalized PageRank, the benchmark evidence for and against), chunks that lost their context (contextual retrieval,
+late chunking, small-to-big, RAPTOR), self-checking pipelines (Adaptive-RAG, CRAG, Self-RAG, deep research), long
+context vs RAG (CAG, Self-Route), and attacks (poisoning, indirect prompt injection). Every claim about what graph RAG
+does on the factory archive comes from graphs that real LLMs extracted from the 38 chunks (gpt-4o-mini $0.0061,
+GPT-6.1 Terra $0.0634, ledger `llms/04_rag/results/l44_calls.jsonl`); the hand-written graph is used only to teach the
+mechanics and is labelled as hand-written. Page-image retrieval (ColPali) is left to the vision-and-documents session
+(#120).
+
+**Why.** The first draft compared measured top-k retrieval against a walk over the hand-written graph, so the graph's
+4/4 was built in (flagged by the session's heads-up note). The real extractions changed the lesson: 94-99 entities
+instead of 27, in-between nodes, "RC-2019-02" and "2019 recall" as two nodes; a 2-hop walk finds 0-1 of 4 suppliers,
+while recall nodes + neighbours -> their chunks finds 4 of 4 with 0 wrong for both models. The benchmark evidence (Han
+et al. 2025, GraphRAG-Bench 2025) shows graph RAG tying or losing on single facts and winning on chains and summaries,
+so the deck presents both.
+
+**Alternatives rejected.** Keep the hand-written graph as the comparison (the result would be an assumption). Spread
+the topics over decks 08-10 (they are taught next; changing them now would disturb the lectures). Include ColPali here
+(it overlaps the planned vision session).
+
+**What would change this.** The instructor's interview: video number (as video 11 it moves the RAG practical to 12),
+scope (sections 4 and 5 could stand alone), or a wish to see a by-hand modularity example or raw extraction JSON.
+
 ## #124 - The course environment `ma` is a pinned uv project (`ma/pyproject.toml`, `ma/uv.lock`, venv in `ma/.venv/`)
 
 **Date:** 2026-11-26 · **Status:** active.
