@@ -9,10 +9,32 @@ this file holds the choice and a pointer.
 
 ---
 
+## #126 - Deck 11 is video 11 and covers graph RAG and chunk fixes; everything after it moves one later
+
+**Date:** 2026-11-27 · **Status:** active. Revisits #125's scope and #120's numbering.
+
+**Decision.** The instructor's answers the same evening: Q2, deck 11 is taught as **video 11**, so the RAG practical
+becomes video 12, the industry block (vision and documents, voice, shipping it) 13-15, and theory starts at 16
+(`llms/TWO_STREAMS_PROPOSAL.html` renumbered). Q3, the deck keeps **graph RAG and the chunk fixes**; self-checking
+pipelines, long context and attacks are parked verbatim in `llms/04_rag/parked/11_rag_advanced_sections_3-5.tex`
+(`DEFERRED_TODO.md`). Q4, three additions: a by-hand modularity frame (two triangles and a bridge, 0.357 / 0 /
+-0.214, asserted against networkx in `l44_figs.py`), one ColPali frame in the chunk section (ViDoRe 81.3 vs 67.0
+nDCG@5), and a short section on retrieval as agent memory (MemGPT 2023, Mem0 2025). Deck: 37 pages.
+
+**Why.** Instructor's choice from the options offered. ColPali here overlaps video 13 a little on purpose: one frame
+that motivates it, with the full treatment left to that session.
+
+**Alternatives rejected.** Deck 11 after the practical, or as a bonus deck (Q2); all five sections, or a split into
+two decks (Q3).
+
+**What would change this.** The vision session taking ColPali in full and wanting the frame removed here; time
+pressure on the industry block.
+
 ## #125 - A fourth RAG deck, `llms/04_rag/11_rag_advanced` (graph RAG and beyond), drafted; its graph claims are measured on LLM-built graphs
 
-**Date:** 2026-11-27 · **Status:** draft, awaiting the instructor (interview and outline approval were skipped on
-his instruction "search up on graph rag and other topics ... start to put them in a new deck 11_").
+**Date:** 2026-11-27 · **Status:** active; scope and video number revisited by #126 the same day (interview and
+outline approval were skipped on his instruction "search up on graph rag and other topics ... start to put them in a
+new deck 11_").
 
 **Decision.** Deck 11 covers graph RAG (extraction, entity resolution, local and global search, communities,
 Personalized PageRank, the benchmark evidence for and against), chunks that lost their context (contextual retrieval,

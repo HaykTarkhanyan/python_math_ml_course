@@ -2,7 +2,25 @@
 
 Things explicitly punted out of the main lecture flow. Park here so they don't get lost. Revisit when course pace allows or when student level is ready.
 
-Last updated: 2026-11-18
+Last updated: 2026-11-27
+
+---
+
+## RAG deck 11: three sections parked (2026-11-27, Q3)
+
+Cut from `llms/04_rag/11_rag_advanced.tex` when the instructor kept the deck to graph RAG and chunk fixes. Built,
+sourced and laid out (13 frames), saved verbatim in `llms/04_rag/parked/11_rag_advanced_sections_3-5.tex`:
+
+- **Pipelines that check their own work**: Adaptive-RAG (router right 55% of the time), CRAG (figure
+  `fig/l44_10_crag.pdf`), Self-RAG, deep research as the agent loop with a budget.
+- **Long context, caching or retrieval**: context windows Nov 2026 (~1M), Li et al. 2024 and Self-Route, the token
+  arithmetic by hand, cache-augmented generation.
+- **Attacking a RAG system**: one injected chunk ranks 1st under BM25 and dense (measured, `results/l44_probe.json`),
+  PoisonedRAG, indirect prompt injection, defences, OWASP 2025.
+
+Natural homes: attacks next to the tools practical's injection demo or in "shipping it" (video 15); long context
+next to LLM-3's lost-in-the-middle part. Numbers are as of 2026-11-27: recheck context windows and library status
+before reuse.
 
 ---
 

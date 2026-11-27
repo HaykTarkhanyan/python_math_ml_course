@@ -544,9 +544,58 @@ def fig_anthropic():
     save(fig, "l44_12_contextual_anthropic")
 
 
+# ------------------------------------------------------------------------------- 13
+MOD_EDGES = [("A", "B"), ("B", "C"), ("A", "C"), ("D", "E"), ("E", "F"), ("D", "F"), ("C", "D")]
+MOD_SPLITS = {   # the three rows of the by-hand table, with the Q the slide prints
+    "good": ([{"A", "B", "C"}, {"D", "E", "F"}], 0.357),
+    "together": ([{"A", "B", "C", "D", "E", "F"}], 0.0),
+    "bad": ([{"A", "B", "D"}, {"C", "E", "F"}], -0.214),
+}
+
+
+def check_modularity_table():
+    """Assert the by-hand modularity numbers on the slide against networkx."""
+    g = nx.Graph(MOD_EDGES)
+    m = g.number_of_edges()
+    for name, (split, printed) in MOD_SPLITS.items():
+        by_hand = sum(
+            sum(1 for u, v in g.edges if u in c and v in c) / m
+            - (sum(dict(g.degree(c)).values()) / (2 * m)) ** 2
+            for c in split)
+        lib = nx.community.modularity(g, split)
+        if abs(by_hand - lib) > 1e-12 or abs(round(by_hand, 3) - printed) > 1e-9:
+            raise AssertionError(f"{name}: by hand {by_hand}, networkx {lib}, slide {printed}")
+        log.info("modularity %s: %.6f (networkx %.6f)", name, by_hand, lib)
+
+
+def fig_modularity_toy():
+    pos = {"A": (0, 1), "B": (0, 0), "C": (0.85, 0.5), "D": (1.85, 0.5), "E": (2.7, 1), "F": (2.7, 0)}
+    color = {n: (ARM_BLUE if n in "ABC" else ARM_ORANGE) for n in pos}
+    g = nx.Graph(MOD_EDGES)
+    fig, ax = plt.subplots(figsize=(2.4, 1.15))
+    for a, b in MOD_EDGES:
+        (x1, y1), (x2, y2) = pos[a], pos[b]
+        ax.plot([x1, x2], [y1, y2], color=ARM_RED if (a, b) == ("C", "D") else "#888888",
+                lw=1.6 if (a, b) == ("C", "D") else 1.0, zorder=1)
+    for n, (x, y) in pos.items():
+        ax.scatter([x], [y], s=190, color=color[n], zorder=2)
+        ax.text(x, y, n, ha="center", va="center", color="white", fontsize=7.5, weight="bold",
+                zorder=3)
+        dy = 0.24 if y >= 0.5 else -0.24
+        ax.text(x, y + dy, f"deg {g.degree(n)}", ha="center", va="center", fontsize=6.5,
+                color="#444444")
+    ax.text(1.35, 0.62, "bridge", ha="center", fontsize=6.5, color=ARM_RED)
+    ax.set_xlim(-0.35, 3.05)
+    ax.set_ylim(-0.4, 1.4)
+    ax.axis("off")
+    save(fig, "l44_13_modularity_toy")
+
+
 def main():
     t0 = time.time()
     probe = load_probe()
+    check_modularity_table()
+    fig_modularity_toy()
     fig_bench()
     fig_anthropic()
     fig_coverage(probe)
