@@ -591,9 +591,55 @@ def fig_modularity_toy():
     save(fig, "l44_13_modularity_toy")
 
 
+# ------------------------------------------------------------------------------- 14
+CHAIN = [("rc2019", "inc031"), ("rc2019", "inc034"), ("rc2023", "inc112"), ("rc2023", "inc118")]
+CHAIN_LABEL = {"rc2019": "recall 2019", "rc2023": "recall 2023", "inc031": "INC-031",
+               "inc034": "INC-034", "inc112": "INC-112", "inc118": "INC-118"}
+
+
+def fig_chain_ranks(probe):
+    """Where each link of the recall chain ranks, per retriever (REAL: probe's full rankings)."""
+    n = probe["corpus_size"]
+    ranks = {}
+    for retr in ("BM25", "dense"):
+        order = probe["coverage"][retr]["order"]
+        ranks[retr] = {cid: order.index(cid) + 1 for cid in CHAIN_LABEL}
+        if ranks[retr] != probe["coverage"][retr]["evidence_ranks"]:
+            raise ValueError(f"{retr}: full order disagrees with evidence_ranks")
+    rows = [("rc2019", "recall 2019  (step 1)"), ("inc031", "INC-031  (step 2, Kotayk)"),
+            ("inc034", "INC-034  (step 2, Sevan)"), ("rc2023", "recall 2023  (step 1)"),
+            ("inc112", "INC-112  (step 2, Ararat)"), ("inc118", "INC-118  (step 2, Gyumri)")]
+    fig, ax = plt.subplots(figsize=(4.3, 1.95))
+    ax.axvspan(0.5, 5.5, color=GREEN, alpha=0.13, lw=0)
+    ax.text(3, -0.85, "top 5", ha="center", va="center", fontsize=6.8, color=GREEN, weight="bold")
+    for y, (cid, lab) in enumerate(rows):
+        b, d = ranks["BM25"][cid], ranks["dense"][cid]
+        ax.plot([b, d], [y, y], color="#cccccc", lw=1.2, zorder=1)
+        ax.scatter([b], [y], s=30, marker="o", color=ARM_ORANGE, zorder=3,
+                   label="BM25" if y == 0 else None)
+        ax.scatter([d], [y], s=30, marker="s", color=ARM_BLUE, zorder=3,
+                   label="dense" if y == 0 else None)
+        for x, col, off in ((b, "#9a6a00", 0.32), (d, ARM_BLUE, -0.32)):
+            if b == d:
+                off = 0.32
+            ax.text(x, y + off, f"{x}", ha="center", va="center", fontsize=6.2, color=col)
+    ax.set_yticks(range(len(rows)), [r[1] for r in rows])
+    for tick, (cid, _) in zip(ax.get_yticklabels(), rows):
+        tick.set_color(ARM_RED if cid.startswith("rc") else "#9a6a00")
+    ax.invert_yaxis()
+    ax.set_xlim(0, n + 1)
+    ax.set_ylim(len(rows) - 0.4, -1.1)
+    ax.set_xticks([1, 5, 10, 15, 20, 25, 30, 35, 38])
+    ax.set_xlabel(f"rank for the recall question, out of {n} chunks (1 = first)")
+    ax.legend(loc="upper right", frameon=False, fontsize=6.8, ncol=2)
+    ax.grid(axis="x", alpha=0.2)
+    save(fig, "l44_14_chain_ranks")
+
+
 def main():
     t0 = time.time()
     probe = load_probe()
+    fig_chain_ranks(probe)
     check_modularity_table()
     fig_modularity_toy()
     fig_bench()

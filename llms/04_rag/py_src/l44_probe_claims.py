@@ -142,7 +142,8 @@ def main():
         ranks = {label(i): rank_of(sc, i) for i in evidence_idx}
         log.info("  %s ranks of the six evidence chunks: %s", name, ranks)
         out["coverage"][name] = {"rows": rows, "evidence_ranks": ranks,
-                                 "top10": [label(i) for i in order[:10]]}
+                                 "top10": [label(i) for i in order[:10]],
+                                 "order": [label(i) for i in order]}
 
     # ------------------------------------------------------------ 2. traversal
     log.info("=" * 78)

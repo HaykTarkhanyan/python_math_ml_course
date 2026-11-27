@@ -94,6 +94,64 @@
 \sectiontransition{Graph RAG}{When the answer is a pattern between documents, not a sentence
 inside one.}
 
+\begin{frame}{Where each link of the chain ranks}
+  \vspace{-0.2em}
+  \begin{center}
+    \includegraphics[width=0.76\linewidth]{fig/l44_14_chain_ranks.pdf}
+  \end{center}
+  \vspace{-0.8em}
+  {\small Step 1 (the recall notices) sounds like the question: both retrievers rank both notices in
+  their top 4. Step 2 (the incident reports) is hit and miss: BM25 ranks INC-034 \textbf{21st} and
+  INC-118 \textbf{37th}; dense gets three into its top 5 and INC-112 \textbf{14th}.}
+
+  \vspace{0.1em}
+  \keybox{\small Similarity measures how much a chunk \emph{sounds like the question}. A link of a
+  chain only has to be \emph{connected to the previous link}; nothing makes it sound like the
+  question.}
+\end{frame}
+
+\begin{frame}{What a vector index throws away}
+  \vspace{0.1em}
+  Indexing embeds every chunk \textbf{on its own}. The vector of the INC-118 report knows about film
+  and seals; the vector of the 2023 recall notice knows about brined wheels and weeks 27-28.
+
+  \vspace{0.3em}
+  The fact that joins them, \emph{RC-2023-07 follows INC-118}, involves two chunks. One of them
+  mentions it as a bare ID, and no embedding knows what that ID points to.
+
+  \vspace{0.3em}
+  \keybox{\small \textbf{Picture a detective's evidence board.} A vector index keeps the photos, sorted
+  by how much each one looks like your question. Graph RAG also keeps the \textbf{strings} pinned
+  between them.}
+
+  \vspace{0.2em}
+  {\small How you would answer it yourself: open the recall notices, read the incident numbers, open
+  those reports, read the suppliers. Two lookups \textbf{by ID}, none by similarity. A graph walk
+  does exactly this.}
+\end{frame}
+
+\begin{frame}{The idea in one sentence}
+  \quotebox{Pay an LLM to read everything \textbf{once} and write down who is connected to whom, so
+  that at question time you \textbf{follow connections} instead of hoping similarity finds them.}
+
+  \vspace{-0.2em}
+  What that buys:
+
+  \vspace{0.1em}
+  \begin{enumerate}\setlength{\itemsep}{1pt}
+    \item \textbf{Chains.} The second hop is a lookup, not a lucky search. (Local search, PageRank
+      from the question.)
+    \item \textbf{The whole corpus.} Groups of connected entities can be summarised in advance, so
+      ``what keeps going wrong?'' has an answer. (Global search.)
+    \item \textbf{A trail.} The path recall $\to$ incident $\to$ supplier \emph{is} the explanation,
+      and every step points to the chunk it came from.
+  \end{enumerate}
+
+  \vspace{0.2em}
+  \watchbox{\small What it costs: an LLM pass over every chunk, and the risk that the LLM reads
+  something wrong. The next slides show both.}
+\end{frame}
+
 \begin{frame}{Step 1: read every chunk once, write down who did what}
   \vspace{0.1em}
   \quotebox{Incident report INC-112: Listeria was found in brine tank 2. It was traced to a
@@ -567,6 +625,100 @@ inside one.}
   graph is one more retriever whose results go into the same prompt.}
 \end{frame}
 
+\begin{frame}{Where graph RAG earns its cost}
+  \vspace{-0.1em}
+  \begin{center}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Domain} & \textbf{A typical question} & \textbf{The chain behind it} \\
+    \midrule
+    Quality & Which suppliers are behind the recalls? & recall $\to$ incident $\to$ supplier \\
+    Supply risk & If Ararat Salt fails, what is at risk? & supplier $\to$ salt $\to$ tank $\to$ cheese \\
+    Legal & Which contracts does the new rule touch? & rule $\to$ clause $\to$ contract \\
+    Medicine & Which drugs act on proteins of this disease? & drug $\to$ protein $\to$ disease \\
+    Fraud & Is this customer linked to closed accounts? & shared directors, addresses \\
+    IT operations & Who is hit if this database fails? & service $\to$ service $\to$ customer \\
+    Feedback & What keeps coming up in 5 years of complaints? & whole corpus: communities \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.1em}
+  {\footnotesize \textbf{Tested so far} on podcasts and news (GraphRAG), agriculture, computer science
+  and legal texts (LightRAG, 2024: preferred over plain RAG in 85\% of legal answers, by an LLM
+  judge), medical guidelines and novels (GraphRAG-Bench), and multi-hop Wikipedia questions
+  (HippoRAG).}
+\end{frame}
+
+\begin{frame}{A database, graph RAG, or plain RAG?}
+  \vspace{0.2em}
+  \begin{center}
+  \small
+  \begin{tabular}{>{\raggedright\arraybackslash}p{0.32\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}>{\raggedright\arraybackslash}p{0.34\textwidth}}
+    \toprule
+    \textbf{Where the connections live} & \textbf{Use} & \textbf{Because} \\
+    \midrule
+    in tables already (the purchasing system knows which supplier delivered which lot) &
+      \textbf{query them}: SQL, or Cypher for a graph database &
+      exact, cheap, always current; an LLM can write the query (video 05) \\
+    buried in prose (incident reports, emails, contracts) & \textbf{graph RAG} &
+      the only way to get them out, at the price of an LLM reading everything \\
+    nowhere: the answer sits inside one passage & \textbf{plain RAG} &
+      similarity is enough, and the index is cheap \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.4em}
+  \takebox{\small Good systems mix them: structured data through a database query, text through
+  RAG, and a graph only over the part of the text where connections matter.}
+\end{frame}
+
+\begin{frame}{Predict first: graph RAG, plain RAG, or neither?}
+  \vspace{0.2em}
+  Six questions to the factory assistant. For each, pick before the next slide.
+
+  \vspace{0.3em}
+  \begin{enumerate}[a.]\setlength{\itemsep}{3pt}
+    \item What temperature is the brine tank kept at?
+    \item Which presses has Kotayk Hydraulics supplied parts for, and did any of them have incidents?
+    \item Summarise the main kinds of problems in five years of incident reports.
+    \item How many incidents were reported in 2023?
+    \item What does the PRS-400 manual say about cleaning?
+    \item If Ararat Salt fails again, which products are at risk?
+  \end{enumerate}
+
+  \vspace{0.3em}
+  \keybox{\small Ask of each: is the answer \textbf{inside one passage}, a \textbf{chain} across
+  passages, the \textbf{whole corpus}, or a \textbf{count}?}
+\end{frame}
+
+\begin{frame}{Answers: what each question needs}
+  \vspace{0.1em}
+  \begin{center}
+  \footnotesize
+  \begin{tabular}{>{\raggedright\arraybackslash}p{0.05\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}>{\raggedright\arraybackslash}p{0.62\textwidth}}
+    \toprule
+    & \textbf{Use} & \textbf{Why} \\
+    \midrule
+    a. & plain RAG & one chunk holds it: ``kept at 12 degrees for Lori cheese'' \\
+    b. & graph, local search & a chain: supplier $\to$ press $\to$ incident, starting from a named entity \\
+    c. & graph, global search & no entity to start from; community summaries, or map-reduce over all reports \\
+    d. & neither: count in a database & top-$k$ hands over $k$ reports, so the model counts $k$ (video 10, ``why RAG cannot count'') \\
+    e. & plain RAG + metadata filter & one document, so filter on it first (video 09) \\
+    f. & graph, local search & supplier $\to$ salt $\to$ brine tank $\to$ the cheeses brined in it \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  \takebox{\small Here three of six need the graph. Do the same count on your own question log before
+  building one: the graph pays only if enough of the real questions are chains or about
+  everything.}
+\end{frame}
+
 % ============================================================ SECTION 2
 \section{Chunks that forgot their document}
 \sectiontransition{Chunks that forgot their document}{A chunk is cut out of a document. The
@@ -776,14 +928,14 @@ document knew things the chunk does not.}
   \begin{itemize}\setlength{\itemsep}{1pt}
     \item \textbf{Top-$k$ cannot see a chain}: on our archive it named 2-3 of 4 right suppliers at
       $k = 5$; a search over an LLM-built graph named all 4, and no wrong one, in 8 chunks.
-    \item \textbf{Graph RAG} = extract entities and relationships once, then walk (local search),
-      summarise communities (global search, modularity) or rank by Personalized PageRank.
+    \item \textbf{Graph RAG} keeps the strings a vector index throws away: extract once, then walk
+      (local search), summarise communities (global search) or rank by Personalized PageRank. If
+      the links already sit in tables, query the tables.
     \item \textbf{Its price}: an LLM pass over everything, entity resolution, re-indexing on change.
       It ties or loses on single-fact questions and wins on chains and summaries.
     \item \textbf{Chunks lose their document}: two clauses tied exactly; one sentence of context
       fixed both retrievers. Late chunking, small-to-big and RAPTOR repair the same loss.
-    \item \textbf{Pages, not text}: ColPali retrieves page images directly, 81.3 against 67.0 for
-      the best parsing pipeline, at about 1{,}000 vectors per page.
+    \item \textbf{Pages, not text}: ColPali retrieves page images, 81.3 against 67.0 for parsing.
     \item \textbf{Memory} is retrieval over past conversations, with writes: update and delete
       matter as much as search.
   \end{itemize}
@@ -855,6 +1007,16 @@ document knew things the chunk does not.}
 %     12 Anthropic      - transcribed from the Contextual Retrieval post (2024)
 %     13 modularity toy - two triangles and a bridge; the slide's Q values (0.357, 0, -0.214)
 %                         are asserted against networkx in l44_figs.check_modularity_table
+%     14 chain ranks    - rank of each of the 6 evidence chunks under BM25 and dense, read from
+%                         the probe's full rankings (coverage.<retriever>.order), checked
+%                         against evidence_ranks
+%
+% INTUITION AND USE CASES (added 2026-11-27 at the instructor's request): frames "Where each
+%   link of the chain ranks", "What a vector index throws away" (evidence-board analogy), "The
+%   idea in one sentence", "Where graph RAG earns its cost" (domain rows are illustrative
+%   questions; the "tested so far" line cites the papers above, LightRAG Legal 84.8% overall
+%   win rate vs naive RAG by an LLM judge), "A database, graph RAG, or plain RAG?", and a
+%   predict-first sorting of six factory questions with answers.
 %   ILLUSTRATIVE (schematic, no data): 07 map-reduce, 08 late chunking, 09 RAPTOR
 %   Used only by the parked sections: 10 CRAG; the poisoning ranks (probe section 6).
 %

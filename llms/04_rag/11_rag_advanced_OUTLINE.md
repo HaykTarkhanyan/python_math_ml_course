@@ -2,7 +2,7 @@
 
 **Status:** draft deck built 2026-11-27 while the instructor was away ("search up on graph rag and other topics i may
 want to teach and start to put them in a new deck 11_"). The usual order (interview, outline, build) was skipped on
-that instruction. The same evening the instructor decided scope and numbering (Q2-Q4, DECISIONS #126). 37 pages:
+that instruction. The same evening the instructor decided scope and numbering (Q2-Q4, DECISIONS #126). 44 pages:
 `11_rag_advanced.tex` / `.pdf` (+ `_notes.pdf` copy, uncommitted until taught).
 
 ## Decided (2026-11-27)
@@ -24,7 +24,7 @@ context assembly, evaluation, HyDE and multi-hop.
 | # | Section | Frames | What it teaches | Evidence |
 |---|---|---|---|---|
 | 0 | Cold open | 2 | Video 10's recall question; top-k gets part of the chain | **measured** on a 38-chunk archive: BM25 top-5 names 2/4 right suppliers, dense 3/4, dense needs k=15 and then has 3 wrong ones; search over an **LLM-built** graph: 4/4, 0 wrong, 8 chunks |
-| 1 | Graph RAG | 19 | extraction, what real LLMs extract, entity resolution, local search, global questions, **modularity by hand**, communities, map-reduce, GraphRAG's numbers, the bill, LazyGraphRAG, PPR (concept, 7-node example by hand, on our graph), HippoRAG's numbers, who is who + library status, predict-first "does the graph win on facts?", GraphRAG-Bench by task, when to use | two real extractions (gpt-4o-mini $0.006, GPT-6.1 Terra $0.063); Louvain, modularity and PPR computed and asserted; papers: Edge 2024, Han 2025, Xiang 2025, Gutierrez 2024 |
+| 1 | Graph RAG | 26 | **intuition first** (added 2026-11-27 on request: "spend more time on explaining the intuition of graph rag and use cases"): where each link of the chain ranks (measured), what a vector index throws away (the evidence-board analogy, answering by ID), the idea in one sentence; then extraction, what real LLMs extract, entity resolution, local search, global questions, **modularity by hand**, communities, map-reduce, GraphRAG's numbers, the bill, LazyGraphRAG, PPR (concept, 7-node example by hand, on our graph), HippoRAG's numbers, who is who + library status, predict-first "does the graph win on facts?", GraphRAG-Bench by task, when to use; **use cases**: by domain (quality, supply risk, legal, medicine, fraud, IT, feedback) with where it was tested, database vs graph RAG vs plain RAG, predict-first sorting of six factory questions and the answers | two real extractions (gpt-4o-mini $0.006, GPT-6.1 Terra $0.063); Louvain, modularity and PPR computed and asserted; papers: Edge 2024, Han 2025, Xiang 2025, Gutierrez 2024 |
 | 2 | Chunks that forgot their document | 9 | two contract clauses one number apart (predict-first), contextual retrieval, Anthropic's numbers, late chunking, small-to-big, RAPTOR, **ColPali**, which fix for which problem | **measured**: BM25 exact tie 4.07/4.07, dense prefers the wrong clause; one context sentence makes the right one win under both |
 | 3 | Retrieval as memory | 1 | an agent's memory is an index it writes itself: MemGPT, Mem0, update and delete | papers (Mem0 numbers are the vendor's own) |
 | - | Recap + Next (video 12, the RAG practical) | 1 | | |
@@ -36,7 +36,7 @@ context assembly, evaluation, HyDE and multi-hop.
 - `py_src/l44_probe_claims.py` -> `results/l44_probe.json`, `logs/l44_probe_claims.log` (~20 s, e5-small).
 - `py_src/l44_extract.py` (paid, OpenRouter) -> `results/l44_extraction_*.json`, ledger `results/l44_calls.jsonl`.
 - `py_src/l44_llm_graph.py` -> `results/l44_llm_graph.json` (no API).
-- `py_src/l44_figs.py` -> `fig/l44_01..13_*.pdf` (~10 s); asserts the PPR and modularity tables.
+- `py_src/l44_figs.py` -> `fig/l44_01..14_*.pdf` (~10 s); asserts the PPR and modularity tables.
 - `parked/11_rag_advanced_sections_3-5.tex` - the three parked sections, verbatim.
 
 ## What the measurements changed
