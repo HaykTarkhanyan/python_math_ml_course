@@ -47,6 +47,12 @@ registry. Reuse a folder if one exists, otherwise add a row here.
 For a new project: the brief is the chapter `.qmd`'s `Գործնական` section or a sibling
 `*_hy.md`, and the solution is `ml/NN_*/*_solution.ipynb`. If two candidates fit, ask.
 
+**LLM-part or self-chosen projects** (no `ml/` chapter, often no brief; check DECISIONS #106/#107
+for the LLM project list first): name the folder `llm_<topic>/` and add no row here, because a
+one-student project named in this tracked file would point at the student. With no brief, review
+against the goals the student states (message, README) and the matching lectures, and say so in
+the FEEDBACK header.
+
 ## 2. Get the submission and pin what you reviewed
 
 ```bash
